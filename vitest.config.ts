@@ -21,6 +21,9 @@ export default defineConfig({
       thresholds: {
         'web/js/core/**': { lines: 90, branches: 85 },
         'web/js/state.ts': { lines: 90, branches: 85 },
+        // net/ pure bits (URL/body building, response normalization) are unit-tested via
+        // an injected fetch (E4/E5); the live fetch/SSE wiring is browser-smoked.
+        'web/js/net/**': { lines: 90, branches: 85 },
       },
     },
   },

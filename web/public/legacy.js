@@ -47,16 +47,8 @@ function stampRef(){
   if(el) el.textContent=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
 }
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
-/* Struktur-/Integritätsprüfung: eine gelesene buchungen.json muss die
-   Grundform haben, sonst arbeiten wir nicht mit kaputten Daten weiter. */
-function validateData(d){
-  if(!d || typeof d!=='object') throw new Error('kein JSON-Objekt');
-  if(!Array.isArray(d.machines)) throw new Error('machines fehlt/ungültig');
-  if(!d.bookings || typeof d.bookings!=='object') throw new Error('bookings fehlt/ungültig');
-  d.log = Array.isArray(d.log) ? d.log : [];
-  if(typeof d.revision!=='number') d.revision = 0; // Alt-Dateien ohne Revision
-  return d;
-}
+/* validateData → net/api.ts (window bridge). Struktur-/Integritätsprüfung eines
+   State-Payloads; unverändert (faithful port). */
 
 let saving=false; // blockiert den stillen Auto-Refresh, solange ein Schreibvorgang läuft
 /* OPTIMISTISCHES SPEICHERN (v5.5):
@@ -2287,15 +2279,9 @@ function maintKind(m){ const s=maintAt(m,todayStr()); return s?s.type:null; }
 function catIco(c){ return ic(c==='messtechnik' ? 'gauge' : 'factory'); }
 function asDevUid(id,node=AS_TREE){ return treeDevUid(node, id); }  // → core/assistant.ts (bridge)
 function asToggleId(id,on){ if(on){ asAdd(id); } else { const u=asDevUid(id); if(u){ asDetach(u); asCleanup(); } } AS_ADDED=new Set(asDevs()); renderWork(); }
-const API = '';   // gleiche Herkunft wie die ausgelieferte Seite
-async function apiGet(path){ const r=await fetch(API+path); if(!r.ok) throw new Error('Server '+r.status); return r.json(); }
-async function apiPost(path, body){ const r=await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); return r.json(); }
-
-async function readFile(){
-  const d = await apiGet('/api/state');
-  d.revision = d.rev || 0; d.log = d.log || [];
-  return validateData(d);
-};
+/* API, apiGet, apiPost, normalizeState → net/api.ts (window bridge). The HTTP data
+   client (same-origin, fetch) is unchanged; SSE below still uses the bridged `API`. */
+async function readFile(){ return normalizeState(await apiGet('/api/state')); }
 async function writeFile(data){
   const w = await S.handle.createWritable();  // FS-Access-API: schreibt in Swap-Datei …
   const txt = JSON.stringify(data, null, 1);

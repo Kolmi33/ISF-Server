@@ -58,7 +58,13 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     ("… durchgehend frei (offen – 542 Tage wählbar)"), core cross-check matches, console clean.
 - **Phase 2 is COMPLETE.** All four core modules extracted, tested (78 tests, 100% cov on `core/**`),
   and behavior-verified.
-- **3.1 (state store) DONE 2026-08-28** — see Done log. **Next: 3.2 `net/api.ts`.**
+- **3.2 (net/api) DONE 2026-08-28** — `web/js/net/api.ts`: `API`, `apiGet`/`apiPost` (fetch
+  injected, E4), `validateData` + `normalizeState` (faithful ports of legacy `validateData`/
+  `readFile` normalization). +14 tests, 100% cov; new `net/` gate layer wired (eslint boundary
+  `net/ ↛ ui/`; coverage floor 90/85). legacy `API`/`apiGet`/`apiPost`/`validateData` removed,
+  `readFile` thinned to `normalizeState(await apiGet('/api/state'))`. Gate + smoke green
+  (boot + a live `/api/state` round-trip both 200; `rev` unchanged). **Next: 3.3 `net/sse.ts`.**
+- **3.1 (state store) DONE 2026-08-28** — see Done log.
   - `web/js/state.ts`: `createStore(initial): Store` — pure, mutates its state object in place so
     the bridged `window.S` reference stays valid; `get`/`set`(shallow-merge+notify)/`subscribe`
     (returns unsubscribe)/`notify`. +6 tests, 100% cov; gate floor extended to `state.ts` (D6).
@@ -74,13 +80,16 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 3.2 `net/api.ts`** — extract the HTTP client (`apiGet`/`apiPost` → `/api/state`,
-> `/api/mutate`, and the `d.revision = d.rev||0; d.log = d.log||[]` normalization from legacy
-> `loadState`). `net/` is a **new gate layer**: add its `no-restricted-imports` boundary in
-> `eslint.config.js` (core must not import net/ — already set; net/ must not import ui/). Keep the
-> pure bits unit-tested (URL/body building, response normalization) and smoke the fetch wiring (E5).
-> Then 3.3 `net/sse.ts` — the **first `notify` consumer**: SSE events call `store.set(...)` →
-> `notify()`; still don't subscribe `render` (revisit UI reactivity in Phase 4).
+> **Phase 3.3 `net/sse.ts`** — extract the live-connection layer from legacy (`connectSSE`,
+> `applyPresence`, the `es`/`EventSource` lifecycle). It is the **first `notify` consumer**: the
+> `update`/`structural` handlers should route through `store.set(...)` → `notify()` rather than
+> mutating `S.data` + `patchCells` inline — but **still do NOT subscribe `render`** (D2/Q2b; UI
+> reactivity is revisited in Phase 4). Split pure/testable bits out (event `data` JSON parsing,
+> the `changes[]`→bookings-patch reduction, presence-list formatting) and unit-test them (E4/E7);
+> the `EventSource` wiring + DOM/toast side effects are browser-smoked (E5). Reuse the bridged
+> `API`/`readFile`/`normalizeState` from 3.2. Mind: `net/ ↛ ui/` boundary — the DOM/toast calls
+> (`stampRef`, `patchCells`, `toast`, `fillGroupSel`, `queueRemote`) stay as legacy-provided
+> callbacks injected in, not imported.
 >
 > **Canonical-naming rule (do not drift):** `store` is canonical for all new TS; `window.S` is a
 > legacy-only bridge that only shrinks. No new code introduces `S` accesses. (ARCHITECTURE §14.)
@@ -115,7 +124,9 @@ Checked off as each item lands (one commit per item unless noted).
 - [x] 3.1 `state.ts` (store + subscribe/notify) — pure `createStore`, +6 tests 100% cov; `AppState`/
   `ServerData`/`LogEntry` typed; `app.ts` hydrates + bridges `window.S`; `const S` removed from
   `legacy.js`. Gate + smoke green; `render()` still manual (D2). **DONE 2026-08-28.**
-- [ ] 3.2 `net/api.ts`
+- [x] 3.2 `net/api.ts` — `apiGet`/`apiPost` (fetch injected) + `validateData`/`normalizeState`
+  faithful ports; +14 tests 100% cov; `net/` gate layer wired (eslint `net/↛ui/`, coverage 90/85).
+  legacy HTTP client removed/bridged. Gate + smoke green. **DONE 2026-08-28.**
 - [ ] 3.3 `net/sse.ts`
 
 **Phase 4 — UI**

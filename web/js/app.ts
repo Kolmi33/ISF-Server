@@ -16,6 +16,7 @@ import { mondayOf } from './core/dates.ts';
 import * as machines from './core/machines.ts';
 import * as weekend from './core/weekend.ts';
 import * as assistant from './core/assistant.ts';
+import * as api from './net/api.ts';
 import { createStore } from './state.ts';
 
 declare global {
@@ -31,6 +32,7 @@ Object.assign(window, dates);
 Object.assign(window, machines);
 Object.assign(window, weekend);
 Object.assign(window, assistant);
+Object.assign(window, api);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);

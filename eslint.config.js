@@ -52,6 +52,20 @@ export default tseslint.config(
     },
   },
 
+  // Net layer: the backend data client. May do I/O (fetch) and use DOM globals, but must
+  // not reach up into the UI layer — dependency direction stays core → net → ui.
+  {
+    files: ['web/js/net/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [{ group: ['**/ui/**'], message: 'net/ must not import ui/.' }],
+        },
+      ],
+    },
+  },
+
   // Tests and config files are exempt from size/any budgets.
   {
     files: ['**/*.test.ts', '*.config.ts', '*.config.js', 'eslint.config.js'],
