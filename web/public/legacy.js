@@ -2341,13 +2341,16 @@ async function setupFileObserver(){};
    Live weekend upkeep is unaffected — sweepWeekends still runs on every booking write. */
 function startRefreshTimer(){};         // kein Polling – der Server schiebt (SSE)
 
-/* --- Live-Verbindung (Server-Sent Events): Push statt Polling --- */
+/* --- Live-Verbindung (Server-Sent Events): Push statt Polling ---
+   Die reine Ereignis-Logik (applyUpdate, presenceInfo, isForeign) liegt in
+   net/sse.ts (window-Bridge); hier bleibt nur der DOM-/EventSource-Adapter.
+   Der store.notify-Pfad folgt in Phase 4, wenn render() abonniert (D2/§14). */
 let es=null;
 function applyPresence(users){
+  const info = presenceInfo(users);         // → net/sse.ts (reine Formatierung)
   const now=Date.now(); presenceData={};
-  const list=(users||[]).filter(Boolean);
-  for(const u of list) presenceData[u]=now;
-  setPres(String(list.length||'–'), list.length?('Gerade aktiv: '+list.join(', ')):'Niemand aktiv');
+  for(const u of info.list) presenceData[u]=now;
+  setPres(info.count, info.label);
 }
 function connectSSE(){
   try{ if(es) es.close(); }catch(_){}
@@ -2359,17 +2362,11 @@ function connectSSE(){
   es.addEventListener('presence', ev=>{ try{ applyPresence(JSON.parse(ev.data).users); }catch(e){ handleError('sse/presence', e); } });
   es.addEventListener('update', ev=>{
     let d; try{ d=JSON.parse(ev.data); }catch(_){ return; }
-    if(typeof d.rev==='number') S.data.revision=d.rev;
-    const patch=[];
-    for(const c of (d.changes||[])){
-      S.data.bookings[c.mid] = S.data.bookings[c.mid] || {};
-      if(c.val) S.data.bookings[c.mid][c.day]=c.val; else delete S.data.bookings[c.mid][c.day];
-      patch.push({ mid:c.mid, date:c.day });
-    }
+    const { rev, patch } = applyUpdate(d, S.data.bookings);   // → net/sse.ts (buchungen mutieren + patch)
+    if(rev!==null) S.data.revision=rev;
     if(patch.length) patchCells(patch);
     stampRef();
-    const me=(S.user||'?').toLowerCase();
-    if(d.by && String(d.by).toLowerCase()!==me && d.log){   // Meldung nur für FREMDE Änderungen
+    if(isForeign(d.by, S.user||'?') && d.log){   // Meldung nur für FREMDE Änderungen
       dbg('remote', d.by+': '+d.log);
       queueRemote(remoteMsg({ user:d.by, action:d.log, ts:new Date().toISOString() }));
     }
@@ -2377,7 +2374,7 @@ function connectSSE(){
   es.addEventListener('structural', async ev=>{             // Maschinenliste geändert → neu laden
     try{ S.data = await readFile(); fillGroupSel(); render(); }catch(e){ handleError('sse/structural', e); }
     let by=''; try{ by=JSON.parse(ev.data).by; }catch(_){}
-    if(by && String(by).toLowerCase()!==(S.user||'?').toLowerCase()) toast(by+' hat die Maschinenliste geändert.');
+    if(isForeign(by, S.user||'?')) toast(by+' hat die Maschinenliste geändert.');
   });
   es.onerror = ()=>{ const el=document.getElementById('lastRef'); if(el) el.textContent='⚠ offline'; };
 }

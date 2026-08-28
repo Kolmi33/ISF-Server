@@ -58,6 +58,14 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     ("… durchgehend frei (offen – 542 Tage wählbar)"), core cross-check matches, console clean.
 - **Phase 2 is COMPLETE.** All four core modules extracted, tested (78 tests, 100% cov on `core/**`),
   and behavior-verified.
+- **3.3 (net/sse) DONE 2026-08-28** — `web/js/net/sse.ts`: pure event logic `applyUpdate`
+  (mutates bookings, returns rev + repaint patch), `presenceInfo` (badge count/label), `isForeign`
+  (remote-change gate). +8 tests, 100% cov. Legacy `connectSSE`/`applyPresence` refactored to the
+  bridged helpers (thin DOM/EventSource adapter remains). **Plan adjusted:** the SSE orchestrator
+  move + `store.notify()` wiring are **deferred to Phase 4** (notify has no subscriber until `render`
+  subscribes — E3/E5/E8; see ARCHITECTURE §14 "3.3 SSE"). Gate + smoke green (live `presence` event
+  drove the badge through the new adapter; `applyUpdate`/`isForeign` bridged and correct; `rev` 23).
+  **Phase 3 complete.** **Next: Phase 4.1.**
 - **3.2 (net/api) DONE 2026-08-28** — `web/js/net/api.ts`: `API`, `apiGet`/`apiPost` (fetch
   injected, E4), `validateData` + `normalizeState` (faithful ports of legacy `validateData`/
   `readFile` normalization). +14 tests, 100% cov; new `net/` gate layer wired (eslint boundary
@@ -80,16 +88,23 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 3.3 `net/sse.ts`** — extract the live-connection layer from legacy (`connectSSE`,
-> `applyPresence`, the `es`/`EventSource` lifecycle). It is the **first `notify` consumer**: the
-> `update`/`structural` handlers should route through `store.set(...)` → `notify()` rather than
-> mutating `S.data` + `patchCells` inline — but **still do NOT subscribe `render`** (D2/Q2b; UI
-> reactivity is revisited in Phase 4). Split pure/testable bits out (event `data` JSON parsing,
-> the `changes[]`→bookings-patch reduction, presence-list formatting) and unit-test them (E4/E7);
-> the `EventSource` wiring + DOM/toast side effects are browser-smoked (E5). Reuse the bridged
-> `API`/`readFile`/`normalizeState` from 3.2. Mind: `net/ ↛ ui/` boundary — the DOM/toast calls
-> (`stampRef`, `patchCells`, `toast`, `fillGroupSel`, `queueRemote`) stay as legacy-provided
-> callbacks injected in, not imported.
+> **Phase 4.1 — `ui/grid.ts` + wire the reactive path.** This is where the view layer starts and
+> where the deferred store-reactivity finally lands. Two intertwined goals:
+> 1. **Extract the grid renderer** — carve `render()` (and its helpers: `buildGrid`/`patchCells`/
+>    the row/column builders) out of legacy into `web/js/ui/grid.ts`. `ui/` is a **new gate layer**:
+>    wire its eslint boundary (ui/ may import core/ + net/ + state; nothing may import ui/) and the
+>    90/85 coverage floor for the pure bits (cell-model building; DOM writes are smoke-tested, E5).
+>    Grid rendering is heavily DOM-coupled → expect thin adapters + injected deps (E3/E4).
+> 2. **Wire `SSE → store.set → notify → render`** (the piece deferred from 3.3, ARCHITECTURE §14
+>    "3.3 SSE"): move the `connectSSE` orchestrator into `net/` (or a `boot` module) so it holds the
+>    real `store`, have `update`/`structural`/`presence` route through `store.set(...)`, and
+>    **subscribe `render` to the store** so notify actually repaints. This retires the manual-render
+>    calls incrementally. Also **evaluate the view layer on real evidence now** (Q2 deferred here):
+>    once one screen is extracted, decide native-templates+signals vs. a compile-away lib, weighed
+>    against §5.6 (zero runtime deps).
+> Then 4.2 `ui/selection.ts` + `ui/navigation.ts`, 4.3 `ui/views/*` (one screen per commit), and
+> **retire the Phase-2 assistant `AS_TREE` adapters + the `window.S` bridge** as legacy sites migrate
+> to `store`.
 >
 > **Canonical-naming rule (do not drift):** `store` is canonical for all new TS; `window.S` is a
 > legacy-only bridge that only shrinks. No new code introduces `S` accesses. (ARCHITECTURE §14.)
@@ -127,7 +142,9 @@ Checked off as each item lands (one commit per item unless noted).
 - [x] 3.2 `net/api.ts` — `apiGet`/`apiPost` (fetch injected) + `validateData`/`normalizeState`
   faithful ports; +14 tests 100% cov; `net/` gate layer wired (eslint `net/↛ui/`, coverage 90/85).
   legacy HTTP client removed/bridged. Gate + smoke green. **DONE 2026-08-28.**
-- [ ] 3.3 `net/sse.ts`
+- [x] 3.3 `net/sse.ts` — pure `applyUpdate`/`presenceInfo`/`isForeign` (+8 tests 100% cov); legacy
+  `connectSSE`/`applyPresence` refactored to the bridged helpers (adapter stays). SSE orchestrator
+  move + `store.notify` wiring **deferred to Phase 4** (see §14). Gate + smoke green. **DONE 2026-08-28.**
 
 **Phase 4 — UI**
 - [ ] 4.1 `ui/grid.ts` + reactive core

@@ -312,3 +312,20 @@ store (~30 lines, typed, tested). **Defer** any view-layer choice to **Phase 4**
 once the UI is extracted into TS view modules; if anything is adopted then, prefer zero-runtime-dep
 options (native templates + a tiny signals helper, or a compile-away approach like Svelte), weighed
 explicitly against §5.6.
+
+### 3.3 SSE — adjustment to the plan (decided 2026-08-28)
+The original backlog framed 3.3 `net/sse.ts` as *"the first `notify` consumer."* On implementing it,
+the coupling made that premature. `connectSSE` needs ~10 legacy DOM/toast functions (`patchCells`,
+`stampRef`, `toast`, `fillGroupSel`, `queueRemote`, `remoteMsg`, `setPres`, `handleError`, `render`,
+`readFile`) plus the `EventSource` lifecycle and the `presenceData` global. Wiring `store.notify()`
+now would require **either** hauling that whole orchestrator into `net/` behind a 10-callback injection
+harness **or** bridging `store` into legacy (which violates the §14 migration rule — legacy uses
+`window.S`, new TS uses `store`). And `notify` has **no subscribers until `render` subscribes in
+Phase 4** (D2/Q2b), so the wiring would be a no-op either way.
+**Decision (E3/E5/E8):** in 3.3, extract only the **pure event logic** to `net/sse.ts` — `applyUpdate`
+(mutates bookings, returns rev + repaint patch), `presenceInfo` (badge count/label), `isForeign`
+(remote-change gate) — unit-tested to 100%; keep `connectSSE`/`applyPresence` as the **thin
+DOM/EventSource adapter in legacy**, refactored to call the bridged helpers (mirrors the Phase-2
+assistant extraction: pure logic out, DOM orchestrator stays). **Deferred to Phase 4** (recorded in
+`PROGRESS.md`): move the SSE orchestrator into `net/` and wire `SSE → store.set → notify` at the same
+time `render` becomes a subscriber — so the notify path lands with a real consumer, not as a symbol.
