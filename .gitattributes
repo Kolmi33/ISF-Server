@@ -1,0 +1,9 @@
+# Normalize line endings to LF in the repo; check out as-is on the OS.
+# Prevents the CRLF churn Git warned about on Windows.
+* text=auto eol=lf
+
+# Binary / generated — never touch line endings
+*.db binary
+*.png binary
+*.jpg binary
+*.ico binary
