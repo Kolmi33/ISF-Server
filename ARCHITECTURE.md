@@ -149,3 +149,89 @@ Phase 1 switches the image to serve the Vite build.
 - `node:sqlite` is still experimental in Node 22; the server runs with
   `--disable-warning=ExperimentalWarning`. Confirm the flag/loader story when the backend
   moves to TypeScript in Phase 6.
+
+---
+
+## 10. Quality gates — the `verify` oracle
+
+Principles are only real if they're **enforced deterministically**. `npm run verify` runs
+every gate in sequence; its exit code is the single source of truth:
+
+> **Exit 0 ⇒ principles hold ⇒ proceed. Non-zero ⇒ stop and fix. Nothing is "done" until
+> `verify` is green (in the dev container) and committed.**
+
+| Gate | Tool | Pass condition | Principle enforced |
+|---|---|---|---|
+| Format | `prettier --check` | 0 diffs | consistent style |
+| Types | `tsc --noEmit` (strict) | 0 errors | types are the contract |
+| Lint — no `any` | `@typescript-eslint/no-explicit-any` | 0 | real types, no escape hatches |
+| Lint — boundaries | eslint import rules | 0 | **core/ has no DOM**; ui/ ⊄ server/; layered deps |
+| Lint — complexity | `complexity` | ≤ **12** / fn | small units |
+| Lint — fn length | `max-lines-per-function` | ≤ **60** | small units |
+| Lint — file length | `max-lines` | ≤ **400** | no new monoliths |
+| Tests | `vitest run` | 100% pass | behavior specified |
+| Coverage — core/ | vitest v8 | lines ≥ **90%**, branches ≥ **85%** | pure logic pinned |
+| Coverage — global | vitest v8 | lines ≥ **70%** | honest floor |
+| Dead code | `knip` | 0 unused | no rot |
+
+**Bold values are the calibrated quality bar** (see the "Calibrated thresholds" note the team
+agrees on; changing one is a one-line config edit). All tools are dev-only — the shipped
+runtime stays zero-dependency.
+
+### What the gate does NOT catch (honest limits)
+- **UI behavior preservation** — not machine-checkable. Backstop: `FEATURES.md` manual smoke
+  after risky phases + diff against baseline `789bfec`.
+- **Naming / readability** — brief self-review per module; not automated.
+
+The current `verify` is a minimal seed (`check` + `test`); the remaining gates are wired once
+their thresholds are calibrated.
+
+## 11. The iteration loop
+
+The repeatable unit is **one module extraction** (§7). The loop repeats it over a backlog.
+
+**Definition of Done (per iteration — all machine-checkable):**
+1. New module + its test file exist.
+2. `npm run verify` is green.
+3. The old copies in the monolith are deleted and call sites rewired.
+4. Exactly one commit captures the step.
+
+**Loop:** `while backlog not empty: take next item → per-module loop → verify → commit`.
+
+**Token discipline** (deliberate — keep cost bounded):
+- One module per iteration bounds the context each step needs.
+- `verify`'s exit code is the oracle — read pass/fail, not the whole tree, to know we're done.
+- State lives in **git + the backlog**, so context can compact mid-run and any fresh session
+  resumes from the backlog with no re-discovery.
+
+**Hard stop conditions** (prevent runaway spend — the loop MUST halt and surface to the user):
+- Backlog is empty (phase complete).
+- The same item fails `verify` twice in a row → escalate, don't thrash.
+- A per-run budget is reached (iterations or tokens), whichever the run sets.
+
+**Check-in cadence:** [calibrated — per-module / per-phase / autonomous-until-blocked].
+
+## 12. Persistence across sessions
+
+So the setup "just works" every time:
+- **`CLAUDE.md`** (repo root, auto-loaded) — the durable operating manual: golden rule,
+  dockerized commands, the per-module loop, and the pointer to the current phase + backlog.
+- **git `pre-commit` hook** (`.githooks/`, calls the dockerized `verify`) — makes committing
+  red impossible. Enable once per clone: `git config core.hooksPath .githooks`.
+- **Backlog** (§13) — the loop's task queue, updated as items land.
+
+## 13. Backlog (loop task queue)
+
+Current phase: **1 — Skeleton** (next). Items are checked off as they land.
+
+- [ ] P1: Vite `web/` root; app runs identically under Vite
+- [ ] P1: monolith inline script → `web/js/app.ts` (verbatim), app boots
+- [ ] P1: Dockerfile/server serve the Vite build
+- [ ] P2: `core/dates.ts` (+ tests)
+- [ ] P2: `core/machines.ts` (+ tests)
+- [ ] P2: `core/weekend.ts` (+ tests)
+- [ ] P2: `core/assistant.ts` (+ tests)
+- [ ] P3: `state.ts`, `net/api.ts`, `net/sse.ts`
+- [ ] P4: `ui/grid.ts` + reactive core, then selection, navigation, views/*
+- [ ] P5: dead-code + CSS/HTML polish
+- [ ] P6: backend → TypeScript (+ mutate concurrency/validation tests)
