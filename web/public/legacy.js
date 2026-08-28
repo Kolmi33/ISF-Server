@@ -2322,7 +2322,7 @@ async function persist(fn, logEntry, result){
 async function refreshNow(silent){
   try{
     const d = await readFile();
-    S.data = d; render(); stampRef();
+    S.data = d; notify(); stampRef();   // 4.1c: repaint via store (subscribed render)
     if(!silent) toast('Aktualisiert ✓');
   }catch(e){
     const el=document.getElementById('lastRef'); if(el) el.textContent='⚠ offline';
@@ -2345,7 +2345,8 @@ function startRefreshTimer(){};         // kein Polling – der Server schiebt (
 /* --- Live-Verbindung (Server-Sent Events): Push statt Polling ---
    Die reine Ereignis-Logik (applyUpdate, presenceInfo, isForeign) liegt in
    net/sse.ts (window-Bridge); hier bleibt nur der DOM-/EventSource-Adapter.
-   Der store.notify-Pfad folgt in Phase 4, wenn render() abonniert (D2/§14). */
+   4.1c: render() ist am Store abonniert; der Struktur-Handler löst den
+   Neuaufbau über notify() (Store) statt direkt render() aus (§14/§15). */
 let es=null;
 function applyPresence(users){
   const info = presenceInfo(users);         // → net/sse.ts (reine Formatierung)
@@ -2373,7 +2374,7 @@ function connectSSE(){
     }
   });
   es.addEventListener('structural', async ev=>{             // Maschinenliste geändert → neu laden
-    try{ S.data = await readFile(); fillGroupSel(); render(); }catch(e){ handleError('sse/structural', e); }
+    try{ S.data = await readFile(); fillGroupSel(); notify(); }catch(e){ handleError('sse/structural', e); }   // 4.1c: repaint via store
     let by=''; try{ by=JSON.parse(ev.data).by; }catch(_){}
     if(isForeign(by, S.user||'?')) toast(by+' hat die Maschinenliste geändert.');
   });

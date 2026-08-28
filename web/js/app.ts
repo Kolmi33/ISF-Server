@@ -26,6 +26,10 @@ declare global {
     /** Legacy compat bridge for the runtime state (ARCHITECTURE §14). It IS `store.state`
      *  — the same object reference. Only shrinks as legacy sites migrate to `store`. */
     S: AppState;
+    /** The legacy full-grid renderer (defined by legacy.js); subscribed to the store in 4.1c. */
+    render: () => void;
+    /** Trigger a store notify (→ the subscribed render). Bridged for the legacy layer (4.1c). */
+    notify: () => void;
   }
 }
 
@@ -69,3 +73,15 @@ function hydrateState(): AppState {
 
 const store = createStore(hydrateState());
 window.S = store.state;
+
+// Phase 4.1c — the store drives repaints. The legacy `render()` subscribes to the store, and the
+// data-load/SSE paths call the bridged `notify()` instead of `render()` directly, so those repaints
+// flow through the store (SSE/refresh → store change → notify → render). The guard preserves the
+// legacy invariant that the grid never renders before the first data load. Remaining direct
+// `render()` calls stay valid during the migration — they simply don't route through the store yet.
+store.subscribe(() => {
+  if (window.S.data) window.render();
+});
+window.notify = () => {
+  store.notify();
+};
