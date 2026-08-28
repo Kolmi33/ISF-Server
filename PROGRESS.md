@@ -4,7 +4,7 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-08-28 — Phase 2: 2.0–2.3 landed (dates, machines, weekend); `migrating` bug fixed._
+_Last updated: 2026-08-28 — Phase 2: 2.0–2.3 + 2.4a landed; `migrating` bug fixed; weekend-bridge feature → Phase 6.3._
 
 ---
 
@@ -43,16 +43,22 @@ _Last updated: 2026-08-28 — Phase 2: 2.0–2.3 landed (dates, machines, weeken
     weekend-bridge write (HTTP 400), so removal preserves behavior (no migration ran before/after)
     while clearing the console error. `missingWeekendBridges` was only used by the removed migration,
     so it was deleted too (not extracted).
-- Verified in a fresh browser tab (Vite :5173 → backend :3000): grid renders, all helpers bridged,
-  **console entirely clean** (no `migrating`, no `/api/mutate`), backend rev unchanged (no write).
-- **Next: 2.4 `core/assistant.ts`** — the last core module.
+  - **2.4a** `web/js/core/assistant.ts` (+ `assistant.test.ts`, 16 tests, 100% cov) — the pure
+    Assistant **tree ops** (`treeFind`, `treeFindParent`, `treeIsAncestor`, `treeDetach`, `treeDevs`,
+    `treeDevUid`, `treeCleanup`). The Assistant is heavily UI-coupled (AS_TREE global + DnD + DOM),
+    so legacy keeps **thin one-line adapters** (`asFind`, …) that bind `AS_TREE` and delegate to
+    core — call sites unchanged; adapters retire in Phase 4 when AS_TREE becomes a store.
+    Browser-verified: core + adapters + the real `asAdd`→`asDevs` mutation path all work; console clean.
+- **Next: 2.4b `core/assistant.ts` (solver)** — completes Phase 2.
 
 ## Next step
-> **Step 2.4 `core/assistant.ts`** — test-first. Extract the device/group tree + N-of-M solver
-> from `legacy.js` (the `AS_*` / assistant helpers — read `legacy.js` for the exact pure set;
-> tree-walk + selection logic is pure, the `renderWork()`/DOM parts stay behind). Write tests
-> capturing behavior, implement the gated module, add to the `app.ts` bridge, delete originals from
-> `legacy.js`, `verify` (90/85 holds), browser-smoke, commit. Completes Phase 2.
+> **Step 2.4b — the Assistant N-of-M solver.** Extract the scheduling logic currently living as
+> closures inside `runAssistant` (`nodeNeed`, `nodeFree`, `dayOk`, `anyRedund`, `pickNode`/`pickFor`,
+> plus the free-run grouping) into `core/assistant.ts`, **parameterized by an injected availability
+> predicate** `isFree(id, day)` so it stays DOM/state-free. Refactor `runAssistant` to call the
+> extracted pure functions (keeping its DOM/result-rendering). Tests: cover need-clamping, AND-at-root,
+> group "N free of M", run-grouping, and device pick order. `verify` (90/85), browser-smoke by actually
+> running the Assistant, commit. Completes Phase 2.
 
 ## Backlog (task queue — the single canonical copy)
 Checked off as each item lands (one commit per item unless noted).
@@ -75,7 +81,9 @@ Checked off as each item lands (one commit per item unless noted).
   deleted from `legacy.js`
 - [x] 2.3 `core/weekend.ts` (`sweepWeekends`, + 6 tests, 100% cov); `migrating` bug fixed by
   removing the two obsolete migrations (see Done log + Known bugs → Fixed)
-- [ ] 2.4 `core/assistant.ts` (+ tests)
+- [x] 2.4a `core/assistant.ts` — pure tree ops (7 fns, + 16 tests, 100% cov); legacy keeps thin
+  `AS_TREE`-binding adapters (retire in Phase 4)
+- [ ] 2.4b `core/assistant.ts` — the N-of-M solver (from `runAssistant`, predicate-injected)
 
 **Phase 3 — State + net**
 - [ ] 3.1 `state.ts` (store + subscribe/notify)
@@ -132,6 +140,8 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 2.4a — `core/assistant.ts` pure tree ops (7 fns, 16 tests, 100% cov) extracted + bridged;
+  legacy keeps thin `AS_TREE`-binding adapters. Browser-verified incl. real `asAdd`→`asDevs` path.
 - Phase 2.3 — `core/weekend.ts` (`sweepWeekends`, 6 tests, 100% cov) extracted + bridged;
   **fixed the `migrating` bug** by deleting the two obsolete file-era migrations and their calls
   (they never ran; server rejects the weekend write with 400). Fresh-tab console now fully clean;

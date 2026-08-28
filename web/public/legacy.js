@@ -1529,21 +1529,14 @@ const AS_HUES=[210,150,275,32,344,190,95,258];
 const asUid=()=>'n'+(++AS_UID);
 const asNextColor=()=>AS_HUES[(asColorI++)%AS_HUES.length];
 function asById(id){ return machById(id); }
-function asFind(uid,node=AS_TREE){ for(const c of node.children){ if(c.uid===uid) return c; if(c.type==='grp'){ const r=asFind(uid,c); if(r) return r; } } return null; }
-function asFindParent(uid,node=AS_TREE){ for(const c of node.children){ if(c.uid===uid) return node; if(c.type==='grp'){ const r=asFindParent(uid,c); if(r) return r; } } return null; }
-function asIsAncestor(aUid,bUid){ if(aUid===bUid) return true; const a=asFind(aUid); return a && a.type==='grp' && !!asFind(bUid,a); }
-function asDetach(uid){ const p=asFindParent(uid); if(!p) return null; const i=p.children.findIndex(c=>c.uid===uid); return p.children.splice(i,1)[0]; }
-function asDevs(node=AS_TREE){ let a=[]; for(const c of node.children){ if(c.type==='dev') a.push(c.id); else a=a.concat(asDevs(c)); } return a; }
-function asCleanup(node=AS_TREE){
-  for(const c of node.children) if(c.type==='grp') asCleanup(c);
-  node.children = node.children.flatMap(c=>{
-    if(c.type!=='grp') return [c];
-    if(c.children.length===0) return [];            // leere Gruppe entfernen
-    if(c.children.length===1) return [c.children[0]]; // Ein-Element-Gruppe auflösen
-    c.need=Math.max(1,Math.min(c.children.length,c.need));
-    return [c];
-  });
-}
+/* Pure tree ops → core/assistant.ts (window bridge). These thin adapters bind the
+   AS_TREE global and delegate; they retire in Phase 4 when AS_TREE becomes a store. */
+function asFind(uid,node=AS_TREE){ return treeFind(node, uid); }
+function asFindParent(uid,node=AS_TREE){ return treeFindParent(node, uid); }
+function asIsAncestor(aUid,bUid){ return treeIsAncestor(AS_TREE, aUid, bUid); }
+function asDetach(uid){ return treeDetach(AS_TREE, uid); }
+function asDevs(node=AS_TREE){ return treeDevs(node); }
+function asCleanup(node=AS_TREE){ treeCleanup(node); }
 function asAdd(id){ if(AS_ADDED.has(id)) return false; AS_TREE.children.push({uid:asUid(),type:'dev',id}); AS_ADDED.add(id); return true; }
 function asGroupOnto(dragUid,targetUid){        // Gerät auf Gerät → neue Gruppe
   if(dragUid===targetUid || asIsAncestor(dragUid,targetUid)) return;
@@ -2323,7 +2316,7 @@ function maintText(s){ if(!s) return ''; const f=s.from?fmtLong(s.from):'sofort'
 function blockText(m,d){ return maintText(maintAt(m,d)); }
 function maintKind(m){ const s=maintAt(m,todayStr()); return s?s.type:null; }
 function catIco(c){ return ic(c==='messtechnik' ? 'gauge' : 'factory'); }
-function asDevUid(id,node=AS_TREE){ for(const c of node.children){ if(c.type==='dev'&&c.id===id) return c.uid; if(c.type==='grp'){ const r=asDevUid(id,c); if(r) return r; } } return null; }
+function asDevUid(id,node=AS_TREE){ return treeDevUid(node, id); }  // → core/assistant.ts (bridge)
 function asToggleId(id,on){ if(on){ asAdd(id); } else { const u=asDevUid(id); if(u){ asDetach(u); asCleanup(); } } AS_ADDED=new Set(asDevs()); renderWork(); }
 const API = '';   // gleiche Herkunft wie die ausgelieferte Seite
 async function apiGet(path){ const r=await fetch(API+path); if(!r.ok) throw new Error('Server '+r.status); return r.json(); }
