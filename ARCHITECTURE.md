@@ -174,9 +174,24 @@ every gate in sequence; its exit code is the single source of truth:
 | Coverage — global | vitest v8 | lines ≥ **70%** | honest floor |
 | Dead code | `knip` | 0 unused | no rot |
 
-**Bold values are the calibrated quality bar** (see the "Calibrated thresholds" note the team
-agrees on; changing one is a one-line config edit). All tools are dev-only — the shipped
-runtime stays zero-dependency.
+### Calibrated thresholds (locked)
+- **Coverage — core/**: lines ≥ **90%**, branches ≥ **85%**. Enforced from Phase 2, when the
+  first `core/` module exists (before that there is nothing to cover).
+- **Enforcement**: **hard** — a git `pre-commit` hook runs the dockerized `verify` and blocks
+  any commit that fails (see §12).
+- **Complexity 12 / fn-length 60 / file-length 400 / global-coverage 70%**: sensible defaults,
+  not separately calibrated; adjust with reasoning if they prove wrong in practice.
+
+All tools are dev-only — the shipped runtime stays zero-dependency. Changing any threshold is a
+one-line config edit, made deliberately (never bypassed).
+
+### The legacy quarantine (reconciling a hard gate with "carve, don't rewrite")
+A hard gate would reject the 3,200-line monolith the instant it entered as TypeScript. So:
+- New code (`core/`, `state`, `net/`, `ui/`, `server/`) faces the **full gate from day one**.
+- The not-yet-extracted monolith lives in **`web/js/legacy.ts`**, explicitly **excluded** from
+  ESLint size/complexity/`any` rules and from coverage — a shrinking quarantine, not an exception
+  to the standard. Every extraction moves code *out* of `legacy.ts` into gated modules.
+- `legacy.ts` must reach zero by Phase 5; its line count is a tracked burn-down.
 
 ### What the gate does NOT catch (honest limits)
 - **UI behavior preservation** — not machine-checkable. Backstop: `FEATURES.md` manual smoke
@@ -209,7 +224,11 @@ The repeatable unit is **one module extraction** (§7). The loop repeats it over
 - The same item fails `verify` twice in a row → escalate, don't thrash.
 - A per-run budget is reached (iterations or tokens), whichever the run sets.
 
-**Check-in cadence:** [calibrated — per-module / per-phase / autonomous-until-blocked].
+**Check-in cadence (calibrated):** **per-phase.** Within a phase, run the backlog
+autonomously — extract, `verify`, and commit each module without pausing. At a phase boundary
+(or any hard stop condition), pause with a summary for review before starting the next phase.
+For a large, cohesive body of work spanning closely related phases, batching them before a
+check-in is acceptable; when in doubt, stop at the phase boundary.
 
 ## 12. Persistence across sessions
 
@@ -224,9 +243,10 @@ So the setup "just works" every time:
 
 Current phase: **1 — Skeleton** (next). Items are checked off as they land.
 
+- [ ] P0.5: wire the full gate (ESLint, Prettier, coverage, pre-commit hook); `verify` green
 - [ ] P1: Vite `web/` root; app runs identically under Vite
-- [ ] P1: monolith inline script → `web/js/app.ts` (verbatim), app boots
-- [ ] P1: Dockerfile/server serve the Vite build
+- [ ] P1: monolith inline script → `web/js/legacy.ts` (quarantined, gate-excluded), app boots
+- [ ] P1: clean `web/js/app.ts` entry that imports legacy.ts; Dockerfile/server serve the Vite build
 - [ ] P2: `core/dates.ts` (+ tests)
 - [ ] P2: `core/machines.ts` (+ tests)
 - [ ] P2: `core/weekend.ts` (+ tests)

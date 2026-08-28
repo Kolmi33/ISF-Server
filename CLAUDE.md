@@ -41,9 +41,21 @@ Work the backlog in `ARCHITECTURE.md` §13 top to bottom. Update it as items lan
 
 ## Loop / autonomy
 
-When running iterations, HALT and surface to the user when: the backlog phase is complete,
-the same item fails `verify` twice, or the run's budget is hit. Keep scope to one module per
-iteration; rely on `verify`'s exit code (not re-reading the tree) to know you're done.
+Cadence is **per-phase**: within a phase, run the backlog autonomously — extract, `verify`,
+commit each module without pausing — then HALT with a summary at the phase boundary for review.
+Also HALT immediately when: the same item fails `verify` twice (escalate, don't thrash), or the
+run's budget is hit. Keep scope to one module per iteration; rely on `verify`'s exit code (not
+re-reading the tree) to know you're done.
+
+## Enforcement & the legacy quarantine
+
+`verify` is enforced by a git `pre-commit` hook (`.githooks/pre-commit`, runs the dockerized
+gate). Enable once per clone: `git config core.hooksPath .githooks`. Never bypass with
+`--no-verify`.
+
+The un-extracted monolith lives in `web/js/legacy.ts` — **gate-excluded** (ESLint size/complexity/
+`any` + coverage), a shrinking quarantine that must reach zero by Phase 5. All NEW modules face
+the full gate. Each extraction moves code OUT of `legacy.ts` into a gated module.
 
 ## Principles (full list in ARCHITECTURE.md §5)
 
