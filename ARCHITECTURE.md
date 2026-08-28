@@ -100,8 +100,8 @@ The general coding standard is **`PRINCIPLES.md`** (P0–P6). These are the rule
 | Phase | What | State |
 |---|---|---|
 | 0 | Safety net + dockerized toolchain + these docs | **done** |
-| 1 | Skeleton: Vite web root, move the monolith into a TS entry, app runs identically under Vite; wire Dockerfile/server for built output | next |
-| 2 | Core logic (TDD): `dates` → `machines` → `weekend` → `assistant` | |
+| 1 | Skeleton: Vite web root, monolith → classic `legacy.js`, CSS → `app.css`, production serves the build | **done** |
+| 2 | Core logic (TDD): `dates` → `machines` → `weekend` → `assistant` | next |
 | 3 | State store + `net/` (api, sse) | |
 | 4 | UI: grid + reactive core, then selection, navigation, then each view | |
 | 5 | Polish: delete dead code, tidy CSS/HTML | |

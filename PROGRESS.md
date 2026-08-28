@@ -4,7 +4,7 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-08-28 — after Phase 1, step 1.4a._
+_Last updated: 2026-08-28 — Phase 1 COMPLETE (through 1.4b)._
 
 ---
 
@@ -19,20 +19,22 @@ _Last updated: 2026-08-28 — after Phase 1, step 1.4a._
    verify → commit. Update this file as items land.
 
 ## Current state
-- **Phase 0 / 0.5** — done. **Phase 1 in progress** (1.1, 1.2, 1.3, 1.4a done).
-- **Step 1.4a done — production cutover:** the multi-stage Dockerfile now builds the frontend
-  (`vite build`) and the runtime image serves the built output from `/app/public` (server code
-  untouched). Verified on the REAL production container at :3000: `/api/health` ok (rev 23, data
-  preserved via volume), served HTML references hashed `/assets/*.css` + `/legacy.js` (old inline
-  `<style>`/`<script>` gone), CSS applies, grid renders (3675 cells), handlers global, no 404s.
-- The old top-level `public/index.html` is now UNUSED by the image (still present on disk as a
-  safety net until 1.4b).
-- Cadence: checking in after each Phase-1 sub-step (per user request).
+- **Phase 0 / 0.5 — done. Phase 1 — COMPLETE** (1.1–1.4b).
+- The frontend is now cleanly split under Vite: `web/index.html` (195-line shell) +
+  `web/css/app.css` (styles) + `web/public/legacy.js` (the quarantined monolith, classic/global).
+  Production builds it (multi-stage Docker) and serves the built output; verified end-to-end at
+  :3000. The old top-level `public/` is deleted (preserved in git baseline `789bfec`).
+- Behavior is byte-identical to baseline throughout (same features, same look, same pre-existing
+  `migrating` bug — see Known bugs).
+- **Phase 2 (core logic, TDD) — not started.** This is next. Coverage 90/85 arms here.
 
 ## Next step
-> **Step 1.4b** — now that the built frontend is proven in the production container, retire the
-> old top-level `public/` folder (delete it; it is no longer copied by the Dockerfile). Confirm
-> `docker compose up -d --build` still serves the app. This completes Phase 1.
+> **Step 2.0** — add the clean ESM entry `web/js/app.ts` (a `<script type="module">` loaded
+> alongside `legacy.js`), empty except for a place to bridge extracted modules onto `window`.
+> Then **2.1 `core/dates.ts`** test-first: write `dates.test.ts` capturing the behavior of the
+> date helpers in `legacy.js` (ymd, mondayOf, isoWeek, weekdayRange, addDays, …), implement the
+> gated module, bridge it onto `window`, delete the originals from `legacy.js`, verify the app
+> still works. Coverage threshold (90/85 on `core/**`) is wired on in this step.
 
 ## Backlog (task queue — the single canonical copy)
 Checked off as each item lands (one commit per item unless noted).
@@ -44,7 +46,7 @@ Checked off as each item lands (one commit per item unless noted).
 - [x] 1.3 Lift the `<style>` block into `web/css/app.css`; app looks identical
 - [x] 1.4a Multi-stage Dockerfile builds the frontend; production container serves the built
   output from `/app/public` (verified end-to-end at :3000)
-- [ ] 1.4b Retire the old top-level `public/`; confirm production still serves the app
+- [x] 1.4b Retire the old top-level `public/`; confirm production still serves the app
 
 **Phase 2 — Core logic (TDD; coverage 90/85 arms here)**
 - [ ] 2.0 clean ESM entry `web/js/app.ts` (module, loaded alongside legacy.js); bridge
@@ -73,6 +75,7 @@ Checked off as each item lands (one commit per item unless noted).
 - [ ] 6.2 remove `src/` from the gate exclusions; full gate covers backend
 
 ## Done log (newest first)
+- Phase 1.4b — deleted old top-level `public/`; production rebuilt + still serves (Phase 1 done)
 - Phase 1.4a — multi-stage Dockerfile; production container serves built frontend (verified :3000)
 - Phase 1.3 — `<style>` → `web/css/app.css`; app looks identical (stylesheet loads + applies)
 - Phase 1.2 — monolith → classic `web/public/legacy.js`; app byte-identical (all handlers global)
