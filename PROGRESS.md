@@ -4,7 +4,7 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-08-28 — after Phase 1, step 1.2._
+_Last updated: 2026-08-28 — after Phase 1, step 1.3._
 
 ---
 
@@ -19,20 +19,22 @@ _Last updated: 2026-08-28 — after Phase 1, step 1.2._
    verify → commit. Update this file as items land.
 
 ## Current state
-- **Phase 0 / 0.5** — done. **Phase 1 in progress** (1.1, 1.2 done).
-- **Step 1.2 done:** the monolith's inline `<script>` is now `web/public/legacy.js`, a **classic**
-  (global-scope) script loaded via `<script src="/legacy.js">`; `web/index.html` is a 501-line
-  shell. Verified at :5173: grid renders identically (3675 cells), all handler functions are
-  global (125 inline handlers intact), gate green. Behavior byte-identical to baseline.
+- **Phase 0 / 0.5** — done. **Phase 1 in progress** (1.1, 1.2, 1.3 done).
+- **Step 1.3 done:** the `<style>` block is now `web/css/app.css` (305 lines), linked via
+  `<link rel="stylesheet" href="/css/app.css">`; `web/index.html` is a 195-line shell. Verified
+  at :5173: stylesheet loads and applies (body bg `#f4f5f7`, CSS vars resolve), grid renders
+  (3675 cells), only the known pre-existing console error. `app.css` is prettier-quarantined
+  (byte-identical for now; tidy in Phase 5.2).
 - Production still serves the original `public/index.html` — untouched until step 1.4.
 - Cadence: checking in after each Phase-1 sub-step (per user request).
 
 ## Next step
-> **Step 1.3** — lift the big `<style>` block out of `web/index.html` into `web/css/app.css`,
-> linked via `<link rel="stylesheet" href="/css/app.css">`. Goal: app looks identical.
-> Verify at :5173 (visual + gate).
-> Backend up: `docker compose up -d`; dev:
-> `docker compose -f docker-compose.dev.yml run --rm --service-ports dev npm run dev`.
+> **Step 1.4** — make the Vite build the thing production serves. Multi-stage Dockerfile
+> (`vite build` → static bundle in `dist/public`), and point the server at the built output
+> instead of `public/`. Then retire the old top-level `public/`. Goal: `docker compose up -d
+> --build` serves the reworked frontend, still behaving identically. This is the Phase-1
+> cutover — verify the production container (not just the dev server) end-to-end before
+> deleting `public/`.
 
 ## Backlog (task queue — the single canonical copy)
 Checked off as each item lands (one commit per item unless noted).
@@ -41,7 +43,7 @@ Checked off as each item lands (one commit per item unless noted).
 - [x] 1.1 Vite `web/` root serving the current `index.html` unchanged; app loads identically
 - [x] 1.2 Monolith inline `<script>` → `web/public/legacy.js` (classic, global-scope,
   gate-excluded); app boots byte-for-byte
-- [ ] 1.3 Lift the `<style>` block into `web/css/app.css`; app looks identical
+- [x] 1.3 Lift the `<style>` block into `web/css/app.css`; app looks identical
 - [ ] 1.4 Multi-stage Dockerfile + server serve the Vite build; `docker compose up` works
 
 **Phase 2 — Core logic (TDD; coverage 90/85 arms here)**
@@ -71,6 +73,7 @@ Checked off as each item lands (one commit per item unless noted).
 - [ ] 6.2 remove `src/` from the gate exclusions; full gate covers backend
 
 ## Done log (newest first)
+- Phase 1.3 — `<style>` → `web/css/app.css`; app looks identical (stylesheet loads + applies)
 - Phase 1.2 — monolith → classic `web/public/legacy.js`; app byte-identical (all handlers global)
 - Phase 1.1 — Vite `web/` root; app loads identically under Vite (`/api` proxied to backend)
 - `2582e27` Phase 0.5 — full gate + hard pre-commit enforcement (proven to block red)

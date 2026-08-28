@@ -7,6 +7,7 @@ public/
 src/
 web/index.html
 web/public/
+web/css/app.css
 buchungen.json
 package-lock.json
 *.md
