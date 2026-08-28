@@ -3,8 +3,10 @@
 Maschinenplan booking tool. Zero-dependency Node + `node:sqlite` backend, TypeScript
 frontend (Vite). Being reworked top-down, module by module, **conserving every behavior**.
 
-Read `ARCHITECTURE.md` (principles, layout, phases, quality gates) and `FEATURES.md`
-(behavioral acceptance checklist) before making changes.
+**Resuming, or after any context clear: read `PROGRESS.md` first** — it holds the current
+phase, the backlog, and step-by-step how to continue. Then this file (how we operate) and
+`PRINCIPLES.md` (the coding standard). `ARCHITECTURE.md` = design & decisions; `FEATURES.md`
+= behavioral acceptance checklist.
 
 ## Golden rule
 
@@ -37,7 +39,11 @@ Unit of work = one module extraction. Each is ONE commit:
 5. `npm run verify` green + quick browser smoke of the touched behavior.
 6. Commit (Conventional-style subject; end with the Co-Authored-By trailer).
 
-Work the backlog in `ARCHITECTURE.md` §13 top to bottom. Update it as items land.
+Work the backlog in `PROGRESS.md` top to bottom. Update it as items land.
+
+This per-module workflow is `PRINCIPLES.md`'s implementation loop
+(Understand → Plan → Explain → Define behavior → Implement → Test → Review → Clean up)
+applied to one module.
 
 ## Loop / autonomy
 
@@ -57,11 +63,15 @@ The un-extracted monolith lives in `web/js/legacy.ts` — **gate-excluded** (ESL
 `any` + coverage), a shrinking quarantine that must reach zero by Phase 5. All NEW modules face
 the full gate. Each extraction moves code OUT of `legacy.ts` into a gated module.
 
-## Principles (full list in ARCHITECTURE.md §5)
+## Principles
 
+Full standard: **`PRINCIPLES.md`** (P0–P6). Conflict order:
+**Correctness/Security → Maintainability → Simplicity → Testability → Performance → Aesthetics.**
+
+Project-specific rules (full list `ARCHITECTURE.md §5`) — the ones that bite daily:
+- Conserve behavior (baseline commit `789bfec` is the reference).
 - Pure `core/` has no DOM. · One authoritative server write path; never trust the client.
-- State changes go through the store. · Conserve behavior (baseline commit `789bfec`).
-- Small reversible commits. · Types are the contract. · Runtime stays zero-dependency.
+- State changes go through the store. · Runtime stays zero-dependency.
 
 ## Guardrails
 

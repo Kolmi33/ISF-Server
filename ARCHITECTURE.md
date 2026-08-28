@@ -77,22 +77,23 @@ maschinenplan-server/
 └── docker-compose.dev.yml  # dev toolchain (Node only lives here)
 ```
 
-## 5. Coding principles
+## 5. Project-specific rules
 
-1. **Pure core has no DOM.** Everything in `core/` is pure functions of data → data.
-   No `document`, no globals. This is what makes it trivially testable and is where our
-   tests concentrate.
-2. **One server-side write path stays authoritative.** The client is never trusted
-   (there is no login). All validation and compare-and-set concurrency stay on the server.
-3. **State changes go through the store**, not ad-hoc global mutation. `state.ts` owns
-   the app state and notifies subscribers; UI re-renders from state.
-4. **Conserve behavior.** When in doubt, the old code's behavior is the spec. Tests
-   encode it; the git baseline is the reference.
-5. **Small, reversible commits.** One module (or one cohesive step) per commit, each with
-   passing tests and a quick manual smoke of the touched behavior.
-6. **Types are the contract.** Domain shapes live once in `shared/types.ts` and are used
-   by both sides.
-7. **Zero runtime dependencies stay zero.** Dev tooling is fine; the shipped image is lean.
+The general coding standard is **`PRINCIPLES.md`** (P0–P6). These are the rules specific to
+*this* codebase — the concrete shape those principles take here:
+
+1. **Pure `core/` has no DOM.** Everything in `core/` is pure functions of data → data.
+   No `document`, no globals. Trivially testable; where our tests concentrate. (Lint-enforced.)
+2. **One server-side write path stays authoritative.** The client is never trusted (there is
+   no login). All validation and compare-and-set concurrency stay on the server.
+3. **State changes go through the store**, not ad-hoc global mutation. `state.ts` owns the
+   app state and notifies subscribers; UI re-renders from state.
+4. **Conserve behavior.** When in doubt, the old code's behavior is the spec. Tests encode it;
+   the git baseline `789bfec` is the reference.
+5. **Types are the contract.** Domain shapes live once in `shared/types.ts`, used by both sides.
+6. **Zero runtime dependencies stay zero.** Dev tooling is fine; the shipped image is lean.
+
+(Workflow rules — small reversible commits, one module per commit — are in `CLAUDE.md`.)
 
 ## 6. Extraction sequence (phases)
 
@@ -108,35 +109,18 @@ maschinenplan-server/
 
 ## 7. The per-module loop (the repeatable unit)
 
-Each iteration is one small commit:
-
-1. **Read** the target functions in the monolith.
-2. **Write the test** for the new module's intended behavior (red). Expected outputs are
-   derived from the existing code, so the test *is* the preserved spec.
-3. **Implement** the module until green.
-4. **Rewire** the app to import from it; delete the old copies.
-5. **Verify** — tests pass + a quick browser smoke of the touched behavior (see FEATURES.md).
-6. **Commit.**
+Canonical steps: `CLAUDE.md` → "How we work: the per-module loop". It is `PRINCIPLES.md`'s
+implementation loop applied to a single module extraction. Its Definition of Done and the
+autonomy / stop-conditions are in §11.
 
 ## 8. Dev workflow (dockerized — no host Node)
 
-Node lives only in the `dev` container defined in `docker-compose.dev.yml`.
+Node lives only in the `dev` container (`docker-compose.dev.yml`). The common commands
+(`verify`, `test`, `check`, `dev`) are in `CLAUDE.md`. Additionally:
 
 ```bash
-# install / update dependencies
-docker compose -f docker-compose.dev.yml run --rm dev npm install
-
-# run the test suite (the TDD loop)
-docker compose -f docker-compose.dev.yml run --rm dev npm test
-
-# watch mode
-docker compose -f docker-compose.dev.yml run --rm dev npm run test:watch
-
-# type-check the whole repo
-docker compose -f docker-compose.dev.yml run --rm dev npm run check
-
-# Vite dev server (browse at http://localhost:5173)
-docker compose -f docker-compose.dev.yml run --rm --service-ports dev npm run dev
+docker compose -f docker-compose.dev.yml run --rm dev npm install         # install/update deps
+docker compose -f docker-compose.dev.yml run --rm dev npm run test:watch   # watch mode
 ```
 
 Production is unchanged for now: `docker compose up -d --build` (see START.md), until
@@ -232,26 +216,14 @@ check-in is acceptable; when in doubt, stop at the phase boundary.
 
 ## 12. Persistence across sessions
 
-So the setup "just works" every time:
-- **`CLAUDE.md`** (repo root, auto-loaded) — the durable operating manual: golden rule,
-  dockerized commands, the per-module loop, and the pointer to the current phase + backlog.
+So the setup "just works" every time, including after a context clear:
+- **`PROGRESS.md`** — the living state + backlog + how-to-resume. **Read first** on any resume.
+- **`CLAUDE.md`** (repo root, auto-loaded) — the durable operating manual; points to PROGRESS.md.
+- **`PRINCIPLES.md`** — the coding standard (P0–P6).
 - **git `pre-commit` hook** (`.githooks/`, calls the dockerized `verify`) — makes committing
   red impossible. Enable once per clone: `git config core.hooksPath .githooks`.
-- **Backlog** (§13) — the loop's task queue, updated as items land.
 
-## 13. Backlog (loop task queue)
+## 13. Backlog
 
-Current phase: **1 — Skeleton** (next). Items are checked off as they land.
-
-- [ ] P0.5: wire the full gate (ESLint, Prettier, coverage, pre-commit hook); `verify` green
-- [ ] P1: Vite `web/` root; app runs identically under Vite
-- [ ] P1: monolith inline script → `web/js/legacy.ts` (quarantined, gate-excluded), app boots
-- [ ] P1: clean `web/js/app.ts` entry that imports legacy.ts; Dockerfile/server serve the Vite build
-- [ ] P2: `core/dates.ts` (+ tests)
-- [ ] P2: `core/machines.ts` (+ tests)
-- [ ] P2: `core/weekend.ts` (+ tests)
-- [ ] P2: `core/assistant.ts` (+ tests)
-- [ ] P3: `state.ts`, `net/api.ts`, `net/sse.ts`
-- [ ] P4: `ui/grid.ts` + reactive core, then selection, navigation, views/*
-- [ ] P5: dead-code + CSS/HTML polish
-- [ ] P6: backend → TypeScript (+ mutate concurrency/validation tests)
+The live task queue and done-log are in **`PROGRESS.md`** (single canonical copy, updated as
+items land). The phase overview is §6 above.
