@@ -1656,8 +1656,7 @@ async function runAssistant(){
   const minDays=Math.max(1,parseInt(document.getElementById('asMin').value)||1);
   if(!from||!to||from>to){ toast('Bitte gültigen Zeitraum wählen.'); return; }
   // „Alle gleichwertigen Geräte erfasst?" – nachfragen, wenn es echte Redundanz gibt (need < Anzahl)
-  const anyRedund=node=>node.children.some(c=> c.type==='grp' && (c.children.length>Math.max(1,Math.min(c.children.length,c.need)) || anyRedund(c)));
-  if(anyRedund(AS_TREE)){
+  if(anyRedund(AS_TREE)){   // anyRedund → core/assistant.ts (bridge)
     const ok=await askConfirm({ title:'Alle gleichwertigen Geräte erfasst?', yes:'Ja, Termine suchen', no:'Zurück', danger:false,
       body:'In mindestens einer Bedarfsgruppe brauchst du weniger Geräte, als enthalten sind (Redundanz). Sind dort alle gleichwertigen Geräte enthalten? Fehlende ggf. oben zur Auswahl hinzufügen.' });
     if(!ok) return;
@@ -1666,42 +1665,23 @@ async function runAssistant(){
   const allIds=[...new Set(asDevs())];
   const days=weekdayRange(from,to);
   const isFreeDev=(id,d)=>{ const m=asById(id); return !!m && !getBooking(id,d) && !isBlockedM(m,d) && dayAvailable(m,d); };
-  const nodeNeed=g=>Math.max(1,Math.min(g.children.length,g.need));
-  const nodeFree=(node,d)=> node.type==='dev' ? isFreeDev(node.id,d)
-      : node.children.filter(c=>nodeFree(c,d)).length >= nodeNeed(node);
-  const dayOk=d=>AS_TREE.children.every(c=>nodeFree(c,d));   // Wurzel = UND
-  const free=days.filter(dayOk);
-  // werktags-zusammenhängende Läufe
-  const runs=[]; let cur=[];
-  const nextWd=s=>{ let d=parseYmd(s); do{ d=addDays(d,1);}while(isWeekend(d)); return ymd(d); };
-  for(const d of free){ if(cur.length && nextWd(cur[cur.length-1])===d) cur.push(d); else { if(cur.length) runs.push(cur); cur=[d]; } }
-  if(cur.length) runs.push(cur);
-  // Offene Läufe: reicht ein Lauf bis ans Ende des Suchfensters, ist danach (bis zur nächsten echten
-  // Buchung/Sperre) alles frei → über das Fenster hinaus verlängern, damit man beliebig lang wählen kann.
-  const openRuns=new Set(), EXT_CAP=520;
-  for(const r of runs){
-    if(nextWd(r[r.length-1]) > to){
-      openRuns.add(r);
-      let d=nextWd(r[r.length-1]), n=0;
-      while(dayOk(d) && n<EXT_CAP){ r.push(d); d=nextWd(d); n++; }
-    }
-  }
+  // Freie, werktags-zusammenhängende Läufe; offene Läufe (bis Fensterende frei) verlängern.
+  // freeDays/groupRuns/extendOpenRuns (mit nodeFree/dayOk) → core/assistant.ts (bridge).
+  const runs=groupRuns(freeDays(AS_TREE, days, isFreeDev));
+  const openRuns=extendOpenRuns(AS_TREE, runs, to, isFreeDev);
   const good=runs.filter(r=>r.length>=minDays);
   const box=document.getElementById('asResults');
   if(!good.length){ box.innerHTML='<p class="hint"><b>Keine passenden Termine im Zeitraum gefunden.</b> Zeitraum vergrößern, „brauche N" senken oder Geräte entfernen.</p>'; return; }
   const rangeText=sel=>sel.length===1?fmtLong(sel[0]):`${fmtLong(sel[0])} – ${fmtLong(sel[sel.length-1])}`;
   const selFor=i=>{ const r=good[i]; const inp=box.querySelector(`.asDays[data-i="${i}"]`); const n=Math.max(1,Math.min(r.length,parseInt(inp&&inp.value)||1)); return r.slice(0,n); };
-  // Für ein gewähltes Fenster je Bedarf „need" Geräte vorauswählen (bevorzugt durchgehend frei)
-  const winFree=(node,sel)=>sel.every(d=>nodeFree(node,d));
-  const pickNode=(node,sel)=> node.type==='dev' ? [node.id]
-      : [...node.children].sort((a,b)=>(winFree(b,sel)?1:0)-(winFree(a,sel)?1:0)).slice(0,nodeNeed(node)).flatMap(c=>pickNode(c,sel));
-  const pickFor=sel=>[...new Set(AS_TREE.children.flatMap(c=>pickNode(c,sel)))];
+  // Für ein gewähltes Fenster je Bedarf „need" Geräte vorauswählen (bevorzugt durchgehend frei):
+  // pickFor(AS_TREE, sel, isFreeDev) → core/assistant.ts (bridge).
   box.innerHTML=`<h2 style="margin-top:14px">Passende Termine:</h2>
     <div class="resultlist">`+
     good.slice(0,30).map((r,i)=>{
       const def=Math.min(minDays,r.length), sel=r.slice(0,def);
       const open=openRuns.has(r);
-      const picked=pickFor(sel).map(id=>asById(id)?.name).filter(Boolean);
+      const picked=pickFor(AS_TREE, sel, isFreeDev).map(id=>asById(id)?.name).filter(Boolean);
       const pickHint=hasGroup?`<br><span class="hint" style="margin:0">Vorschlag: ${picked.length?picked.map(esc).join(', '):'—'}</span>`:'';
       const winTxt=open?`ab ${fmtLong(r[0])} durchgehend frei (offen – ${r.length} Tage wählbar)`:`freies Fenster: ${rangeText(r)} (${r.length} Tag${r.length>1?'e':''})`;
       return `<div class="res"><div><b class="asRange" data-i="${i}">${rangeText(sel)}</b><br>
@@ -1721,7 +1701,7 @@ async function runAssistant(){
     };
     inp.oninput=clamp;   // deckt Spinner-Pfeile, Tastatur und Direkteingabe ab (kein max-Attribut → Event feuert auch an der Grenze)
   });
-  box.querySelectorAll('button[data-i]').forEach(btn=>{ btn.onclick=()=>{ const sel=selFor(+btn.dataset.i); openBookingForm(pickFor(sel), sel[0], sel[sel.length-1]); }; });
+  box.querySelectorAll('button[data-i]').forEach(btn=>{ btn.onclick=()=>{ const sel=selFor(+btn.dataset.i); openBookingForm(pickFor(AS_TREE, sel, isFreeDev), sel[0], sel[sel.length-1]); }; });
   box.querySelectorAll('button[data-show]').forEach(btn=>{
     btn.onclick=()=>{
       const sel=selFor(+btn.dataset.show);

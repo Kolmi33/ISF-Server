@@ -4,7 +4,7 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-08-28 — Phase 2: 2.0–2.3 + 2.4a landed; `migrating` bug fixed; weekend-bridge feature → Phase 6.3._
+_Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug fixed; weekend-bridge feature → Phase 6.3._
 
 ---
 
@@ -49,16 +49,24 @@ _Last updated: 2026-08-28 — Phase 2: 2.0–2.3 + 2.4a landed; `migrating` bug 
     so legacy keeps **thin one-line adapters** (`asFind`, …) that bind `AS_TREE` and delegate to
     core — call sites unchanged; adapters retire in Phase 4 when AS_TREE becomes a store.
     Browser-verified: core + adapters + the real `asAdd`→`asDevs` mutation path all work; console clean.
-- **Next: 2.4b `core/assistant.ts` (solver)** — completes Phase 2.
+  - **2.4b** the Assistant **N-of-M solver** — `nodeNeed`, `nodeFree`, `dayOk`, `anyRedund`,
+    `nextWeekday`, `freeDays`, `groupRuns`, `extendOpenRuns`, `winFree`, `pickNode`, `pickFor`
+    extracted into `core/assistant.ts`, **parameterized by an injected `isFree(id,day)` predicate**
+    so the scheduler is a pure function of (tree, days, availability). `runAssistant` refactored to
+    call them (keeps its DOM/result rendering + the S-coupled `isFreeDev`). +15 tests, 100% cov.
+    Browser-verified by **running the Assistant end-to-end**: correct result card
+    ("… durchgehend frei (offen – 542 Tage wählbar)"), core cross-check matches, console clean.
+- **Phase 2 is COMPLETE.** All four core modules extracted, tested (78 tests, 100% cov on `core/**`),
+  and behavior-verified. **Next: Phase 3 — state store + net (api, sse).**
 
 ## Next step
-> **Step 2.4b — the Assistant N-of-M solver.** Extract the scheduling logic currently living as
-> closures inside `runAssistant` (`nodeNeed`, `nodeFree`, `dayOk`, `anyRedund`, `pickNode`/`pickFor`,
-> plus the free-run grouping) into `core/assistant.ts`, **parameterized by an injected availability
-> predicate** `isFree(id, day)` so it stays DOM/state-free. Refactor `runAssistant` to call the
-> extracted pure functions (keeping its DOM/result-rendering). Tests: cover need-clamping, AND-at-root,
-> group "N free of M", run-grouping, and device pick order. `verify` (90/85), browser-smoke by actually
-> running the Assistant, commit. Completes Phase 2.
+> **Phase 3.1 `state.ts`** — introduce the store that replaces the global `S`: it owns app state
+> and notifies subscribers; UI re-renders from state (ARCHITECTURE §5 rule 3). Read how `S` is used
+> in `legacy.js` (it's a `const S` object, script-scoped — many reads/writes). Design a minimal
+> `createStore`/subscribe-notify, TDD it, and begin routing state access through it. Then 3.2
+> `net/api.ts` (apiGet/apiPost, mutate, persist, refreshNow) and 3.3 `net/sse.ts` (connectSSE,
+> presence). One module per commit; `verify` (90/85) + browser-smoke each. NOTE: `net/` is a new
+> gate layer — confirm eslint `no-restricted-imports` boundaries cover it before/when it lands.
 
 ## Backlog (task queue — the single canonical copy)
 Checked off as each item lands (one commit per item unless noted).
@@ -83,7 +91,8 @@ Checked off as each item lands (one commit per item unless noted).
   removing the two obsolete migrations (see Done log + Known bugs → Fixed)
 - [x] 2.4a `core/assistant.ts` — pure tree ops (7 fns, + 16 tests, 100% cov); legacy keeps thin
   `AS_TREE`-binding adapters (retire in Phase 4)
-- [ ] 2.4b `core/assistant.ts` — the N-of-M solver (from `runAssistant`, predicate-injected)
+- [x] 2.4b `core/assistant.ts` — the N-of-M solver (11 fns, predicate-injected; +15 tests, 100% cov);
+  `runAssistant` refactored to call it. **Phase 2 complete.**
 
 **Phase 3 — State + net**
 - [ ] 3.1 `state.ts` (store + subscribe/notify)
@@ -140,6 +149,9 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 2.4b — Assistant N-of-M solver (11 fns, predicate-injected) extracted to `core/assistant.ts`
+  (15 tests, 100% cov); `runAssistant` refactored to call it. Ran the Assistant end-to-end in the
+  browser: correct open-run result, core cross-check matches, console clean. **Phase 2 COMPLETE.**
 - Phase 2.4a — `core/assistant.ts` pure tree ops (7 fns, 16 tests, 100% cov) extracted + bridged;
   legacy keeps thin `AS_TREE`-binding adapters. Browser-verified incl. real `asAdd`→`asDevs` path.
 - Phase 2.3 — `core/weekend.ts` (`sweepWeekends`, 6 tests, 100% cov) extracted + bridged;

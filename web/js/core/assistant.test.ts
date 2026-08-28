@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { AssistContainer, AssistNode } from './assistant.ts';
+import type { AssistContainer, AssistNode, AssistGrp, IsFree } from './assistant.ts';
 import {
   treeFind,
   treeFindParent,
@@ -8,6 +8,17 @@ import {
   treeDevs,
   treeDevUid,
   treeCleanup,
+  nodeNeed,
+  nodeFree,
+  dayOk,
+  anyRedund,
+  nextWeekday,
+  freeDays,
+  groupRuns,
+  extendOpenRuns,
+  winFree,
+  pickNode,
+  pickFor,
 } from './assistant.ts';
 
 const dev = (uid: string, id: string): AssistNode => ({ uid, type: 'dev', id });
@@ -123,5 +134,131 @@ describe('treeCleanup', () => {
     // inner empty group removed → outer keeps its 2 devices
     const outer = t.children[0] as { children: AssistNode[] };
     expect(outer.children.map((c) => c.uid)).toEqual(['a', 'b']);
+  });
+});
+
+// ---- solver ----------------------------------------------------------------------------
+const mkGrp = (need: number, ids: string[]): AssistGrp => ({
+  uid: 'g',
+  type: 'grp',
+  need,
+  children: ids.map((id) => dev('d_' + id, id)),
+});
+// isFree from a set of "id@day" strings.
+const freeOn =
+  (pairs: string[]): IsFree =>
+  (id, day) =>
+    pairs.includes(`${id}@${day}`);
+
+describe('nodeNeed', () => {
+  it('clamps need to 1..childCount', () => {
+    expect(nodeNeed(mkGrp(9, ['A', 'B', 'C']))).toBe(3);
+    expect(nodeNeed(mkGrp(0, ['A', 'B', 'C']))).toBe(1);
+    expect(nodeNeed(mkGrp(2, ['A', 'B', 'C']))).toBe(2);
+  });
+});
+
+describe('nodeFree', () => {
+  it('a device is free iff isFree says so', () => {
+    expect(nodeFree(dev('d', 'A'), 'X', freeOn(['A@X']))).toBe(true);
+    expect(nodeFree(dev('d', 'A'), 'X', freeOn([]))).toBe(false);
+  });
+  it('a group needs at least `need` free children', () => {
+    const g = mkGrp(2, ['A', 'B', 'C']);
+    expect(nodeFree(g, 'X', freeOn(['A@X', 'B@X']))).toBe(true); // 2 of 3 free
+    expect(nodeFree(g, 'Y', freeOn(['A@Y']))).toBe(false); // only 1 free
+  });
+});
+
+describe('dayOk', () => {
+  it('is the AND over the root children', () => {
+    const root: AssistContainer = { children: [dev('a', 'A'), dev('b', 'B')] };
+    expect(dayOk(root, 'X', freeOn(['A@X', 'B@X']))).toBe(true);
+    expect(dayOk(root, 'X', freeOn(['A@X']))).toBe(false); // B not free
+  });
+});
+
+describe('anyRedund', () => {
+  it('detects a group with more children than it needs', () => {
+    expect(anyRedund({ children: [mkGrp(1, ['A', 'B', 'C'])] })).toBe(true);
+    expect(anyRedund({ children: [mkGrp(3, ['A', 'B', 'C'])] })).toBe(false);
+    expect(anyRedund({ children: [dev('a', 'A')] })).toBe(false); // no groups
+  });
+  it('detects redundancy nested inside a non-redundant group', () => {
+    const inner = mkGrp(1, ['B', 'C']); // 2 > need 1 → redundant
+    const outer: AssistGrp = { uid: 'o', type: 'grp', need: 2, children: [dev('a', 'A'), inner] };
+    expect(anyRedund({ children: [outer] })).toBe(true); // outer not redundant, inner is
+  });
+});
+
+describe('nextWeekday', () => {
+  it('skips the weekend', () => {
+    expect(nextWeekday('2021-01-08')).toBe('2021-01-11'); // Fri → Mon
+    expect(nextWeekday('2021-01-11')).toBe('2021-01-12'); // Mon → Tue
+  });
+});
+
+describe('freeDays / groupRuns', () => {
+  it('freeDays keeps only satisfiable days', () => {
+    const root: AssistContainer = { children: [dev('a', 'A')] };
+    const days = ['2021-01-11', '2021-01-12', '2021-01-13'];
+    expect(freeDays(root, days, freeOn(['A@2021-01-11', 'A@2021-01-13']))).toEqual([
+      '2021-01-11',
+      '2021-01-13',
+    ]);
+  });
+  it('groupRuns splits into weekday-contiguous runs (Fri+Mon are adjacent)', () => {
+    expect(groupRuns([])).toEqual([]);
+    expect(groupRuns(['2021-01-08', '2021-01-11'])).toEqual([['2021-01-08', '2021-01-11']]);
+    expect(groupRuns(['2021-01-11', '2021-01-12', '2021-01-14'])).toEqual([
+      ['2021-01-11', '2021-01-12'],
+      ['2021-01-14'],
+    ]);
+  });
+});
+
+describe('extendOpenRuns', () => {
+  const root: AssistContainer = { children: [dev('a', 'A')] };
+  it('extends a run that reaches the window end while still free', () => {
+    const runs = [['2021-01-11', '2021-01-12']];
+    const open = extendOpenRuns(root, runs, '2021-01-12', freeOn(['A@2021-01-13', 'A@2021-01-14']));
+    expect(runs[0]).toEqual(['2021-01-11', '2021-01-12', '2021-01-13', '2021-01-14']);
+    expect(open.has(runs[0]!)).toBe(true);
+  });
+  it('leaves a run untouched when it does not reach the window end', () => {
+    const runs = [['2021-01-11', '2021-01-12']];
+    const open = extendOpenRuns(root, runs, '2021-01-20', freeOn([]));
+    expect(runs[0]).toEqual(['2021-01-11', '2021-01-12']);
+    expect(open.size).toBe(0);
+  });
+  it('honors the extension cap', () => {
+    const runs = [['2021-01-12']];
+    extendOpenRuns(root, runs, '2021-01-12', freeOn(['A@2021-01-13', 'A@2021-01-14']), 1);
+    expect(runs[0]!.length).toBe(2); // +1 only
+  });
+});
+
+describe('winFree / pickNode / pickFor', () => {
+  const sel = ['2021-01-11', '2021-01-12'];
+  it('winFree requires the node free on every window day', () => {
+    const g = mkGrp(2, ['A', 'B', 'C']);
+    const allFree = freeOn(['A@2021-01-11', 'B@2021-01-11', 'A@2021-01-12', 'B@2021-01-12']);
+    expect(winFree(g, sel, allFree)).toBe(true);
+    expect(winFree(g, sel, freeOn(['A@2021-01-11']))).toBe(false);
+  });
+  it('pickNode returns a device id directly', () => {
+    expect(pickNode(dev('a', 'A'), sel, freeOn(['A@2021-01-11']))).toEqual(['A']);
+  });
+  it('pickFor prefers devices free across the whole window', () => {
+    const root: AssistContainer = { children: [mkGrp(1, ['A', 'B'])] };
+    // B free both days, A only the first → B is chosen for a need-1 group
+    const isFree = freeOn(['B@2021-01-11', 'B@2021-01-12', 'A@2021-01-11']);
+    expect(pickFor(root, sel, isFree)).toEqual(['B']);
+  });
+  it('ranks the continuously-free device first in a larger group', () => {
+    const root: AssistContainer = { children: [mkGrp(1, ['A', 'B', 'C'])] };
+    // only B is free across BOTH days; A and C each free on just one → B wins
+    const isFree = freeOn(['B@2021-01-11', 'B@2021-01-12', 'A@2021-01-11', 'C@2021-01-12']);
+    expect(pickFor(root, sel, isFree)).toEqual(['B']);
   });
 });
