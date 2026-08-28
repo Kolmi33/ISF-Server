@@ -73,6 +73,66 @@ and change.
 
 ---
 
+## In-depth operating principles (the rework)
+
+These deepen P0–P6 into the concrete rules this top-down rework runs by. They emerged from
+Phase 2 and are **binding** for every extraction. Each says how it is verified.
+
+### E1 — Faithful port: behavior is the spec
+An extraction reproduces the old behavior **exactly**, quirks included (e.g. `mondayOf` reads
+*local* calendar components; UTC-vs-local is preserved, not "corrected"). Write the test to
+capture current behavior **first**, then port until green. Never improve logic inside a move —
+a behavior change is a separate, explicitly-flagged step (see E2).
+*Verify:* tests encode the old behavior; browser smoke shows identical output.
+
+### E2 — Conserve behavior over resurrecting dead code
+When a fix reveals dormant or obsolete code, the right fix preserves what the system **actually
+did**, not what the code looks like it intended. A fix must never silently activate a path that
+never ran. (The `migrating` bug: merely declaring the variable would have resurrected a
+server-rejected migration; removing the obsolete code conserved behavior and was correct.)
+*Verify:* server `rev` unchanged / no new writes; console clean; diff against baseline `789bfec`.
+
+### E3 — Strangler bridge, with thin adapters for coupled code
+Each extraction moves pure logic into a gated module and bridges its exports onto `window` for
+the legacy layer. Code too coupled to move cleanly (e.g. bound to the `AS_TREE` global) keeps a
+**thin one-line adapter** in `legacy.js` that binds the global and delegates to core, so call
+sites stay unchanged. Adapters are temporary and **must name the phase they retire in**.
+*Verify:* `legacy.js` line-count burn-down; adapters grep-able and phase-tagged.
+
+### E4 — Inject impurity to keep core pure
+When pure logic needs impure data (bookings, state, time), **inject it as a parameter** (a
+predicate or value); never reach for a global. This is how coupled logic becomes `core/`-eligible
+(e.g. the solver takes `isFree(id, day)`).
+*Verify:* core/ DOM-free + no-restricted-imports lint; the module imports nothing impure.
+
+### E5 — Two-tier verification: gate proves logic, smoke proves integration
+`verify` proves the extracted unit; a **browser smoke** proves the wiring (bridge resolves, app
+boots, behavior identical). For impure/DOM/init code with no unit-test surface, the smoke **is**
+the acceptance test — say so honestly rather than implying a unit test covers it.
+*Smoke acceptance:* console clean (only known issues), **no unintended writes (server `rev`
+unchanged)**, the feature runs end-to-end.
+
+### E6 — Deterministic tests
+Tests never depend on ambient environment or "now": pin `TZ=UTC`, use fixed real-calendar
+anchors (known ISO weeks), and inject time/availability. Determinism is what makes the gate a
+trustworthy oracle.
+*Verify:* re-runs are identical; no `Date.now()`/timezone reliance in assertions.
+
+### E7 — 100% on pure core, and mean it
+90/85 is the hard floor; the working target for pure `core/` logic is **100%**. An uncovered
+branch in pure logic is a defect to close (add the case), not an allowance to spend — unless the
+branch is genuinely unreachable, in which case remove it.
+*Verify:* coverage report; we actively closed e.g. the `pickNode` comparator branch.
+
+### E8 — Defer, don't scope-creep
+A real feature or non-blocking bug found mid-extraction is **recorded as a fully-specified
+backlog item** (with grounded facts, so it needs no re-investigation) and the plan continues.
+Layers open only in their phase — the backend stays sealed until Phase 6. (Weekend auto-bridging
+→ Phase 6.3.)
+*Verify:* item exists in `PROGRESS.md` with enough detail to execute cold.
+
+---
+
 ## What the automated gate enforces (and what it can't)
 
 `npm run verify` mechanically checks *part* of these principles. It is **necessary but not

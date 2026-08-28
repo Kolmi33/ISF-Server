@@ -79,8 +79,9 @@ maschinenplan-server/
 
 ## 5. Project-specific rules
 
-The general coding standard is **`PRINCIPLES.md`** (P0–P6). These are the rules specific to
-*this* codebase — the concrete shape those principles take here:
+The general coding standard is **`PRINCIPLES.md`** (P0–P6, plus the in-depth **E1–E8** operating
+principles that govern how we extract). These are the rules specific to *this* codebase — the
+concrete shape those principles take here:
 
 1. **Pure `core/` has no DOM.** Everything in `core/` is pure functions of data → data.
    No `document`, no globals. Trivially testable; where our tests concentrate. (Lint-enforced.)
