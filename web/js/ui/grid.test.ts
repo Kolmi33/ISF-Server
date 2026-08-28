@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Booking } from '../../../shared/types.ts';
-import { classifyCell, isMine, cellClass } from './grid.ts';
+import { classifyCell, isMine, cellClass, weekHeaderCells, classifyDot } from './grid.ts';
 
 const bk: Booking = { name: 'anna' };
 
@@ -48,5 +48,47 @@ describe('cellClass', () => {
     );
     expect(cellClass('free', { today: true })).toBe('cell free today');
     expect(cellClass('free', { weekend: true })).toBe('cell free wknd');
+  });
+});
+
+describe('weekHeaderCells', () => {
+  // Real ISO anchors (TZ=UTC pinned): 2021-01-04 is Mon of ISO week 1; 2021-01-11 week 2.
+  const w1 = ['2021-01-04', '2021-01-05', '2021-01-06', '2021-01-07', '2021-01-08'];
+  const w2 = ['2021-01-11', '2021-01-12', '2021-01-13', '2021-01-14', '2021-01-15'];
+
+  it('builds one KW header per week with a rowspan-2 gap between them', () => {
+    const { kwRow } = weekHeaderCells([w1, w2], 5, '2021-01-05');
+    expect(kwRow).toContain('KW 1');
+    expect(kwRow).toContain('KW 2');
+    expect(kwRow).toContain('colspan="5"');
+    expect((kwRow.match(/class="gap"/g) || []).length).toBe(1); // only between weeks
+  });
+
+  it('builds one day header per date and marks exactly the today column', () => {
+    const { dayRow } = weekHeaderCells([w1, w2], 5, '2021-01-05');
+    expect((dayRow.match(/<th /g) || []).length).toBe(10);
+    expect((dayRow.match(/class="today /g) || []).length).toBe(1); // 2021-01-05, not weekend
+    expect(dayRow).not.toContain('wknd'); // Mon–Fri only
+  });
+
+  it('marks weekend columns with wknd and leaves weekdays unmarked', () => {
+    // 2021-01-09 Sat, 2021-01-10 Sun are weekend; 2021-01-04 Mon is not.
+    const { dayRow } = weekHeaderCells([['2021-01-04', '2021-01-09', '2021-01-10']], 3, 'x');
+    expect((dayRow.match(/wknd/g) || []).length).toBe(2);
+    expect(dayRow).toContain('class=" "'); // the Monday: neither today nor weekend
+  });
+});
+
+describe('classifyDot', () => {
+  const bk: Booking = { name: 'anna' };
+  it('ranks an active maintenance slot highest (defekt vs. any other type)', () => {
+    expect(classifyDot('defekt', bk, true)).toBe('defekt');
+    expect(classifyDot('wartung', bk, true)).toBe('maint');
+    expect(classifyDot('irgendwas', null, false)).toBe('maint'); // any non-defekt type
+  });
+  it('is busy / unavail / free when no maintenance slot is active', () => {
+    expect(classifyDot(null, bk, true)).toBe('busy');
+    expect(classifyDot(null, null, false)).toBe('unavail');
+    expect(classifyDot(undefined, null, true)).toBe('free');
   });
 });

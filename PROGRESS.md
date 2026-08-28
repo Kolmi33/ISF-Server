@@ -58,6 +58,13 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     ("… durchgehend frei (offen – 542 Tage wählbar)"), core cross-check matches, console clean.
 - **Phase 2 is COMPLETE.** All four core modules extracted, tested (78 tests, 100% cov on `core/**`),
   and behavior-verified.
+- **4.1b (ui/grid header + dot) DONE 2026-08-28** — `web/js/ui/grid.ts`: `weekHeaderCells` (KW +
+  weekday/date header columns; pure over core/dates — the gap-`<th>` asymmetry between the two header
+  rows preserved) and `classifyDot` (5-state today-dot: defekt/maint/busy/unavail/free), which dedups
+  the dot decision across `render()` and `refreshDot()`. +5 tests, 100% cov. Smoke: header shows KW
+  34/35/36, 15 day columns, exactly 1 today column, "Mo17.08." format; 245 dots (232 free / 13 busy);
+  `refreshDot` idempotent ("heute belegt: Hensler"); console clean; `rev` 23. Remaining row-header
+  string assembly stays in legacy for now (see backlog 4.1b note).
 - **4.1a (ui/grid cell model) DONE 2026-08-28** — `web/js/ui/grid.ts`: pure `classifyCell` (4-state
   priority), `isMine` (case-insensitive owner check), `cellClass` (class stem). +9 tests, 100% cov.
   `render()` and `refreshCell()` both refactored to the shared helpers — removes the per-cell decision
@@ -95,19 +102,22 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 4.1b — pure header/row builders in `ui/grid.ts`** (design: ARCHITECTURE §15). Continue
-> carving the pure string-building bits out of `render()`: the KW + weekday header cells, the
-> category/group header rows, and the machine row-header (favorite star, today-dot, status tag,
-> next-free/back buttons). Each is a pure function of injected data/predicates (E4), unit-tested to
-> 100%; the DOM write (`thead/tbody.innerHTML=`) and event binding stay in the legacy adapter.
-> Faithful port — reproduce the exact markup incl. aria/data attributes (E1). Watch the same class
-> of asymmetries as 4.1a (see Known bugs → Open).
->
-> After 4.1b: **4.1c reactive wiring** — the larger, riskier step (subscribe `render` to the store;
-> migrate the 36 `render()` call sites; move `connectSSE` so `SSE → store.set → notify → render`,
-> the piece deferred from 3.3). Resolve the action-layer open question in §15 first. Then 4.2
-> `ui/selection.ts` (+`ui/navigation.ts`), 4.3 `ui/views/*` (one screen/commit), and **retire the
-> Phase-2 assistant `AS_TREE` adapters + the `window.S` bridge** as legacy sites migrate to `store`.
+> **Phase 4.1c — reactive wiring** (the larger, riskier step; design: ARCHITECTURE §15). Make the
+> store drive repaints instead of 36 imperative `render()` calls:
+> 1. **Subscribe `render` to the store** — `store.subscribe(() => render())` (wired in `app.ts`,
+>    which holds the store). `render` stays the same function; it just also fires on notify.
+> 2. **Route mutations through the store** so they notify. Resolve the **§15 open question first**:
+>    a thin `actions.ts` (`setWeek`/`toggleCat`/`setFilter`…) wrapping `store.set` + persistence, vs.
+>    leaving the 36 sites and having them call `store.notify()` after their `S.x=` mutation. Lean:
+>    start by having the existing mutations call a bridged `notify()` (smallest diff, no behavior
+>    change), then migrate hot paths to `store.set` incrementally. **Guard against double-repaint**
+>    (a site that both mutates→notifies and still calls `render()`), and against render re-entrancy.
+> 3. **Move `connectSSE` so `SSE → store.set → notify → render`** (the piece deferred from 3.3,
+>    §14 "3.3 SSE") — the `update`/`structural` handlers stop calling `render`/`patchCells` directly
+>    and instead go through the store. Keep `patchCells` as the fast path where it matters.
+> Do it in small, individually-smoked slices (each: gate + browser smoke that the specific
+> interaction still repaints exactly once, `rev` unchanged). Then 4.2 `ui/selection.ts`
+> (+`ui/navigation.ts`), 4.3 `ui/views/*`, and **retire the assistant `AS_TREE` adapters + `window.S`**.
 >
 > **View-layer decision (resolved, §15):** no framework — keep the custom string render + a tiny
 > store subscription (zero-dep). Revisit only if the UI grows materially.
@@ -156,8 +166,12 @@ Checked off as each item lands (one commit per item unless noted).
 - [x] 4.1a `ui/grid.ts` — pure per-cell model (`classifyCell`, `isMine`, `cellClass`); +9 tests
   100% cov; `render()` + `refreshCell()` refactored to share it (removes the duplicated cell
   decision). New `ui/` gate layer (coverage 90/85). Gate + smoke green. **DONE 2026-08-28.**
-- [ ] 4.1b `ui/grid.ts` — pure header/row builders (KW/weekday header cells, cat/group header rows,
-  machine row-header: dot/star/status tag/next-free buttons)
+- [x] 4.1b `ui/grid.ts` — `weekHeaderCells` (KW + weekday/date header columns, core/dates-only) and
+  `classifyDot` (today-dot state, dedups render() vs refreshDot()). +5 tests 100% cov; `render()`
+  header loop + dot and `refreshDot()` refactored to them. **Remaining row-header markup (cat/group
+  header rows, star/status-tag/next-free buttons) left in the legacy adapter** — trivial interpolation
+  over still-legacy presentation helpers (`esc`/`ic`/`catLabel`/`statusRangeText`/`daysMaskText`);
+  extract once those helpers move (low logic value now, P3/E8). Gate + smoke green. **DONE 2026-08-28.**
 - [ ] 4.1c reactive wiring — subscribe `render` to the store; migrate the 36 `render()` call sites
   to notifying mutations; move `connectSSE` so `SSE → store.set → notify → render` (deferred from 3.3)
 - [ ] 4.2 `ui/selection.ts`, `ui/navigation.ts`

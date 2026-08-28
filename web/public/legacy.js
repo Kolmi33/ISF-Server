@@ -718,15 +718,10 @@ function render(){
   // wird auch vom Slider im Filter-Dropdown und der Kategorie-Kopfzeile gesetzt.
   const catBtns=CATS.map(([c,l])=>`<button class="catbtn ${S.cats.has(c)?'on':''}" data-cat="${c}"
     title="${l} ${S.cats.has(c)?'einklappen':'aufklappen'}" aria-pressed="${S.cats.has(c)}">${catIco(c)}<span class="lbl">${l}</span></button>`).join('');
-  let h1=`<tr role="row"><th class="machcol" rowspan="2" role="columnheader"><div class="catseg" role="group" aria-label="Kategorien ein-/ausklappen">${catBtns}</div><span id="colResize" title="Spaltenbreite ziehen"></span></th>`;
-  let h2=`<tr role="row">`;
   const N=dpw();
-  weeks.forEach((wk,i)=>{
-    if(i>0){ h1+='<th class="gap" rowspan="2" aria-hidden="true"></th>'; }
-    h1+=`<th colspan="${N}" role="columnheader">KW ${isoWeek(parseYmd(wk[0]))}</th>`;
-    wk.forEach(d=>{ const dd=parseYmd(d); const we=isWeekend(dd);
-      h2+=`<th class="${d===tS?'today':''} ${we?'wknd':''}" role="columnheader">${weekdayName(dd)}<br>${fmtShort(dd)}</th>`; });
-  });
+  const hdr=weekHeaderCells(weeks, N, tS);   // → ui/grid.ts (nur Datums-Spaltenköpfe)
+  const h1=`<tr role="row"><th class="machcol" rowspan="2" role="columnheader"><div class="catseg" role="group" aria-label="Kategorien ein-/ausklappen">${catBtns}</div><span id="colResize" title="Spaltenbreite ziehen"></span></th>`+hdr.kwRow;
+  const h2=`<tr role="row">`+hdr.dayRow;
   thead.innerHTML=h1+'</tr>'+h2+'</tr>';
   thead.querySelectorAll('.catbtn').forEach(b=>{
     b.onclick=ev=>{ ev.stopPropagation(); catTap(b.dataset.cat); };                          // Einfach: Kategorie ein/aus
@@ -773,10 +768,11 @@ function render(){
     // Heute-Indikator am Zeilenanfang (CSS-Punkt mit Textalternative)
     const tb=getBooking(m.id,tS);
     const dslot = maintAt(m,tS);
-    const dot = dslot
-      ? `<span class="statdot ${dslot.type==='defekt'?'broken':'maint'}" role="img" aria-label="heute ${dslot.type==='defekt'?'defekt':'in Wartung'}" title="heute gesperrt – ${esc(blockText(m,tS))}">${ic('bolt')}</span>`
-      : tb ? `<span class="dot busy" role="img" aria-label="heute belegt von ${esc(tb.name)}" title="heute belegt: ${esc(tb.name)}"></span>`
-           : !dayAvailable(m,tS) ? `<span class="dot unavail" role="img" aria-label="heute nicht verfügbar" title="an diesem Wochentag nicht verfügbar (verfügbar: ${esc(daysMaskText(m))})"></span>`
+    const dstate = classifyDot(dslot?dslot.type:null, tb, dayAvailable(m,tS));   // → ui/grid.ts
+    const dot = (dstate==='defekt'||dstate==='maint')
+      ? `<span class="statdot ${dstate==='defekt'?'broken':'maint'}" role="img" aria-label="heute ${dstate==='defekt'?'defekt':'in Wartung'}" title="heute gesperrt – ${esc(blockText(m,tS))}">${ic('bolt')}</span>`
+      : dstate==='busy' ? `<span class="dot busy" role="img" aria-label="heute belegt von ${esc(tb.name)}" title="heute belegt: ${esc(tb.name)}"></span>`
+           : dstate==='unavail' ? `<span class="dot unavail" role="img" aria-label="heute nicht verfügbar" title="an diesem Wochentag nicht verfügbar (verfügbar: ${esc(daysMaskText(m))})"></span>`
            : `<span class="dot free" role="img" aria-label="heute frei" title="heute frei"></span>`;
     const star=`<span class="favstar ${S.favs.has(m.id)?'fav':''}" data-fav="${esc(m.id)}" role="button" aria-label="${S.favs.has(m.id)?'Favorit entfernen':'Als Favorit anheften'}" title="${S.favs.has(m.id)?'Favorit entfernen':'Als Favorit anheften'}">${S.favs.has(m.id)?'★':'☆'}</span>`;
     const nextBtn=`<span class="nextfree" data-nf="${esc(m.id)}" role="button" aria-label="Zum nächsten freien Termin von ${esc(m.name)}" title="Zum nächsten freien Termin springen (mehrfach drückbar)">${ic('next')}</span>`;
@@ -897,8 +893,10 @@ function refreshDot(mid){
   const dot=row.querySelector('.dot'); if(!dot) return;   // Wartung/defekt nutzt .statdot (Blitz) – bleibt statisch
   const m=machById(mid); if(!m) return;
   const tS=todayStr(); const tb=getBooking(mid, tS);
-  if(tb){ dot.className='dot busy'; dot.title='heute belegt: '+tb.name; }
-  else if(!dayAvailable(m, tS)){ dot.className='dot unavail'; dot.title='an diesem Wochentag nicht verfügbar'; }
+  // .dot existiert nur auf Zeilen ohne heutige Sperre → classifyDot(null,…) liefert busy/unavail/frei.
+  const st=classifyDot(null, tb, dayAvailable(m, tS));   // → ui/grid.ts
+  if(st==='busy'){ dot.className='dot busy'; dot.title='heute belegt: '+tb.name; }
+  else if(st==='unavail'){ dot.className='dot unavail'; dot.title='an diesem Wochentag nicht verfügbar'; }
   else { dot.className='dot free'; dot.title='heute frei'; }
 }
 function patchCells(entries){
