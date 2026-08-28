@@ -4,7 +4,7 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-08-28 — Phase 2: 2.0 (bridge), 2.1 (dates), 2.2 (machines) landed._
+_Last updated: 2026-08-28 — Phase 2: 2.0–2.3 landed (dates, machines, weekend); `migrating` bug fixed._
 
 ---
 
@@ -35,18 +35,24 @@ _Last updated: 2026-08-28 — Phase 2: 2.0 (bridge), 2.1 (dates), 2.2 (machines)
     `isBlockedM`, `anyMaint`, `dayAvailable`, `cellBookable`), extracted and deleted from `legacy.js`.
     The German status-text helpers (`maintText`, `statusRangeText`, `daysMaskText`, `blockText`,
     `maintKind`) stayed in `legacy.js` (presentation; move with the views in Phase 4).
-- Verified in the browser (Vite :5173 → backend :3000): all helpers bridged, grid renders from the
-  bridged predicates, app boots identically. Only JS error is the known pre-existing `migrating` bug.
-- **Next: 2.3 `core/weekend.ts`.**
+  - `web/js/core/weekend.ts` (+ `weekend.test.ts`, 6 tests, 100% cov) — the live `sweepWeekends`
+    (removes orphaned Sat/Sun days on booking writes), extracted + bridged.
+  - **`migrating` bug FIXED** (see Known bugs → Fixed): removed the two obsolete file-era
+    Bestands-Migrationen (`migrateWeekends`/`migrateMesstechnik`) and their `startUI()` calls.
+    They never ran (threw on undeclared `migrating`/`migratingMess`) and the server *rejects* the
+    weekend-bridge write (HTTP 400), so removal preserves behavior (no migration ran before/after)
+    while clearing the console error. `missingWeekendBridges` was only used by the removed migration,
+    so it was deleted too (not extracted).
+- Verified in a fresh browser tab (Vite :5173 → backend :3000): grid renders, all helpers bridged,
+  **console entirely clean** (no `migrating`, no `/api/mutate`), backend rev unchanged (no write).
+- **Next: 2.4 `core/assistant.ts`** — the last core module.
 
 ## Next step
-> **Step 2.3 `core/weekend.ts`** — test-first. Extract the weekend-bridge logic from `legacy.js`
-> (`sweepWeekends`, `missingWeekendBridges` — read them for the exact contract). This is also where
-> the pre-existing **`migrating` bug** gets fixed **test-first**: write a test that reproduces the
-> `ReferenceError`, then declare/define the missing `migrating`/`migratingMess` state so the weekend +
-> messtechnik auto-migration paths no longer throw (see Known bugs). Implement the gated module, add
-> to the `app.ts` bridge, delete originals from `legacy.js`, `verify` (90/85 holds), browser-smoke
-> (console must be **clean** — the `migrating` error gone), commit. One module per commit.
+> **Step 2.4 `core/assistant.ts`** — test-first. Extract the device/group tree + N-of-M solver
+> from `legacy.js` (the `AS_*` / assistant helpers — read `legacy.js` for the exact pure set;
+> tree-walk + selection logic is pure, the `renderWork()`/DOM parts stay behind). Write tests
+> capturing behavior, implement the gated module, add to the `app.ts` bridge, delete originals from
+> `legacy.js`, `verify` (90/85 holds), browser-smoke, commit. Completes Phase 2.
 
 ## Backlog (task queue — the single canonical copy)
 Checked off as each item lands (one commit per item unless noted).
@@ -67,7 +73,8 @@ Checked off as each item lands (one commit per item unless noted).
 - [x] 2.1 `core/dates.ts` (+ 22 tests, 100% cov); 12 helpers deleted from `legacy.js`
 - [x] 2.2 `core/machines.ts` (+ 18 tests, 100% cov) + `shared/types.ts` seeded; 8 predicates
   deleted from `legacy.js`
-- [ ] 2.3 `core/weekend.ts` (+ tests)
+- [x] 2.3 `core/weekend.ts` (`sweepWeekends`, + 6 tests, 100% cov); `migrating` bug fixed by
+  removing the two obsolete migrations (see Done log + Known bugs → Fixed)
 - [ ] 2.4 `core/assistant.ts` (+ tests)
 
 **Phase 3 — State + net**
@@ -89,6 +96,10 @@ Checked off as each item lands (one commit per item unless noted).
 - [ ] 6.2 remove `src/` from the gate exclusions; full gate covers backend
 
 ## Done log (newest first)
+- Phase 2.3 — `core/weekend.ts` (`sweepWeekends`, 6 tests, 100% cov) extracted + bridged;
+  **fixed the `migrating` bug** by deleting the two obsolete file-era migrations and their calls
+  (they never ran; server rejects the weekend write with 400). Fresh-tab console now fully clean;
+  backend rev unchanged (no write). `missingWeekendBridges` deleted with its only caller.
 - Phase 2.2 — `core/machines.ts` + `machines.test.ts` (18 tests, 100% cov) + `shared/types.ts`
   contract seeded; 8 pure predicates removed from `legacy.js`; grid renders from the bridge
   (browser-verified); core coverage still 100%
@@ -112,9 +123,18 @@ Checked off as each item lands (one commit per item unless noted).
   revisit at Phase 5 polish.
 - `node:sqlite` experimental in Node 22 — confirm the flag/loader story at Phase 6.
 
-## Known bugs (pre-existing in baseline — fix deliberately, test-first, do NOT patch mid-move)
-- **`migrating` / `migratingMess` undeclared implicit globals.** Used but never declared, so
-  under `'use strict'` the weekend + messtechnik auto-migration paths throw `ReferenceError` at
-  init (uncaught in an async promise → non-fatal; app still runs). Confirmed identical on the
-  baseline at :3000, so 1.2 preserved behavior exactly. Fix when extracting that logic in Phase 2
-  (`core/weekend`, `migrateMesstechnik`) — with a test that reproduces it first.
+## Known bugs
+
+### Fixed
+- **`migrating` / `migratingMess` undeclared implicit globals** — FIXED in Phase 2.3.
+  Root cause: two obsolete one-time client-side Bestands-Migrationen (`migrateWeekends`,
+  `migrateMesstechnik`) from the old File-System-Access variant referenced undeclared globals, so
+  under `'use strict'` they threw `ReferenceError` at init (uncaught async → non-fatal) and never
+  actually ran. Investigation showed merely *declaring* the vars was the wrong fix: it resurrects
+  `migrateWeekends`, which then fires a weekend-bridge write the **server rejects with HTTP 400** on
+  every load — i.e. it does NOT conserve behavior. The correct, behavior-preserving fix was to
+  **remove the two obsolete migrations and their `startUI()` calls** (server data is authoritative
+  and already consistent; `migrateMesstechnik` needed a local folder that no longer exists). Result:
+  console clean, no write attempted (rev unchanged). Acceptance was integration-level (fresh-tab
+  console clean + zero `/api/mutate` + rev stable), since the defect lived in impure obsolete init
+  code with no meaningful unit-test surface.

@@ -37,23 +37,7 @@ const S = {
    gated module web/js/core/dates.ts and are provided here as window globals by app.ts
    (which runs before this script). Their behavior is unchanged. */
 
-/* Wochenend-Brückentage aufräumen: Ein Sa/So-Eintrag existiert nur als Teil
-   einer durchgehenden Serie. Fehlt der Freitag davor ODER der Montag danach
-   (gleiche Person), wird der Wochenendtag entfernt. Liefert Undo-Einträge. */
-function sweepWeekends(fresh, mid){
-  const mb=fresh.bookings[mid]; if(!mb) return [];
-  const undo=[];
-  for(const d of Object.keys(mb)){
-    const dt=parseYmd(d); const wd=dt.getUTCDay();
-    if(wd!==0 && wd!==6) continue;
-    const fri=ymd(addDays(dt, wd===6?-1:-2));
-    const mon=ymd(addDays(dt, wd===6? 2: 1));
-    // Brücke gilt, solange Freitag UND Montag belegt sind (beliebige Personen)
-    const bridged = mb[fri] && mb[mon];
-    if(!bridged){ undo.push({mid, date:d, prev:{...mb[d]}}); delete mb[d]; }
-  }
-  return undo;
-}
+/* sweepWeekends → core/weekend.ts (window bridge). */
 function statusRangeText(m){
   const ss=maintSlots(m); if(!ss.length) return '';
   const t=todayStr();
@@ -131,10 +115,6 @@ function startUI(){
   dbg('info','App gestartet — '+(S.data.machines?S.data.machines.length:0)+' Maschinen geladen'+(S.readOnly?' (Nur-Lese-Modus)':''));
   // Auto-refresh + Anwesenheit (einmalige Registrierung, auch bei späterem Freischalten)
   if(!S.readOnly){ startLiveTimers(); setupFileObserver(); }
-  // Bestands-Migrationen (laufen im Hintergrund): fehlende Sa/So-Tage ergänzen,
-  // Messtechnik-Erstimport aus messtechnik_import.json übernehmen
-  migrateWeekends();
-  migrateMesstechnik();
 }
 document.getElementById('btnRefresh').onclick = ()=>refreshNow(false);
 
@@ -2345,24 +2325,6 @@ function maintKind(m){ const s=maintAt(m,todayStr()); return s?s.type:null; }
 function catIco(c){ return ic(c==='messtechnik' ? 'gauge' : 'factory'); }
 function asDevUid(id,node=AS_TREE){ for(const c of node.children){ if(c.type==='dev'&&c.id===id) return c.uid; if(c.type==='grp'){ const r=asDevUid(id,c); if(r) return r; } } return null; }
 function asToggleId(id,on){ if(on){ asAdd(id); } else { const u=asDevUid(id); if(u){ asDetach(u); asCleanup(); } } AS_ADDED=new Set(asDevs()); renderWork(); }
-function missingWeekendBridges(data){
-  const adds=[];
-  for(const m of data.machines){
-    const mb=data.bookings[m.id]; if(!mb) continue;
-    for(const d of Object.keys(mb)){
-      const dt=parseYmd(d);
-      if(dt.getUTCDay()!==5) continue;              // nur Freitage prüfen
-      const name=mb[d].name;
-      const sat=ymd(addDays(dt,1)), sun=ymd(addDays(dt,2)), mon=ymd(addDays(dt,3));
-      if(mb[mon]){                                    // Serie läuft über das Wochenende (beliebige Person Mo)
-        if(!mb[sat]) adds.push({mid:m.id, date:sat, name});
-        if(!mb[sun]) adds.push({mid:m.id, date:sun, name});
-      }
-    }
-  }
-  return adds;
-}
-
 const API = '';   // gleiche Herkunft wie die ausgelieferte Seite
 async function apiGet(path){ const r=await fetch(API+path); if(!r.ok) throw new Error('Server '+r.status); return r.json(); }
 async function apiPost(path, body){ const r=await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); return r.json(); }
@@ -2420,63 +2382,15 @@ async function refreshNow(silent){
 };
 
 async function setupFileObserver(){};
-async function migrateWeekends(){
-  if(S.readOnly || !S.data || migrating) return;
-  if(!missingWeekendBridges(S.data).length) return; // nichts zu tun -> kein Schreibzugriff
-  migrating=true;
-  try{
-    const res=await mutate(fresh=>{
-      const adds=missingWeekendBridges(fresh);      // gegen den FRISCHEN Stand rechnen
-      if(!adds.length) return {abort:true};
-      const undo=[]; const ts=new Date().toISOString();
-      for(const a of adds){
-        const mb=fresh.bookings[a.mid]=fresh.bookings[a.mid]||{};
-        if(mb[a.date]) continue;
-        mb[a.date]={name:a.name, ts};
-        undo.push({mid:a.mid, date:a.date, prev:null});
-      }
-      return {n:undo.length, undo};
-    }, 'Migration: Wochenend-Brückentage in bestehenden Serien ergänzt');
-    if(res && !res.abort && res.n) dbg('info','Migration: '+res.n+' Wochenend-Brückentage ergänzt');
-  } finally { migrating=false; }
-};   // Serverdaten sind bereits konsistent
-async function migrateMesstechnik(){
-  if(S.readOnly || !S.data || !S.dir || migratingMess) return;
-  if(S.data.machines.some(m=>m.cat==='messtechnik')) return;  // bereits importiert
-  let imp=null;
-  try{
-    const fh=await S.dir.getFileHandle('messtechnik_import.json');
-    imp=JSON.parse(await (await fh.getFile()).text());
-  }catch(e){ return; }                                         // Datei (noch) nicht im Ordner
-  if(!imp || !Array.isArray(imp.machines)) return;
-  migratingMess=true;
-  try{
-    const res=await mutate(fresh=>{
-      if(fresh.machines.some(m=>m.cat==='messtechnik')) return {abort:true}; // Kollege war schneller
-      for(const g of (imp.groups||[])) if(!fresh.groups.includes(g)) fresh.groups.push(g);
-      let nm=0, nb=0;
-      for(const d of imp.machines){
-        if(fresh.machines.some(x=>x.id===d.id)) continue;
-        fresh.machines.push({id:d.id, name:d.name, group:d.group, status:'ok', statusNote:'', info:d.info||'', cat:'messtechnik'});
-        nm++;
-      }
-      const ts=new Date().toISOString();
-      for(const [mid,runs] of Object.entries(imp.runs||{})){   // runs: [[von,bis,Name],...] inkl. Wochenenden
-        const mb=fresh.bookings[mid]=fresh.bookings[mid]||{};
-        for(const [from,to,name] of runs)
-          for(const day of allDaysRange(from,to))
-            if(!mb[day]){ mb[day]={name, ts}; nb++; }
-      }
-      if(!nm && !nb) return {abort:true};
-      return {nm, nb};
-    }, 'Migration: Messtechnik aus Excel importiert');
-    if(res && !res.abort){
-      dbg('info',`Messtechnik-Import: ${res.nm} Geräte, ${res.nb} Buchungstage`);
-      toast(`Messtechnik importiert ✓ (${res.nm} Geräte)`);
-      render(); fillGroupSel();
-    }
-  } finally { migratingMess=false; }
-};
+/* Removed: migrateWeekends()/migrateMesstechnik() — obsolete one-time client-side
+   Bestands-Migrationen from the old File-System-Access variant. They referenced the
+   undeclared globals `migrating`/`migratingMess`, so under 'use strict' they threw
+   "migrating is not defined" at init and never actually ran (non-fatal). The server
+   is authoritative and already consistent ("Serverdaten sind bereits konsistent"):
+   migrateMesstechnik needed a local folder (S.dir) that no longer exists, and the
+   server rejects the weekend-bridge write (HTTP 400). Deleting them fixes the console
+   error while preserving behavior exactly (no migration ran before; none runs now).
+   Live weekend upkeep is unaffected — sweepWeekends still runs on every booking write. */
 function startRefreshTimer(){};         // kein Polling – der Server schiebt (SSE)
 
 /* --- Live-Verbindung (Server-Sent Events): Push statt Polling --- */

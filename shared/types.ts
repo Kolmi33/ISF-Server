@@ -35,3 +35,21 @@ export interface Machine {
 
 /** A machine's resource category, as returned by `catOf`. */
 export type MachineCategory = 'messtechnik' | 'maschine';
+
+/** A single booked day: who booked it (and when it was written). */
+export interface Booking {
+  name: string;
+  ts?: string;
+}
+
+/** One machine's bookings, keyed by ISO date 'YYYY-MM-DD'. */
+export type MachineBookings = Record<string, Booking>;
+
+/** All bookings, keyed by machine id → that machine's bookings. */
+export type Bookings = Record<string, MachineBookings>;
+
+/** The subset of app state the pure booking/weekend logic reads. */
+export interface BookingData {
+  machines: Machine[];
+  bookings: Bookings;
+}
