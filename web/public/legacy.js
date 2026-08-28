@@ -32,26 +32,10 @@ const S = {
    weekdayRange() liefert nur Werktage; isBlockedM() prüft die (optional
    zeitbegrenzte) Wartungs-/Defekt-Sperre für einen konkreten Tag.
    ================================================================= */
-function ymd(d){ return d.toISOString().slice(0,10); }
-function parseYmd(s){ const [y,m,dd]=s.split('-').map(Number); return new Date(Date.UTC(y,m-1,dd)); }
-function addDays(d,n){ const x=new Date(d); x.setUTCDate(x.getUTCDate()+n); return x; }
-function mondayOf(d){ const x=new Date(Date.UTC(d.getFullYear?d.getFullYear():d.getUTCFullYear(), d.getMonth?d.getMonth():d.getUTCMonth(), d.getDate?d.getDate():d.getUTCDate())); const wd=(x.getUTCDay()+6)%7; return addDays(x,-wd); }
-function isWeekend(d){ const wd=d.getUTCDay(); return wd===0||wd===6; }
-function fmtShort(d){ return d.toLocaleDateString('de-DE',{timeZone:'UTC',day:'2-digit',month:'2-digit'}); }
-function fmtLong(s){ return parseYmd(s).toLocaleDateString('de-DE',{timeZone:'UTC',weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'}); }
-function weekdayName(d){ return ['So','Mo','Di','Mi','Do','Fr','Sa'][d.getUTCDay()]; }
-function isoWeek(d){ const x=new Date(d); x.setUTCDate(x.getUTCDate()+3-((x.getUTCDay()+6)%7)); const w1=new Date(Date.UTC(x.getUTCFullYear(),0,4)); return 1+Math.round(((x-w1)/864e5-3+((w1.getUTCDay()+6)%7))/7); }
-function todayStr(){ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; }
-function weekdayRange(fromS,toS){ // list of ISO dates Mon-Fri
-  const out=[]; let d=parseYmd(fromS); const end=parseYmd(toS);
-  while(d<=end){ if(!isWeekend(d)) out.push(ymd(d)); d=addDays(d,1); }
-  return out;
-}
-function allDaysRange(fromS,toS){ // ALLE Kalendertage inkl. Wochenende
-  const out=[]; let d=parseYmd(fromS); const end=parseYmd(toS);
-  while(d<=end){ out.push(ymd(d)); d=addDays(d,1); }
-  return out;
-}
+/* Date helpers (ymd, parseYmd, addDays, mondayOf, isWeekend, fmtShort, fmtLong,
+   weekdayName, isoWeek, todayStr, weekdayRange, allDaysRange) were extracted to the
+   gated module web/js/core/dates.ts and are provided here as window globals by app.ts
+   (which runs before this script). Their behavior is unchanged. */
 
 /* Wochenend-Brückentage aufräumen: Ein Sa/So-Eintrag existiert nur als Teil
    einer durchgehenden Serie. Fehlt der Freitag davor ODER der Montag danach

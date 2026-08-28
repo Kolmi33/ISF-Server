@@ -4,7 +4,7 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-08-28 — Phase 1 COMPLETE (through 1.4b)._
+_Last updated: 2026-08-28 — Phase 2 started: 2.0 (app.ts bridge) + 2.1 (core/dates.ts) landed._
 
 ---
 
@@ -20,21 +20,25 @@ _Last updated: 2026-08-28 — Phase 1 COMPLETE (through 1.4b)._
 
 ## Current state
 - **Phase 0 / 0.5 — done. Phase 1 — COMPLETE** (1.1–1.4b).
-- The frontend is now cleanly split under Vite: `web/index.html` (195-line shell) +
-  `web/css/app.css` (styles) + `web/public/legacy.js` (the quarantined monolith, classic/global).
-  Production builds it (multi-stage Docker) and serves the built output; verified end-to-end at
-  :3000. The old top-level `public/` is deleted (preserved in git baseline `789bfec`).
-- Behavior is byte-identical to baseline throughout (same features, same look, same pre-existing
-  `migrating` bug — see Known bugs).
-- **Phase 2 (core logic, TDD) — not started.** This is next. Coverage 90/85 arms here.
+- **Phase 2 — in progress.** 2.0 + 2.1 landed:
+  - `web/js/app.ts` — the ESM entry/bridge. Loaded as `<script type="module">` BEFORE
+    `legacy.js` (which is now `defer`); both run post-parse in document order, so the bridged
+    globals exist before legacy's `init()`. It does `Object.assign(window, dates)`.
+  - `web/js/core/dates.ts` (+ `dates.test.ts`, 22 tests, **100% cov**) — the 12 pure date
+    helpers extracted from `legacy.js` and deleted there; legacy calls them via the window bridge.
+  - Coverage is now **enforced by `verify`** (`test:cov`, threshold 90/85 on `core/**`); TZ pinned
+    to UTC in `test/setup.ts` for deterministic date tests; `tsconfig` allows `.ts` import specifiers.
+- Verified in the browser (Vite :5173 → backend :3000): all 12 helpers bridged, grid renders,
+  app boots identically. Only console error is the known pre-existing `migrating` bug (see below).
+- **Next: 2.2 `core/machines.ts`.**
 
 ## Next step
-> **Step 2.0** — add the clean ESM entry `web/js/app.ts` (a `<script type="module">` loaded
-> alongside `legacy.js`), empty except for a place to bridge extracted modules onto `window`.
-> Then **2.1 `core/dates.ts`** test-first: write `dates.test.ts` capturing the behavior of the
-> date helpers in `legacy.js` (ymd, mondayOf, isoWeek, weekdayRange, addDays, …), implement the
-> gated module, bridge it onto `window`, delete the originals from `legacy.js`, verify the app
-> still works. Coverage threshold (90/85 on `core/**`) is wired on in this step.
+> **Step 2.2 `core/machines.ts`** — test-first. Extract the machine/availability helpers from
+> `legacy.js` (`catOf`, `dayAvailable`, `maintAt`, `cellBookable`, … — confirm the exact set by
+> reading `legacy.js`). Write `machines.test.ts` capturing current behavior, implement the gated
+> module, add it to the `app.ts` bridge (`Object.assign(window, machines)`), delete the originals
+> from `legacy.js`, run `verify` (coverage 90/85 must hold on the growing `core/`), browser-smoke,
+> commit. One module per commit.
 
 ## Backlog (task queue — the single canonical copy)
 Checked off as each item lands (one commit per item unless noted).
@@ -49,9 +53,10 @@ Checked off as each item lands (one commit per item unless noted).
 - [x] 1.4b Retire the old top-level `public/`; confirm production still serves the app
 
 **Phase 2 — Core logic (TDD; coverage 90/85 arms here)**
-- [ ] 2.0 clean ESM entry `web/js/app.ts` (module, loaded alongside legacy.js); bridge
-  extracted modules onto `window` so legacy's inline handlers keep resolving
-- [ ] 2.1 `core/dates.ts` (+ tests)
+- [x] 2.0 clean ESM entry `web/js/app.ts` (module, runs before `defer` legacy.js); bridges
+  extracted modules onto `window` so legacy's inline handlers keep resolving. Coverage armed
+  into `verify` (`test:cov`, 90/85 on `core/**`).
+- [x] 2.1 `core/dates.ts` (+ 22 tests, 100% cov); 12 helpers deleted from `legacy.js`
 - [ ] 2.2 `core/machines.ts` (+ tests)
 - [ ] 2.3 `core/weekend.ts` (+ tests)
 - [ ] 2.4 `core/assistant.ts` (+ tests)
@@ -75,6 +80,9 @@ Checked off as each item lands (one commit per item unless noted).
 - [ ] 6.2 remove `src/` from the gate exclusions; full gate covers backend
 
 ## Done log (newest first)
+- Phase 2.1 — `core/dates.ts` + `dates.test.ts` (22 tests, 100% cov); 12 date helpers removed
+  from `legacy.js`; coverage 90/85 armed into `verify`; app boots identically (browser-verified)
+- Phase 2.0 — `web/js/app.ts` ESM entry + window bridge; `legacy.js` now `defer`, module runs first
 - Phase 1.4b — deleted old top-level `public/`; production rebuilt + still serves (Phase 1 done)
 - Phase 1.4a — multi-stage Dockerfile; production container serves built frontend (verified :3000)
 - Phase 1.3 — `<style>` → `web/css/app.css`; app looks identical (stylesheet loads + applies)

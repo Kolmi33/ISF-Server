@@ -7,13 +7,18 @@ export default defineConfig({
     environment: 'node',
     include: ['{web,server,shared,test}/**/*.test.ts'],
     globals: true,
+    setupFiles: ['./test/setup.ts'],
     coverage: {
       provider: 'v8',
       include: ['web/js/**/*.ts', 'server/**/*.ts', 'shared/**/*.ts'],
-      exclude: ['web/js/legacy.ts', '**/*.test.ts'],
+      // app.ts is the boot/bridge entry (side effects, exercised by browser smoke,
+      // not unit tests) — excluded like the legacy shim.
+      exclude: ['web/js/app.ts', 'web/js/legacy.ts', '**/*.test.ts'],
       reporter: ['text', 'json-summary'],
-      // Thresholds activate in Phase 2, once core/ modules exist:
-      //   'web/js/core/**': { lines: 90, branches: 85 }
+      // Armed from Phase 2 (ARCHITECTURE §10): pure core is pinned hard.
+      thresholds: {
+        'web/js/core/**': { lines: 90, branches: 85 },
+      },
     },
   },
 });
