@@ -236,7 +236,7 @@ So the setup "just works" every time, including after a context clear:
 The live task queue and done-log are in **`PROGRESS.md`** (single canonical copy, updated as
 items land). The phase overview is §6 above.
 
-## 14. Phase 3 design — the state store  _(PROPOSED — pending review before 3.1)_
+## 14. Phase 3 design — the state store  _(DECIDED 2026-08-28 — ready to implement 3.1)_
 
 ### The problem
 `S` is a `const` object (`legacy.js:8`) with **~16 fields** and **158 direct `S.x` access sites**.
@@ -269,6 +269,14 @@ export function createStore(initial: AppState): Store;   // PURE — initial inj
 | # | Decision | Chosen | Trade-off / why |
 |---|---|---|---|
 | D1 | Ownership vs. migrate 158 sites | **Own the object; legacy keeps using `window.S`** | Zero churn/regression risk in 3.1 (E3). Legacy stays untyped JS (already un-gated); types accrue to new code. Big-bang rewrite rejected. |
+
+### Migration rule — naming (decided, Q1)
+**`store` is the canonical abstraction from 3.1 onward.** `web/js/state.ts` exports `store`; all new
+TypeScript code uses `store` / `store.state` and its typed accessors. **`window.S` exists only as a
+legacy compatibility bridge** (it *is* `store.state`, same reference) so the 158 un-migrated legacy
+sites keep working. **No new code may introduce additional `S` accesses.** As legacy consumers move to
+TS (Phase 4), they switch to `store`; `window.S` is deleted once the last consumer is migrated. This
+keeps the naming from drifting: `S` only ever shrinks.
 | D2 | Reactive now vs. manual render | **Keep manual `render()` in 3.1**; build+test subscribe/notify but don't rewire `render` yet | Behavior-identical (E1/E2). notify is *used* in 3.3 (SSE→`set`→notify) and Phase 4 — not YAGNI, just not wired in 3.1. Auto-reactive-now would change render timing → regressions. |
 | D3 | Store purity | **`createStore(initial)` pure + fully unit-tested**; localStorage hydration separate, storage-reader injected (E4) | Testable in node (no `localStorage`). app.ts wires the real localStorage + `mondayOf(new Date())`. |
 | D4 | State shape fidelity | **Keep the shape byte-identical** (incl. now-dead `lastRaw`) | E1 faithful port. `writeFile`/`S.handle`/`S.dir`/`lastRaw` are FS-era dead code → **Phase 5 removal** (E8), not snuck into 3.1. |
@@ -283,8 +291,24 @@ export function createStore(initial: AppState): Store;   // PURE — initial inj
 - **Defers:** rewiring `render()` to `notify()` (3.3/Phase 4); migrating the 158 sites to typed accessors
   (Phase 4); moving `machById`/`saveFilters` into the store (later 3.x); dead-code removal (Phase 5).
 
-### Open questions (need sign-off)
-- **Q1 name:** keep `S` (zero churn) now, rename to `store`/`state` opportunistically during Phase 4
-  migration? *(recommend: keep `S`.)*
-- **Q2 reactivity:** agree to defer render-on-notify to 3.3/Phase 4 (D2)? *(recommend: yes.)*
-- **Q3 coverage:** extend the hard threshold to `state.ts` now (D6)? *(recommend: yes.)*
+### Open questions
+- **Q1 name — RESOLVED:** `store` is canonical; `window.S` is a legacy-only compat bridge that shrinks
+  to zero. See "Migration rule — naming" above.
+- **Q3 coverage — RESOLVED (yes):** the hard 90/85 threshold extends to `web/js/state.ts` (D6).
+- **Q2 view layer — RESOLVED (custom minimal store; defer view layer to Phase 4).** Brief evaluation
+  below. **Q2b reactivity — RESOLVED (yes, defer render-on-notify):** keep manual `render()` in 3.1;
+  build + test `subscribe/notify` but don't subscribe `render` yet; first consumer is SSE in 3.3;
+  revisit UI reactivity when the view layer is evaluated/migrated in Phase 4 (per D2).
+
+### View-layer evaluation (brief, evidence-based — Q2)
+Measured coupling in `legacy.js` (2569 lines, 143 functions): **23** `innerHTML` render points,
+**~150** event bindings (73 inline `onclick=` + 79 `.onXxx=` assignments), **~400** direct DOM
+accesses (228 `document.`, 181 `getElementById`, 67 `querySelector`). Any component/template library
+(React, `lit`, Svelte, …) would require rewriting essentially **all** of this now — a broad UI rewrite
+that contradicts *refactor-not-reimagine* (§1) and the **zero-runtime-dep** invariant (§5.6). Expected
+growth is low: a mature internal tool with a fixed set of screens (grid + ~10 modals), being
+restructured, not expanded — so framework ROI is weak. **Decision:** proceed with the custom minimal
+store (~30 lines, typed, tested). **Defer** any view-layer choice to **Phase 4**, decided on evidence
+once the UI is extracted into TS view modules; if anything is adopted then, prefer zero-runtime-dep
+options (native templates + a tiny signals helper, or a compile-away approach like Svelte), weighed
+explicitly against §5.6.

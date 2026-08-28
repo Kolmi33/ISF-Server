@@ -60,13 +60,20 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
   and behavior-verified. **Next: Phase 3 — state store + net (api, sse).**
 
 ## Next step
-> **Phase 3.1 `state.ts`** — introduce the store that replaces the global `S`: it owns app state
-> and notifies subscribers; UI re-renders from state (ARCHITECTURE §5 rule 3). Read how `S` is used
-> in `legacy.js` (it's a `const S` object, script-scoped — many reads/writes). Design a minimal
-> `createStore`/subscribe-notify, TDD it, and begin routing state access through it. Then 3.2
-> `net/api.ts` (apiGet/apiPost, mutate, persist, refreshNow) and 3.3 `net/sse.ts` (connectSSE,
-> presence). One module per commit; `verify` (90/85) + browser-smoke each. NOTE: `net/` is a new
-> gate layer — confirm eslint `no-restricted-imports` boundaries cover it before/when it lands.
+> **Phase 3.1 `state.ts`** — implement the state store per the **DECIDED design in `ARCHITECTURE.md
+> §14`** (read it first). Summary: `createStore(initial): Store` (pure — `get`/`set`/`subscribe`/
+> `notify`), unit-tested (E7, gate extended to `state.ts` per D6); add `AppState` + `ServerData` to
+> `shared/types.ts` (keep the shape byte-identical incl. dead `lastRaw`, D4); `app.ts` hydrates from
+> localStorage + `mondayOf(new Date())` and bridges `window.S = store.state` (the legacy compat alias,
+> per the Migration rule); **remove `const S` from `legacy.js`** so its 158 `S.x` sites resolve to the
+> bridge (zero call-site changes). **Keep manual `render()`** — build/test `subscribe`/`notify` but do
+> NOT subscribe `render` yet (D2/Q2b; first consumer is SSE in 3.3). Verify + browser-smoke (app boots,
+> **filters persist**, grid renders — behavior identical; `rev` unchanged). Then 3.2 `net/api.ts`,
+> 3.3 `net/sse.ts` (first `notify` consumer). `net/` is a new gate layer — wire its `no-restricted-
+> imports` boundaries as it lands.
+>
+> **Canonical-naming rule (do not drift):** `store` is canonical for all new TS; `window.S` is a
+> legacy-only bridge that only shrinks. No new code introduces `S` accesses. (ARCHITECTURE §14.)
 
 ## Backlog (task queue — the single canonical copy)
 Checked off as each item lands (one commit per item unless noted).
