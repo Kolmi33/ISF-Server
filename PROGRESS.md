@@ -94,6 +94,42 @@ Checked off as each item lands (one commit per item unless noted).
 **Phase 6 — Backend → TypeScript**
 - [ ] 6.1 `server/` conversion + tests for mutate concurrency/validation
 - [ ] 6.2 remove `src/` from the gate exclusions; full gate covers backend
+- [ ] 6.3 **Server-authoritative weekend auto-bridging** (feature; scope decided 2026-08-28 =
+  *maintain + backfill*). See "Deferred features" below for the full design + grounded facts.
+
+## Deferred features (decided, scheduled — not yet built)
+
+### Server-authoritative weekend auto-bridging  → Phase 6.3
+**Decision (2026-08-28):** scope = **maintain + backfill** (full). Build it in Phase 6 with the
+backend TS conversion — do NOT crack open the baseline backend earlier (sticks to the plan +
+"backend sealed until Phase 6" principle).
+
+**What it is.** A weekend day (Sat/Sun) should be booked as part of any continuous Fri→Mon
+series (see `core/weekend.ts` `sweepWeekends`, which already REMOVES orphaned weekend days on
+every client write). "Auto-bridging" is the ADD direction: when a Fri→Mon span exists, the Sat/Sun
+between them should be filled (carrying the Friday booking's name). Today the ADD direction does
+not happen at all.
+
+**Design (server owns the invariant):**
+1. **Maintain (going forward):** in the `/api/mutate` cell path, within the same transaction,
+   when a write completes a Fri→Mon span, insert the two weekend days (same name). Symmetric
+   triggers: booking a Friday whose Monday is already booked, or a Monday whose Friday is already
+   booked, fills that weekend. (Optionally also move the orphan-sweep server-side for full
+   authority; the client sweep can then be retired.)
+2. **Backfill (one-time):** a server-side pass computing all missing bridges and inserting them in
+   a single DB transaction — internal SQL, so NOT subject to the API's 1000-cell/batch cap.
+
+**Grounded facts (from live data @ rev 23):**
+- **1,794** missing bridges across **245** machines; **0** have empty names.
+- The old client migration (`migrateWeekends`, removed in 2.3) tried to POST all 1,794 in one
+  `/api/mutate` call and got **HTTP 400** — cause: the server caps a batch at **1,000 cells**
+  (`src/server.mjs` ~line 133, `Zu viele Zellen (max. 1000)`). 1794 > 1000. (NOT a name/availability
+  problem — the server only turns blocked days into *conflicts*, never 400s.)
+
+**Principled build:** put the pure bridge computation (the old `missingWeekendBridges` logic,
+removed in 2.3 — recover from git if useful) in a **tested** module the TS backend uses; keep the
+removed client-side migrations gone. Safety: daily VACUUM backup exists; backfill is reversible via
+restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
 - Phase 2.3 — `core/weekend.ts` (`sweepWeekends`, 6 tests, 100% cov) extracted + bridged;
