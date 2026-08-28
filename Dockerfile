@@ -1,4 +1,16 @@
-# Security-first, non-root, minimal. No build step, no dependencies to install.
+# Multi-stage: build the frontend with Vite, then ship a lean, zero-dependency runtime.
+# The runtime stage carries only the backend + the built frontend (no node_modules).
+
+# ---- build stage: compile the frontend ----
+FROM node:22-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY vite.config.ts tsconfig.json ./
+COPY web ./web
+RUN npm run build        # -> /app/dist/public : index.html + hashed assets + legacy.js
+
+# ---- runtime stage: the zero-dependency Node server + built frontend ----
 FROM node:22-slim
 
 ENV NODE_ENV=production \
@@ -9,12 +21,12 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-# Copy only what runs. package.json first for layer caching.
+# Only what runs: backend, seed data, and the built frontend (served from /app/public,
+# unchanged from the server's point of view — no server code change needed).
 COPY package.json ./
 COPY src ./src
-COPY public ./public
-# Startdaten: seedet die DB beim Erststart (Fallback, wenn /data leer ist)
 COPY buchungen.json ./
+COPY --from=build /app/dist/public ./public
 
 # /data is a mounted volume at runtime; make sure the unprivileged user owns it.
 RUN mkdir -p /data && chown -R node:node /data /app
