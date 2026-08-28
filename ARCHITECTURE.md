@@ -101,7 +101,7 @@ The general coding standard is **`PRINCIPLES.md`** (P0–P6). These are the rule
 |---|---|---|
 | 0 | Safety net + dockerized toolchain + these docs | **done** |
 | 1 | Skeleton: Vite web root, monolith → classic `legacy.js`, CSS → `app.css`, production serves the build | **done** |
-| 2 | Core logic (TDD): `dates` → `machines` → `weekend` → `assistant` | in progress (`dates` done) |
+| 2 | Core logic (TDD): `dates` → `machines` → `weekend` → `assistant` | in progress (`dates`, `machines` done) |
 | 3 | State store + `net/` (api, sse) | |
 | 4 | UI: grid + reactive core, then selection, navigation, then each view | |
 | 5 | Polish: delete dead code, tidy CSS/HTML | |

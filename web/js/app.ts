@@ -11,6 +11,8 @@
 // boot/orchestration entry.
 
 import * as dates from './core/dates.ts';
+import * as machines from './core/machines.ts';
 
 // Bridge extracted pure modules onto the global scope for the legacy layer.
 Object.assign(window, dates);
+Object.assign(window, machines);

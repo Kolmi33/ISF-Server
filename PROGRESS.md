@@ -4,7 +4,7 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-08-28 — Phase 2 started: 2.0 (app.ts bridge) + 2.1 (core/dates.ts) landed._
+_Last updated: 2026-08-28 — Phase 2: 2.0 (bridge), 2.1 (dates), 2.2 (machines) landed._
 
 ---
 
@@ -28,17 +28,25 @@ _Last updated: 2026-08-28 — Phase 2 started: 2.0 (app.ts bridge) + 2.1 (core/d
     helpers extracted from `legacy.js` and deleted there; legacy calls them via the window bridge.
   - Coverage is now **enforced by `verify`** (`test:cov`, threshold 90/85 on `core/**`); TZ pinned
     to UTC in `test/setup.ts` for deterministic date tests; `tsconfig` allows `.ts` import specifiers.
-- Verified in the browser (Vite :5173 → backend :3000): all 12 helpers bridged, grid renders,
-  app boots identically. Only console error is the known pre-existing `migrating` bug (see below).
-- **Next: 2.2 `core/machines.ts`.**
+  - `shared/types.ts` seeded (the domain contract): `Machine`, `MaintSlot`, `MachineCategory`.
+    It grows as extraction surfaces more fields.
+  - `web/js/core/machines.ts` (+ `machines.test.ts`, 18 tests, 100% cov) — the pure resource
+    category + maintenance/availability predicates (`catOf`, `maintSlots`, `slotCovers`, `maintAt`,
+    `isBlockedM`, `anyMaint`, `dayAvailable`, `cellBookable`), extracted and deleted from `legacy.js`.
+    The German status-text helpers (`maintText`, `statusRangeText`, `daysMaskText`, `blockText`,
+    `maintKind`) stayed in `legacy.js` (presentation; move with the views in Phase 4).
+- Verified in the browser (Vite :5173 → backend :3000): all helpers bridged, grid renders from the
+  bridged predicates, app boots identically. Only JS error is the known pre-existing `migrating` bug.
+- **Next: 2.3 `core/weekend.ts`.**
 
 ## Next step
-> **Step 2.2 `core/machines.ts`** — test-first. Extract the machine/availability helpers from
-> `legacy.js` (`catOf`, `dayAvailable`, `maintAt`, `cellBookable`, … — confirm the exact set by
-> reading `legacy.js`). Write `machines.test.ts` capturing current behavior, implement the gated
-> module, add it to the `app.ts` bridge (`Object.assign(window, machines)`), delete the originals
-> from `legacy.js`, run `verify` (coverage 90/85 must hold on the growing `core/`), browser-smoke,
-> commit. One module per commit.
+> **Step 2.3 `core/weekend.ts`** — test-first. Extract the weekend-bridge logic from `legacy.js`
+> (`sweepWeekends`, `missingWeekendBridges` — read them for the exact contract). This is also where
+> the pre-existing **`migrating` bug** gets fixed **test-first**: write a test that reproduces the
+> `ReferenceError`, then declare/define the missing `migrating`/`migratingMess` state so the weekend +
+> messtechnik auto-migration paths no longer throw (see Known bugs). Implement the gated module, add
+> to the `app.ts` bridge, delete originals from `legacy.js`, `verify` (90/85 holds), browser-smoke
+> (console must be **clean** — the `migrating` error gone), commit. One module per commit.
 
 ## Backlog (task queue — the single canonical copy)
 Checked off as each item lands (one commit per item unless noted).
@@ -57,7 +65,8 @@ Checked off as each item lands (one commit per item unless noted).
   extracted modules onto `window` so legacy's inline handlers keep resolving. Coverage armed
   into `verify` (`test:cov`, 90/85 on `core/**`).
 - [x] 2.1 `core/dates.ts` (+ 22 tests, 100% cov); 12 helpers deleted from `legacy.js`
-- [ ] 2.2 `core/machines.ts` (+ tests)
+- [x] 2.2 `core/machines.ts` (+ 18 tests, 100% cov) + `shared/types.ts` seeded; 8 predicates
+  deleted from `legacy.js`
 - [ ] 2.3 `core/weekend.ts` (+ tests)
 - [ ] 2.4 `core/assistant.ts` (+ tests)
 
@@ -80,6 +89,9 @@ Checked off as each item lands (one commit per item unless noted).
 - [ ] 6.2 remove `src/` from the gate exclusions; full gate covers backend
 
 ## Done log (newest first)
+- Phase 2.2 — `core/machines.ts` + `machines.test.ts` (18 tests, 100% cov) + `shared/types.ts`
+  contract seeded; 8 pure predicates removed from `legacy.js`; grid renders from the bridge
+  (browser-verified); core coverage still 100%
 - Phase 2.1 — `core/dates.ts` + `dates.test.ts` (22 tests, 100% cov); 12 date helpers removed
   from `legacy.js`; coverage 90/85 armed into `verify`; app boots identically (browser-verified)
 - Phase 2.0 — `web/js/app.ts` ESM entry + window bridge; `legacy.js` now `defer`, module runs first

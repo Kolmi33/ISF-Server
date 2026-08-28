@@ -12,8 +12,9 @@ export default defineConfig({
       provider: 'v8',
       include: ['web/js/**/*.ts', 'server/**/*.ts', 'shared/**/*.ts'],
       // app.ts is the boot/bridge entry (side effects, exercised by browser smoke,
-      // not unit tests) — excluded like the legacy shim.
-      exclude: ['web/js/app.ts', 'web/js/legacy.ts', '**/*.test.ts'],
+      // not unit tests) — excluded like the legacy shim. shared/types.ts is type-only
+      // (compiles to nothing) so there is no runtime to cover.
+      exclude: ['web/js/app.ts', 'web/js/legacy.ts', 'shared/types.ts', '**/*.test.ts'],
       reporter: ['text', 'json-summary'],
       // Armed from Phase 2 (ARCHITECTURE §10): pure core is pinned hard.
       thresholds: {

@@ -54,8 +54,6 @@ function sweepWeekends(fresh, mid){
   }
   return undo;
 }
-/* Zeitlich begrenzte Sperre: gilt am Tag d? */
-function isBlockedM(m,d){ return !!maintAt(m,d); }
 function statusRangeText(m){
   const ss=maintSlots(m); if(!ss.length) return '';
   const t=todayStr();
@@ -64,20 +62,13 @@ function statusRangeText(m){
 }
 // Verfügbare Wochentage: m.days = 7-Zeichen-Maske Mo..So ('1'=verfügbar). Fehlt das Feld → alle Tage verfügbar.
 const WD_SHORT=['Mo','Di','Mi','Do','Fr','Sa','So'];
-function dayAvailable(m,d){
-  if(!m.days || m.days.length!==7) return true;
-  const wd=(parseYmd(d).getUTCDay()+6)%7;   // Mo=0 … So=6
-  return m.days.charAt(wd)!=='0';
-}
 function daysMaskText(m){
   if(!m.days || m.days.length!==7 || m.days==='1111111') return 'jeden Tag';
   const on=WD_SHORT.filter((_,i)=>m.days.charAt(i)==='1');
   return on.length ? on.join(', ') : 'keine Tage';
 }
-// Zelle nicht buchbar? = gesperrt (Status) ODER Wochentag nicht verfügbar
-function cellBookable(m,d){ return !isBlockedM(m,d) && dayAvailable(m,d); }
-
-
+/* catOf, maintSlots, slotCovers, maintAt, isBlockedM, anyMaint, dayAvailable,
+   cellBookable → core/machines.ts (provided as window globals by app.ts). */
 function stampRef(){
   const el=document.getElementById('lastRef');
   if(el) el.textContent=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
@@ -699,7 +690,7 @@ function getBooking(mid,date){ const mb=S.data.bookings[mid]; return mb?mb[date]
    Bereiche (m.group) sind Unterkategorien ihrer jeweiligen Hauptkategorie.
    S.cats steuert die Sichtbarkeit im Raster (Umschalt-Buttons im Spaltenkopf). */
 const CATS=[['maschine','Maschinen'],['messtechnik','Messtechnik']];
-function catOf(m){ return m && m.cat==='messtechnik' ? 'messtechnik' : 'maschine'; }
+/* catOf → core/machines.ts (window bridge). */
 function catLabel(c){ return c==='messtechnik' ? 'Messtechnik' : 'Maschinen'; }
 function catIco(c){ return ic(c==='messtechnik' ? 'gauge' : 'factory'); }  // einheitliches Icon je Kategorie
 function groupCat(g){ const m=S.data.machines.find(x=>x.group===g); return catOf(m); }
@@ -2345,16 +2336,11 @@ function openLog(){
    ================================================================= */
 
 /* --- portierte UI-/Wartungs-Helfer --- */
-function maintSlots(m){
-  if(Array.isArray(m.maint)) return m.maint;
-  if(m.status && m.status!=='ok') return [{type:m.status, from:m.statusFrom||'', until:m.statusUntil||'', note:m.statusNote||''}];
-  return [];
-}
-function slotCovers(s,d){ return (!s.from || d>=s.from) && (!s.until || d<=s.until); }
-function maintAt(m,d){ for(const s of maintSlots(m)) if(slotCovers(s,d)) return s; return null; }
+/* maintSlots, slotCovers, maintAt, anyMaint → core/machines.ts (window bridge).
+   The German status-text helpers below stay here (presentation) and call the
+   bridged predicates as before. */
 function maintText(s){ if(!s) return ''; const f=s.from?fmtLong(s.from):'sofort', u=s.until?fmtLong(s.until):'unbegrenzt'; return `${s.type==='defekt'?'defekt':'Wartung'}: ${f} – ${u}${s.note?' ('+s.note+')':''}`; }
 function blockText(m,d){ return maintText(maintAt(m,d)); }
-function anyMaint(m){ return maintSlots(m).length>0; }
 function maintKind(m){ const s=maintAt(m,todayStr()); return s?s.type:null; }
 function catIco(c){ return ic(c==='messtechnik' ? 'gauge' : 'factory'); }
 function asDevUid(id,node=AS_TREE){ for(const c of node.children){ if(c.type==='dev'&&c.id===id) return c.uid; if(c.type==='grp'){ const r=asDevUid(id,c); if(r) return r; } } return null; }
