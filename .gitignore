@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Runtime data (created inside the container / at runtime — never source)
+data/
+backups/
+*.db
+*.db-wal
+*.db-shm
+
+# Local env / editor
+.env
+.env.*
+.DS_Store
+.vscode/
+*.log

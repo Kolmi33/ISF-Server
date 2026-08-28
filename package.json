@@ -1,0 +1,12 @@
+{
+  "name": "maschinenplan-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zero-dependency SQLite-backed booking server with live SSE updates.",
+  "engines": { "node": ">=22.5" },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.mjs",
+    "import": "node --disable-warning=ExperimentalWarning src/import.mjs"
+  }
+}
