@@ -172,10 +172,15 @@ one-line config edit, made deliberately (never bypassed).
 ### The legacy quarantine (reconciling a hard gate with "carve, don't rewrite")
 A hard gate would reject the 3,200-line monolith the instant it entered as TypeScript. So:
 - New code (`core/`, `state`, `net/`, `ui/`, `server/`) faces the **full gate from day one**.
-- The not-yet-extracted monolith lives in **`web/js/legacy.ts`**, explicitly **excluded** from
-  ESLint size/complexity/`any` rules and from coverage — a shrinking quarantine, not an exception
-  to the standard. Every extraction moves code *out* of `legacy.ts` into gated modules.
-- `legacy.ts` must reach zero by Phase 5; its line count is a tracked burn-down.
+- The not-yet-extracted monolith lives in **`web/public/legacy.js`**, a **classic** (non-module)
+  script loaded via `<script src="/legacy.js">`. It stays classic on purpose: the app has 125
+  inline `onclick=` handlers that rely on its ~130 functions being **global** — an ES module would
+  hide them and break every button. Classic scope preserves behavior with zero code change.
+- It is explicitly **gate-excluded** (ESLint/Prettier/tsc) — a shrinking quarantine, not an
+  exception to the standard. Every extraction moves code *out* of `legacy.js` into a gated ES
+  module; the module's public functions are bridged onto `window` so the remaining legacy handlers
+  keep resolving during the transition.
+- `legacy.js` must reach zero by Phase 5; its line count is a tracked burn-down (2712 at 1.2).
 
 ### What the gate does NOT catch (honest limits)
 - **UI behavior preservation** — not machine-checkable. Backstop: `FEATURES.md` manual smoke

@@ -12,7 +12,7 @@ export default tseslint.config(
       'backups/**',
       'public/**', // the legacy monolith is being replaced, not linted
       'src/**', // legacy backend (.mjs); converted + gated in Phase 6
-      'web/js/legacy.ts', // quarantine: gate-excluded, burns down to zero by Phase 5
+      'web/public/**', // quarantined monolith (legacy.js); burns down to zero by Phase 5
     ],
   },
   js.configs.recommended,

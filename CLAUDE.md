@@ -27,6 +27,20 @@ docker compose -f docker-compose.dev.yml run --rm --service-ports dev npm run de
 
 Production is separate: `docker compose up -d --build` (see START.md).
 
+## Versioning & rollback
+
+Every step is one small commit on a linear history; the pre-commit hook keeps `HEAD` green, so
+each commit is a known-good save point. The repo is **local only** (no remote yet). To roll back:
+
+- Discard uncommitted edits: `git restore .`
+- Undo the last commit, keep edits: `git reset --soft HEAD~1`
+- Discard the last commit entirely: `git reset --hard HEAD~1`
+- Return to a known-good step: `git reset --hard <hash>`
+- Return to the original app: `git reset --hard 789bfec` (the untouched baseline)
+- Recover from a mistaken reset: `git reflog` (every HEAD move is logged)
+
+Local workflow uses `reset`; if a shared remote is ever added, prefer `git revert` instead.
+
 ## How we work: the per-module loop
 
 Unit of work = one module extraction. Each is ONE commit:
@@ -59,9 +73,11 @@ re-reading the tree) to know you're done.
 gate). Enable once per clone: `git config core.hooksPath .githooks`. Never bypass with
 `--no-verify`.
 
-The un-extracted monolith lives in `web/js/legacy.ts` — **gate-excluded** (ESLint size/complexity/
-`any` + coverage), a shrinking quarantine that must reach zero by Phase 5. All NEW modules face
-the full gate. Each extraction moves code OUT of `legacy.ts` into a gated module.
+The un-extracted monolith lives in **`web/public/legacy.js`** — a **classic** (non-module) script,
+loaded via `<script src="/legacy.js">`, so its ~130 functions stay global and the 125 inline
+`onclick=` handlers keep working with zero changes. It is **gate-excluded** (ESLint/Prettier/tsc),
+a shrinking quarantine that must reach zero by Phase 5. All NEW modules face the full gate. Each
+extraction moves code OUT of `legacy.js` into a gated ES module.
 
 ## Principles
 
