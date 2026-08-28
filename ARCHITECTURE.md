@@ -235,3 +235,56 @@ So the setup "just works" every time, including after a context clear:
 
 The live task queue and done-log are in **`PROGRESS.md`** (single canonical copy, updated as
 items land). The phase overview is §6 above.
+
+## 14. Phase 3 design — the state store  _(PROPOSED — pending review before 3.1)_
+
+### The problem
+`S` is a `const` object (`legacy.js:8`) with **~16 fields** and **158 direct `S.x` access sites**.
+Reactivity today is **manual**: code mutates `S` (often deeply, e.g. `S.data.bookings[m][d]=…`),
+then calls `render()` (and `saveFilters()` for persisted filters). There is no subscribe/notify.
+ARCHITECTURE §5 rule 3 wants: *state changes go through a store that notifies subscribers; UI
+re-renders from state.*
+
+### Approach — E3 ownership substitution (no call-site churn in 3.1)
+`state.ts` becomes the **owner** of the state object; `app.ts` bridges it as `window.S`; `legacy.js`
+**drops its `const S = {…}`** and its bare `S.x` references resolve to the bridged global. Result:
+**zero of the 158 sites change in 3.1** — the store simply owns the same object legacy already uses.
+Type safety accrues to new TS code now, and to legacy sites as they migrate to TS in Phase 4.
+
+### Store API (sketch)
+```ts
+// web/js/state.ts
+export interface Store {
+  state: AppState;                                   // the live object (bridged as window.S)
+  get<K extends keyof AppState>(k: K): AppState[K];
+  set(patch: Partial<AppState>): void;               // shallow-merge + notify()
+  subscribe(fn: (s: AppState) => void): () => void;  // returns an unsubscribe
+  notify(): void;
+}
+export function createStore(initial: AppState): Store;   // PURE — initial injected (E4), unit-tested
+```
+`AppState` and `ServerData` (= `BookingData` + `groups`/`log`/`revision`) go in `shared/types.ts`.
+
+### Decisions (for evaluation)
+| # | Decision | Chosen | Trade-off / why |
+|---|---|---|---|
+| D1 | Ownership vs. migrate 158 sites | **Own the object; legacy keeps using `window.S`** | Zero churn/regression risk in 3.1 (E3). Legacy stays untyped JS (already un-gated); types accrue to new code. Big-bang rewrite rejected. |
+| D2 | Reactive now vs. manual render | **Keep manual `render()` in 3.1**; build+test subscribe/notify but don't rewire `render` yet | Behavior-identical (E1/E2). notify is *used* in 3.3 (SSE→`set`→notify) and Phase 4 — not YAGNI, just not wired in 3.1. Auto-reactive-now would change render timing → regressions. |
+| D3 | Store purity | **`createStore(initial)` pure + fully unit-tested**; localStorage hydration separate, storage-reader injected (E4) | Testable in node (no `localStorage`). app.ts wires the real localStorage + `mondayOf(new Date())`. |
+| D4 | State shape fidelity | **Keep the shape byte-identical** (incl. now-dead `lastRaw`) | E1 faithful port. `writeFile`/`S.handle`/`S.dir`/`lastRaw` are FS-era dead code → **Phase 5 removal** (E8), not snuck into 3.1. |
+| D5 | `machById` cache (`S._mbi`) | **Stays in legacy for 3.1** | It's a state-derived selector; migrating it is a later 3.x step. Works as a dynamic prop on `window.S`. |
+| D6 | Coverage policy for new layer | **Extend the 90/85 threshold to `web/js/state.ts`** (pure store = core-grade). `net/` (fetch/SSE) is smoke-tested (E5); extract pure bits (URL build, SSE parse) to unit-test | Deliberate gate-config change; recorded so it's intentional. |
+
+### 3.1 scope (does / defers)
+- **Does:** create `state.ts` (`createStore` + get/set/subscribe/notify, unit-tested); add `AppState`/
+  `ServerData` to `shared/types.ts`; `app.ts` hydrates from localStorage + bridges `window.S`; remove
+  `const S` from `legacy.js`. Verify + browser-smoke (app boots, filters persist, grid renders — behavior
+  identical). Wire D6 coverage.
+- **Defers:** rewiring `render()` to `notify()` (3.3/Phase 4); migrating the 158 sites to typed accessors
+  (Phase 4); moving `machById`/`saveFilters` into the store (later 3.x); dead-code removal (Phase 5).
+
+### Open questions (need sign-off)
+- **Q1 name:** keep `S` (zero churn) now, rename to `store`/`state` opportunistically during Phase 4
+  migration? *(recommend: keep `S`.)*
+- **Q2 reactivity:** agree to defer render-on-notify to 3.3/Phase 4 (D2)? *(recommend: yes.)*
+- **Q3 coverage:** extend the hard threshold to `state.ts` now (D6)? *(recommend: yes.)*
