@@ -7,5 +7,13 @@ export default defineConfig({
     environment: 'node',
     include: ['{web,server,shared,test}/**/*.test.ts'],
     globals: true,
+    coverage: {
+      provider: 'v8',
+      include: ['web/js/**/*.ts', 'server/**/*.ts', 'shared/**/*.ts'],
+      exclude: ['web/js/legacy.ts', '**/*.test.ts'],
+      reporter: ['text', 'json-summary'],
+      // Thresholds activate in Phase 2, once core/ modules exist:
+      //   'web/js/core/**': { lines: 90, branches: 85 }
+    },
   },
 });

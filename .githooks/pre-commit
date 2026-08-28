@@ -1,0 +1,14 @@
+#!/bin/sh
+# Hard quality gate: run the full dockerized verify; block the commit if it fails.
+# Enable once per clone:  git config core.hooksPath .githooks
+# (Never bypass with --no-verify. If a gate is wrong, change the gate deliberately.)
+echo "pre-commit: running dockerized verify (npm run verify) ..."
+docker compose -f docker-compose.dev.yml run --rm dev npm run verify
+status=$?
+if [ $status -ne 0 ]; then
+  echo ""
+  echo "pre-commit: verify FAILED (exit $status) — commit blocked. Fix, then re-commit."
+  exit $status
+fi
+echo "pre-commit: verify passed."
+exit 0
