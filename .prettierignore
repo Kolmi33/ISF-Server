@@ -5,6 +5,8 @@ data/
 backups/
 public/
 src/
+web/index.html
+web/js/legacy.ts
 buchungen.json
 package-lock.json
 *.md
