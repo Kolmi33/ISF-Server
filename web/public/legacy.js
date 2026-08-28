@@ -3,25 +3,14 @@
    GLOBALER ZUSTAND
    S bündelt den gesamten Laufzeitzustand. Grundsatz:
    - teamweite Daten kommen vom Server (S.data spiegelt /api/state),
-   - gerätebezogene Vorlieben in localStorage (hier beim Start gelesen).
-   ================================================================= */
-const S = {
-  data: null,          // Datenstand vom Server (/api/state)
-  readOnly: false,
-  user: localStorage.getItem('mb_user') || '',
-  startMonday: mondayOf(new Date()),
-  weeks: 2,            // Basis-Wochen; weitere hängen sich beim Scrollen automatisch an
-  extraWeeks: 0,                          // auto-appended weeks while scrolling right
-  machSel: new Set(JSON.parse(localStorage.getItem('mb_machsel') || '[]')),      // Maschinenfilter (IDs); leer = alle
-  groupsSel: new Set(JSON.parse(localStorage.getItem('mb_groupssel') || '[]')),  // Bereichsfilter; leer = alle
-  cats: new Set(JSON.parse(localStorage.getItem('mb_cats') || '["maschine","messtechnik"]')), // sichtbare Hauptkategorien
-  collapsed: new Set(JSON.parse(localStorage.getItem('mb_collapsed') || '[]')),
-  person: localStorage.getItem('mb_person') || '',           // Personenfilter (Hervorhebung)
-  personOnly: localStorage.getItem('mb_persononly')==='on',  // nur Zeilen dieser Person
-  favs: new Set(JSON.parse(localStorage.getItem('mb_favs') || '[]')),  // Favoriten (Maschinen-IDs)
-  visM: [], visD: [],  // currently rendered machine ids (rows) and dates (columns)
-  lastRaw: ''          // for change detection on auto-refresh
-};
+   - gerätebezogene Vorlieben in localStorage (beim Start gelesen).
+
+   Der Store besitzt dieses Objekt jetzt (web/js/state.ts) und app.ts
+   spiegelt es als window.S – gleiche Referenz, gleiche Felder (byte-
+   identisch, ARCHITECTURE §14). Der bisherige `const S = {…}` samt
+   localStorage-Hydration ist dorthin gewandert; Zugriffe `S.x` hier
+   binden an das globale window.S. `store` ist ab Phase 3.1 die kanonische
+   Abstraktion; window.S schrumpft nur noch (Migrationsregel §14). */
 
 /* =================================================================
    DATUMS-HELFER

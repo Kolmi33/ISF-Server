@@ -236,7 +236,7 @@ So the setup "just works" every time, including after a context clear:
 The live task queue and done-log are in **`PROGRESS.md`** (single canonical copy, updated as
 items land). The phase overview is §6 above.
 
-## 14. Phase 3 design — the state store  _(DECIDED 2026-08-28 — ready to implement 3.1)_
+## 14. Phase 3 design — the state store  _(DECIDED 2026-08-28; 3.1 IMPLEMENTED — `web/js/state.ts`, gate + smoke green)_
 
 ### The problem
 `S` is a `const` object (`legacy.js:8`) with **~16 fields** and **158 direct `S.x` access sites**.

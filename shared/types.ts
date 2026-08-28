@@ -53,3 +53,62 @@ export interface BookingData {
   machines: Machine[];
   bookings: Bookings;
 }
+
+/** One audit-log line the client keeps in memory (newest first, capped at 500). */
+export interface LogEntry {
+  ts: string;
+  user: string;
+  action: string;
+}
+
+/**
+ * The team-wide state mirrored from `/api/state`. On the wire the server sends
+ * `{ rev, groups, machines, bookings }`; the client normalizes `revision = rev || 0`
+ * and carries an in-memory `log` (see legacy `loadState`). Kept faithful to that shape.
+ */
+export interface ServerData extends BookingData {
+  groups: string[];
+  /** Server's monotonic revision under its wire name; present on server responses. */
+  rev?: number;
+  /** Client-normalized revision (`= rev || 0`). */
+  revision: number;
+  log: LogEntry[];
+}
+
+/**
+ * The complete frontend runtime state — the object legacy code knows as the global `S`.
+ * The store (`web/js/state.ts`) owns it; `app.ts` bridges it as `window.S` during the
+ * strangler transition. Shape kept byte-identical to legacy `S` (ARCHITECTURE §14 D4),
+ * including the now-dead `lastRaw` (removed with the rest of the FS-era code in Phase 5).
+ */
+export interface AppState {
+  /** Server data (`/api/state`); `null` until the first load completes. */
+  data: ServerData | null;
+  readOnly: boolean;
+  user: string;
+  /** Monday of the currently displayed week block (a local-calendar `Date`). */
+  startMonday: Date;
+  /** Base weeks shown; further weeks auto-append while scrolling right. */
+  weeks: number;
+  extraWeeks: number;
+  /** Machine-id filter (empty = all). */
+  machSel: Set<string>;
+  /** Group filter (empty = all). */
+  groupsSel: Set<string>;
+  /** Visible top-level categories, e.g. 'maschine' | 'messtechnik'. */
+  cats: Set<string>;
+  /** Collapsed group ids. */
+  collapsed: Set<string>;
+  /** Person filter (highlight). */
+  person: string;
+  /** Show only this person's rows. */
+  personOnly: boolean;
+  /** Favorite machine ids. */
+  favs: Set<string>;
+  /** Currently rendered machine ids (rows). */
+  visM: string[];
+  /** Currently rendered dates (columns), ISO 'YYYY-MM-DD'. */
+  visD: string[];
+  /** Raw snapshot for auto-refresh change detection (FS-era; dead — removed in Phase 5). */
+  lastRaw: string;
+}

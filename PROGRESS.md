@@ -57,20 +57,30 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     Browser-verified by **running the Assistant end-to-end**: correct result card
     ("… durchgehend frei (offen – 542 Tage wählbar)"), core cross-check matches, console clean.
 - **Phase 2 is COMPLETE.** All four core modules extracted, tested (78 tests, 100% cov on `core/**`),
-  and behavior-verified. **Next: Phase 3 — state store + net (api, sse).**
+  and behavior-verified.
+- **3.1 (state store) DONE 2026-08-28** — see Done log. **Next: 3.2 `net/api.ts`.**
+  - `web/js/state.ts`: `createStore(initial): Store` — pure, mutates its state object in place so
+    the bridged `window.S` reference stays valid; `get`/`set`(shallow-merge+notify)/`subscribe`
+    (returns unsubscribe)/`notify`. +6 tests, 100% cov; gate floor extended to `state.ts` (D6).
+  - `shared/types.ts`: added `LogEntry`, `ServerData` (= `BookingData` + `groups`/`rev?`/`revision`/
+    `log`), `AppState` (the 16-field legacy `S`, byte-identical incl. dead `lastRaw`, D4).
+  - `app.ts`: `hydrateState()` (localStorage + `mondayOf(new Date())`, the impurity `createStore`
+    avoids — D3/E4) → `createStore` → `window.S = store.state`; `Window.S` augmented.
+  - `legacy.js`: `const S = {…}` removed (its 158 `S.x` sites now resolve to the bridge; zero
+    call-site changes). Manual `render()` kept — `subscribe`/`notify` built+tested but NOT wired
+    (D2/Q2b; first consumer is SSE in 3.3).
+  - Gate green (85 tests, 100% cov). Browser smoke: `window.S` = 16 fields in order, Sets intact,
+    data loaded (245 machines, rev 23), 265 rows rendered, stored filters (`machSel`/`person`/
+    `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 3.1 `state.ts`** — implement the state store per the **DECIDED design in `ARCHITECTURE.md
-> §14`** (read it first). Summary: `createStore(initial): Store` (pure — `get`/`set`/`subscribe`/
-> `notify`), unit-tested (E7, gate extended to `state.ts` per D6); add `AppState` + `ServerData` to
-> `shared/types.ts` (keep the shape byte-identical incl. dead `lastRaw`, D4); `app.ts` hydrates from
-> localStorage + `mondayOf(new Date())` and bridges `window.S = store.state` (the legacy compat alias,
-> per the Migration rule); **remove `const S` from `legacy.js`** so its 158 `S.x` sites resolve to the
-> bridge (zero call-site changes). **Keep manual `render()`** — build/test `subscribe`/`notify` but do
-> NOT subscribe `render` yet (D2/Q2b; first consumer is SSE in 3.3). Verify + browser-smoke (app boots,
-> **filters persist**, grid renders — behavior identical; `rev` unchanged). Then 3.2 `net/api.ts`,
-> 3.3 `net/sse.ts` (first `notify` consumer). `net/` is a new gate layer — wire its `no-restricted-
-> imports` boundaries as it lands.
+> **Phase 3.2 `net/api.ts`** — extract the HTTP client (`apiGet`/`apiPost` → `/api/state`,
+> `/api/mutate`, and the `d.revision = d.rev||0; d.log = d.log||[]` normalization from legacy
+> `loadState`). `net/` is a **new gate layer**: add its `no-restricted-imports` boundary in
+> `eslint.config.js` (core must not import net/ — already set; net/ must not import ui/). Keep the
+> pure bits unit-tested (URL/body building, response normalization) and smoke the fetch wiring (E5).
+> Then 3.3 `net/sse.ts` — the **first `notify` consumer**: SSE events call `store.set(...)` →
+> `notify()`; still don't subscribe `render` (revisit UI reactivity in Phase 4).
 >
 > **Canonical-naming rule (do not drift):** `store` is canonical for all new TS; `window.S` is a
 > legacy-only bridge that only shrinks. No new code introduces `S` accesses. (ARCHITECTURE §14.)
@@ -102,7 +112,9 @@ Checked off as each item lands (one commit per item unless noted).
   `runAssistant` refactored to call it. **Phase 2 complete.**
 
 **Phase 3 — State + net**
-- [ ] 3.1 `state.ts` (store + subscribe/notify)
+- [x] 3.1 `state.ts` (store + subscribe/notify) — pure `createStore`, +6 tests 100% cov; `AppState`/
+  `ServerData`/`LogEntry` typed; `app.ts` hydrates + bridges `window.S`; `const S` removed from
+  `legacy.js`. Gate + smoke green; `render()` still manual (D2). **DONE 2026-08-28.**
 - [ ] 3.2 `net/api.ts`
 - [ ] 3.3 `net/sse.ts`
 

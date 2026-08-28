@@ -16,9 +16,11 @@ export default defineConfig({
       // (compiles to nothing) so there is no runtime to cover.
       exclude: ['web/js/app.ts', 'web/js/legacy.ts', 'shared/types.ts', '**/*.test.ts'],
       reporter: ['text', 'json-summary'],
-      // Armed from Phase 2 (ARCHITECTURE §10): pure core is pinned hard.
+      // Armed from Phase 2 (ARCHITECTURE §10): pure core is pinned hard. The pure store
+      // (Phase 3.1, §14 D6) is core-grade and held to the same floor.
       thresholds: {
         'web/js/core/**': { lines: 90, branches: 85 },
+        'web/js/state.ts': { lines: 90, branches: 85 },
       },
     },
   },
