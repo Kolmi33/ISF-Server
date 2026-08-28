@@ -24,6 +24,9 @@ export default defineConfig({
         // net/ pure bits (URL/body building, response normalization) are unit-tested via
         // an injected fetch (E4/E5); the live fetch/SSE wiring is browser-smoked.
         'web/js/net/**': { lines: 90, branches: 85 },
+        // ui/ pure model logic (cell classification, class stems, header/row builders) is
+        // unit-tested; the DOM writes that consume it are browser-smoked (E5).
+        'web/js/ui/**': { lines: 90, branches: 85 },
       },
     },
   },

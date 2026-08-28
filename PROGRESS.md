@@ -58,6 +58,13 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     ("… durchgehend frei (offen – 542 Tage wählbar)"), core cross-check matches, console clean.
 - **Phase 2 is COMPLETE.** All four core modules extracted, tested (78 tests, 100% cov on `core/**`),
   and behavior-verified.
+- **4.1a (ui/grid cell model) DONE 2026-08-28** — `web/js/ui/grid.ts`: pure `classifyCell` (4-state
+  priority), `isMine` (case-insensitive owner check), `cellClass` (class stem). +9 tests, 100% cov.
+  `render()` and `refreshCell()` both refactored to the shared helpers — removes the per-cell decision
+  duplication that had already drifted (title/aria richness) between them. New `ui/` gate layer
+  (coverage 90/85). Smoke: grid renders (216 booked / 40 mine / 245 today / 3459 free), `refreshCell`
+  idempotent vs. the full render for booked+free cells, console clean, `rev` 23. Pre-existing
+  `wknd`-on-patch asymmetry preserved (Known bugs → Open). **Phase 4 started.**
 - **3.3 (net/sse) DONE 2026-08-28** — `web/js/net/sse.ts`: pure event logic `applyUpdate`
   (mutates bookings, returns rev + repaint patch), `presenceInfo` (badge count/label), `isForeign`
   (remote-change gate). +8 tests, 100% cov. Legacy `connectSSE`/`applyPresence` refactored to the
@@ -88,23 +95,22 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 4.1 — `ui/grid.ts` + wire the reactive path.** This is where the view layer starts and
-> where the deferred store-reactivity finally lands. Two intertwined goals:
-> 1. **Extract the grid renderer** — carve `render()` (and its helpers: `buildGrid`/`patchCells`/
->    the row/column builders) out of legacy into `web/js/ui/grid.ts`. `ui/` is a **new gate layer**:
->    wire its eslint boundary (ui/ may import core/ + net/ + state; nothing may import ui/) and the
->    90/85 coverage floor for the pure bits (cell-model building; DOM writes are smoke-tested, E5).
->    Grid rendering is heavily DOM-coupled → expect thin adapters + injected deps (E3/E4).
-> 2. **Wire `SSE → store.set → notify → render`** (the piece deferred from 3.3, ARCHITECTURE §14
->    "3.3 SSE"): move the `connectSSE` orchestrator into `net/` (or a `boot` module) so it holds the
->    real `store`, have `update`/`structural`/`presence` route through `store.set(...)`, and
->    **subscribe `render` to the store** so notify actually repaints. This retires the manual-render
->    calls incrementally. Also **evaluate the view layer on real evidence now** (Q2 deferred here):
->    once one screen is extracted, decide native-templates+signals vs. a compile-away lib, weighed
->    against §5.6 (zero runtime deps).
-> Then 4.2 `ui/selection.ts` + `ui/navigation.ts`, 4.3 `ui/views/*` (one screen per commit), and
-> **retire the Phase-2 assistant `AS_TREE` adapters + the `window.S` bridge** as legacy sites migrate
-> to `store`.
+> **Phase 4.1b — pure header/row builders in `ui/grid.ts`** (design: ARCHITECTURE §15). Continue
+> carving the pure string-building bits out of `render()`: the KW + weekday header cells, the
+> category/group header rows, and the machine row-header (favorite star, today-dot, status tag,
+> next-free/back buttons). Each is a pure function of injected data/predicates (E4), unit-tested to
+> 100%; the DOM write (`thead/tbody.innerHTML=`) and event binding stay in the legacy adapter.
+> Faithful port — reproduce the exact markup incl. aria/data attributes (E1). Watch the same class
+> of asymmetries as 4.1a (see Known bugs → Open).
+>
+> After 4.1b: **4.1c reactive wiring** — the larger, riskier step (subscribe `render` to the store;
+> migrate the 36 `render()` call sites; move `connectSSE` so `SSE → store.set → notify → render`,
+> the piece deferred from 3.3). Resolve the action-layer open question in §15 first. Then 4.2
+> `ui/selection.ts` (+`ui/navigation.ts`), 4.3 `ui/views/*` (one screen/commit), and **retire the
+> Phase-2 assistant `AS_TREE` adapters + the `window.S` bridge** as legacy sites migrate to `store`.
+>
+> **View-layer decision (resolved, §15):** no framework — keep the custom string render + a tiny
+> store subscription (zero-dep). Revisit only if the UI grows materially.
 >
 > **Canonical-naming rule (do not drift):** `store` is canonical for all new TS; `window.S` is a
 > legacy-only bridge that only shrinks. No new code introduces `S` accesses. (ARCHITECTURE §14.)
@@ -146,8 +152,14 @@ Checked off as each item lands (one commit per item unless noted).
   `connectSSE`/`applyPresence` refactored to the bridged helpers (adapter stays). SSE orchestrator
   move + `store.notify` wiring **deferred to Phase 4** (see §14). Gate + smoke green. **DONE 2026-08-28.**
 
-**Phase 4 — UI**
-- [ ] 4.1 `ui/grid.ts` + reactive core
+**Phase 4 — UI**  _(design: ARCHITECTURE §15)_
+- [x] 4.1a `ui/grid.ts` — pure per-cell model (`classifyCell`, `isMine`, `cellClass`); +9 tests
+  100% cov; `render()` + `refreshCell()` refactored to share it (removes the duplicated cell
+  decision). New `ui/` gate layer (coverage 90/85). Gate + smoke green. **DONE 2026-08-28.**
+- [ ] 4.1b `ui/grid.ts` — pure header/row builders (KW/weekday header cells, cat/group header rows,
+  machine row-header: dot/star/status tag/next-free buttons)
+- [ ] 4.1c reactive wiring — subscribe `render` to the store; migrate the 36 `render()` call sites
+  to notifying mutations; move `connectSSE` so `SSE → store.set → notify → render` (deferred from 3.3)
 - [ ] 4.2 `ui/selection.ts`, `ui/navigation.ts`
 - [ ] 4.3 `ui/views/*` (one screen per commit)
 
@@ -229,6 +241,15 @@ restore, and the sweep removes bridges automatically if a series later breaks.
 - `node:sqlite` experimental in Node 22 — confirm the flag/loader story at Phase 6.
 
 ## Known bugs
+
+### Open (deferred — preserve for now, fix in a flagged step)
+- **`wknd` class lost on cell patch.** `render()` adds a `wknd` class to weekend cells; the targeted
+  patch path (`refreshCell`) does not — so on a booking update a weekend column loses its `wknd`
+  styling until the next full `render()`. Only visible when weekends are shown (`mb_weekends==='on'`,
+  `dpw()===7`; default is Mon–Fri, no weekend columns). Pre-existing; **preserved verbatim** in the
+  Phase-4.1a cell-model extraction (E1/E2 — an extraction must not silently change behavior). Fix =
+  pass `weekend` to `cellClass` from `refreshCell` too, in a flagged Phase-4/5 step. Grounded facts:
+  `render()` `web/public/legacy.js:~792`, `refreshCell()` `~868`; helper `cellClass` in `web/js/ui/grid.ts`.
 
 ### Fixed
 - **`migrating` / `migratingMess` undeclared implicit globals** — FIXED in Phase 2.3.

@@ -329,3 +329,54 @@ DOM/EventSource adapter in legacy**, refactored to call the bridged helpers (mir
 assistant extraction: pure logic out, DOM orchestrator stays). **Deferred to Phase 4** (recorded in
 `PROGRESS.md`): move the SSE orchestrator into `net/` and wire `SSE → store.set → notify` at the same
 time `render` becomes a subscriber — so the notify path lands with a real consumer, not as a symbol.
+
+## 15. Phase 4 design — the UI layer  _(SKETCHED 2026-08-28 — awaiting go for 4.1a)_
+
+### The problem (measured)
+`render()` (`legacy.js:707`, ~110 lines) rebuilds the whole grid as one HTML string from `S` via ~40
+helper calls, then `tbody.innerHTML = html`. `refreshCell()`/`refreshDot()` (868–899) do targeted DOM
+surgery for performance on a booking patch. There are **36 imperative `render()` call sites**. The
+per-cell decision (blocked / booked / mine / unavailable / free → className + title + text + bg + aria)
+is **duplicated** between `render()`'s inner branch and `refreshCell()` — the prime bug-risk and the
+highest-value extraction target.
+
+### View-layer decision (Q2, resolved on evidence)
+Now that the render reality is visible — one big string builder + hand-tuned `patchCells` DOM surgery,
+23 `innerHTML` points, ~400 DOM accesses — a component/template library would mean **rewriting all of
+it** and taking a runtime dependency (violates §5.6, §1). **Decision: no framework.** Keep the custom
+string-building render; add the only reactive bit worth having — a **store subscription** (`render`
+subscribes to the store; ~5 lines, custom, zero-dep). Revisit only if the UI grows materially.
+
+### Decomposition (one slice per commit — E8)
+- **4.1a — pure cell model (`ui/grid.ts`), first slice.** Extract the duplicated per-cell decision as
+  a pure function, injected with its predicates/presentation (E4), unit-tested to 100%; refactor **both**
+  `render()` and `refreshCell()` to use it (removes the duplication — a real DRY win). DOM writes stay in
+  legacy. Low risk, high value, fully testable.
+- **4.1b — pure header/row builders.** KW + weekday header cells, category/group header rows, the
+  machine row-header (dot / star / status tag / next-free buttons) as pure string builders. Incremental.
+- **4.1c — reactive wiring (the deferred notify path).** Introduce a `render` that subscribes to the
+  store; migrate the 36 `render()` call sites to state mutations that notify (likely via a small action
+  layer). Move the `connectSSE` orchestrator so `SSE → store.set → notify → render`. This is the large,
+  risky step — do it after 4.1a/b have thinned `render`, and keep manual render working until the last
+  site flips.
+- **4.2** `ui/selection.ts` (the `Sel` rectangle model — `computeSelCells` is already near-pure) +
+  `ui/navigation.ts`. **4.3** `ui/views/*` (one screen/modal per commit). Retire the Phase-2 assistant
+  `AS_TREE` adapters and the `window.S` bridge as sites migrate to `store`.
+
+### The `ui/` gate layer
+New layer: **ui/ may import core/ + net/ + state; nothing may import ui/** (add the eslint boundary).
+Pure model builders are held to the 90/85 floor; DOM writes are browser-smoked (E5). ui/ may touch the
+DOM (unlike core/), but keep the *pure* model logic in DOM-free functions so it stays unit-testable.
+
+### Faithful-port constraints (E1/E2) — must preserve, do NOT "fix"
+- `render()` adds a `wknd` class to weekend cells; **`refreshCell()` does not** — so on a booking patch a
+  weekend column loses its `wknd` styling until the next full render. Weekends only show when
+  `mb_weekends==='on'` (`dpw()===7`). Preserve this asymmetry (pass `weekend` to the shared className
+  builder from `render` and `false`/omit from `refreshCell`). **Deferred fix** → backlog.
+- `refreshCell` rebuilds `className` from scratch (dropping `sel`/`kfocus`), then `patchCells` calls
+  `paintSel()` to restore them. Keep that ordering.
+
+### Open questions (resolve before 4.1c)
+- The action layer for the 36 call sites: a thin `actions.ts` (`setWeek`, `toggleCat`, `setFilter`…) that
+  wraps `store.set` + persistence, or subscribe `render` and let existing mutations call `store.notify()`?
+  Decide when 4.1c starts, on the shape `render` has after 4.1a/b.

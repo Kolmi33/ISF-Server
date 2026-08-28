@@ -789,19 +789,21 @@ function render(){
       wk.forEach(d=>{
         const b=getBooking(m.id,d);
         const isToday=d===tS;
-        const we=isWeekend(parseYmd(d))?'wknd':'';
-        // aria-label: Screenreader liest beim Fokuswechsel Maschine + Datum + Status
-        if(isBlockedM(m,d)){
-          html+=`<td class="cell blocked ${isToday?'today':''} ${we}" role="gridcell" data-mid="${esc(m.id)}" data-date="${d}" aria-label="${mnm}, ${dlbl[d]}, gesperrt" title="${esc(blockText(m,d))}">${b?esc(b.name):''}</td>`;
-        } else if(b){
-          const mine = S.user && b.name.toLowerCase()===S.user.toLowerCase();
-          const dim = false;
-          html+=`<td class="cell booked ${mine?'mine':''} ${dim?'dim':''} ${isToday?'today':''} ${we}" role="gridcell" data-mid="${esc(m.id)}" data-date="${d}"
-            style="background:${nameColor(b.name)}" aria-label="${mnm}, ${dlbl[d]}, belegt von ${esc(b.name)}" title="${esc(b.name)}${b.note?' — '+esc(b.note):''}${b.gtitle?' — 📁 '+esc(b.gtitle):''}">${esc(b.name)}</td>`;
-        } else if(!dayAvailable(m,d)){
-          html+=`<td class="cell unavail ${isToday?'today':''} ${we}" role="gridcell" data-mid="${esc(m.id)}" data-date="${d}" aria-label="${mnm}, ${dlbl[d]}, nicht verfügbar" title="an diesem Wochentag nicht verfügbar (verfügbar: ${esc(daysMaskText(m))})"></td>`;
+        const weekend=isWeekend(parseYmd(d));
+        // Zell-Zustand + Klassen-Stamm aus ui/grid.ts (window-Bridge); Attribute/Titel je
+        // Zustand unterschiedlich → hier zusammengesetzt. aria-label: Screenreader liest
+        // beim Fokuswechsel Maschine + Datum + Status.
+        const st=classifyCell(isBlockedM(m,d), b, dayAvailable(m,d));
+        const attrs=`role="gridcell" data-mid="${esc(m.id)}" data-date="${d}"`;
+        if(st==='blocked'){
+          html+=`<td class="${cellClass('blocked',{today:isToday,weekend})}" ${attrs} aria-label="${mnm}, ${dlbl[d]}, gesperrt" title="${esc(blockText(m,d))}">${b?esc(b.name):''}</td>`;
+        } else if(st==='booked'){
+          const mine=isMine(S.user, b.name);
+          html+=`<td class="${cellClass('booked',{mine,today:isToday,weekend})}" ${attrs} style="background:${nameColor(b.name)}" aria-label="${mnm}, ${dlbl[d]}, belegt von ${esc(b.name)}" title="${esc(b.name)}${b.note?' — '+esc(b.note):''}${b.gtitle?' — 📁 '+esc(b.gtitle):''}">${esc(b.name)}</td>`;
+        } else if(st==='unavail'){
+          html+=`<td class="${cellClass('unavail',{today:isToday,weekend})}" ${attrs} aria-label="${mnm}, ${dlbl[d]}, nicht verfügbar" title="an diesem Wochentag nicht verfügbar (verfügbar: ${esc(daysMaskText(m))})"></td>`;
         } else {
-          html+=`<td class="cell free ${isToday?'today':''} ${we}" role="gridcell" data-mid="${esc(m.id)}" data-date="${d}" aria-label="${mnm}, ${dlbl[d]}, frei"></td>`;
+          html+=`<td class="${cellClass('free',{today:isToday,weekend})}" ${attrs} aria-label="${mnm}, ${dlbl[d]}, frei"></td>`;
         }
       });
     });
@@ -870,21 +872,22 @@ function refreshCell(mid, date){
   const m=machById(mid); if(!m) return;
   const tS=todayStr(); const isToday=date===tS;
   const b=getBooking(mid, date);
-  if(isBlockedM(m, date)){
-    el.className='cell blocked'+(isToday?' today':'');
+  // Gleiche Zustands-/Klassenlogik wie render() (ui/grid.ts). Der Patch-Pfad setzt bewusst
+  // KEIN wknd (siehe ARCHITECTURE §15); aria/kfocus bleiben erhalten (paintSel danach).
+  const st=classifyCell(isBlockedM(m,date), b, dayAvailable(m,date));
+  if(st==='blocked'){
+    el.className=cellClass('blocked',{today:isToday});
     el.style.background=''; el.title=blockText(m,date); el.textContent=b?b.name:'';
-  } else if(b){
-    const mine=S.user && b.name.toLowerCase()===S.user.toLowerCase();
-    const dim=false;
-    el.className='cell booked'+(mine?' mine':'')+(dim?' dim':'')+(isToday?' today':'');
+  } else if(st==='booked'){
+    el.className=cellClass('booked',{mine:isMine(S.user,b.name),today:isToday});
     el.style.background=nameColor(b.name);
     el.title=b.name+(b.note?' — '+b.note:'');
     el.textContent=b.name;
-  } else if(!dayAvailable(m, date)){
-    el.className='cell unavail'+(isToday?' today':'');
+  } else if(st==='unavail'){
+    el.className=cellClass('unavail',{today:isToday});
     el.style.background=''; el.title='an diesem Wochentag nicht verfügbar'; el.textContent='';
   } else {
-    el.className='cell free'+(isToday?' today':'');
+    el.className=cellClass('free',{today:isToday});
     el.style.background=''; el.title=''; el.textContent='';
   }
 }
