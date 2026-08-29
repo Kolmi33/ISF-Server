@@ -11,7 +11,6 @@ export default tseslint.config(
       'data/**',
       'backups/**',
       'public/**', // the legacy monolith is being replaced, not linted
-      'src/**', // legacy backend (.mjs); converted + gated in Phase 6
       'web/public/**', // quarantined monolith (legacy.js); burns down to zero by Phase 5
     ],
   },

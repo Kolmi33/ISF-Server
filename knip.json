@@ -1,5 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "project": ["{web,shared}/**/*.ts"],
+  "entry": ["server/server.ts", "server/import.ts"],
+  "project": ["{web,server,shared}/**/*.ts"],
   "ignoreExportsUsedInFile": true
 }

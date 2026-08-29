@@ -4,7 +4,7 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-08-29 — **Phase 5 COMPLETE** (5.1 write-path reducers → `core/booking.ts`, 5.2 FS-era burn-down, 5.3 knip-in-verify + coverage floor). Next: Phase 6 (backend → TS)._
+_Last updated: 2026-08-29 — **Phase 6.1/6.2 COMPLETE** (backend → gated TS under `server/`, compiled in the Docker build, full gate covers it). Next: Phase 6.3 (weekend auto-bridging)._
 
 ---
 
@@ -120,22 +120,23 @@ _Last updated: 2026-08-29 — **Phase 5 COMPLETE** (5.1 write-path reducers → 
     `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 6 — Backend → TypeScript.** Phase 5 is complete (5.1 write-path reducers → `core/booking.ts`,
-> 5.2 FS-era burn-down, 5.3 knip-in-`verify` + repo-wide coverage floor). The frontend logic core is fully
-> gated (213 tests, 100%); `legacy.js` is a DOM adapter over bridged pure logic (2362 lines, from 2712).
-> **The backend (`src/*.mjs`) has been sealed/gate-excluded until here — Phase 6 opens it.**
->   1. **6.1** convert `src/server.mjs` + `src/import.mjs` to TS under `server/`; add tests for the mutate
->      concurrency/validation (the 1000-cell batch cap, compare-and-set, revision bump). Re-add the
->      `server/*.ts` knip entries removed in 5.3.
->   2. **6.2** remove `src/` from the gate exclusions (tsconfig/eslint/vitest/knip); the full gate covers backend.
->   3. **6.3** server-authoritative weekend auto-bridging (feature; scope = *maintain + backfill*, decided
->      2026-08-28 — see "Deferred features"). Reuse the pure bridge computation (recover `missingWeekendBridges`
->      from git); mind the 1000-cell cap (1794 missing bridges → must be internal SQL, not an API batch).
+> **Phase 6.3 — server-authoritative weekend auto-bridging.** 6.1/6.2 landed: the backend is gated TS under
+> `server/` (pure db/model/mutate + run-verified shells), compiled to `dist/server` in the Docker build,
+> full gate green, validated on a throwaway image. Now the feature (scope = *maintain + backfill*, decided
+> 2026-08-28 — see "Deferred features" for the grounded facts):
+>   1. **Pure bridge computation** in `server/` (e.g. `server/bridge.ts`), tested: given the bookings, find the
+>      Sat/Sun days that sit inside a continuous Fri→Mon series but are not yet booked (carry the Friday's name).
+>      Recover the old `missingWeekendBridges` logic from git (`789bfec`/pre-2.3) as a reference.
+>   2. **Maintain** — inside the `applyMutate` cell transaction, when a write completes a Fri→Mon span, insert
+>      the two weekend days (same name). Symmetric triggers (book a Friday whose Monday is booked, or vice versa).
+>   3. **Backfill** — a one-time server-side pass (internal SQL, NOT an API batch — 1,794 bridges > the 1000-cell
+>      cap) behind an explicit trigger (CLI flag or guarded endpoint). **This is a production data write** — build
+>      + test it here; only RUN it against live data with explicit authorization (daily VACUUM backup exists;
+>      reversible via restore, and `sweepWeekends` removes bridges automatically if a series later breaks).
 >
-> **Carry into Phase 6 (deferred from Phase 5, with rationale in §16):** the trivial modal-markup fold and the
-> `AS_TREE`-adapter / `window.S` shrink (a real store migration, not a burn-down), plus the **wknd-on-patch**
-> known bug. **Action-layer question (§16) still open:** thin `actions.ts` vs. the legacy `mutate` orchestrator
-> (which still owns persistence + the optimistic patch) — resolve when the store migration lands.
+> **Carry forward (deferred, rationale in §16):** the trivial modal-markup fold and the `AS_TREE`-adapter /
+> `window.S` shrink (a real store migration), plus the **wknd-on-patch** known bug and the open action-layer
+> question (thin `actions.ts` vs. the legacy `mutate` orchestrator).
 >
 > **View-layer decision (resolved, §15):** no framework — custom string render + the store
 > subscription (now live). Revisit only if the UI grows materially.
@@ -234,8 +235,12 @@ Checked off as each item lands (one commit per item unless noted).
   deferred (E8 — no dead-CSS need, restyle risks visual drift). **DONE 2026-08-29.** **Phase 5 COMPLETE.**
 
 **Phase 6 — Backend → TypeScript**
-- [ ] 6.1 `server/` conversion + tests for mutate concurrency/validation
-- [ ] 6.2 remove `src/` from the gate exclusions; full gate covers backend
+- [x] 6.1 `server/` conversion — `db.ts`/`model.ts`/`mutate.ts` (pure, unit-tested against in-memory
+  SQLite; 31 tests incl. concurrency/compare-and-set/validation/rollback) + the impure entry shells
+  `server.ts`/`import.ts`. `node:sqlite` loaded via `createRequire`. **DONE 2026-08-29.**
+- [x] 6.2 `src/` deleted; gate exclusions removed (eslint/knip/tsconfig); `tsconfig.server.json` + Dockerfile
+  compile `server/*.ts` → `dist/server`; runtime runs `node server/server.js`. Full gate covers the backend
+  (99.4% lines / 90.9% branch). Validated on a throwaway image (isolated port+volume); prod untouched. **DONE 2026-08-29.**
 - [ ] 6.3 **Server-authoritative weekend auto-bridging** (feature; scope decided 2026-08-28 =
   *maintain + backfill*). See "Deferred features" below for the full design + grounded facts.
 
@@ -274,6 +279,19 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 6.1/6.2 backend → TypeScript — ported `src/*.mjs` (~350 lines) to gated `server/*.ts`, decomposed so
+  domain logic is pure/tested and I/O stays in a thin shell: `db.ts` (schema/meta/import; `node:sqlite` via
+  `createRequire` — Vite/bundler can't resolve the new builtin from a static import), `model.ts` (read model),
+  `mutate.ts` (single write path, structural+cell reducers, SSE `broadcast` injected — E4). Entry shells
+  `server.ts`/`import.ts` coverage-excluded (run-verified, E5). 31 backend tests vs. `:memory:` SQLite (both
+  mutate paths, foreign/blocked conflicts, compare-and-set delete, 1000-cell cap, validation, orphan cleanup,
+  rollback via a broken DB). Backend cov 99.4%/90.9% (only defensive rollback-inner-catches uncovered).
+  `tsconfig.server.json` (NodeNext, `.js` specifiers) compiles → `dist/server`; Dockerfile build stage runs
+  `build:server`, runtime ships it at `/app/server` and runs `node server/server.js` (zero runtime deps kept).
+  `src/` deleted; eslint/knip/tsconfig un-sealed → backend faces the full gate. Validated end-to-end on a
+  throwaway image `maschinenplan:phase6-test` (isolated port 3998 + fresh volume): health, real seeded state,
+  static frontend 200, a real booking through POST /api/mutate (rev 0→1, read back), then torn down — the
+  production container + `data` volume never touched. ARCHITECTURE §17 added. **DONE 2026-08-29.**
 - Phase 5.3 tooling — `knip` promoted into `verify` (now `format:check && check && lint && deadcode &&
   test:cov`; knip after lint = cheap fail-fast). knip.json tidied to **zero findings**: removed the stale
   `web/js/legacy.ts` ignore and the not-yet-existing `server/*.ts` entries (Phase 6 re-adds), scoped project

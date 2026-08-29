@@ -8,10 +8,11 @@
     "node": ">=22.5"
   },
   "scripts": {
-    "start": "node --disable-warning=ExperimentalWarning src/server.mjs",
-    "import": "node --disable-warning=ExperimentalWarning src/import.mjs",
+    "start": "node --disable-warning=ExperimentalWarning dist/server/server.js",
+    "import": "node --disable-warning=ExperimentalWarning dist/server/import.js",
     "dev": "vite",
     "build": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",

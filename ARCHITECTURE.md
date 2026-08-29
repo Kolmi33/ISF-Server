@@ -103,10 +103,10 @@ concrete shape those principles take here:
 | 0 | Safety net + dockerized toolchain + these docs | **done** |
 | 1 | Skeleton: Vite web root, monolith → classic `legacy.js`, CSS → `app.css`, production serves the build | **done** |
 | 2 | Core logic (TDD): `dates` → `machines` → `weekend` → `assistant` | **done** (4 modules, 78 tests, 100% cov; `migrating` bug fixed) |
-| 3 | State store + `net/` (api, sse) | next |
-| 4 | UI: grid + reactive core, then selection, navigation, then each view | |
-| 5 | Polish: delete dead code, tidy CSS/HTML | |
-| 6 | Backend → TypeScript (+ tests for mutate concurrency/validation) | |
+| 3 | State store + `net/` (api, sse) | **done** (store + api + sse; §14) |
+| 4 | UI: grid + reactive core, then selection, navigation, then each view | **done** (grid/selection/navigation + view kernels; §15) |
+| 5 | Polish: write-path reducers → `core/booking`, dead-code burn-down, knip in verify | **done** (§16) |
+| 6 | Backend → TypeScript (+ tests for mutate concurrency/validation) | **6.1/6.2 done (§17); 6.3 next** |
 
 ## 7. The per-module loop (the repeatable unit)
 
@@ -132,8 +132,9 @@ Phase 1 switches the image to serve the Vite build.
 - Dev dependencies report npm-audit vulnerabilities (dev-only, transitive via Vite/Vitest).
   They do not affect the zero-dependency runtime. Revisit before finalizing.
 - `node:sqlite` is still experimental in Node 22; the server runs with
-  `--disable-warning=ExperimentalWarning`. Confirm the flag/loader story when the backend
-  moves to TypeScript in Phase 6.
+  `--disable-warning=ExperimentalWarning`. **Resolved in Phase 6.1 (§17):** no runtime flag is
+  needed on Node 22.23 (it only warns); it is loaded via `createRequire` so Vite/the bundler
+  never tries to resolve it, and `@types/node` supplies the (erased) types.
 
 ---
 
@@ -526,3 +527,45 @@ the Phase-6 backend work / a later store-migration slice.
 `bookCells` and friends now have a caller shape that would suit a thin `actions.ts` (`book`/`del`/… →
 reducer + `store.set` + persistence + `notify`). Not yet built — the legacy `mutate` orchestrator still
 owns persistence and the optimistic patch. Resolve alongside the 5.2 store migration or Phase 6.
+
+## 17. Phase 6 design — backend → TypeScript
+
+### 6.1 / 6.2 — conversion + gate + build — IMPLEMENTED 2026-08-29
+The zero-dependency backend (`src/*.mjs`, ~350 lines) was ported to gated TypeScript under `server/`,
+decomposed so the domain logic is pure and unit-testable while the impure I/O stays in a thin entry shell:
+- `server/db.ts` — schema, `openDb`, meta helpers (`getMeta`/`setMeta`/`bumpRev`), `importFromJson` (split
+  into `seedMachines`/`seedBookings` for the complexity cap). **`node:sqlite` is loaded via `createRequire`**,
+  not a static `import` — it's too new for Vite's builtin list, so a static import breaks the Vitest loader
+  (and would need bundler special-casing); `createRequire('node:sqlite')` sidesteps that in both the tests
+  and the compiled build, with the type still coming from `@types/node` (erased, zero runtime cost).
+- `server/model.ts` — the read model (`isBlocked`, `machineOut`, `bookingOut`, `getState`); pure over the db.
+- `server/mutate.ts` — the single write path (`applyMutate`), split into the structural and cell-delta
+  reducers plus per-machine/per-cell helpers. **The SSE `broadcast` is injected (E4)**, defaulting to a noop,
+  so the whole write path is unit-testable with an in-memory DB and no live server.
+- `server/server.ts` (HTTP/SSE/backup/seed) and `server/import.ts` (seed CLI) — the impure entry shells,
+  run-verified (E5), coverage-excluded like `app.ts`. `server/types.ts` is type-only.
+
+**Testing (E5/E6).** 31 backend tests run against `openDb(':memory:')` — deterministic, no production
+contact: the read model, both mutate paths (book/delete, foreign+blocked conflicts, compare-and-set delete,
+the 1000-cell cap, the validation errors, orphan cleanup, group/ts handling) and even the rollback/error
+paths (by pointing the reducer at a deliberately broken DB). Backend coverage 99.4% lines / 90.9% branches —
+above the 90/85 floor; the only uncovered branches are the defensive "rollback itself failed" inner catches.
+
+**Build (zero runtime deps kept).** `tsconfig.server.json` compiles `server/*.ts` → `dist/server/*.js` with
+`tsc` (NodeNext, `.js` import specifiers so the emit runs natively on Node). The Docker build stage now runs
+both `npm run build` (vite → `dist/public`) and `npm run build:server` (tsc → `dist/server`); the runtime
+stage ships the compiled server at `/app/server` (so its `../public` / `../buchungen.json` paths resolve
+exactly as `src/*.mjs` did) and runs `node server/server.js`. No new runtime dependency — only Node built-ins.
+`src/` was deleted; the eslint/knip/tsconfig gate exclusions for it were removed (the backend now faces the
+full gate: prettier, tsc, eslint with the 60-line/complexity-12 budgets, knip, and coverage).
+
+**Validation without touching production.** The whole flow was proven on a throwaway image
+(`maschinenplan:phase6-test`) run on an isolated port + fresh volume: `/api/health`, `/api/state` (real
+seeded data), the static frontend (200), and a real booking through `POST /api/mutate` (`rev` 0→1, read
+back) — then torn down. The production `maschinenplan` container and its `data` volume were never touched.
+
+### 6.3 — server-authoritative weekend auto-bridging
+See PROGRESS "Deferred features". The pure bridge computation lands in `server/` (tested); the maintain hook
+runs inside the mutate transaction and the one-time backfill is internal SQL (not subject to the 1000-cell
+API cap). **The backfill is a production data write** — built and tested here, but only *run* against live
+data when explicitly authorized.

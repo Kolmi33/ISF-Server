@@ -1,0 +1,17 @@
+{
+  // Emit config for the backend only (the base tsconfig is noEmit, for the type-check gate).
+  // The Docker build runs `tsc -p tsconfig.server.json` to compile server/*.ts → dist/server/*.js,
+  // which Node runs directly (zero runtime deps; node:sqlite is loaded via createRequire in db.ts).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist/server",
+    "rootDir": "server",
+    "lib": ["ES2022"]
+  },
+  "include": ["server"],
+  "exclude": ["server/**/*.test.ts"]
+}

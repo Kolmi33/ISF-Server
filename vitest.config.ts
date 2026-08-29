@@ -12,9 +12,19 @@ export default defineConfig({
       provider: 'v8',
       include: ['web/js/**/*.ts', 'server/**/*.ts', 'shared/**/*.ts'],
       // app.ts is the boot/bridge entry (side effects, exercised by browser smoke,
-      // not unit tests) — excluded like the legacy shim. shared/types.ts is type-only
-      // (compiles to nothing) so there is no runtime to cover.
-      exclude: ['web/js/app.ts', 'web/js/legacy.ts', 'shared/types.ts', '**/*.test.ts'],
+      // not unit tests) — excluded like the legacy shim. shared/types.ts and
+      // server/types.ts are type-only (compile to nothing). server/server.ts and
+      // server/import.ts are the backend's impure entry shells (HTTP/SSE/backup and the
+      // seed CLI) — run-verified (E5), not unit-covered, like app.ts.
+      exclude: [
+        'web/js/app.ts',
+        'web/js/legacy.ts',
+        'shared/types.ts',
+        'server/types.ts',
+        'server/server.ts',
+        'server/import.ts',
+        '**/*.test.ts',
+      ],
       reporter: ['text', 'json-summary'],
       // Armed from Phase 2 (ARCHITECTURE §10): pure core is pinned hard. The pure store
       // (Phase 3.1, §14 D6) is core-grade and held to the same floor.
