@@ -25,6 +25,8 @@ export interface Machine {
   days?: string;
   /** Structured maintenance slots (the newer form). */
   maint?: MaintSlot[];
+  /** Redundancy marker (label only — a free-form note the machine-form save writes). */
+  redu?: string;
   /** Legacy single-status form; synthesized into a MaintSlot when no `maint` array exists. */
   status?: string;
   statusFrom?: string;
@@ -40,6 +42,12 @@ export type MachineCategory = 'messtechnik' | 'maschine';
 export interface Booking {
   name: string;
   ts?: string;
+  /** Optional note carried on the cell (doubles as the group title source). */
+  note?: string;
+  /** Booking-group id, shared by every cell created in one multi-cell/titled action. */
+  gid?: string;
+  /** Booking-group title (present only on grouped cells that were given a title). */
+  gtitle?: string;
 }
 
 /** One machine's bookings, keyed by ISO date 'YYYY-MM-DD'. */

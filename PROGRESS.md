@@ -120,26 +120,21 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 5 — Polish / dead-code burn-down + the write-path reducers.** Phase 4.3 extracted every clean
-> *view-model kernel* (§15 scope: kernels, not markup): my-bookings run-grouping, the stats aggregation,
-> the all-bookings runs+filter, the admin list order/search, and the shared machine-status text formatters —
-> all gated to 100% and browser-smoked (`rev` never moved). What remains in `legacy.js` splits into three
-> Phase-5 workstreams:
->   1. **Trivial modal markup** (Log, Help, Settings, booking-detail): branch-free `innerHTML` builders with
->      no logic — leave as-is until the burn-down, or fold into `openModal` templating then; do NOT snapshot-
->      test tautologies (E7/E8).
->   2. **Write-path reducers** → a new gated `core/booking.ts`: `submitBooking`'s conflict-detection + apply
->      reducer, the machine-form save, and the admin reorder. These are pure/mutating domain logic (like
->      `sweepWeekends`) and belong in `core/`, NOT `ui/`. Gate-only (E5 note): they mutate `fresh` server
->      state and POST, so they can't be browser-smoked without a production write — unit-test exhaustively,
->      and verify integration by reading back `/api/state` only if/when a real write is authorized.
->   3. **Burn-down**: delete dead FS-era code (`writeFile`, `lastRaw`, `S.handle`), retire the Phase-2
->      assistant `AS_TREE` adapters + shrink the `window.S` bridge as sites move to `store`, drive `legacy.js`
->      toward zero, and promote `knip` into `verify`.
+> **Phase 5.2 — dead-code burn-down.** 5.1 landed: `core/booking.ts` holds all eight write-path reducers,
+> gated to 100% and clone-smoked (`rev` 23). Now drive `legacy.js` down and delete the FS-era corpse:
+>   1. **FS-era dead code** (§14 D4): `writeFile()` (uses `S.handle.createWritable` — never runs in server
+>      mode), `S.handle`, `S.lastRaw` (+ the `lastRaw` field in `AppState`/`hydrateState`), `setupFileObserver`
+>      (empty stub), `startRefreshTimer` (empty stub). Grep for each; confirm zero live callers before cutting.
+>   2. **Trivial modal markup** (Log, Help, Settings, booking-detail): branch-free `innerHTML` builders —
+>      fold into `openModal` templating where it removes real duplication; do NOT snapshot-test tautologies (E7/E8).
+>   3. **`AS_TREE` adapters + `window.S` shrink**: retire the Phase-2 assistant bind-adapters as the tree moves
+>      toward the store; drop `window.S` fields as call sites adopt `store`. Incremental — only what has a clean seam.
 >
-> **Action-layer question (§15 open q) — still open, decide in Phase 5/6:** whether writes go through a thin
-> `actions.ts` (`book`/`del`/`setFilter` → `store.set` + persistence + `notify`) or keep calling the legacy
-> mutators. It only bites once a reducer moves to `core/booking` and needs a caller — resolve it then.
+> Then **5.3**: promote `knip` + the global coverage floor into `verify`; tidy CSS/HTML.
+>
+> **Action-layer question (§16) — still open, decide in 5.2/Phase 6:** whether writes go through a thin
+> `actions.ts` (`book`/`del`/`setFilter` → reducer + `store.set` + persistence + `notify`) or keep the legacy
+> `mutate` orchestrator (which still owns persistence + the optimistic patch). Resolve alongside the store migration.
 >
 > **View-layer decision (resolved, §15):** no framework — custom string render + the store
 > subscription (now live). Revisit only if the UI grows materially.
@@ -222,8 +217,11 @@ Checked off as each item lands (one commit per item unless noted).
   **DONE 2026-08-29.**
 
 **Phase 5 — Polish + write-path reducers**
-- [ ] 5.1 `core/booking.ts` — extract the write-path reducers (`submitBooking` conflict/apply, machine-form
-  save, admin reorder) as pure/mutating domain logic; gate-only (no production-write smoke)
+- [x] 5.1 `core/booking.ts` — extracted **all eight** write-path reducers (not just the three planned):
+  `bookCells` (submitBooking conflict/apply, ts+gid injected), the four distinct delete reducers
+  (`deleteCells` exact / `deleteOwnCells` ci / `deleteSelectedCells` cell-list / `deleteGroup` by-gid — so
+  **every** `sweepWeekends` caller now lives in core), and machine CRUD (`saveMachine`/`deleteMachine`/
+  `moveMachine`). 43 tests, 100% cov. Gate-only + clone-smoke (no production write); `rev` 23. **DONE 2026-08-29.**
 - [ ] 5.2 delete dead FS-era code (`writeFile`/`lastRaw`/`S.handle`); retire `AS_TREE` adapters; shrink
   `window.S`; `legacy.js` toward zero; fold trivial modal markup into `openModal` templating
 - [ ] 5.3 promote `knip` into `verify`; tidy CSS/HTML
@@ -269,6 +267,20 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 5.1 write-path reducers — `core/booking.ts`: the eight `mutate(fresh=>…)` callback bodies extracted
+  as pure/mutating reducers with the legacy return shapes. `bookCells` (conflict-check + apply, ts + gid
+  factory injected — E4; split into findConflicts/applyBooking/writeMachineCells for the complexity cap);
+  four delete reducers kept distinct by predicate (E1): `deleteCells` exact-name run, `deleteOwnCells`
+  case-insensitive user, `deleteSelectedCells` explicit cell list, `deleteGroup` by-gid across all machines
+  — all sweep via core/weekend, so no legacy site calls `sweepWeekends` directly any more; machine CRUD
+  `saveMachine` (edit/create + slug/transliteration + same-group insert index), `deleteMachine`,
+  `moveMachine`. `shared/types.ts` grew `Booking.note/gid/gtitle` + `Machine.redu`. Legacy call sites are
+  now one-liners over the window bridge. 43 tests → **100% cov** (213 total). E5 note: these POST, so they
+  are gate-only — verified additionally by running every bridged reducer against a `structuredClone` of the
+  **live** S.data in the browser (245 machines): `deleteGroup` hit exactly the 10 cells of a real gid, create
+  slugged `ueber-smoke` after its group, `moveMachine` swapped a real pair, cross-group/unknown-id aborted;
+  `window.S.data` untouched, app rendered identically (266 rows / 216 booked), server `rev` unmoved (23).
+  ARCHITECTURE §16 added. **DONE 2026-08-29.**
 - Phase 4.3 machine-text — `ui/machine-text.ts`: pure German status/availability formatters
   `maintText(slot)`, `statusRangeText(m, today=todayStr())` (today injected w/ default), `daysMaskText(m)`.
   Legacy defs deleted; `blockText` now calls the bridged `maintText`; legacy `WD_SHORT` kept only for the

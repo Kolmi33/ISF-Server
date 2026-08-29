@@ -15,6 +15,7 @@ import * as dates from './core/dates.ts';
 import { mondayOf } from './core/dates.ts';
 import * as machines from './core/machines.ts';
 import * as weekend from './core/weekend.ts';
+import * as booking from './core/booking.ts';
 import * as assistant from './core/assistant.ts';
 import * as api from './net/api.ts';
 import * as sse from './net/sse.ts';
@@ -44,6 +45,7 @@ declare global {
 Object.assign(window, dates);
 Object.assign(window, machines);
 Object.assign(window, weekend);
+Object.assign(window, booking);
 Object.assign(window, assistant);
 Object.assign(window, api);
 Object.assign(window, sse);

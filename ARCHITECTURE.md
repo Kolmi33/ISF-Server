@@ -450,3 +450,46 @@ DOM (unlike core/), but keep the *pure* model logic in DOM-free functions so it 
 - The action layer for the 36 call sites: a thin `actions.ts` (`setWeek`, `toggleCat`, `setFilter`…) that
   wraps `store.set` + persistence, or subscribe `render` and let existing mutations call `store.notify()`?
   Decide when 4.1c starts, on the shape `render` has after 4.1a/b.
+
+## 16. Phase 5 design — write-path reducers + burn-down
+
+### 5.1 — `core/booking.ts` (the write-path reducers) — IMPLEMENTED 2026-08-29
+Every `mutate(fresh => …)` callback body — the domain logic of a write — is now an exported pure/mutating
+reducer in `core/booking.ts`, mirroring the exact `{abort}` / `{conflicts}` / `{count,undo}` / `{n,undo}`
+shapes the legacy callbacks returned. Eight functions, one per write path:
+- `bookCells(fresh, mids, dates, opts)` — the `submitBooking` conflict-check + apply. The two impurities
+  are **injected** (E4): `ts` (the wall-clock stamp) and `newGid` (the group-id factory, called only when
+  the action forms a group). Internally split into `findConflicts` + `applyBooking` (+ `writeMachineCells`)
+  to stay under the complexity cap. Returns `{abort:true, conflicts}` (nothing written) or `{count, undo}`.
+- The four **delete** reducers — kept distinct because their selection predicates differ and each
+  difference is behaviour (E1): `deleteCells` (booking-detail run, **exact** stored-name match),
+  `deleteOwnCells` (my-bookings, **case-insensitive** user match), `deleteSelectedCells` (marquee context
+  menu, an explicit cell list, **no** name check), `deleteGroup` (by `gid` across **all** machines). Each
+  ends by calling `sweepWeekends` on the affected machine(s), so every `sweepWeekends` caller now lives in
+  core (the legacy adapter no longer sweeps directly).
+- The three **machine-CRUD** reducers: `saveMachine` (edit-or-create; the German slug/transliteration and
+  same-group insertion index moved in with it), `deleteMachine`, `moveMachine` (same-group neighbour swap).
+
+The legacy call sites are now one-liners: `mutate(fresh => bookCells(fresh, …), logAction)` etc. The DOM
+around them — reading the form, `openModal`, `askConfirm`, `offerUndo`, `patchCells`/`notify`, the
+conflict-box re-open — stays in the legacy adapter (E3). `shared/types.ts` grew the fields the write-path
+actually writes: `Booking.note/gid/gtitle`, `Machine.redu`.
+
+**Verification (E5) — gate-only + a clone smoke, NO production write.** These reducers POST to
+`/api/mutate`, so they cannot be browser-smoked against the live backend without mutating real data. They
+are proven two ways: (1) exhaustive unit tests to **100% branch** (43 tests in `booking.test.ts`); (2) a
+browser cross-check that ran every bridged reducer against a `structuredClone` of the **live** `S.data`
+(245 machines) — `deleteGroup` removed exactly the 10 cells carrying a real gid, `saveMachine` create
+produced the right slug and same-group index, `moveMachine` swapped a real adjacent pair, cross-group and
+unknown-id aborted — with `window.S.data` left untouched and the server `rev` unmoved (23) throughout.
+
+### 5.2 / 5.3 — burn-down + tooling (planned)
+Delete FS-era dead code (`writeFile`, `S.handle`, `S.lastRaw` — see §14 D4), retire the Phase-2 `AS_TREE`
+adapters as the Assistant tree moves into the store, shrink the `window.S` bridge as sites adopt `store`,
+fold the trivial modal markup (Log/Help/Settings/booking-detail) into `openModal` templating, drive
+`legacy.js` toward zero, and promote `knip` + the global coverage floor into `verify`.
+
+### Action-layer question (still open)
+`bookCells` and friends now have a caller shape that would suit a thin `actions.ts` (`book`/`del`/… →
+reducer + `store.set` + persistence + `notify`). Not yet built — the legacy `mutate` orchestrator still
+owns persistence and the optimistic patch. Resolve alongside the 5.2 store migration or Phase 6.

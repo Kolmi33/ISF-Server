@@ -1074,15 +1074,9 @@ function showCtx(x,y){
     })) return;
     const cells=[...Sel.cells];
     clearSel(); // Markierung sofort aufheben – snappy, Zellen patchen gleich nach
-    const res=await mutate(fresh=>{
-      let n=0; const undo=[];
-      for(const c of cells){
-        const mb=fresh.bookings[c.mid];
-        if(mb && mb[c.date]){ undo.push({mid:c.mid,date:c.date,prev:{...mb[c.date]}}); delete mb[c.date]; n++; }
-      }
-      for(const mid2 of mids) undo.push(...sweepWeekends(fresh, mid2)); // Sa/So-Brückentage aufräumen
-      return {n, undo};
-    }, `Bereich gelöscht: ${mids.length} Maschine(n), ${from} bis ${to}`);
+    const res=await mutate(
+      fresh=>deleteSelectedCells(fresh, cells, mids), // → core/booking.ts (Zell-Liste + Sweep)
+      `Bereich gelöscht: ${mids.length} Maschine(n), ${from} bis ${to}`);
     if(res && !res.abort){ offerUndo(`${res.n} Buchung(en) gelöscht.`, res.undo, 'Bereich löschen'); }
   };
   document.getElementById('cxClose').onclick=()=>{ hideCtx(); clearSel(); };
@@ -1270,40 +1264,11 @@ async function submitBooking(mids, skipConflicts){
 
   closeModal(); // Dialog SOFORT schließen – das Speichern läuft im Anschluss, Ergebnis kommt als Toast
 
-  const res = await mutate(fresh=>{
-    // check conflicts against FRESH data (belegte Tage + zeitlich gesperrte Tage)
-    const conflicts=[];
-    for(const mid of mids){
-      const m=fresh.machines.find(x=>x.id===mid);
-      if(!m) continue;
-      const mb=fresh.bookings[mid]||{};
-      for(const d of dates){
-        if(!dayAvailable(m,d)) continue; // an nicht verfügbaren Wochentagen wird einfach nicht gebucht (Serie überspringt sie)
-        if(isBlockedM(m,d)) conflicts.push({mid, date:d, by:`gesperrt (${maintAt(m,d)?.type||'Wartung'})`});
-        else if(mb[d]) conflicts.push({mid, date:d, by:mb[d].name});
-      }
-    }
-    if(conflicts.length && !skipConflicts) return {abort:true, conflicts};
-    const ts=new Date().toISOString();
-    // Buchungsgruppe: eine gemeinsame gid, wenn diese Aktion mehr als eine Zelle
-    // erzeugt (mehrere Maschinen und/oder Tage) ODER ein Titel gesetzt wurde.
-    const isGroup = mids.length>1 || dates.length>1 || !!title;
-    const gid = isGroup ? genGid() : null;
-    const extra = gid ? {gid, ...(title?{gtitle:title}:{})} : {};
-    let count=0; const undo=[];
-    for(const mid of mids){
-      const m=fresh.machines.find(x=>x.id===mid);
-      if(!m) continue;
-      fresh.bookings[mid]=fresh.bookings[mid]||{};
-      for(const d of dates){
-        if(fresh.bookings[mid][d] || isBlockedM(m,d) || !dayAvailable(m,d)) continue; // nie überschreiben / Sperren + nicht verfügbare Wochentage respektieren
-        fresh.bookings[mid][d]={name, ...(note?{note}:{}), ts, ...extra};
-        undo.push({mid, date:d, prev:null});
-        count++;
-      }
-    }
-    return {count, undo};
-  }, `Buchung: ${name}, ${mids.length} Maschine(n), ${from} bis ${to}`);
+  // Konflikt-Prüfung + Anwenden liegt in core/booking.ts (bookCells, window-Bridge);
+  // die Impuritäten (Zeitstempel, Gruppen-ID) werden injiziert (E4).
+  const res = await mutate(
+    fresh=>bookCells(fresh, mids, dates, {name, note, title, skipConflicts, ts:new Date().toISOString(), newGid:genGid}),
+    `Buchung: ${name}, ${mids.length} Maschine(n), ${from} bis ${to}`);
 
   if(res && res.conflicts){
     // Konflikte: Formular mit denselben Werten und der Konfliktliste wieder öffnen
@@ -1359,14 +1324,9 @@ function openBookingDetail(m, date, b){
   document.getElementById('bdStats').onclick=()=>{ openStats(b.name.toLowerCase()); };
   const del=async dates=>{
     closeModal(); // sofort zu – Löschung läuft im Anschluss
-    const res=await mutate(fresh=>{
-      const fmb=fresh.bookings[m.id]||{}; let n=0; const undo=[];
-      for(const dd of dates){
-        if(fmb[dd] && fmb[dd].name===b.name){ undo.push({mid:m.id,date:dd,prev:{...fmb[dd]}}); delete fmb[dd]; n++; }
-      }
-      undo.push(...sweepWeekends(fresh, m.id)); // verwaiste Sa/So-Brückentage mit entfernen
-      return {n, undo};
-    },`Gelöscht: ${b.name} auf ${m.name}, ${dates.length} Tag(e)`);
+    const res=await mutate(
+      fresh=>deleteCells(fresh, m.id, b.name, dates), // → core/booking.ts (Löschen + Wochenend-Sweep)
+      `Gelöscht: ${b.name} auf ${m.name}, ${dates.length} Tag(e)`);
     if(res&&!res.abort){ offerUndo(`${res.n} Buchung(en) gelöscht.`, res.undo, 'Löschen'); }
   };
   document.getElementById('bdDel').onclick=()=>del([date]);
@@ -1386,14 +1346,9 @@ function openBookingDetail(m, date, b){
       yes:'Buchungsgruppe löschen'
     })) return;
     closeModal();
-    const res=await mutate(fresh=>{
-      // gegen den FRISCHEN Stand: alle Zellen mit dieser gid entfernen
-      const undo=[]; let n=0; const affected=new Set();
-      for(const mid of Object.keys(fresh.bookings)){ const fmb=fresh.bookings[mid];
-        for(const dd of Object.keys(fmb)){ if(fmb[dd] && fmb[dd].gid===gid){ undo.push({mid, date:dd, prev:{...fmb[dd]}}); delete fmb[dd]; n++; affected.add(mid); } } }
-      for(const mid of affected) undo.push(...sweepWeekends(fresh, mid)); // Sa/So-Brückentage aufräumen
-      return {n, undo};
-    }, `Gruppe gelöscht: ${gTitle||gid} (${b.name})`);
+    const res=await mutate(
+      fresh=>deleteGroup(fresh, gid), // → core/booking.ts (alle Zellen dieser gid + Sweep)
+      `Gruppe gelöscht: ${gTitle||gid} (${b.name})`);
     if(res && !res.abort) offerUndo(`Buchungsgruppe gelöscht (${res.n} Tag(e)).`, res.undo, 'Löschen');
   };
 }
@@ -1795,16 +1750,9 @@ function renderMyBookings(){
     renderMyBookings();
   });
   const delDates=async (m, dates)=>{
-    const res=await mutate(fresh=>{
-      const mb=fresh.bookings[m.id]||{}; let n=0; const undo=[];
-      for(const d of dates){
-        if(mb[d] && mb[d].name.toLowerCase()===S.user.toLowerCase()){
-          undo.push({mid:m.id,date:d,prev:{...mb[d]}}); delete mb[d]; n++;
-        }
-      }
-      undo.push(...sweepWeekends(fresh, m.id)); // Sa/So-Brückentage aufräumen
-      return {n, undo};
-    }, `Gelöscht: ${S.user} auf ${m.name}, ${dates.length} Tag(e)`);
+    const res=await mutate(
+      fresh=>deleteOwnCells(fresh, m.id, S.user, dates), // → core/booking.ts (eigene Zellen, ci)
+      `Gelöscht: ${S.user} auf ${m.name}, ${dates.length} Tag(e)`);
     if(res && !res.abort){ renderMyBookings(); offerUndo(`${res.n} Buchung(en) gelöscht.`, res.undo, 'Löschen'); }
   };
   document.querySelectorAll('#modal [data-del]').forEach(el=>el.onclick=async ()=>{
@@ -2021,12 +1969,8 @@ function openAdmin(){
     document.querySelectorAll('#adList [data-down]').forEach(b=>b.onclick=()=>moveById(b.dataset.down,1));
   };
   const moveById=async (id,dir)=>{
-    const res=await mutate(fresh=>{
-      const idx=fresh.machines.findIndex(m=>m.id===id); const j=idx+dir;
-      if(idx<0||j<0||j>=fresh.machines.length) return {abort:true};
-      if(fresh.machines[idx].group!==fresh.machines[j].group) return {abort:true}; // nur innerhalb desselben Bereichs tauschen
-      [fresh.machines[idx],fresh.machines[j]]=[fresh.machines[j],fresh.machines[idx]];
-    },'Reihenfolge geändert');
+    // Nachbar-Tausch innerhalb des Bereichs → core/booking.ts (moveMachine).
+    const res=await mutate(fresh=>moveMachine(fresh, id, dir),'Reihenfolge geändert');
     if(res&&res.abort) return;
     renderList();
   };
@@ -2108,27 +2052,10 @@ function openMachineForm(mid){
     for(const s of maint){ if(s.from && s.until && s.from>s.until){ toast('Wartungs-Zeitraum ungültig (von liegt nach bis).'); return; } }
     if(!name||!group){ toast('Name und Bereich sind Pflicht.'); return; }
     if(daysMask && !daysMask.includes('1')){ toast('Mindestens einen verfügbaren Wochentag wählen.'); return; }
-    const applyFields=(o)=>{
-      o.name=name; o.group=group; o.info=info;
-      if(redu) o.redu=redu; else delete o.redu;               // Redundanz-Markierung (nur Label)
-      if(daysMask) o.days=daysMask; else delete o.days;        // verfügbare Wochentage
-      if(maint.length) o.maint=maint; else delete o.maint;     // Wartungs-/Ausfall-Slots
-      delete o.status; delete o.statusNote; delete o.statusFrom; delete o.statusUntil; // Alt-Status durch maint ersetzt
-      if(cat==='messtechnik') o.cat='messtechnik'; else delete o.cat; // 'maschine' = Standard (kein Feld)
-    };
-    const res=await mutate(fresh=>{
-      if(mid){
-        const fm=fresh.machines.find(x=>x.id===mid); if(!fm) return {abort:true};
-        applyFields(fm);
-      } else {
-        let base=name.toLowerCase().replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'maschine';
-        let id=base,n=2; while(fresh.machines.some(x=>x.id===id)) id=`${base}-${n++}`;
-        let idx=fresh.machines.length;
-        for(let i=fresh.machines.length-1;i>=0;i--) if(fresh.machines[i].group===group){ idx=i+1; break; }
-        const nm={id}; applyFields(nm);
-        fresh.machines.splice(idx,0,nm);
-      }
-    }, mid?`Maschine bearbeitet: ${name}`:`Maschine angelegt: ${name}`);
+    // Anwenden/Anlegen (Slug-ID, Bereichs-Einsortierung, Feld-Übernahme) → core/booking.ts (saveMachine).
+    const res=await mutate(
+      fresh=>saveMachine(fresh, mid||null, {name, group, cat, info, redu, daysMask, maint}),
+      mid?`Maschine bearbeitet: ${name}`:`Maschine angelegt: ${name}`);
     if(res&&res.abort) return;
     fillGroupSel(); openAdmin(); toast('Gespeichert ✓');
   };
@@ -2139,10 +2066,9 @@ function openMachineForm(mid){
       body:`<b>${esc(m.name)}</b> (${esc(m.group)}) wird entfernt — <b>inklusive aller zugehörigen Buchungen</b>. Das lässt sich nicht rückgängig machen.`,
       yes:'Maschine löschen'
     })) return;
-    const res=await mutate(fresh=>{
-      const i=fresh.machines.findIndex(x=>x.id===mid); if(i<0) return {abort:true};
-      fresh.machines.splice(i,1); delete fresh.bookings[mid];
-    },`Maschine gelöscht: ${m.name}`);
+    const res=await mutate(
+      fresh=>deleteMachine(fresh, mid), // → core/booking.ts (Maschine + Buchungen entfernen)
+      `Maschine gelöscht: ${m.name}`);
     if(res&&res.abort) return;
     fillGroupSel(); openAdmin(); toast('Maschine gelöscht.');
   };
