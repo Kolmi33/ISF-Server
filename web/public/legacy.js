@@ -1775,26 +1775,11 @@ function openAllBookings(){
 const myExpanded=new Set();
 let myRuns=[];
 let myShowPast=false;   // Checkbox in „Meine Buchungen": auch vergangene Buchungen zeigen
-function computeMyRuns(){
-  const t=todayStr();
-  const nextWd=s=>{ let d=parseYmd(s); do{ d=addDays(d,1);}while(isWeekend(d)); return ymd(d); };
-  const runs=[];
-  for(const m of orderedMachines()){
-    const mb=S.data.bookings[m.id]||{};
-    const ds=Object.keys(mb).filter(d=>d>=t && !isWeekend(parseYmd(d)) && mb[d].name.toLowerCase()===S.user.toLowerCase()).sort();
-    let cur=[];
-    for(const d of ds){
-      if(cur.length && nextWd(cur[cur.length-1])===d) cur.push(d);
-      else { if(cur.length) runs.push({m, dates:cur}); cur=[d]; }
-    }
-    if(cur.length) runs.push({m, dates:cur});
-  }
-  runs.sort((a,b)=>a.dates[0]<b.dates[0]?-1:1);
-  return runs;
-}
+// computeMyRuns → ui/views/my-bookings.ts (bridged). Struktur der eigenen zukünftigen Buchungen
+// (konsekutive Werktags-Serien); Impurität (Maschinen-Reihenfolge, bookings, user, heute) injiziert.
 function openMyBookings(){
   if(!S.user){ askUserName(false); return; }
-  myRuns=computeMyRuns();   // Struktur einfrieren
+  myRuns=computeMyRuns(orderedMachines(), S.data.bookings, S.user, todayStr());   // Struktur einfrieren
   renderMyBookings();
 }
 function renderMyBookings(){

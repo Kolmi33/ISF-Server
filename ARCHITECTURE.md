@@ -389,6 +389,23 @@ subscribes to the store; ~5 lines, custom, zero-dep). Revisit only if the UI gro
     the grid-interaction extraction; what remains in `legacy.js` is the DOM adapter (Phase 5) and the modal
     /view builders (Phase 4.3).
 
+  - **4.3 — scope decision (view *models*, not markup).** The original sketch imagined extracting each
+    modal's `render*(state) → html` string builder and snapshot-testing it. On contact with the code that
+    proved the wrong cut: the modals are ~14 large **interpolated-markup shells** (`openModal(\`…\`)`) whose
+    HTML is nearly branch-free — the real logic is the small **pure kernel** each one wraps (run-grouping,
+    stats aggregation, booking-conflict detection, log derivation, filter/sort). Porting the markup would be
+    high-risk transcription (E1 makes every byte behaviour, so a stray space is a regression) guarded only by
+    a tautological "output == the same string" test — low verifiable value, against E7's intent (100% on
+    *logic*) and E8 (don't scope-creep into markup churn). So 4.3 extracts the **pure view-model / computation
+    kernel** behind each screen (one per commit, under `ui/views/`), injected with its data (E4) and gated to
+    100%; the `openModal(html)` shell, the `.map(row => \`…\`)` markup, and all event wiring stay in the legacy
+    adapter — exactly as 4.1/4.2 left paint/patch/scroll there. A modal whose kernel is trivial (pure markup,
+    no logic — e.g. Help) is left in legacy for the Phase-5 burn-down rather than extracted for its own sake.
+    - **my-bookings done.** `ui/views/my-bookings.ts` — `computeMyRuns(machines, bookings, user, today)`
+      groups the user's future bookings into consecutive-workday runs (Fri→Mon is one run), date-sorted.
+      Legacy's `computeMyRuns()` deleted; its one call site now passes `orderedMachines()/S.data.bookings/
+      S.user/todayStr()`. The modal's expand/goto/delete-series wiring stays in legacy. 5 tests, 100% cov.
+
 ### The `ui/` gate layer
 New layer: **ui/ may import core/ + net/ + state; nothing may import ui/** (add the eslint boundary).
 Pure model builders are held to the 90/85 floor; DOM writes are browser-smoked (E5). ui/ may touch the

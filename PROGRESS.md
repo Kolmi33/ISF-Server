@@ -258,6 +258,12 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 4.3 my-bookings — `ui/views/my-bookings.ts`: `computeMyRuns(machines, bookings, user, today)`
+  extracted (consecutive-workday run-grouping of the user's future bookings, date-sorted; Fri→Mon = one
+  run). Legacy `computeMyRuns()` deleted, call site injects `orderedMachines()/bookings/user/today`. The
+  modal shell + expand/goto/delete wiring stay in legacy. 5 tests, 100% cov; browser smoke: bridge live,
+  cross-checked run-days vs. a manual reduction, real modal opened for a live booker, `rev` unchanged (23).
+  **Scope note (§15): 4.3 extracts pure view *kernels*, not markup shells.** **DONE 2026-08-29.**
 - Phase 4.2b — `ui/navigation.ts`: pure next-free scan geometry extracted from the ⏭/⏮ jump code.
   `nextFreeDay(fromIso, today, isFree, horizon=730)` and `prevFreeDay(fromIso, today, isFree)` walk the
   calendar (skipping weekends via `core/dates`) for the first day a machine is bookable; the impurity —
