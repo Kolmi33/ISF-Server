@@ -1890,31 +1890,9 @@ function openStats(presetPerson){
   const compute=()=>{
     const f=document.getElementById('stFrom').value, o=document.getElementById('stTo').value;
     if(!f||!o||f>o){ toast('Bitte gültigen Zeitraum wählen.'); return false; }
-    const days=weekdayRange(f,o);
-    const machRows=[]; const persons=new Map();
-    for(const m of orderedMachines()){
-      const mb=S.data.bookings[m.id]||{};
-      let n=0; const pmap=new Map();
-      for(const d of days){
-        const b=mb[d]; if(!b||!b.name) continue;
-        n++;
-        const k=b.name.toLowerCase();
-        pmap.set(k,{name:b.name, days:(pmap.get(k)?pmap.get(k).days:0)+1});
-        if(!persons.has(k)) persons.set(k,{name:b.name, days:0, machines:new Map()});
-        const e=persons.get(k); e.days++;
-        e.machines.set(m.name,(e.machines.get(m.name)||0)+1);
-      }
-      machRows.push({m, n, pct: days.length?Math.round(n*100/days.length):0, persons:pmap});
-    }
-    // Wartung/Ausfall: Instanzen (Slots, die den Zeitraum schneiden) + gesperrte Kalendertage
-    const calDays=allDaysRange(f,o);
-    const maintRows=[]; let maintInst=0, maintDays=0;
-    for(const m of orderedMachines()){
-      const inRange=maintSlots(m).filter(s=>(!s.until||s.until>=f)&&(!s.from||s.from<=o));
-      let dc=0; for(const d of calDays) if(isBlockedM(m,d)) dc++;
-      if(inRange.length||dc){ maintRows.push({m, inst:inRange.length, days:dc}); maintInst+=inRange.length; maintDays+=dc; }
-    }
-    agg={days, machRows, persons, maint:{rows:maintRows, inst:maintInst, days:maintDays}};
+    // Aggregation (Buchungen + Wartung über den Zeitraum) → ui/views/stats.ts (computeStats).
+    // Validierung + DOM-Lesen von f/o bleiben hier; die Reduktion ist rein und injiziert.
+    agg=computeStats(orderedMachines(), S.data.bookings, f, o);
     return true;
   };
 

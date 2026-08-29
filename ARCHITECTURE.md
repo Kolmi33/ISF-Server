@@ -405,6 +405,14 @@ subscribes to the store; ~5 lines, custom, zero-dep). Revisit only if the UI gro
       groups the user's future bookings into consecutive-workday runs (Fri→Mon is one run), date-sorted.
       Legacy's `computeMyRuns()` deleted; its one call site now passes `orderedMachines()/S.data.bookings/
       S.user/todayStr()`. The modal's expand/goto/delete-series wiring stays in legacy. 5 tests, 100% cov.
+    - **stats done.** `ui/views/stats.ts` — `computeStats(machines, bookings, from, to)` builds the whole
+      aggregation the modal renders (per-machine counts + percent + who booked, a cross-machine person
+      index, and a maintenance/downtime tally), fully pure over `core/dates`+`core/machines` (no function
+      injection — all four helpers were already gated). Split into two internal aggregators to stay under
+      the complexity cap. Legacy `compute()` keeps only the DOM read of the range + `f>o` validation, then
+      calls `computeStats`; all mode/drilldown/fold markup + wiring stay in legacy. 7 tests, 100% cov;
+      smoke cross-checked 9462 booked cells across 245 machines against a manual count and reconciled the
+      person-day totals to the same number.
 
 ### The `ui/` gate layer
 New layer: **ui/ may import core/ + net/ + state; nothing may import ui/** (add the eslint boundary).

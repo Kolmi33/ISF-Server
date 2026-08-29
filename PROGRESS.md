@@ -258,6 +258,11 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 4.3 stats — `ui/views/stats.ts`: `computeStats(machines, bookings, from, to)` extracted — the
+  full stats aggregation (per-machine counts/percent/person-breakdown, cross-machine person index,
+  maintenance+downtime tally), pure over core/dates+core/machines. Legacy `compute()` keeps only the
+  range DOM-read + validation. 7 tests, 100% cov; browser smoke cross-checked 9462 booked cells over 245
+  machines vs. a manual count (person-day totals reconcile), all 3 modes render, `rev` 23. **DONE 2026-08-29.**
 - Phase 4.3 my-bookings — `ui/views/my-bookings.ts`: `computeMyRuns(machines, bookings, user, today)`
   extracted (consecutive-workday run-grouping of the user's future bookings, date-sorted; Fri→Mon = one
   run). Legacy `computeMyRuns()` deleted, call site injects `orderedMachines()/bookings/user/today`. The
