@@ -419,6 +419,14 @@ subscribes to the store; ~5 lines, custom, zero-dep). Revisit only if the UI gro
       the `sorters`+filter chain in `renderList` replaced by the bridged calls (raw input values in; trim/
       lowercase inside). The go-to wiring + row markup stay in legacy. 9 tests, 100% cov (comparator
       tie-breakers and empty group/name/ts fallbacks explicitly covered).
+    - **admin done.** `ui/views/admin.ts` — `filterAdminMachines(machines, sort, query)`: the Verwalten
+      list's order (manual = stored order, or by name / group→name) + "name group" substring search. The
+      reorder/edit/add wiring, the status/maintenance badges and row markup stay in legacy. 6 tests, 100%.
+    - **Deferred (kernel too thin to extract now — left for the Phase-5 burn-down):** Log (`openLog` is a
+      branch-free `log.slice(0,200).map(...)`), Help/Settings (near-static markup), booking-detail (display).
+    - **Booking write-path (`submitBooking`) — noted, not yet cut.** Its conflict-detection + apply reducer
+      is real domain logic but it *mutates fresh server state and POSTs*, so it belongs in a `core/booking`
+      slice (Phase 5/6 territory) and can't be browser-smoked without a production write. Gate-only when done.
 
 ### The `ui/` gate layer
 New layer: **ui/ may import core/ + net/ + state; nothing may import ui/** (add the eslint boundary).

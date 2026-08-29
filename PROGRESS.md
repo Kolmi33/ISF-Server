@@ -258,6 +258,11 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 4.3 admin — `ui/views/admin.ts`: `filterAdminMachines(machines, sort, query)` — order
+  (manual/name/group→name, German collation) + case-insensitive "name group" search of the machine
+  list for the Verwalten modal. Legacy `renderList` sort/filter block replaced by the bridged call
+  (`manual` flag kept for the ↑/↓ markup). 6 tests, 100% cov (empty-group collation + name tiebreak).
+  Smoke: 245→7 rows on live search, name-sort ascending, input not mutated, `rev` 23. **DONE 2026-08-29.**
 - Phase 4.3 all-bookings — `ui/views/all-bookings.ts`: `computeAllRuns(machines, bookings, today)`
   (per-person consecutive-workday runs w/ earliest ts) + `filterAllRuns(runs, criteria)` (case-insensitive
   person/machine, group, [from,to] overlap window, 5 sort keys w/ termin fallback, cap 300). Legacy

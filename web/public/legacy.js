@@ -2014,12 +2014,9 @@ function openAdmin(){
     <div class="mlist" style="max-height:380px" id="adList"></div>
     <div class="modal-actions"><button class="btn" onclick="closeModal()">Schließen</button></div>`);
   const renderList=()=>{
-    const q=(document.getElementById('adSearch').value||'').toLowerCase();
     const manual = adSort==='manual';
-    let rows=S.data.machines.slice();
-    if(adSort==='name') rows.sort((a,b)=>a.name.localeCompare(b.name,'de'));
-    else if(adSort==='group') rows.sort((a,b)=>(a.group||'').localeCompare(b.group||'','de') || a.name.localeCompare(b.name,'de'));
-    rows=rows.filter(m=>(m.name+' '+m.group).toLowerCase().includes(q));
+    // Sortierung (manuell/Name/Bereich) + Suche → ui/views/admin.ts (filterAdminMachines).
+    const rows=filterAdminMachines(S.data.machines, adSort, document.getElementById('adSearch').value||'');
     document.getElementById('adList').innerHTML = rows.length ? rows.map(m=>`
       <div class="admrow">
         <span class="nm" title="${esc(m.name)}">${esc(m.name)} <span class="hint" style="margin:0">(${esc(m.group)})</span>
