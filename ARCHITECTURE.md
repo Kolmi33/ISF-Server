@@ -504,8 +504,23 @@ console clean, `rev` 23.
   Assistant tree into the store: a real state migration, not a burn-down. Deferred to the store-migration
   slice / Phase 6, where it has a clean seam.
 
-### 5.3 — tooling
-Promote `knip` (+ a global coverage floor) into `verify`; tidy CSS/HTML.
+### 5.3 — tooling — IMPLEMENTED 2026-08-29
+- **`knip` promoted into `verify`.** `verify` is now `format:check && check && lint && deadcode && test:cov`
+  (knip placed after lint — a cheap structural check that fails fast before the slower coverage run). Config
+  tidied to zero findings: dropped the stale `web/js/legacy.ts` ignore and the not-yet-existing
+  `server/*.ts` entries (Phase 6 re-adds them), scoped `project` to `{web,shared}/**/*.ts`, and set
+  `ignoreExportsUsedInFile` (so a module's own public types — e.g. the store's `Store` — aren't flagged).
+  knip auto-detects `web/js/app.ts` as the entry via its Vite/index.html plugin, so no explicit `entry` is
+  needed. Dead code now fails the gate.
+- **Repo-wide coverage floor** added to `vitest.config.ts` (top-level `lines: 90, branches: 85`) as a safety
+  net beneath the explicit per-layer globs, so a new top-level module (e.g. a future `actions.ts`) can't slip
+  in untested. Project standard stays 100% in practice.
+- **CSS/HTML tidy — deferred (E8).** No dead-CSS need was identified and a restyle risks silent visual drift
+  against the faithful-port bar; revisit only with a concrete trigger.
+
+**Phase 5 is complete** (5.1 write-path reducers, 5.2 FS-era burn-down, 5.3 tooling). Remaining
+legacy-shrink items (modal markup, `AS_TREE`/`window.S`) are deferred with rationale above and travel with
+the Phase-6 backend work / a later store-migration slice.
 
 ### Action-layer question (still open)
 `bookCells` and friends now have a caller shape that would suit a thin `actions.ts` (`book`/`del`/… →

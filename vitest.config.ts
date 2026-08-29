@@ -19,6 +19,11 @@ export default defineConfig({
       // Armed from Phase 2 (ARCHITECTURE §10): pure core is pinned hard. The pure store
       // (Phase 3.1, §14 D6) is core-grade and held to the same floor.
       thresholds: {
+        // Repo-wide floor (Phase 5.3): every covered file — including a new top-level
+        // module not matched by the layer globs below (e.g. a future `actions.ts`) — must
+        // clear this. The layer entries stay explicit; the project standard remains 100%.
+        lines: 90,
+        branches: 85,
         'web/js/core/**': { lines: 90, branches: 85 },
         'web/js/state.ts': { lines: 90, branches: 85 },
         // net/ pure bits (URL/body building, response normalization) are unit-tested via

@@ -4,7 +4,7 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug fixed; weekend-bridge feature → Phase 6.3._
+_Last updated: 2026-08-29 — **Phase 5 COMPLETE** (5.1 write-path reducers → `core/booking.ts`, 5.2 FS-era burn-down, 5.3 knip-in-verify + coverage floor). Next: Phase 6 (backend → TS)._
 
 ---
 
@@ -120,21 +120,22 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 5.2 — dead-code burn-down.** 5.1 landed: `core/booking.ts` holds all eight write-path reducers,
-> gated to 100% and clone-smoked (`rev` 23). Now drive `legacy.js` down and delete the FS-era corpse:
->   1. **FS-era dead code** (§14 D4): `writeFile()` (uses `S.handle.createWritable` — never runs in server
->      mode), `S.handle`, `S.lastRaw` (+ the `lastRaw` field in `AppState`/`hydrateState`), `setupFileObserver`
->      (empty stub), `startRefreshTimer` (empty stub). Grep for each; confirm zero live callers before cutting.
->   2. **Trivial modal markup** (Log, Help, Settings, booking-detail): branch-free `innerHTML` builders —
->      fold into `openModal` templating where it removes real duplication; do NOT snapshot-test tautologies (E7/E8).
->   3. **`AS_TREE` adapters + `window.S` shrink**: retire the Phase-2 assistant bind-adapters as the tree moves
->      toward the store; drop `window.S` fields as call sites adopt `store`. Incremental — only what has a clean seam.
+> **Phase 6 — Backend → TypeScript.** Phase 5 is complete (5.1 write-path reducers → `core/booking.ts`,
+> 5.2 FS-era burn-down, 5.3 knip-in-`verify` + repo-wide coverage floor). The frontend logic core is fully
+> gated (213 tests, 100%); `legacy.js` is a DOM adapter over bridged pure logic (2362 lines, from 2712).
+> **The backend (`src/*.mjs`) has been sealed/gate-excluded until here — Phase 6 opens it.**
+>   1. **6.1** convert `src/server.mjs` + `src/import.mjs` to TS under `server/`; add tests for the mutate
+>      concurrency/validation (the 1000-cell batch cap, compare-and-set, revision bump). Re-add the
+>      `server/*.ts` knip entries removed in 5.3.
+>   2. **6.2** remove `src/` from the gate exclusions (tsconfig/eslint/vitest/knip); the full gate covers backend.
+>   3. **6.3** server-authoritative weekend auto-bridging (feature; scope = *maintain + backfill*, decided
+>      2026-08-28 — see "Deferred features"). Reuse the pure bridge computation (recover `missingWeekendBridges`
+>      from git); mind the 1000-cell cap (1794 missing bridges → must be internal SQL, not an API batch).
 >
-> Then **5.3**: promote `knip` + the global coverage floor into `verify`; tidy CSS/HTML.
->
-> **Action-layer question (§16) — still open, decide in 5.2/Phase 6:** whether writes go through a thin
-> `actions.ts` (`book`/`del`/`setFilter` → reducer + `store.set` + persistence + `notify`) or keep the legacy
-> `mutate` orchestrator (which still owns persistence + the optimistic patch). Resolve alongside the store migration.
+> **Carry into Phase 6 (deferred from Phase 5, with rationale in §16):** the trivial modal-markup fold and the
+> `AS_TREE`-adapter / `window.S` shrink (a real store migration, not a burn-down), plus the **wknd-on-patch**
+> known bug. **Action-layer question (§16) still open:** thin `actions.ts` vs. the legacy `mutate` orchestrator
+> (which still owns persistence + the optimistic patch) — resolve when the store migration lands.
 >
 > **View-layer decision (resolved, §15):** no framework — custom string render + the store
 > subscription (now live). Revisit only if the UI grows materially.
@@ -227,7 +228,10 @@ Checked off as each item lands (one commit per item unless noted).
   `AppState`/`hydrateState`/tests. legacy.js 2712→2362. knip clean on gated layers; boot identical, `rev` 23.
   Modal-markup folding + `AS_TREE` retirement **deferred with rationale** (§16: low-value / real migration).
   **DONE 2026-08-29.**
-- [ ] 5.3 promote `knip` into `verify`; tidy CSS/HTML
+- [x] 5.3 `knip` promoted into `verify` (`… && lint && deadcode && test:cov`); knip.json tidied to zero
+  findings (dropped stale `legacy.ts` ignore + Phase-6 `server/*.ts` entries, `ignoreExportsUsedInFile`,
+  auto-entry via Vite plugin). Repo-wide coverage floor (90/85) added under the layer globs. CSS/HTML tidy
+  deferred (E8 — no dead-CSS need, restyle risks visual drift). **DONE 2026-08-29.** **Phase 5 COMPLETE.**
 
 **Phase 6 — Backend → TypeScript**
 - [ ] 6.1 `server/` conversion + tests for mutate concurrency/validation
@@ -270,6 +274,12 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 5.3 tooling — `knip` promoted into `verify` (now `format:check && check && lint && deadcode &&
+  test:cov`; knip after lint = cheap fail-fast). knip.json tidied to **zero findings**: removed the stale
+  `web/js/legacy.ts` ignore and the not-yet-existing `server/*.ts` entries (Phase 6 re-adds), scoped project
+  to `{web,shared}/**/*.ts`, set `ignoreExportsUsedInFile`; app.ts entry auto-detected via knip's Vite plugin.
+  Added a repo-wide coverage floor (top-level `lines:90, branches:85`) beneath the per-layer globs in
+  `vitest.config.ts`. CSS/HTML tidy deferred (E8). Gate green (213 tests, 100%). **Phase 5 COMPLETE.** **DONE 2026-08-29.**
 - Phase 5.2 FS-era burn-down — removed the file-backed-variant dead code, each confirmed zero-caller first:
   `writeFile()` (+ `S.handle`/`S.lastRaw`/`lastMtime`), the empty stubs `setupFileObserver`/`startRefreshTimer`
   and the `setupFileObserver()` call in `startUI`; the dead `lastRaw` field dropped from `AppState`
