@@ -68,7 +68,7 @@ async function mutate(fn, logAction){
   if(S.data.log.length>500) S.data.log.length=500;
   // SOFORT zeichnen (nur betroffene Zellen, sonst voll)
   if(result && result.undo && result.undo.length && result.undo.length<=500) patchCells(result.undo);
-  else render();
+  else notify();
   saving=true;                            // ab jetzt keinen stillen Refresh dazwischenfunken lassen
   persist(fn, logEntry, result);          // Datei-Arbeit im Hintergrund
   return result;
@@ -88,7 +88,7 @@ function startUI(){
   updateMachBtn(); // persistierten Filter in der Leiste anzeigen
   if(!S.user && !S.readOnly) askUserName(true);
   updateUserChip();
-  render();
+  notify();
   prependWeek(); // eine Woche Vergangenheit als Scroll-Puffer nach links
   centerToday();
   stampRef();
@@ -137,7 +137,7 @@ function askUserName(firstRun){
       <button class="btn primary" id="unSave">Speichern</button></div>`);
   const inp=document.getElementById('unInput'); inp.focus();
   const save=()=>{ const v=inp.value.trim(); if(!v){ inp.focus(); return; }
-    S.user=v; localStorage.setItem('mb_user',v); updateUserChip(); closeModal(); render();
+    S.user=v; localStorage.setItem('mb_user',v); updateUserChip(); closeModal(); notify();
     dbg('user','Name gesetzt: '+v); presenceTick(); };
   document.getElementById('unSave').onclick=save;
   inp.onkeydown=e=>{ if(e.key==='Enter') save(); };
@@ -172,9 +172,9 @@ function centerCol(dISO){
 function centerToday(){
   requestAnimationFrame(()=>centerCol(todayStr()));
 }
-document.getElementById('btnToday').onclick = ()=>{ S.startMonday=mondayOf(new Date()); resetView(); render(); prependWeek(); centerToday(); };
-document.getElementById('btnPrev').onclick  = ()=>{ S.startMonday=addDays(S.startMonday,-7); render(); };
-document.getElementById('btnNext').onclick  = ()=>{ S.startMonday=addDays(S.startMonday, 7); render(); };
+document.getElementById('btnToday').onclick = ()=>{ S.startMonday=mondayOf(new Date()); resetView(); notify(); prependWeek(); centerToday(); };
+document.getElementById('btnPrev').onclick  = ()=>{ S.startMonday=addDays(S.startMonday,-7); notify(); };
+document.getElementById('btnNext').onclick  = ()=>{ S.startMonday=addDays(S.startMonday, 7); notify(); };
 function jumpToMonth(){
   // Jahr zweistellig (26 = 2026); vierstellige Eingaben werden auch akzeptiert
   let yy=parseInt(document.getElementById('jumpYear').value);
@@ -183,7 +183,7 @@ function jumpToMonth(){
   const mo=parseInt(document.getElementById('jumpMonth').value)||0;
   S.startMonday=mondayOf(new Date(Date.UTC(y,mo,1)));
   const first=ymd(S.startMonday);
-  resetView(); render(); prependWeek(); gotoDate(first);
+  resetView(); notify(); prependWeek(); gotoDate(first);
 }
 document.getElementById('jumpMonth').onchange = jumpToMonth;
 document.getElementById('jumpYear').onchange  = jumpToMonth;
@@ -360,7 +360,7 @@ function applyTheme(){
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
 }
 applyTheme();
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{ applyTheme(); if(S.data) render(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{ applyTheme(); if(S.data) notify(); });
 if(localStorage.getItem('mb_compact')==='on') document.body.classList.add('compact');
 
 
@@ -393,14 +393,14 @@ function openSettings(){
       <label style="min-width:auto"><input type="checkbox" id="setDebug" ${dbgOn()?'checked':''}> Debug-Panel anzeigen (protokolliert Schreiben, Updates, Nutzer, Fehler)</label></div>
     <div class="modal-actions"><button class="btn primary" onclick="closeModal()">Fertig</button></div>`);
   document.getElementById('setTheme').onchange = ev=>{
-    localStorage.setItem('mb_theme', ev.target.value); applyTheme(); render();
+    localStorage.setItem('mb_theme', ev.target.value); applyTheme(); notify();
   };
   document.getElementById('setPresence').onchange = ev=>{
     localStorage.setItem('mb_presence', ev.target.checked?'on':'off'); presenceTick();
   };
   document.getElementById('setWeekends').onchange = ev=>{
     localStorage.setItem('mb_weekends', ev.target.checked?'on':'off');
-    S.extraWeeks=0; render(); centerToday();
+    S.extraWeeks=0; notify(); centerToday();
   };
   document.getElementById('setCompact').onchange = ev=>{
     localStorage.setItem('mb_compact', ev.target.checked?'on':'off');
@@ -485,9 +485,9 @@ function fillMachSel(reset){
     h.onclick=()=>{ const k=h.dataset.tgrp; mfOpenGrp.has(k)?mfOpenGrp.delete(k):mfOpenGrp.add(k); applyView(); };
   });
   drop.querySelectorAll('.mfCb').forEach(cb=>{
-    cb.onchange=()=>{ cb.checked?S.machSel.add(cb.value):S.machSel.delete(cb.value); saveFilters(); cnt(); updateMachBtn(); render(); };
+    cb.onchange=()=>{ cb.checked?S.machSel.add(cb.value):S.machSel.delete(cb.value); saveFilters(); cnt(); updateMachBtn(); notify(); };
   });
-  drop.querySelector('#machClear').onclick=()=>{ S.machSel.clear(); saveFilters(); fillMachSel(); render(); };
+  drop.querySelector('#machClear').onclick=()=>{ S.machSel.clear(); saveFilters(); fillMachSel(); notify(); };
   const se=drop.querySelector('#machSearch');
   se.oninput=applyView;
   se.focus();
@@ -517,12 +517,12 @@ function fillGroupSel(){
   drop.innerHTML =
     `<label><input type="checkbox" id="grpAll" ${S.groupsSel.size===0?'checked':''}> <b>Alle Bereiche</b></label><hr style="border:none;border-top:1px solid var(--border);margin:4px 0">` +
     groupList().map(g=>`<label><input type="checkbox" class="grpCb" value="${esc(g)}" ${S.groupsSel.has(g)?'checked':''}> ${esc(g)}</label>`).join('');
-  drop.querySelector('#grpAll').onchange=()=>{ S.groupsSel.clear(); saveFilters(); fillGroupSel(); updateGroupBtn(); render(); };
+  drop.querySelector('#grpAll').onchange=()=>{ S.groupsSel.clear(); saveFilters(); fillGroupSel(); updateGroupBtn(); notify(); };
   drop.querySelectorAll('.grpCb').forEach(cb=>{
     cb.onchange=()=>{
       cb.checked ? S.groupsSel.add(cb.value) : S.groupsSel.delete(cb.value);
       if(S.groupsSel.size===groupList().length) S.groupsSel.clear(); // all selected = all
-      saveFilters(); fillGroupSel(); updateGroupBtn(); render();
+      saveFilters(); fillGroupSel(); updateGroupBtn(); notify();
     };
   });
   updateGroupBtn();
@@ -568,7 +568,7 @@ function prependWeek(){
   const keep=el.scrollLeft, before=el.scrollWidth;
   S.startMonday=addDays(S.startMonday,-7);
   if(S.extraWeeks<MAXW || Sel.dragging) S.extraWeeks++; // beim Ziehen: wachsen statt schieben (Anker behalten)
-  render();
+  notify();
   const grew=el.scrollWidth-before;
   el.scrollLeft = keep + (grew>0 ? grew : weekWidth());
   setTimeout(()=>{ extendPending=false; }, 80);
@@ -583,11 +583,11 @@ document.getElementById('gridWrap').addEventListener('scroll', ev=>{
     const keep=el.scrollLeft;
     if(S.extraWeeks<MAXW || Sel.dragging){         // wachsen
       S.extraWeeks++;
-      render();
+      notify();
       el.scrollLeft=keep;
     } else {                                        // Fenster nach rechts schieben
       S.startMonday=addDays(S.startMonday,7);
-      render();
+      notify();
       el.scrollLeft=Math.max(0, keep-weekWidth());
     }
     setTimeout(()=>{ extendPending=false; }, 100);
@@ -660,7 +660,7 @@ function toggleCat(c){
   // zu lassen – sind beide aus, zeigt das Raster nur noch die Favoriten.
   S.cats.has(c) ? S.cats.delete(c) : S.cats.add(c);
   localStorage.setItem('mb_cats', JSON.stringify([...S.cats]));
-  render();
+  notify();
 }
 /* Doppelklick auf Kategorie-Button/-Kopf: ALLE Unterkategorien (Bereiche) dieser
    Kategorie auf einmal auf- oder zuklappen (Toggle). Sind alle offen → alle zu,
@@ -671,7 +671,7 @@ function toggleAllGroupsInCat(c){
   const allOpen=groups.every(g=>!S.collapsed.has(g));
   groups.forEach(g=> allOpen ? S.collapsed.add(g) : S.collapsed.delete(g));
   localStorage.setItem('mb_collapsed', JSON.stringify([...S.collapsed]));
-  render();
+  notify();
 }
 /* Einfach-/Doppelklick trennen (sonst löst der Doppelklick erst den Einfach-
    Toggle aus): kurzer Timer, den der Doppelklick abbricht. */
@@ -691,7 +691,7 @@ function orderedMachines(){
 function toggleFav(mid){
   S.favs.has(mid) ? S.favs.delete(mid) : S.favs.add(mid);
   localStorage.setItem('mb_favs', JSON.stringify([...S.favs]));
-  render();
+  notify();
 }
 
 function dpw(){ return localStorage.getItem('mb_weekends')==='on' ? 7 : 5; } // Tage je Woche im Raster
@@ -816,7 +816,7 @@ function ensureOverflow(){
   const el=document.getElementById('gridWrap');
   if(el.style.display==='none') return;
   if(S.extraWeeks<100 && el.scrollWidth <= el.clientWidth + 60){
-    S.extraWeeks++; render();
+    S.extraWeeks++; render();   // interner Overflow-/Wachstums-Loop → direkt (nicht über Store)
   }
 }
 
@@ -861,7 +861,8 @@ function clearSel(){ Sel.anchor=Sel.focus=null; Sel.cells=[]; paintSel(); hideCt
    aktualisiert statt das komplette Raster neu zu bauen. Die Liste der
    betroffenen Zellen liefern die Undo-Einträge der Mutation gratis mit.
    Strukturelle Änderungen (Maschinen anlegen/löschen/sortieren, Status)
-   und Fremdänderungen per Refresh nutzen weiterhin render().
+   und Fremdänderungen per Refresh lösen den vollständigen Neuaufbau aus
+   (render(), ab 4.1c über den Store: notify() → abonniertes render()).
    ================================================================= */
 function refreshCell(mid, date){
   const el=cellEl(mid, date); if(!el) return; // z. B. Wochenendtag: keine Zelle
@@ -947,7 +948,7 @@ function jumpToSlot(m, iso, isBack){
   S.startMonday=addDays(mondayOf(parseYmd(iso)),-14);
   S.extraWeeks=4;
   document.getElementById('gridWrap').scrollLeft=0;
-  render();
+  notify();
   Sel.anchor={mid, date:iso}; Sel.focus={mid, date:iso}; paintSel(); // Zelle markieren
   gotoDateCenter(iso); // Slot mittig auf dem Bildschirm
   // Hinweis, falls ab hier nichts mehr gebucht/gesperrt ist
@@ -1070,7 +1071,7 @@ gridEl.addEventListener('click', ev=>{
     if(gr.dataset.catgroup){ catTap(gr.dataset.catgroup); return; }  // Einfach: Kategorie ein/aus · Doppel (siehe dblclick): alle Bereiche
     const g=gr.dataset.group;
     S.collapsed.has(g)?S.collapsed.delete(g):S.collapsed.add(g);
-    localStorage.setItem('mb_collapsed',JSON.stringify([...S.collapsed])); render(); return; }
+    localStorage.setItem('mb_collapsed',JSON.stringify([...S.collapsed])); notify(); return; }
   if(Sel.didDrag){ Sel.didDrag=false; return; } // drag end, not a click
   // single click only selects the cell (via mousedown) – booking opens on double-click
 });
@@ -1142,7 +1143,7 @@ document.addEventListener('keydown', ev=>{
     } else {
       const [dr,dc]=arrows[ev.key];
       let r=S.visM.indexOf(Sel.focus.mid)+dr, c=S.visD.indexOf(Sel.focus.date)+dc;
-      if(c>=S.visD.length && S.extraWeeks<150){ S.extraWeeks++; render(); } // grow to the right
+      if(c>=S.visD.length && S.extraWeeks<150){ S.extraWeeks++; render(); } // grow to the right (interner Wachstums-Pfad → direkt)
       if(c<0 && S.extraWeeks<150){ prependWeek(); c=S.visD.indexOf(Sel.focus.date)+dc; } // grow to the left
       r=Math.max(0, Math.min(S.visM.length-1, r));
       c=Math.max(0, Math.min(S.visD.length-1, c));
@@ -1691,7 +1692,7 @@ async function runAssistant(){
       S.machSel=new Set(allIds);
       saveFilters(); updateMachBtn();
       S.startMonday=mondayOf(parseYmd(sel[0]));
-      resetView(); render(); prependWeek();
+      resetView(); notify(); prependWeek();
       clearSel();
       gotoDate(sel[0]);
     };
@@ -1783,7 +1784,7 @@ function openAllBookings(){
       // Filter auf die Zielmaschine setzen, damit ihre Zeile garantiert sichtbar
       // ist (auch wenn ihre Kategorie/ihr Bereich eingeklappt ist).
       S.machSel=new Set([r.m.id]); saveFilters(); updateMachBtn();
-      S.startMonday=mondayOf(parseYmd(r.dates[0])); resetView(); render(); prependWeek(); gotoDate(r.dates[0]);
+      S.startMonday=mondayOf(parseYmd(r.dates[0])); resetView(); notify(); prependWeek(); gotoDate(r.dates[0]);
       toast(`Plan gefiltert auf „${r.m.name}".`, null, 4000);
     });
   };
@@ -1855,7 +1856,7 @@ function renderMyBookings(){
     <div class="modal-actions"><button class="btn" onclick="closeModal()">Schließen</button></div>`);
   const mf=document.getElementById('myFilter');
   if(mf) mf.onclick=()=>{
-    S.machSel=new Set(myMids); saveFilters(); updateMachBtn(); render(); closeModal();
+    S.machSel=new Set(myMids); saveFilters(); updateMachBtn(); notify(); closeModal();
     toast(`Plan gefiltert: nur deine ${myMids.length} Maschine${myMids.length===1?'':'n'}. Aufheben über „Filtern → Filter löschen".`, null, 6000);
   };
   // Pin: zur Buchung im Zeitstrahl springen (Zeile sichtbar machen: Kategorie/Bereich aufklappen)
@@ -1866,7 +1867,7 @@ function renderMyBookings(){
     S.collapsed.delete(m.group); if(S.favs.has(m.id)) S.collapsed.delete(FAVGRP);
     localStorage.setItem('mb_collapsed', JSON.stringify([...S.collapsed]));
     S.startMonday=mondayOf(parseYmd(iso));
-    resetView(); render(); prependWeek(); gotoDate(iso);
+    resetView(); notify(); prependWeek(); gotoDate(iso);
   });
   document.querySelectorAll('#modal [data-x]').forEach(el=>el.onclick=()=>{
     const r=runs[+el.dataset.x]; const key=r.m.id+'|'+r.all[0];

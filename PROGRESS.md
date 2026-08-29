@@ -58,6 +58,14 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     ("… durchgehend frei (offen – 542 Tage wählbar)"), core cross-check matches, console clean.
 - **Phase 2 is COMPLETE.** All four core modules extracted, tested (78 tests, 100% cov on `core/**`),
   and behavior-verified.
+- **4.1c-2 (reactive wiring, rest) DONE 2026-08-29** — migrated all 27 remaining direct `render()`
+  calls to `notify()` (bulk, then reverted the two internal render/overflow-loop sites back to direct
+  `render()`: `ensureOverflow` and the keyboard grow-right — they must not re-enter via the store).
+  `render()` now appears only as its definition, those two loops, and the store subscription; every
+  user repaint routes through `store.notify()`. Smoke via instrumented render-count on real clicks:
+  btnNext/btnPrev = exactly 1 render each (KW 34/35/36 ↔ 35/36/37); btnToday = 2 (notify + prependWeek,
+  pre-existing, not a new double); category-filter toggle = exactly 1 render, grid 163 ↔ 263 rows;
+  console clean; `rev` 23. **Phase 4.1 complete — grid logic extracted + store-reactive.**
 - **4.1c-1 (reactive wiring, core) DONE 2026-08-28** — `app.ts` subscribes the legacy `render` to the
   store (`store.subscribe`, guarded so the grid never renders before the first data load) and bridges
   `window.notify = () => store.notify()` (Window augmented with `render`/`notify`). The two runtime
@@ -112,23 +120,22 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 4.1c-2 — finish the reactive migration.** The core wiring is live (4.1c-1: `render`
-> subscribed; `notify()` bridged; data paths store-driven). Now migrate the remaining ~34 direct
-> `render()` call sites (filters, week nav, theme, collapse, favorites, admin actions, etc.) to
-> `notify()` so every repaint flows through the store. This is mostly mechanical (`…; render();` →
-> `…; notify();`), since `notify()` synchronously calls the subscribed `render()`. Cautions:
-> - **Do NOT touch** `render()`'s own internal calls (`ensureOverflow`'s `S.extraWeeks++; render();`
->   and the recursion guard) unless verified safe — notify re-entrancy inside a render could loop.
-> - **Leave the `patchCells` fast path** (booking deltas) alone.
-> - Keep boot's first `render()` (in `startUI`) direct — it runs before any data-driven notify.
-> Do it in a couple of smoked batches (each: gate + a browser smoke that the specific interactions —
-> change week, toggle a filter, switch theme — still repaint exactly once, `rev` unchanged). Optional
-> follow-on (defer unless it pays off): a thin `actions.ts` wrapping `store.set` + persistence for the
-> hot paths (the §15 action-layer question) — only if the bare `notify()` calls prove noisy.
+> **Phase 4.2 — `ui/selection.ts` (the grid selection model).** Extract the pure rectangle-selection
+> logic from legacy's `Sel`/interaction block (around `computeSelCells`, `legacy.js:~840`). The prime
+> target is `computeSelCells` — already near-pure: given the anchor+focus cells and the visible rows
+> (`S.visM`) and columns (`S.visD`), it returns the rectangle of `{mid,date}` cells. Extract it as a
+> pure fn injected with `visM`/`visD` (E4), unit-tested to 100% (rectangles, reversed drags,
+> out-of-view anchors → empty). Consider also the arrow-key move/extend math (clamp within
+> `visM×visD`) if it factors cleanly. The DOM side (`paintSel`, `cellEl`, event listeners, autoscroll)
+> stays in the legacy adapter. Then `ui/navigation.ts` (week nav / goto / next-free helpers if pure
+> bits factor out).
 >
-> After 4.1c: **4.2** `ui/selection.ts` (the `Sel` rectangle model — `computeSelCells` is already
-> near-pure) + `ui/navigation.ts`; **4.3** `ui/views/*` (one screen/commit); and **retire the
-> Phase-2 assistant `AS_TREE` adapters + the `window.S` bridge** as legacy sites migrate to `store`.
+> After 4.2: **4.3** `ui/views/*` (one screen/modal per commit — book/delete dialog, admin, assistant
+> panel, etc.); and **retire the Phase-2 assistant `AS_TREE` adapters + the `window.S` bridge** as
+> legacy sites migrate to `store` (Phase 5 territory as legacy.js burns down).
+>
+> **View-layer decision (resolved, §15):** no framework — custom string render + the store
+> subscription (now live). Revisit only if the UI grows materially.
 >
 > **View-layer decision (resolved, §15):** no framework — keep the custom string render + a tiny
 > store subscription (zero-dep). Revisit only if the UI grows materially.
@@ -187,8 +194,10 @@ Checked off as each item lands (one commit per item unless noted).
   render before first data); `notify()` bridged; the data-change paths (`refreshNow`, SSE
   `structural`) route through the store instead of calling `render()` directly. Delivers the
   deferred 3.3 goal (SSE/refresh → store → notify → render). Gate + smoke green. **DONE 2026-08-28.**
-- [ ] 4.1c-2 reactive wiring (rest) — migrate the remaining ~34 direct `render()` call sites (filters,
-  nav, theme, etc.) to `notify()`; mixed mode is safe meanwhile (both mechanisms call the same render)
+- [x] 4.1c-2 reactive wiring (rest) — migrated all remaining direct `render()` calls to `notify()`
+  (27 sites). `render()` now appears only as its definition + the two internal overflow/grow loops
+  (`ensureOverflow`, keyboard grow-right, kept direct by design) + the store subscription. Every
+  user-facing repaint flows through the store. Gate + smoke green. **DONE 2026-08-29.**
 - [ ] 4.2 `ui/selection.ts`, `ui/navigation.ts`
 - [ ] 4.3 `ui/views/*` (one screen per commit)
 
