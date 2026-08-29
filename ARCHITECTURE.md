@@ -363,6 +363,18 @@ subscribes to the store; ~5 lines, custom, zero-dep). Revisit only if the UI gro
   `ui/navigation.ts`. **4.3** `ui/views/*` (one screen/modal per commit). Retire the Phase-2 assistant
   `AS_TREE` adapters and the `window.S` bridge as sites migrate to `store`.
 
+  - **4.2a done.** `ui/selection.ts` extracts exactly the pure *geometry* of the `Sel` block:
+    `computeSelCells(anchor, focus, visM, visD)` — the inclusive anchor↔focus rectangle over the visible
+    grid, in row-major order, empty if a corner isn't visible — and `clampIndex(idx, len)`, the arrow-key
+    move/extend clamp (`max(0, min(len-1, idx))`) that legacy applies to both the row and column index.
+    Both injected (E4), 100% cov. Everything with a side effect stayed in the legacy adapter: `paintSel`
+    (writes `.sel`/`.kfocus`/aria), `cellEl`, the mouse/key listeners, autoscroll, and the **week-growth**
+    at the edges (`S.extraWeeks++` + `render()`/`prependWeek()`). That growth interleaves *inside* the
+    arrow handler — it mutates `visD` between computing the raw target index and clamping it — so a single
+    pure `moveFocus` would not port faithfully (E1); splitting out just the clamp keeps the growth path
+    verbatim in legacy while still giving the index math a tested home. Deriving the selection's unique
+    mids/sorted dates (used by the book/delete action) is left for the 4.3 action/view layer.
+
 ### The `ui/` gate layer
 New layer: **ui/ may import core/ + net/ + state; nothing may import ui/** (add the eslint boundary).
 Pure model builders are held to the 90/85 floor; DOM writes are browser-smoked (E5). ui/ may touch the

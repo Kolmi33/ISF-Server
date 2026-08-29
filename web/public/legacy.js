@@ -835,21 +835,11 @@ function ensureOverflow(){
    ================================================================= */
 const Sel = { anchor:null, focus:null, cells:[], dragging:false, didDrag:false };
 function cellEl(mid,date){ return document.querySelector(`td.cell[data-mid="${CSS.escape(mid)}"][data-date="${date}"]`); }
-function computeSelCells(){
-  if(!Sel.anchor || !Sel.focus) return [];
-  const r1=S.visM.indexOf(Sel.anchor.mid), r2=S.visM.indexOf(Sel.focus.mid);
-  const c1=S.visD.indexOf(Sel.anchor.date), c2=S.visD.indexOf(Sel.focus.date);
-  if(r1<0||r2<0||c1<0||c2<0) return [];
-  const cells=[];
-  for(let r=Math.min(r1,r2); r<=Math.max(r1,r2); r++)
-    for(let c=Math.min(c1,c2); c<=Math.max(c1,c2); c++)
-      cells.push({mid:S.visM[r], date:S.visD[c]});
-  return cells;
-}
+// Auswahl-Rechteck (Anker↔Fokus über S.visM×S.visD) → ui/selection.ts (computeSelCells).
 function paintSel(){
   document.querySelectorAll('td.cell.sel').forEach(el=>{ el.classList.remove('sel'); el.removeAttribute('aria-selected'); });
   document.querySelectorAll('td.cell.kfocus').forEach(el=>{ el.classList.remove('kfocus'); el.removeAttribute('tabindex'); });
-  Sel.cells=computeSelCells();
+  Sel.cells=computeSelCells(Sel.anchor, Sel.focus, S.visM, S.visD);
   for(const c of Sel.cells){ const el=cellEl(c.mid,c.date); if(el){ el.classList.add('sel'); el.setAttribute('aria-selected','true'); } }
   if(Sel.focus){ const el=cellEl(Sel.focus.mid,Sel.focus.date); if(el){ el.classList.add('kfocus'); el.setAttribute('tabindex','0'); } } // roving tabindex
 }
@@ -1145,8 +1135,8 @@ document.addEventListener('keydown', ev=>{
       let r=S.visM.indexOf(Sel.focus.mid)+dr, c=S.visD.indexOf(Sel.focus.date)+dc;
       if(c>=S.visD.length && S.extraWeeks<150){ S.extraWeeks++; render(); } // grow to the right (interner Wachstums-Pfad → direkt)
       if(c<0 && S.extraWeeks<150){ prependWeek(); c=S.visD.indexOf(Sel.focus.date)+dc; } // grow to the left
-      r=Math.max(0, Math.min(S.visM.length-1, r));
-      c=Math.max(0, Math.min(S.visD.length-1, c));
+      r=clampIndex(r, S.visM.length); // → ui/selection.ts
+      c=clampIndex(c, S.visD.length);
       Sel.focus={mid:S.visM[r], date:S.visD[c]};
       if(!ev.shiftKey) Sel.anchor={...Sel.focus};
     }

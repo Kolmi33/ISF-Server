@@ -120,15 +120,14 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 4.2 — `ui/selection.ts` (the grid selection model).** Extract the pure rectangle-selection
-> logic from legacy's `Sel`/interaction block (around `computeSelCells`, `legacy.js:~840`). The prime
-> target is `computeSelCells` — already near-pure: given the anchor+focus cells and the visible rows
-> (`S.visM`) and columns (`S.visD`), it returns the rectangle of `{mid,date}` cells. Extract it as a
-> pure fn injected with `visM`/`visD` (E4), unit-tested to 100% (rectangles, reversed drags,
-> out-of-view anchors → empty). Consider also the arrow-key move/extend math (clamp within
-> `visM×visD`) if it factors cleanly. The DOM side (`paintSel`, `cellEl`, event listeners, autoscroll)
-> stays in the legacy adapter. Then `ui/navigation.ts` (week nav / goto / next-free helpers if pure
-> bits factor out).
+> **Phase 4.2b — `ui/navigation.ts` (week nav / goto / next-free geometry).** 4.2a landed
+> `ui/selection.ts` (`computeSelCells` + `clampIndex`, 100% cov, bridged, smoked). What remains of the
+> interaction block is the week-navigation and next-free math: `gotoNextFree`/`gotoPrevFree` walk a
+> per-machine pointer over the visible dates looking for the first free day; `prependWeek`/`ensureOverflow`
+> decide week growth. Factor the *pure* pointer/scan math (given a machine's bookings + the visible date
+> window → next free index, or −1) into `ui/navigation.ts`, injected (E4), 100% unit-tested; the DOM
+> scroll/growth side effects and `S.extraWeeks` mutation stay in the legacy adapter. If little factors
+> cleanly, note that and move to 4.3 — do not force an extraction (E8).
 >
 > After 4.2: **4.3** `ui/views/*` (one screen/modal per commit — book/delete dialog, admin, assistant
 > panel, etc.); and **retire the Phase-2 assistant `AS_TREE` adapters + the `window.S` bridge** as
@@ -198,7 +197,11 @@ Checked off as each item lands (one commit per item unless noted).
   (27 sites). `render()` now appears only as its definition + the two internal overflow/grow loops
   (`ensureOverflow`, keyboard grow-right, kept direct by design) + the store subscription. Every
   user-facing repaint flows through the store. Gate + smoke green. **DONE 2026-08-29.**
-- [ ] 4.2 `ui/selection.ts`, `ui/navigation.ts`
+- [x] 4.2a `ui/selection.ts` — pure rectangle geometry (`computeSelCells` injected with `visM`/`visD`)
+  + `clampIndex` (the arrow-key move/extend clamp, used for row and column). 8 tests, 100% cov;
+  bridged; browser smoke drove a real drag (`.sel`=4, `.kfocus`=1 via `paintSel`), ArrowRight moved one
+  column, ArrowUp clamped at the top row; console clean; `rev` unchanged (23). **DONE 2026-08-29.**
+- [ ] 4.2b `ui/navigation.ts` (week nav / next-free scan geometry — see Next step)
 - [ ] 4.3 `ui/views/*` (one screen per commit)
 
 **Phase 5 — Polish**
@@ -246,6 +249,14 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 4.2a — `ui/selection.ts`: pure selection geometry extracted from the `Sel`/interaction block.
+  `computeSelCells(anchor, focus, visM, visD)` (the anchor↔focus rectangle over the visible grid,
+  injected — E4) and `clampIndex(idx, len)` (the arrow-key move/extend clamp, used for both row and
+  column). 8 tests, 100% cov; bridged in `app.ts`; legacy's `paintSel` now calls the injected form and
+  the keyboard handler uses `clampIndex`. Browser smoke: bridged fns live, a real drag painted 4 `.sel`
+  cells + 1 `.kfocus` via `paintSel`, ArrowRight advanced one column, ArrowUp clamped at the top row;
+  console clean; `rev` unchanged (23). The DOM side (paint/listeners/autoscroll/week-growth) stays in
+  the legacy adapter (E3/E8). **DONE 2026-08-29.**
 - Phase 2.4b — Assistant N-of-M solver (11 fns, predicate-injected) extracted to `core/assistant.ts`
   (15 tests, 100% cov); `runAssistant` refactored to call it. Ran the Assistant end-to-end in the
   browser: correct open-run result, core cross-check matches, console clean. **Phase 2 COMPLETE.**
