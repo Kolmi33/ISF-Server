@@ -23,6 +23,7 @@ import * as selection from './ui/selection.ts';
 import * as navigation from './ui/navigation.ts';
 import * as viewMyBookings from './ui/views/my-bookings.ts';
 import * as viewStats from './ui/views/stats.ts';
+import * as viewAllBookings from './ui/views/all-bookings.ts';
 import { createStore } from './state.ts';
 
 declare global {
@@ -49,6 +50,7 @@ Object.assign(window, selection);
 Object.assign(window, navigation);
 Object.assign(window, viewMyBookings);
 Object.assign(window, viewStats);
+Object.assign(window, viewAllBookings);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);

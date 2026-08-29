@@ -413,6 +413,12 @@ subscribes to the store; ~5 lines, custom, zero-dep). Revisit only if the UI gro
       calls `computeStats`; all mode/drilldown/fold markup + wiring stay in legacy. 7 tests, 100% cov;
       smoke cross-checked 9462 booked cells across 245 machines against a manual count and reconciled the
       person-day totals to the same number.
+    - **all-bookings done.** `ui/views/all-bookings.ts` — `computeAllRuns` (per-*person* consecutive-workday
+      runs with the earliest creation ts) + `filterAllRuns` (the list's person/machine/group/date-window
+      filter, five sort keys with a `termin` fallback, capped at 300). Legacy `computeAllRuns()` deleted and
+      the `sorters`+filter chain in `renderList` replaced by the bridged calls (raw input values in; trim/
+      lowercase inside). The go-to wiring + row markup stay in legacy. 9 tests, 100% cov (comparator
+      tie-breakers and empty group/name/ts fallbacks explicitly covered).
 
 ### The `ui/` gate layer
 New layer: **ui/ may import core/ + net/ + state; nothing may import ui/** (add the eslint boundary).

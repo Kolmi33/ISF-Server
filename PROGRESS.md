@@ -258,6 +258,12 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 4.3 all-bookings — `ui/views/all-bookings.ts`: `computeAllRuns(machines, bookings, today)`
+  (per-person consecutive-workday runs w/ earliest ts) + `filterAllRuns(runs, criteria)` (case-insensitive
+  person/machine, group, [from,to] overlap window, 5 sort keys w/ termin fallback, cap 300). Legacy
+  `computeAllRuns()` deleted + the `sorters` map/filter chain in `renderList` replaced by the bridged calls.
+  9 tests, 100% cov (incl. comparator tie-breakers + empty-field fallbacks). Smoke: 66 runs / 564 run-days
+  == manual future-weekday count, sort dropdown works, `rev` 23. **DONE 2026-08-29.**
 - Phase 4.3 stats — `ui/views/stats.ts`: `computeStats(machines, bookings, from, to)` extracted — the
   full stats aggregation (per-machine counts/percent/person-breakdown, cross-machine person index,
   maintenance+downtime tally), pure over core/dates+core/machines. Legacy `compute()` keeps only the

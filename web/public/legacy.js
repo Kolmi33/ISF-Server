@@ -1674,26 +1674,7 @@ async function runAssistant(){
 
 
 /* ================= Alle Buchungen: Tabelle mit Filtern ================= */
-function computeAllRuns(){
-  // alle zukünftigen Buchungen als Serien (gleiche Person, zusammenhängende Werktage)
-  const t=todayStr();
-  const nextWd=s=>{ let d=parseYmd(s); do{ d=addDays(d,1);}while(isWeekend(d)); return ymd(d); };
-  const runs=[];
-  for(const m of orderedMachines()){
-    const mb=S.data.bookings[m.id]||{};
-    const ds=Object.keys(mb).filter(d=>d>=t && !isWeekend(parseYmd(d))).sort();
-    const runTs=arr=>arr.map(d=>(mb[d]&&mb[d].ts)||'').filter(Boolean).sort()[0]||''; // frühester Erstell-Zeitstempel der Serie
-    let cur=[], curName=null;
-    for(const d of ds){
-      const nm=mb[d].name;
-      if(cur.length && curName===nm && nextWd(cur[cur.length-1])===d) cur.push(d);
-      else { if(cur.length) runs.push({m, name:curName, dates:cur, ts:runTs(cur)}); cur=[d]; curName=nm; }
-    }
-    if(cur.length) runs.push({m, name:curName, dates:cur, ts:runTs(cur)});
-  }
-  runs.sort((a,b)=>a.dates[0]<b.dates[0]?-1:1);
-  return runs;
-}
+// computeAllRuns → ui/views/all-bookings.ts (bridged). Alle zukünftigen Buchungen als Personen-Serien.
 function openAllBookings(){
   const t=todayStr();
   openModal(`
@@ -1720,28 +1701,18 @@ function openAllBookings(){
     <div class="hint" id="abCount" style="margin:0 0 6px"></div>
     <div class="resultlist" style="max-height:420px" id="abList"></div>
     <div class="modal-actions"><button class="btn" onclick="closeModal()">Schließen</button></div>`);
-  const runsAll=computeAllRuns();
+  const runsAll=computeAllRuns(orderedMachines(), S.data.bookings, todayStr());
   document.getElementById('abSort').value = localStorage.getItem('mb_absort') || 'termin';
-  const sorters={
-    termin:   (a,b)=> a.dates[0]<b.dates[0]?-1:(a.dates[0]>b.dates[0]?1:0),
-    erstellt: (a,b)=> (b.ts||'').localeCompare(a.ts||''),                       // neueste Buchung zuerst
-    bereich:  (a,b)=> (a.m.group||'').localeCompare(b.m.group||'','de') || a.m.name.localeCompare(b.m.name,'de') || (a.dates[0]<b.dates[0]?-1:1),
-    maschine: (a,b)=> a.m.name.localeCompare(b.m.name,'de') || (a.dates[0]<b.dates[0]?-1:1),
-    person:   (a,b)=> (a.name||'').localeCompare(b.name||'','de') || (a.dates[0]<b.dates[0]?-1:1),
-  };
+  // Filter/Sortierung/Kappung → ui/views/all-bookings.ts (filterAllRuns); Trim/Lowercase intern.
   const renderList=()=>{
-    const p=document.getElementById('abPerson').value.trim().toLowerCase();
-    const mq=document.getElementById('abMach').value.trim().toLowerCase();
-    const g=document.getElementById('abGroup').value;
-    const f=document.getElementById('abFrom').value, o=document.getElementById('abTo').value;
-    const sort=document.getElementById('abSort').value;
-    const rows=runsAll.filter(r=>
-      (!p || r.name.toLowerCase().includes(p)) &&
-      (!mq || r.m.name.toLowerCase().includes(mq)) &&
-      (!g || r.m.group===g) &&
-      (!f || r.dates[r.dates.length-1]>=f) &&
-      (!o || r.dates[0]<=o)
-    ).sort(sorters[sort]||sorters.termin).slice(0,300);
+    const rows=filterAllRuns(runsAll, {
+      person: document.getElementById('abPerson').value,
+      mach:   document.getElementById('abMach').value,
+      group:  document.getElementById('abGroup').value,
+      from:   document.getElementById('abFrom').value,
+      to:     document.getElementById('abTo').value,
+      sort:   document.getElementById('abSort').value,
+    });
     document.getElementById('abCount').textContent=rows.length+' Einträge'+(rows.length===300?' (gekürzt)':'');
     document.getElementById('abList').innerHTML = rows.map((r,i)=>`
       <div class="mybk"><div style="min-width:0">
