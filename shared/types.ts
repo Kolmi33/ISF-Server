@@ -86,8 +86,8 @@ export interface ServerData extends BookingData {
 /**
  * The complete frontend runtime state — the object legacy code knows as the global `S`.
  * The store (`web/js/state.ts`) owns it; `app.ts` bridges it as `window.S` during the
- * strangler transition. Shape kept byte-identical to legacy `S` (ARCHITECTURE §14 D4),
- * including the now-dead `lastRaw` (removed with the rest of the FS-era code in Phase 5).
+ * strangler transition. Kept faithful to legacy `S` (ARCHITECTURE §14 D4); the FS-era
+ * `lastRaw` field was removed in Phase 5.2 with the rest of the file-backed dead code.
  */
 export interface AppState {
   /** Server data (`/api/state`); `null` until the first load completes. */
@@ -117,6 +117,4 @@ export interface AppState {
   visM: string[];
   /** Currently rendered dates (columns), ISO 'YYYY-MM-DD'. */
   visD: string[];
-  /** Raw snapshot for auto-refresh change detection (FS-era; dead — removed in Phase 5). */
-  lastRaw: string;
 }

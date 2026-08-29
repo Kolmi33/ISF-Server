@@ -83,7 +83,6 @@ function hydrateState(): AppState {
     favs: jsonSet('mb_favs', '[]'),
     visM: [],
     visD: [],
-    lastRaw: '',
   };
 }
 

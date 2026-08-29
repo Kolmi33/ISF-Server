@@ -20,7 +20,6 @@ function initial(): AppState {
     favs: new Set(),
     visM: [],
     visD: [],
-    lastRaw: '',
   };
 }
 

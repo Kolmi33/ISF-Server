@@ -222,8 +222,11 @@ Checked off as each item lands (one commit per item unless noted).
   (`deleteCells` exact / `deleteOwnCells` ci / `deleteSelectedCells` cell-list / `deleteGroup` by-gid — so
   **every** `sweepWeekends` caller now lives in core), and machine CRUD (`saveMachine`/`deleteMachine`/
   `moveMachine`). 43 tests, 100% cov. Gate-only + clone-smoke (no production write); `rev` 23. **DONE 2026-08-29.**
-- [ ] 5.2 delete dead FS-era code (`writeFile`/`lastRaw`/`S.handle`); retire `AS_TREE` adapters; shrink
-  `window.S`; `legacy.js` toward zero; fold trivial modal markup into `openModal` templating
+- [x] 5.2 deleted dead FS-era code (`writeFile`/`S.handle`/`lastRaw`/`lastMtime` + empty stubs
+  `setupFileObserver`/`startRefreshTimer` and the stub call in `startUI`); `lastRaw` dropped from
+  `AppState`/`hydrateState`/tests. legacy.js 2712→2362. knip clean on gated layers; boot identical, `rev` 23.
+  Modal-markup folding + `AS_TREE` retirement **deferred with rationale** (§16: low-value / real migration).
+  **DONE 2026-08-29.**
 - [ ] 5.3 promote `knip` into `verify`; tidy CSS/HTML
 
 **Phase 6 — Backend → TypeScript**
@@ -267,6 +270,13 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 5.2 FS-era burn-down — removed the file-backed-variant dead code, each confirmed zero-caller first:
+  `writeFile()` (+ `S.handle`/`S.lastRaw`/`lastMtime`), the empty stubs `setupFileObserver`/`startRefreshTimer`
+  and the `setupFileObserver()` call in `startUI`; the dead `lastRaw` field dropped from `AppState`
+  (`shared/types.ts`), `hydrateState` (`app.ts`) and the `state.test.ts` fixture (written, never read).
+  legacy.js 2712→**2362**. `knip` shows no dead code in the gated layers (legacy.js isn't analysed by knip →
+  manual burn-down). Gate green; browser reload booted identically (245 machines / 266 rows), console clean,
+  `rev` 23. Modal-markup folding + `AS_TREE` retirement deferred with rationale (ARCHITECTURE §16). **DONE 2026-08-29.**
 - Phase 5.1 write-path reducers — `core/booking.ts`: the eight `mutate(fresh=>…)` callback bodies extracted
   as pure/mutating reducers with the legacy return shapes. `bookCells` (conflict-check + apply, ts + gid
   factory injected — E4; split into findConflicts/applyBooking/writeMachineCells for the complexity cap);

@@ -483,11 +483,29 @@ browser cross-check that ran every bridged reducer against a `structuredClone` o
 produced the right slug and same-group index, `moveMachine` swapped a real adjacent pair, cross-group and
 unknown-id aborted — with `window.S.data` left untouched and the server `rev` unmoved (23) throughout.
 
-### 5.2 / 5.3 — burn-down + tooling (planned)
-Delete FS-era dead code (`writeFile`, `S.handle`, `S.lastRaw` — see §14 D4), retire the Phase-2 `AS_TREE`
-adapters as the Assistant tree moves into the store, shrink the `window.S` bridge as sites adopt `store`,
-fold the trivial modal markup (Log/Help/Settings/booking-detail) into `openModal` templating, drive
-`legacy.js` toward zero, and promote `knip` + the global coverage floor into `verify`.
+### 5.2 — burn-down (FS-era dead code) — IMPLEMENTED 2026-08-29
+Deleted the file-backed-variant corpse (§14 D4), all confirmed zero-caller before cutting:
+- `writeFile()` (+ its `S.handle.createWritable`/`S.lastRaw`/`lastMtime` uses) — the FS-Access-API writer,
+  never invoked in server mode (persistence goes through `apiPost('/api/mutate')` in `persist()`).
+- `setupFileObserver()` and `startRefreshTimer()` — empty FS-era stubs; the `setupFileObserver()` call in
+  `startUI()` was dropped with them (server pushes via SSE, no polling).
+- The dead `lastRaw` field — removed from `AppState` (`shared/types.ts`), `hydrateState()` (`app.ts`), and
+  the `state.test.ts` fixture. It was only ever written, never read.
+
+`legacy.js` 2712 (1.2) → **2362**. `knip` reports no dead code in the gated layers (it does not analyse
+`legacy.js`, so that burn-down stays manual). Gate green; app boots identically (245 machines / 266 rows),
+console clean, `rev` 23.
+
+**Deferred (with rationale, not skipped):**
+- **Trivial modal markup** (Log/Help/Settings/booking-detail) — branch-free `innerHTML`; folding into
+  `openModal` templating moves strings without removing logic (low value, E8). Revisit only if a real
+  templating need appears.
+- **`AS_TREE` adapters + `window.S` shrink** — retiring the Phase-2 assistant bind-adapters means moving the
+  Assistant tree into the store: a real state migration, not a burn-down. Deferred to the store-migration
+  slice / Phase 6, where it has a clean seam.
+
+### 5.3 — tooling
+Promote `knip` (+ a global coverage floor) into `verify`; tidy CSS/HTML.
 
 ### Action-layer question (still open)
 `bookCells` and friends now have a caller shape that would suit a thin `actions.ts` (`book`/`del`/… →

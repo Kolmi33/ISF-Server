@@ -86,7 +86,7 @@ function startUI(){
   applyDebug();
   dbg('info','App gestartet — '+(S.data.machines?S.data.machines.length:0)+' Maschinen geladen'+(S.readOnly?' (Nur-Lese-Modus)':''));
   // Auto-refresh + Anwesenheit (einmalige Registrierung, auch bei späterem Freischalten)
-  if(!S.readOnly){ startLiveTimers(); setupFileObserver(); }
+  if(!S.readOnly){ startLiveTimers(); }
 }
 document.getElementById('btnRefresh').onclick = ()=>refreshNow(false);
 
@@ -2105,13 +2105,9 @@ function asToggleId(id,on){ if(on){ asAdd(id); } else { const u=asDevUid(id); if
 /* API, apiGet, apiPost, normalizeState → net/api.ts (window bridge). The HTTP data
    client (same-origin, fetch) is unchanged; SSE below still uses the bridged `API`. */
 async function readFile(){ return normalizeState(await apiGet('/api/state')); }
-async function writeFile(data){
-  const w = await S.handle.createWritable();  // FS-Access-API: schreibt in Swap-Datei …
-  const txt = JSON.stringify(data, null, 1);
-  await w.write(txt); await w.close();        // … und ersetzt die Datei ATOMAR beim Schließen (Punkt 7)
-  S.lastRaw = txt;
-  try{ lastMtime = (await S.handle.getFile()).lastModified; }catch(e){}
-};   // im Server-Modus ungenutzt
+/* writeFile()/S.handle/S.lastRaw/lastMtime removed in Phase 5.2 — dead FS-Access-API
+   code from the old file-backed variant. Server mode persists via apiPost('/api/mutate')
+   in persist() below; it never called writeFile (§14 D4). */
 
 async function persist(fn, logEntry, result){
   saving = true;
@@ -2152,7 +2148,9 @@ async function refreshNow(silent){
   }
 };
 
-async function setupFileObserver(){};
+/* setupFileObserver()/startRefreshTimer() removed in Phase 5.2 — empty FS-era stubs
+   (no polling in server mode; the server pushes via SSE). Their call sites were dropped
+   with them. */
 /* Removed: migrateWeekends()/migrateMesstechnik() — obsolete one-time client-side
    Bestands-Migrationen from the old File-System-Access variant. They referenced the
    undeclared globals `migrating`/`migratingMess`, so under 'use strict' they threw
@@ -2162,7 +2160,6 @@ async function setupFileObserver(){};
    server rejects the weekend-bridge write (HTTP 400). Deleting them fixes the console
    error while preserving behavior exactly (no migration ran before; none runs now).
    Live weekend upkeep is unaffected — sweepWeekends still runs on every booking write. */
-function startRefreshTimer(){};         // kein Polling – der Server schiebt (SSE)
 
 /* --- Live-Verbindung (Server-Sent Events): Push statt Polling ---
    Die reine Ereignis-Logik (applyUpdate, presenceInfo, isForeign) liegt in
