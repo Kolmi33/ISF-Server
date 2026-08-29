@@ -120,23 +120,26 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 4.3 — `ui/views/*` (one screen/modal per commit).** Phase 4.1/4.2 have taken the *grid* apart:
-> cell/dot/header model (`ui/grid.ts`), selection geometry (`ui/selection.ts`), and the next-free scan
-> (`ui/navigation.ts`) are all pure + gated, and the store→render loop is live. What's left in `legacy.js`
-> is (a) the DOM adapter around those pure models (paint/patch/listeners/scroll — stays until Phase 5),
-> and (b) the **modal/view builders**: the book/delete dialog, the machine-admin screen, the lists/stats
-> panels, the assistant panel. These are big `innerHTML` string builders — start extracting them one per
-> commit as pure `render*(state) → html` functions (injected data, no DOM writes; the `openModal(html)`
-> shell + event wiring stay in legacy), each unit-tested against a faithful HTML snapshot and browser-smoked.
-> Pick the smallest self-contained dialog first (likely book/delete) to establish the pattern. As each view
-> migrates to reading `store`, retire its `window.S` reads and the Phase-2 assistant `AS_TREE` adapters (a
-> Phase-5 burn-down that 4.3 feeds). Watch the action-layer question (§15 open q): decide whether views get
-> a thin `actions.ts` (`book`, `del`, `setFilter` → `store.set` + persistence + `notify`) or keep calling
-> the existing legacy mutators; resolve it when the first dialog needs to write.
+> **Phase 5 — Polish / dead-code burn-down + the write-path reducers.** Phase 4.3 extracted every clean
+> *view-model kernel* (§15 scope: kernels, not markup): my-bookings run-grouping, the stats aggregation,
+> the all-bookings runs+filter, the admin list order/search, and the shared machine-status text formatters —
+> all gated to 100% and browser-smoked (`rev` never moved). What remains in `legacy.js` splits into three
+> Phase-5 workstreams:
+>   1. **Trivial modal markup** (Log, Help, Settings, booking-detail): branch-free `innerHTML` builders with
+>      no logic — leave as-is until the burn-down, or fold into `openModal` templating then; do NOT snapshot-
+>      test tautologies (E7/E8).
+>   2. **Write-path reducers** → a new gated `core/booking.ts`: `submitBooking`'s conflict-detection + apply
+>      reducer, the machine-form save, and the admin reorder. These are pure/mutating domain logic (like
+>      `sweepWeekends`) and belong in `core/`, NOT `ui/`. Gate-only (E5 note): they mutate `fresh` server
+>      state and POST, so they can't be browser-smoked without a production write — unit-test exhaustively,
+>      and verify integration by reading back `/api/state` only if/when a real write is authorized.
+>   3. **Burn-down**: delete dead FS-era code (`writeFile`, `lastRaw`, `S.handle`), retire the Phase-2
+>      assistant `AS_TREE` adapters + shrink the `window.S` bridge as sites move to `store`, drive `legacy.js`
+>      toward zero, and promote `knip` into `verify`.
 >
-> After 4.2: **4.3** `ui/views/*` (one screen/modal per commit — book/delete dialog, admin, assistant
-> panel, etc.); and **retire the Phase-2 assistant `AS_TREE` adapters + the `window.S` bridge** as
-> legacy sites migrate to `store` (Phase 5 territory as legacy.js burns down).
+> **Action-layer question (§15 open q) — still open, decide in Phase 5/6:** whether writes go through a thin
+> `actions.ts` (`book`/`del`/`setFilter` → `store.set` + persistence + `notify`) or keep calling the legacy
+> mutators. It only bites once a reducer moves to `core/booking` and needs a caller — resolve it then.
 >
 > **View-layer decision (resolved, §15):** no framework — custom string render + the store
 > subscription (now live). Revisit only if the UI grows materially.
@@ -211,11 +214,19 @@ Checked off as each item lands (one commit per item unless noted).
   now thin wrappers over the bridged fns; browser smoke drove real ⏭/⏮ jumps (08-31→09-01→08-31, prev
   never before today), wrapper≡pure cross-checked live, `rev` unchanged (23). Week-nav/growth DOM
   (`prependWeek`/`ensureOverflow`/scroll) stays in the legacy adapter (E8). **DONE 2026-08-29.**
-- [ ] 4.3 `ui/views/*` (one screen per commit)
+- [x] 4.3 `ui/views/*` — view-model kernels extracted (one per commit): my-bookings (`computeMyRuns`),
+  stats (`computeStats`), all-bookings (`computeAllRuns`+`filterAllRuns`), admin (`filterAdminMachines`),
+  machine-text (`maintText`/`statusRangeText`/`daysMaskText`). All 100% cov + smoked, `rev` never moved.
+  Trivial modal markup (Log/Help/Settings/booking-detail) + the write-path reducers (`submitBooking`,
+  machine-form save, reorder) intentionally deferred to Phase 5 (§15 scope; write-paths → `core/booking`).
+  **DONE 2026-08-29.**
 
-**Phase 5 — Polish**
-- [ ] 5.1 delete dead code; `legacy.js` reaches zero; promote knip into `verify`
-- [ ] 5.2 tidy CSS/HTML
+**Phase 5 — Polish + write-path reducers**
+- [ ] 5.1 `core/booking.ts` — extract the write-path reducers (`submitBooking` conflict/apply, machine-form
+  save, admin reorder) as pure/mutating domain logic; gate-only (no production-write smoke)
+- [ ] 5.2 delete dead FS-era code (`writeFile`/`lastRaw`/`S.handle`); retire `AS_TREE` adapters; shrink
+  `window.S`; `legacy.js` toward zero; fold trivial modal markup into `openModal` templating
+- [ ] 5.3 promote `knip` into `verify`; tidy CSS/HTML
 
 **Phase 6 — Backend → TypeScript**
 - [ ] 6.1 `server/` conversion + tests for mutate concurrency/validation
