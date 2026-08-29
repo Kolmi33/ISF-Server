@@ -422,6 +422,11 @@ subscribes to the store; ~5 lines, custom, zero-dep). Revisit only if the UI gro
     - **admin done.** `ui/views/admin.ts` — `filterAdminMachines(machines, sort, query)`: the Verwalten
       list's order (manual = stored order, or by name / group→name) + "name group" substring search. The
       reorder/edit/add wiring, the status/maintenance badges and row markup stay in legacy. 6 tests, 100%.
+    - **machine-text done.** `ui/machine-text.ts` — the pure German presentation formatters shared by the
+      row headers, admin badges and machine form: `maintText(slot)`, `statusRangeText(m, today=todayStr())`
+      (clock injected with a default so legacy `statusRangeText(m)` is unchanged — E4/E6), `daysMaskText(m)`.
+      Not under `views/` because they're cross-view. Legacy defs deleted; `blockText` calls bridged
+      `maintText`; legacy `WD_SHORT` kept only for the machine-form checkboxes. 11 tests, 100%.
     - **Deferred (kernel too thin to extract now — left for the Phase-5 burn-down):** Log (`openLog` is a
       branch-free `log.slice(0,200).map(...)`), Help/Settings (near-static markup), booking-detail (display).
     - **Booking write-path (`submitBooking`) — noted, not yet cut.** Its conflict-detection + apply reducer

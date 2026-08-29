@@ -258,6 +258,12 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 4.3 machine-text — `ui/machine-text.ts`: pure German status/availability formatters
+  `maintText(slot)`, `statusRangeText(m, today=todayStr())` (today injected w/ default), `daysMaskText(m)`.
+  Legacy defs deleted; `blockText` now calls the bridged `maintText`; legacy `WD_SHORT` kept only for the
+  Verwalten checkboxes. 11 tests, 100% cov. Smoke: bridged formatters produce correct text on synthetic
+  slots/masks (live data has no maint/day-restricted machines), default-today path matches, `rev` 23.
+  **DONE 2026-08-29.**
 - Phase 4.3 admin — `ui/views/admin.ts`: `filterAdminMachines(machines, sort, query)` — order
   (manual/name/group→name, German collation) + case-insensitive "name group" search of the machine
   list for the Verwalten modal. Legacy `renderList` sort/filter block replaced by the bridged call

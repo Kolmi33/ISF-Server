@@ -27,19 +27,10 @@
    (which runs before this script). Their behavior is unchanged. */
 
 /* sweepWeekends → core/weekend.ts (window bridge). */
-function statusRangeText(m){
-  const ss=maintSlots(m); if(!ss.length) return '';
-  const t=todayStr();
-  const active=ss.find(s=>slotCovers(s,t)) || ss.slice().sort((a,b)=>(a.from||'0')<(b.from||'0')?-1:1)[0];
-  return maintText(active) + (ss.length>1?` · +${ss.length-1} weitere`:'');
-}
+/* maintText, statusRangeText, daysMaskText → ui/machine-text.ts (window bridge). Präsentationstext
+   für Wartungs-/Verfügbarkeitsstatus; statusRangeText injiziert „heute" per Default. */
 // Verfügbare Wochentage: m.days = 7-Zeichen-Maske Mo..So ('1'=verfügbar). Fehlt das Feld → alle Tage verfügbar.
-const WD_SHORT=['Mo','Di','Mi','Do','Fr','Sa','So'];
-function daysMaskText(m){
-  if(!m.days || m.days.length!==7 || m.days==='1111111') return 'jeden Tag';
-  const on=WD_SHORT.filter((_,i)=>m.days.charAt(i)==='1');
-  return on.length ? on.join(', ') : 'keine Tage';
-}
+const WD_SHORT=['Mo','Di','Mi','Do','Fr','Sa','So'];  // hier für das Verwalten-Formular (Checkboxen)
 /* catOf, maintSlots, slotCovers, maintAt, isBlockedM, anyMaint, dayAvailable,
    cellBookable → core/machines.ts (provided as window globals by app.ts). */
 function stampRef(){
@@ -2179,7 +2170,7 @@ function openLog(){
 /* maintSlots, slotCovers, maintAt, anyMaint → core/machines.ts (window bridge).
    The German status-text helpers below stay here (presentation) and call the
    bridged predicates as before. */
-function maintText(s){ if(!s) return ''; const f=s.from?fmtLong(s.from):'sofort', u=s.until?fmtLong(s.until):'unbegrenzt'; return `${s.type==='defekt'?'defekt':'Wartung'}: ${f} – ${u}${s.note?' ('+s.note+')':''}`; }
+/* maintText → ui/machine-text.ts (window bridge). */
 function blockText(m,d){ return maintText(maintAt(m,d)); }
 function maintKind(m){ const s=maintAt(m,todayStr()); return s?s.type:null; }
 function catIco(c){ return ic(c==='messtechnik' ? 'gauge' : 'factory'); }
