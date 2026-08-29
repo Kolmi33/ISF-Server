@@ -375,6 +375,20 @@ subscribes to the store; ~5 lines, custom, zero-dep). Revisit only if the UI gro
     verbatim in legacy while still giving the index math a tested home. Deriving the selection's unique
     mids/sorted dates (used by the book/delete action) is left for the 4.3 action/view layer.
 
+  - **4.2b done.** `ui/navigation.ts` extracts the next-free *scan* behind the ⏭/⏮ per-machine jump
+    buttons: `nextFreeDay(fromIso, today, isFree, horizon)` and `prevFreeDay(fromIso, today, isFree)` walk
+    the calendar (skipping weekends via `core/dates`) for the first bookable day, forward or backward.
+    The one impurity — whether a given day is bookable for *this* machine — is injected as an `isFree`
+    predicate (E4); legacy's `nextFreeAfter`/`prevFreeBefore` collapse to one-line wrappers that pass
+    `iso => !getBooking(m.id,iso) && !isBlockedM(m,iso) && dayAvailable(m,iso)`, so every caller
+    (`gotoNextFree`, `gotoPrevFree`, the `hasBack` flag on the row header) is untouched. The *jump* itself
+    — `jumpToSlot` (rebuild the window around the slot, scroll-center, `paintSel`, `toast`) and the
+    `nextFreePtr` per-machine pointer bookkeeping — is pure orchestration of side effects and stays in the
+    legacy adapter; likewise the week-growth (`prependWeek`, `ensureOverflow`) and the plain week-nav
+    buttons (`btnPrev`/`btnNext` are already just `addDays ± 7` + `notify`, nothing to extract). This closes
+    the grid-interaction extraction; what remains in `legacy.js` is the DOM adapter (Phase 5) and the modal
+    /view builders (Phase 4.3).
+
 ### The `ui/` gate layer
 New layer: **ui/ may import core/ + net/ + state; nothing may import ui/** (add the eslint boundary).
 Pure model builders are held to the 90/85 floor; DOM writes are browser-smoked (E5). ui/ may touch the

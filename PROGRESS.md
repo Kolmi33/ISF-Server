@@ -120,14 +120,19 @@ _Last updated: 2026-08-28 — **Phase 2 COMPLETE** (2.0–2.4b); `migrating` bug
     `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 4.2b — `ui/navigation.ts` (week nav / goto / next-free geometry).** 4.2a landed
-> `ui/selection.ts` (`computeSelCells` + `clampIndex`, 100% cov, bridged, smoked). What remains of the
-> interaction block is the week-navigation and next-free math: `gotoNextFree`/`gotoPrevFree` walk a
-> per-machine pointer over the visible dates looking for the first free day; `prependWeek`/`ensureOverflow`
-> decide week growth. Factor the *pure* pointer/scan math (given a machine's bookings + the visible date
-> window → next free index, or −1) into `ui/navigation.ts`, injected (E4), 100% unit-tested; the DOM
-> scroll/growth side effects and `S.extraWeeks` mutation stay in the legacy adapter. If little factors
-> cleanly, note that and move to 4.3 — do not force an extraction (E8).
+> **Phase 4.3 — `ui/views/*` (one screen/modal per commit).** Phase 4.1/4.2 have taken the *grid* apart:
+> cell/dot/header model (`ui/grid.ts`), selection geometry (`ui/selection.ts`), and the next-free scan
+> (`ui/navigation.ts`) are all pure + gated, and the store→render loop is live. What's left in `legacy.js`
+> is (a) the DOM adapter around those pure models (paint/patch/listeners/scroll — stays until Phase 5),
+> and (b) the **modal/view builders**: the book/delete dialog, the machine-admin screen, the lists/stats
+> panels, the assistant panel. These are big `innerHTML` string builders — start extracting them one per
+> commit as pure `render*(state) → html` functions (injected data, no DOM writes; the `openModal(html)`
+> shell + event wiring stay in legacy), each unit-tested against a faithful HTML snapshot and browser-smoked.
+> Pick the smallest self-contained dialog first (likely book/delete) to establish the pattern. As each view
+> migrates to reading `store`, retire its `window.S` reads and the Phase-2 assistant `AS_TREE` adapters (a
+> Phase-5 burn-down that 4.3 feeds). Watch the action-layer question (§15 open q): decide whether views get
+> a thin `actions.ts` (`book`, `del`, `setFilter` → `store.set` + persistence + `notify`) or keep calling
+> the existing legacy mutators; resolve it when the first dialog needs to write.
 >
 > After 4.2: **4.3** `ui/views/*` (one screen/modal per commit — book/delete dialog, admin, assistant
 > panel, etc.); and **retire the Phase-2 assistant `AS_TREE` adapters + the `window.S` bridge** as
@@ -201,7 +206,11 @@ Checked off as each item lands (one commit per item unless noted).
   + `clampIndex` (the arrow-key move/extend clamp, used for row and column). 8 tests, 100% cov;
   bridged; browser smoke drove a real drag (`.sel`=4, `.kfocus`=1 via `paintSel`), ArrowRight moved one
   column, ArrowUp clamped at the top row; console clean; `rev` unchanged (23). **DONE 2026-08-29.**
-- [ ] 4.2b `ui/navigation.ts` (week nav / next-free scan geometry — see Next step)
+- [x] 4.2b `ui/navigation.ts` — pure next-free scan geometry (`nextFreeDay`/`prevFreeDay`, machine
+  bookability injected as a predicate — E4). 11 tests, 100% cov; legacy `nextFreeAfter`/`prevFreeBefore`
+  now thin wrappers over the bridged fns; browser smoke drove real ⏭/⏮ jumps (08-31→09-01→08-31, prev
+  never before today), wrapper≡pure cross-checked live, `rev` unchanged (23). Week-nav/growth DOM
+  (`prependWeek`/`ensureOverflow`/scroll) stays in the legacy adapter (E8). **DONE 2026-08-29.**
 - [ ] 4.3 `ui/views/*` (one screen per commit)
 
 **Phase 5 — Polish**
@@ -249,6 +258,17 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 4.2b — `ui/navigation.ts`: pure next-free scan geometry extracted from the ⏭/⏮ jump code.
+  `nextFreeDay(fromIso, today, isFree, horizon=730)` and `prevFreeDay(fromIso, today, isFree)` walk the
+  calendar (skipping weekends via `core/dates`) for the first day a machine is bookable; the impurity —
+  whether a day is bookable for *that* machine (`!getBooking && !isBlockedM && dayAvailable`) — is
+  injected as a predicate (E4). 11 tests, 100% cov; bridged; legacy `nextFreeAfter`/`prevFreeBefore`
+  reduced to one-line wrappers so all callers (`gotoNextFree`, `gotoPrevFree`, the `hasBack` flag) are
+  unchanged. Everything with a side effect (`jumpToSlot`: scroll/window-rebuild/`paintSel`/`toast`, the
+  `nextFreePtr` bookkeeping, `prependWeek`/`ensureOverflow`) stayed in the legacy adapter (E3/E8).
+  Browser smoke: bridged fns live and wrapper≡pure cross-checked on a live machine; real ⏭ advanced
+  08-31→09-01, ⏮ walked back to 08-31 and never before today; SSE-reconnect console noise only; `rev`
+  unchanged (23). **DONE 2026-08-29.**
 - Phase 4.2a — `ui/selection.ts`: pure selection geometry extracted from the `Sel`/interaction block.
   `computeSelCells(anchor, focus, visM, visD)` (the anchor↔focus rectangle over the visible grid,
   injected — E4) and `clampIndex(idx, len)` (the arrow-key move/extend clamp, used for both row and

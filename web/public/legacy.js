@@ -904,31 +904,14 @@ const nextFreePtr={};        // mid -> zuletzt angesprungener freier Tag (ISO)
 function gotoDateCenter(dISO){
   requestAnimationFrame(()=>centerCol(dISO)); // instant, mittig – kein Zurückspringen mehr
 }
+// Freie-Werktag-Scan → ui/navigation.ts (nextFreeDay/prevFreeDay). Die Impurität — ob ein Tag für
+// DIESE Maschine buchbar ist — wird als Prädikat injiziert (E4); Wochenend-Sprung + Horizont stecken
+// in der reinen Funktion. Wrapper-Namen bleiben, damit die Aufrufer (gotoNextFree, hasBack) gleich sind.
+const bookable = m => iso => !getBooking(m.id,iso) && !isBlockedM(m,iso) && dayAvailable(m,iso);
 /* Nächster freier Werktag ab (exklusive) fromIso; null wenn keiner in ~2 Jahren */
-function nextFreeAfter(m, fromIso){
-  let d = fromIso ? addDays(parseYmd(fromIso),1) : parseYmd(todayStr());
-  for(let i=0;i<730;i++){
-    if(!isWeekend(d)){
-      const iso=ymd(d);
-      if(!getBooking(m.id,iso) && !isBlockedM(m,iso) && dayAvailable(m,iso)) return iso;
-    }
-    d=addDays(d,1);
-  }
-  return null;
-}
+function nextFreeAfter(m, fromIso){ return nextFreeDay(fromIso, todayStr(), bookable(m)); }
 /* Vorheriger freier Werktag vor fromIso, aber nicht vor heute; null wenn keiner */
-function prevFreeBefore(m, fromIso){
-  const t=todayStr();
-  let d=addDays(parseYmd(fromIso),-1);
-  while(ymd(d)>=t){
-    if(!isWeekend(d)){
-      const iso=ymd(d);
-      if(!getBooking(m.id,iso) && !isBlockedM(m,iso) && dayAvailable(m,iso)) return iso;
-    }
-    d=addDays(d,-1);
-  }
-  return null;
-}
+function prevFreeBefore(m, fromIso){ return prevFreeDay(fromIso, todayStr(), bookable(m)); }
 /* Gemeinsamer Sprung: rendern, markieren, zentrieren */
 function jumpToSlot(m, iso, isBack){
   const mid=m.id;
