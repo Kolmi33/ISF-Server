@@ -218,6 +218,41 @@ describe('applyMutate — cells', () => {
   });
 });
 
+/* ------------------------ weekend bridging (6.3 maintain hook) ------------------------ */
+describe('applyMutate — weekend auto-bridging', () => {
+  it('bridges the weekend when a booking completes a Fri→Mon span', () => {
+    // Fri 2021-01-08 already Alice's; booking Mon 2021-01-11 completes the span.
+    const db = mem();
+    addMachine(db, 'm1');
+    book(db, 'm1', '2021-01-08', 'Alice');
+    const spy = vi.fn();
+    const res = applyMutate(
+      db,
+      { cells: [{ mid: 'm1', day: '2021-01-11', val: { name: 'Bob' } }] },
+      spy,
+    );
+    expect(res.applied).toBe(1); // only the client's Monday counts as "applied"
+    expect(bk(db, 'm1', '2021-01-09')!.name).toBe('Alice'); // Sat bridged with Friday's name
+    expect(bk(db, 'm1', '2021-01-10')!.name).toBe('Alice'); // Sun bridged
+    // the bridges are broadcast too, so other clients patch them in
+    const changes = (spy.mock.calls[0]![1] as { changes: { day: string }[] }).changes;
+    expect(changes.map((c) => c.day).sort()).toEqual(['2021-01-09', '2021-01-10', '2021-01-11']);
+  });
+
+  it('does not bridge when the maintain hook is disabled', () => {
+    const db = mem();
+    addMachine(db, 'm1');
+    book(db, 'm1', '2021-01-08', 'Alice');
+    applyMutate(
+      db,
+      { cells: [{ mid: 'm1', day: '2021-01-11', val: { name: 'Bob' } }] },
+      () => {},
+      false,
+    );
+    expect(bk(db, 'm1', '2021-01-09')).toBeUndefined(); // no bridge
+  });
+});
+
 /* ------------------------ dispatch + error paths ------------------------ */
 describe('applyMutate — dispatch & failure handling', () => {
   it('returns "Nichts zu tun" when neither cells nor machines are present', () => {

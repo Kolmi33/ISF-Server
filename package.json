@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning dist/server/server.js",
     "import": "node --disable-warning=ExperimentalWarning dist/server/import.js",
+    "backfill": "node --disable-warning=ExperimentalWarning dist/server/backfill.js",
     "dev": "vite",
     "build": "vite build",
     "build:server": "tsc -p tsconfig.server.json",

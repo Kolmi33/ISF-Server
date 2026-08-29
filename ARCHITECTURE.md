@@ -106,7 +106,7 @@ concrete shape those principles take here:
 | 3 | State store + `net/` (api, sse) | **done** (store + api + sse; §14) |
 | 4 | UI: grid + reactive core, then selection, navigation, then each view | **done** (grid/selection/navigation + view kernels; §15) |
 | 5 | Polish: write-path reducers → `core/booking`, dead-code burn-down, knip in verify | **done** (§16) |
-| 6 | Backend → TypeScript (+ tests for mutate concurrency/validation) | **6.1/6.2 done (§17); 6.3 next** |
+| 6 | Backend → TypeScript (+ tests for mutate concurrency/validation) + weekend auto-bridging | **done — code-complete (§17); deploy + backfill await authorization** |
 
 ## 7. The per-module loop (the repeatable unit)
 
@@ -564,8 +564,23 @@ full gate: prettier, tsc, eslint with the 60-line/complexity-12 budgets, knip, a
 seeded data), the static frontend (200), and a real booking through `POST /api/mutate` (`rev` 0→1, read
 back) — then torn down. The production `maschinenplan` container and its `data` volume were never touched.
 
-### 6.3 — server-authoritative weekend auto-bridging
-See PROGRESS "Deferred features". The pure bridge computation lands in `server/` (tested); the maintain hook
-runs inside the mutate transaction and the one-time backfill is internal SQL (not subject to the 1000-cell
-API cap). **The backfill is a production data write** — built and tested here, but only *run* against live
-data when explicitly authorized.
+### 6.3 — server-authoritative weekend auto-bridging — IMPLEMENTED 2026-08-29
+`server/bridge.ts` is the mirror of `core/weekend.ts`'s sweep — the ADD direction:
+- **`missingBridges(bookings)`** (pure, tested) — a faithful recovery of the baseline `missingWeekendBridges`:
+  for every booked Friday whose Monday is also booked (any person), the empty Saturday/Sunday between them is
+  returned, carrying the **Friday's** name.
+- **`maintainBridges(db, mids, ts)`** — runs inside the mutate transaction; `INSERT … ON CONFLICT DO NOTHING`
+  so it never overwrites a real cell. Wired into `applyCells`: after the client's writes, it bridges the
+  affected machines and **appends the bridges to the broadcast `changes`** (so every client patches them in via
+  SSE), while `applied` stays the client-requested count. Gated by the `WEEKEND_BRIDGE` env (on unless `off`),
+  threaded through `applyMutate(db, body, broadcast, bridge)`. Only the cell path bridges (structural doesn't).
+- **`backfillBridges(db)`** — one-time whole-DB pass in a single transaction (internal SQL, **not** subject to
+  the 1000-cell API cap that made the old client migration fail with HTTP 400). Exposed as the `server/backfill.ts`
+  CLI (`npm run backfill`).
+
+10 tests (pure computation incl. only-fills-missing / non-Friday / no-Monday; in-DB maintain incl.
+never-overwrite; whole-DB backfill incl. idempotence). Validated on the compiled image: a Fri+Mon booking
+auto-bridged Sat/Sun with the Friday's name; the backfill CLI inserted 1782 legacy bridges — all on a throwaway
+temp DB. **The live backfill and the deploy that enables the maintain hook are production actions and were NOT
+performed — they await explicit authorization** (a daily VACUUM backup exists; the client sweep removes bridges
+again if a series later breaks, so both directions are reversible).

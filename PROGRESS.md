@@ -4,7 +4,7 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-08-29 — **Phase 6.1/6.2 COMPLETE** (backend → gated TS under `server/`, compiled in the Docker build, full gate covers it). Next: Phase 6.3 (weekend auto-bridging)._
+_Last updated: 2026-08-29 — **Phase 6 COMPLETE (code)** — backend → gated TS under `server/` + weekend auto-bridging (maintain hook + backfill CLI). Whole roadmap (0–6) implemented & gated. Remaining: authorization-gated deploy + one-time backfill (production writes; not run)._
 
 ---
 
@@ -120,23 +120,23 @@ _Last updated: 2026-08-29 — **Phase 6.1/6.2 COMPLETE** (backend → gated TS u
     `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 6.3 — server-authoritative weekend auto-bridging.** 6.1/6.2 landed: the backend is gated TS under
-> `server/` (pure db/model/mutate + run-verified shells), compiled to `dist/server` in the Docker build,
-> full gate green, validated on a throwaway image. Now the feature (scope = *maintain + backfill*, decided
-> 2026-08-28 — see "Deferred features" for the grounded facts):
->   1. **Pure bridge computation** in `server/` (e.g. `server/bridge.ts`), tested: given the bookings, find the
->      Sat/Sun days that sit inside a continuous Fri→Mon series but are not yet booked (carry the Friday's name).
->      Recover the old `missingWeekendBridges` logic from git (`789bfec`/pre-2.3) as a reference.
->   2. **Maintain** — inside the `applyMutate` cell transaction, when a write completes a Fri→Mon span, insert
->      the two weekend days (same name). Symmetric triggers (book a Friday whose Monday is booked, or vice versa).
->   3. **Backfill** — a one-time server-side pass (internal SQL, NOT an API batch — 1,794 bridges > the 1000-cell
->      cap) behind an explicit trigger (CLI flag or guarded endpoint). **This is a production data write** — build
->      + test it here; only RUN it against live data with explicit authorization (daily VACUUM backup exists;
->      reversible via restore, and `sweepWeekends` removes bridges automatically if a series later breaks).
+> **Phase 6 is code-complete** (6.1/6.2 backend → gated TS; 6.3 weekend auto-bridging). The whole roadmap
+> (Phases 0–6) is implemented in the repo, gated (255 tests, full `verify` green over web + server), and
+> validated on a throwaway image — **the running production container and its `data` volume were never
+> touched.** What remains is not more code but **two authorization-gated operational steps + carried-forward
+> polish**:
+>   1. **Deploy the reworked stack** — `docker compose up -d --build` rebuilds the image (frontend Vite build +
+>      backend `tsc`) and restarts the `maschinenplan` container on the new code. This is an outward-facing,
+>      brief-downtime action on live users → **do only when the user authorizes it.** Enabling deploy also turns
+>      on the weekend maintain hook (set `WEEKEND_BRIDGE=off` in compose to keep it dormant).
+>   2. **Run the one-time weekend backfill** — `npm run backfill` (or `node server/backfill.js`) inside the
+>      running container inserts the ~1.8k legacy Sat/Sun bridges. **Production data write** → only on explicit
+>      authorization. Safe/reversible: the daily VACUUM backup exists and the client sweep removes bridges if a
+>      series later breaks.
 >
 > **Carry forward (deferred, rationale in §16):** the trivial modal-markup fold and the `AS_TREE`-adapter /
-> `window.S` shrink (a real store migration), plus the **wknd-on-patch** known bug and the open action-layer
-> question (thin `actions.ts` vs. the legacy `mutate` orchestrator).
+> `window.S` shrink (a real store migration), the **wknd-on-patch** known bug, and the open action-layer
+> question (thin `actions.ts` vs. the legacy `mutate` orchestrator). None block anything; pick up when useful.
 >
 > **View-layer decision (resolved, §15):** no framework — custom string render + the store
 > subscription (now live). Revisit only if the UI grows materially.
@@ -241,15 +241,22 @@ Checked off as each item lands (one commit per item unless noted).
 - [x] 6.2 `src/` deleted; gate exclusions removed (eslint/knip/tsconfig); `tsconfig.server.json` + Dockerfile
   compile `server/*.ts` → `dist/server`; runtime runs `node server/server.js`. Full gate covers the backend
   (99.4% lines / 90.9% branch). Validated on a throwaway image (isolated port+volume); prod untouched. **DONE 2026-08-29.**
-- [ ] 6.3 **Server-authoritative weekend auto-bridging** (feature; scope decided 2026-08-28 =
-  *maintain + backfill*). See "Deferred features" below for the full design + grounded facts.
+- [x] 6.3 **Server-authoritative weekend auto-bridging** (feature; scope = *maintain + backfill*).
+  `server/bridge.ts`: pure `missingBridges` (recovered baseline logic) + `maintainBridges` (in-transaction,
+  ON CONFLICT DO NOTHING) + `backfillBridges`. Maintain wired into `applyCells` (bridges the affected
+  machines after a write, appended to the broadcast `changes`; `applied` stays the client count), behind
+  `WEEKEND_BRIDGE` env (on unless `off`). Backfill = `server/backfill.ts` CLI (`npm run backfill`).
+  10 tests. Validated on the compiled image: a Fri+Mon booking auto-bridged Sat/Sun with the Friday's name;
+  backfill inserted 1782 legacy bridges — all on a **temp** DB. **Live backfill NOT run — awaits authorization.**
+  **DONE 2026-08-29.**
 
 ## Deferred features (decided, scheduled — not yet built)
 
-### Server-authoritative weekend auto-bridging  → Phase 6.3
-**Decision (2026-08-28):** scope = **maintain + backfill** (full). Build it in Phase 6 with the
-backend TS conversion — do NOT crack open the baseline backend earlier (sticks to the plan +
-"backend sealed until Phase 6" principle).
+### Server-authoritative weekend auto-bridging  → Phase 6.3 — **BUILT 2026-08-29** (`server/bridge.ts`)
+**Decision (2026-08-28):** scope = **maintain + backfill** (full). **Status:** implemented, gated, and
+validated on a throwaway image (§17). The maintain hook goes live on the next deploy (toggle `WEEKEND_BRIDGE`);
+the one-time backfill (`npm run backfill`, ~1.8k bridges) is a production write and **awaits authorization**.
+The facts below are kept for reference.
 
 **What it is.** A weekend day (Sat/Sun) should be booked as part of any continuous Fri→Mon
 series (see `core/weekend.ts` `sweepWeekends`, which already REMOVES orphaned weekend days on
@@ -279,6 +286,19 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- Phase 6.3 weekend auto-bridging — `server/bridge.ts` (the ADD direction, mirror of core/weekend's sweep):
+  pure `missingBridges(bookings)` (faithful recovery of the baseline `missingWeekendBridges` — for each booked
+  Friday whose Monday is booked, fill the empty Sat/Sun with the Friday's name), `maintainBridges(db,mids,ts)`
+  (in an open transaction, INSERT … ON CONFLICT DO NOTHING) and `backfillBridges(db)` (whole-DB one-time pass,
+  internal SQL, not the 1000-cell API cap). Maintain hook wired into `applyCells`: after the client writes, it
+  bridges the affected machines and appends the bridges to the broadcast `changes` (so every client patches
+  them), while `applied` stays the client-requested count; gated by the `WEEKEND_BRIDGE` env (on unless `off`,
+  threaded as `applyMutate(…, bridge)`). Backfill exposed as `server/backfill.ts` (`npm run backfill`,
+  coverage-excluded entry). 10 tests (pure computation, in-DB maintain incl. never-overwrite, whole-DB backfill
+  incl. idempotence). Validated on the compiled image: booking Fri 2027-01-08 + Mon 2027-01-11 auto-bridged
+  09/10 with the Friday's name; the backfill CLI inserted 1782 legacy bridges — all on a throwaway temp DB, prod
+  untouched. **The live backfill is a production write and was NOT run — it awaits explicit authorization.**
+  ARCHITECTURE §17 updated. **Phase 6 COMPLETE (code).** **DONE 2026-08-29.**
 - Phase 6.1/6.2 backend → TypeScript — ported `src/*.mjs` (~350 lines) to gated `server/*.ts`, decomposed so
   domain logic is pure/tested and I/O stays in a thin shell: `db.ts` (schema/meta/import; `node:sqlite` via
   `createRequire` — Vite/bundler can't resolve the new builtin from a static import), `model.ts` (read model),

@@ -20,6 +20,7 @@ const DB_PATH = process.env.DB_PATH || join(__dir, '..', 'data', 'buchungen.db')
 const IMPORT_JSON = process.env.IMPORT_JSON || join(dirname(DB_PATH), 'buchungen.json');
 const BACKUP_DIR = process.env.BACKUP_DIR || join(dirname(DB_PATH), 'backups');
 const BACKUP_KEEP = parseInt(process.env.BACKUP_KEEP || '30');
+const WEEKEND_BRIDGE = process.env.WEEKEND_BRIDGE !== 'off'; // 6.3 maintain hook (on unless disabled)
 const PUBLIC_DIR = join(__dir, '..', 'public');
 const BUNDLED_JSON = join(__dir, '..', 'buchungen.json'); // shipped in the image (Dockerfile copies it)
 
@@ -199,7 +200,7 @@ const server = createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/mutate') {
       const body = await readBody(req);
       if (body === null) return send(res, 400, { error: 'Ungültige oder zu große Anfrage' });
-      const out = applyMutate(db, body, broadcast);
+      const out = applyMutate(db, body, broadcast, WEEKEND_BRIDGE);
       return send(res, out.error ? 400 : 200, out);
     }
     return serveStatic(res, p);

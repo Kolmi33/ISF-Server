@@ -8,6 +8,7 @@
 // The SSE broadcast is injected (E4) so the reducer is testable without a live server.
 import type { Db } from './db.js';
 import { bumpRev, setMeta } from './db.js';
+import { maintainBridges } from './bridge.js';
 import { bookingOut, isBlocked } from './model.js';
 import type {
   BookingRow,
@@ -205,12 +206,26 @@ function writeCell(
   }
 }
 
+/** Add server-side weekend bridges for the machines the client just changed (6.3, ADD
+ *  direction), appending them to `changes` so they broadcast to every client. */
+function addWeekendBridges(db: Db, changes: MutateChange[]): void {
+  const affected = [...new Set(changes.map((c) => c.mid))];
+  const bridges = maintainBridges(db, affected, new Date().toISOString());
+  for (const b of bridges)
+    changes.push({
+      mid: b.mid,
+      day: b.day,
+      val: bookingOut({ name: b.name, ts: null, note: null, gid: null, gtitle: null }),
+    });
+}
+
 function applyCells(
   db: Db,
   cells: CellDelta[],
   who: string,
   note: string | null,
   broadcast: Broadcast,
+  bridge: boolean,
 ): MutateResult {
   if (cells.length > 1000) return { error: 'Zu viele Zellen (max. 1000)' };
   const machineById = new Map(
@@ -222,6 +237,7 @@ function applyCells(
   if (err) return { error: err };
   const changes: MutateChange[] = [];
   const conflicts: MutateConflict[] = [];
+  let applied = 0;
   db.exec('BEGIN');
   try {
     const stmts = {
@@ -231,6 +247,8 @@ function applyCells(
       dl: db.prepare('DELETE FROM bookings WHERE mid=? AND day=?'),
     };
     for (const c of cells) writeCell(c, machineById.get(c.mid)!, stmts, changes, conflicts);
+    applied = changes.length; // client-requested changes (bridges below are extra)
+    if (bridge) addWeekendBridges(db, changes);
     if (note) logAction(db, who, note);
     db.exec('COMMIT');
   } catch (e) {
@@ -244,23 +262,25 @@ function applyCells(
   }
   const rev = bumpRev(db);
   if (changes.length) broadcast('update', { rev, changes, by: who, log: note });
-  return { ok: true, rev, applied: changes.length, conflicts };
+  return { ok: true, rev, applied, conflicts };
 }
 
 /**
  * The single write entry point. Dispatches to the structural path (a full machine list)
  * or the cell-delta path, validating server-side. `broadcast` defaults to a noop so the
- * reducer can be unit-tested without a live SSE server.
+ * reducer can be unit-tested without a live SSE server; `bridge` toggles the weekend
+ * auto-bridging maintain hook (on by default — the decided Phase 6.3 scope).
  */
 export function applyMutate(
   db: Db,
   body: MutateBody,
   broadcast: Broadcast = () => {},
+  bridge = true,
 ): MutateResult {
   const who = String(body.user || '?').slice(0, 80);
   const note = body.log ? String(body.log).slice(0, 200) : null;
   if (Array.isArray(body.machines))
     return applyStructural(db, body.machines as InMachine[], body.groups, who, note, broadcast);
-  if (Array.isArray(body.cells)) return applyCells(db, body.cells, who, note, broadcast);
+  if (Array.isArray(body.cells)) return applyCells(db, body.cells, who, note, broadcast, bridge);
   return { error: 'Nichts zu tun' };
 }

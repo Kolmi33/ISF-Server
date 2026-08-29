@@ -23,6 +23,7 @@ export default defineConfig({
         'server/types.ts',
         'server/server.ts',
         'server/import.ts',
+        'server/backfill.ts',
         '**/*.test.ts',
       ],
       reporter: ['text', 'json-summary'],
