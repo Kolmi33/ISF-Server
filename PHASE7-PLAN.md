@@ -299,10 +299,36 @@ unchanged), `ui/machine-text.ts` (`maintSlots`→`maintenanceSlots`), `ui/views/
   `stats.test.ts` (7) all green unmodified — they only call the still-exported reducer/
   view functions, never the renamed machine predicates directly.
 
-### A4 — `web/js/core/assistant.ts` (largest, most abbreviation-heavy)
-- **Must-haves:** exported functions called directly in `legacy.js`: `anyRedund`, `freeDays`, `groupRuns`, `extendOpenRuns`, `pickFor` (in `runAssistant`, ~5 call sites, all in one function — cheap to fix). `treeFind`/`treeFindParent`/`treeIsAncestor`/`treeDetach`/`treeDevs`/`treeCleanup`/`treeDevUid` are only called through the one-line `asXxx` adapters (10 of them, lines 1436–1459, 2103) — rename-safe there too, just more call sites to touch. Types `AssistDev`/`AssistGrp`/`AssistNode`/`AssistContainer` are already good names. Function names worth expanding (all exported, so coordinate): `nodeNeed`→`effectiveNeed`, `nodeFree`→`isNodeSatisfiable`, `dayOk`→`isTreeSatisfiableOnDay`, `winFree`→`isSatisfiableAcrossWindow`, `pickNode`/`pickFor`→`chooseDevicesForNode`/`chooseDevicesForTree`. Private locals: `c` (child), `r`/`g`/`p` (result/group/parent), `cur`/`n` in `groupRuns`/`extendOpenRuns` → `currentRun`, `daysExtended`.
-- **Functionality:** unchanged; this is the highest logic-density module (N-of-M solver) — after renaming, re-read `runAssistant`'s call sites once more to make sure the new names still read naturally in context (`pickFor(AS_TREE, sel, isFreeDev)` → `chooseDevicesForTree(...)`).
-- **Tests:** `assistant.test.ts` (16+15 tests) green unmodified.
+### A4 — `web/js/core/assistant.ts` (largest, most abbreviation-heavy) — **DONE**
+Grepped precisely (as with A2/A5/A7/A9) rather than assumed: the seven `treeXxx` functions
+are called ONLY through the one-line `asXxx` adapters in `legacy.js`, never by bare name
+directly — and "tree" + a verb was already a full, non-abbreviated name, so **zero rename,
+zero alias** needed for any of them (the plan's guess that they'd need bridge coordination
+was wrong; they didn't need renaming at all). Of the solver functions, only `anyRedund` and
+`pickFor` are called directly by bare name in `runAssistant` (3 call sites total, not ~5) —
+those got the alias-bridge treatment: `anyRedund`→`hasAnyRedundancy`, `pickFor`→
+`chooseDevicesForTree`. `groupRuns`/`freeDays`/`extendOpenRuns` are also called directly but
+were already full words — no rename. `nodeNeed`/`nodeFree`/`dayOk`/`winFree`/`pickNode`
+are **not** called anywhere in `legacy.js` (only used internally, plus directly in
+`assistant.test.ts`) — fully free renames: `nodeNeed`→`effectiveNeed`, `nodeFree`→
+`isNodeSatisfiable`, `dayOk`→`isTreeSatisfiableOnDay`, `winFree`→`isSatisfiableAcrossWindow`,
+`pickNode`→`chooseDevicesForNode` (renamed alongside `pickFor`→`chooseDevicesForTree` for
+pair consistency — picking for one node vs. the whole tree should read as a matched pair).
+
+Every private local expanded throughout: `c`→`child`, `r`→`found`/`run` (context-dependent),
+`p`→`parent`, `a` (in `treeDevs`)→`deviceIds`, `g`→`group`, `d`→`day`/`date`
+(context-dependent — `day` in the solver predicates, `date` in the run-building loops, since
+those are conceptually different: one is "which day of the week" and the other is "which
+calendar date in a list"), `sel`→`selectedDates`, `cur`/`n`→`currentRun`/`daysExtended`,
+`free` (the `groupRuns` param, which would have collided in meaning with the `freeDays`
+function one line above) → `sortedFreeDates`.
+
+- **Functionality:** unchanged — `assistant.test.ts`'s 32 tests already pin every solver edge
+  case (redundancy detection, extension cap, tie-breaking on continuously-free devices), so a
+  green re-run is the proof.
+- **Tests:** `assistant.test.ts` (32) — imports and `describe` titles updated to the new names
+  (mechanical, via a scoped `sed` since every renamed identifier was unique with no
+  substring collisions); same assertions throughout.
 
 ### A5 — `web/js/core/booking.ts` (highest domain value) — **DONE**
 

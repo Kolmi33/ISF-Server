@@ -8,17 +8,17 @@ import {
   treeDevs,
   treeDevUid,
   treeCleanup,
-  nodeNeed,
-  nodeFree,
-  dayOk,
-  anyRedund,
+  effectiveNeed,
+  isNodeSatisfiable,
+  isTreeSatisfiableOnDay,
+  hasAnyRedundancy,
   nextWeekday,
   freeDays,
   groupRuns,
   extendOpenRuns,
-  winFree,
-  pickNode,
-  pickFor,
+  isSatisfiableAcrossWindow,
+  chooseDevicesForNode,
+  chooseDevicesForTree,
 } from './assistant.ts';
 
 const dev = (uid: string, id: string): AssistNode => ({ uid, type: 'dev', id });
@@ -150,44 +150,44 @@ const freeOn =
   (id, day) =>
     pairs.includes(`${id}@${day}`);
 
-describe('nodeNeed', () => {
+describe('effectiveNeed', () => {
   it('clamps need to 1..childCount', () => {
-    expect(nodeNeed(mkGrp(9, ['A', 'B', 'C']))).toBe(3);
-    expect(nodeNeed(mkGrp(0, ['A', 'B', 'C']))).toBe(1);
-    expect(nodeNeed(mkGrp(2, ['A', 'B', 'C']))).toBe(2);
+    expect(effectiveNeed(mkGrp(9, ['A', 'B', 'C']))).toBe(3);
+    expect(effectiveNeed(mkGrp(0, ['A', 'B', 'C']))).toBe(1);
+    expect(effectiveNeed(mkGrp(2, ['A', 'B', 'C']))).toBe(2);
   });
 });
 
-describe('nodeFree', () => {
+describe('isNodeSatisfiable', () => {
   it('a device is free iff isFree says so', () => {
-    expect(nodeFree(dev('d', 'A'), 'X', freeOn(['A@X']))).toBe(true);
-    expect(nodeFree(dev('d', 'A'), 'X', freeOn([]))).toBe(false);
+    expect(isNodeSatisfiable(dev('d', 'A'), 'X', freeOn(['A@X']))).toBe(true);
+    expect(isNodeSatisfiable(dev('d', 'A'), 'X', freeOn([]))).toBe(false);
   });
   it('a group needs at least `need` free children', () => {
     const g = mkGrp(2, ['A', 'B', 'C']);
-    expect(nodeFree(g, 'X', freeOn(['A@X', 'B@X']))).toBe(true); // 2 of 3 free
-    expect(nodeFree(g, 'Y', freeOn(['A@Y']))).toBe(false); // only 1 free
+    expect(isNodeSatisfiable(g, 'X', freeOn(['A@X', 'B@X']))).toBe(true); // 2 of 3 free
+    expect(isNodeSatisfiable(g, 'Y', freeOn(['A@Y']))).toBe(false); // only 1 free
   });
 });
 
-describe('dayOk', () => {
+describe('isTreeSatisfiableOnDay', () => {
   it('is the AND over the root children', () => {
     const root: AssistContainer = { children: [dev('a', 'A'), dev('b', 'B')] };
-    expect(dayOk(root, 'X', freeOn(['A@X', 'B@X']))).toBe(true);
-    expect(dayOk(root, 'X', freeOn(['A@X']))).toBe(false); // B not free
+    expect(isTreeSatisfiableOnDay(root, 'X', freeOn(['A@X', 'B@X']))).toBe(true);
+    expect(isTreeSatisfiableOnDay(root, 'X', freeOn(['A@X']))).toBe(false); // B not free
   });
 });
 
-describe('anyRedund', () => {
+describe('hasAnyRedundancy', () => {
   it('detects a group with more children than it needs', () => {
-    expect(anyRedund({ children: [mkGrp(1, ['A', 'B', 'C'])] })).toBe(true);
-    expect(anyRedund({ children: [mkGrp(3, ['A', 'B', 'C'])] })).toBe(false);
-    expect(anyRedund({ children: [dev('a', 'A')] })).toBe(false); // no groups
+    expect(hasAnyRedundancy({ children: [mkGrp(1, ['A', 'B', 'C'])] })).toBe(true);
+    expect(hasAnyRedundancy({ children: [mkGrp(3, ['A', 'B', 'C'])] })).toBe(false);
+    expect(hasAnyRedundancy({ children: [dev('a', 'A')] })).toBe(false); // no groups
   });
   it('detects redundancy nested inside a non-redundant group', () => {
     const inner = mkGrp(1, ['B', 'C']); // 2 > need 1 → redundant
     const outer: AssistGrp = { uid: 'o', type: 'grp', need: 2, children: [dev('a', 'A'), inner] };
-    expect(anyRedund({ children: [outer] })).toBe(true); // outer not redundant, inner is
+    expect(hasAnyRedundancy({ children: [outer] })).toBe(true); // outer not redundant, inner is
   });
 });
 
@@ -238,27 +238,27 @@ describe('extendOpenRuns', () => {
   });
 });
 
-describe('winFree / pickNode / pickFor', () => {
+describe('isSatisfiableAcrossWindow / chooseDevicesForNode / chooseDevicesForTree', () => {
   const sel = ['2021-01-11', '2021-01-12'];
-  it('winFree requires the node free on every window day', () => {
+  it('isSatisfiableAcrossWindow requires the node free on every window day', () => {
     const g = mkGrp(2, ['A', 'B', 'C']);
     const allFree = freeOn(['A@2021-01-11', 'B@2021-01-11', 'A@2021-01-12', 'B@2021-01-12']);
-    expect(winFree(g, sel, allFree)).toBe(true);
-    expect(winFree(g, sel, freeOn(['A@2021-01-11']))).toBe(false);
+    expect(isSatisfiableAcrossWindow(g, sel, allFree)).toBe(true);
+    expect(isSatisfiableAcrossWindow(g, sel, freeOn(['A@2021-01-11']))).toBe(false);
   });
-  it('pickNode returns a device id directly', () => {
-    expect(pickNode(dev('a', 'A'), sel, freeOn(['A@2021-01-11']))).toEqual(['A']);
+  it('chooseDevicesForNode returns a device id directly', () => {
+    expect(chooseDevicesForNode(dev('a', 'A'), sel, freeOn(['A@2021-01-11']))).toEqual(['A']);
   });
-  it('pickFor prefers devices free across the whole window', () => {
+  it('chooseDevicesForTree prefers devices free across the whole window', () => {
     const root: AssistContainer = { children: [mkGrp(1, ['A', 'B'])] };
     // B free both days, A only the first → B is chosen for a need-1 group
     const isFree = freeOn(['B@2021-01-11', 'B@2021-01-12', 'A@2021-01-11']);
-    expect(pickFor(root, sel, isFree)).toEqual(['B']);
+    expect(chooseDevicesForTree(root, sel, isFree)).toEqual(['B']);
   });
   it('ranks the continuously-free device first in a larger group', () => {
     const root: AssistContainer = { children: [mkGrp(1, ['A', 'B', 'C'])] };
     // only B is free across BOTH days; A and C each free on just one → B wins
     const isFree = freeOn(['B@2021-01-11', 'B@2021-01-12', 'A@2021-01-11', 'C@2021-01-12']);
-    expect(pickFor(root, sel, isFree)).toEqual(['B']);
+    expect(chooseDevicesForTree(root, sel, isFree)).toEqual(['B']);
   });
 });
