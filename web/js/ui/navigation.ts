@@ -6,7 +6,7 @@
 // `nextFreePtr` bookkeeping). Weekends are skipped here, faithful to legacy: the scan hops
 // Sat/Sun regardless of whether weekend columns are currently shown.
 
-import { parseYmd, addDays, ymd, isWeekend } from '../core/dates.ts';
+import { parseIsoDateString, addDays, formatDateAsIsoString, isWeekend } from '../core/dates.ts';
 
 /** Predicate: is this working day (ISO `YYYY-MM-DD`) bookable for the machine in question? */
 export type FreeDay = (iso: string) => boolean;
@@ -22,13 +22,13 @@ export function nextFreeDay(
   isFree: FreeDay,
   horizon = 730,
 ): string | null {
-  let d = fromIso ? addDays(parseYmd(fromIso), 1) : parseYmd(today);
-  for (let i = 0; i < horizon; i++) {
-    if (!isWeekend(d)) {
-      const iso = ymd(d);
-      if (isFree(iso)) return iso;
+  let candidateDate = fromIso ? addDays(parseIsoDateString(fromIso), 1) : parseIsoDateString(today);
+  for (let daysChecked = 0; daysChecked < horizon; daysChecked++) {
+    if (!isWeekend(candidateDate)) {
+      const candidateIsoDate = formatDateAsIsoString(candidateDate);
+      if (isFree(candidateIsoDate)) return candidateIsoDate;
     }
-    d = addDays(d, 1);
+    candidateDate = addDays(candidateDate, 1);
   }
   return null;
 }
@@ -39,13 +39,13 @@ export function nextFreeDay(
  * only invokes it with a real anchor — the pointer set by a prior forward jump).
  */
 export function prevFreeDay(fromIso: string, today: string, isFree: FreeDay): string | null {
-  let d = addDays(parseYmd(fromIso), -1);
-  while (ymd(d) >= today) {
-    if (!isWeekend(d)) {
-      const iso = ymd(d);
-      if (isFree(iso)) return iso;
+  let candidateDate = addDays(parseIsoDateString(fromIso), -1);
+  while (formatDateAsIsoString(candidateDate) >= today) {
+    if (!isWeekend(candidateDate)) {
+      const candidateIsoDate = formatDateAsIsoString(candidateDate);
+      if (isFree(candidateIsoDate)) return candidateIsoDate;
     }
-    d = addDays(d, -1);
+    candidateDate = addDays(candidateDate, -1);
   }
   return null;
 }

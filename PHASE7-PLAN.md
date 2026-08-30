@@ -1,0 +1,405 @@
+# Phase 7 & Readability — detailed slice plans
+
+Companion to `PROGRESS.md`/`ARCHITECTURE.md`. This doc breaks Backlog A (readability pass)
+and Backlog B (React view-layer migration) into per-slice implementation plans, grounded in
+a full read of `web/public/legacy.js` (2,362 lines) and every current `core/`/`net/`/`ui/`/
+`state.ts` module. Not yet committed — for iteration. Once a slice's plan is agreed, it
+becomes that slice's actual commit checklist.
+
+---
+
+## Cross-cutting rule for Backlog A — rename safety
+
+Every `core/`, `net/`, `ui/` module is re-exported onto `window` in `app.ts`
+(`Object.assign(window, dates)` etc.), and `legacy.js` calls many of them **by bare global
+name** — not just through thin adapters. Concretely, these are called directly in
+`legacy.js` today: `classifyCell`, `classifyDot`, `cellClass`, `weekHeaderCells`,
+`computeSelCells`, `clampIndex`, `nextFreeDay`/`prevFreeDay` (via wrappers), `anyRedund`,
+`groupRuns`, `freeDays`, `extendOpenRuns`, `pickFor`, `computeAllRuns`/`filterAllRuns`,
+`computeMyRuns`, `computeStats`, `filterAdminMachines`, `maintText`, `statusRangeText`,
+`daysMaskText`, plus the `core/machines.ts` predicates (`catOf`, `maintAt`, `isBlockedM`,
+`dayAvailable`, `anyMaint`, `maintSlots`).
+
+**Rule:** renaming a function/type that is **exported** from one of these modules requires,
+in the *same* commit: (1) the rename, (2) `grep -n '\bOLDNAME\b' web/public/legacy.js
+web/js/app.ts` and fixing every hit, (3) `verify` green, (4) a browser smoke (E5) — a missed
+call site fails silently as `ReferenceError` at runtime, not at build time, since
+`legacy.js` is gate-excluded and untyped. Renaming a **module-private** (non-exported)
+identifier is free — no cross-file coordination, do it liberally. Each item below says
+which of its targets are exported (coordinate) vs. private (free).
+
+---
+
+## Non-negotiable style rules for every slice
+
+Restated from `PRINCIPLES.md` P3/P5 because they're the ones a mechanical rename-and-move
+pass most easily drifts on. These apply to **every** slice below, not just A1 — A1 is just
+where they're worked out in full first.
+
+1. **No shortened names, anywhere — parameters, locals, loop variables, everything.**
+   `m`, `d`, `s`, `n`, `x`, `r`, `c`, `mb`, `fresh` are all banned, including in one-line
+   arrow functions and short-lived loop counters. A name should say what the value *is*
+   (`machine`, `isoDate`, `slot`, `numberOfDays`), not what letter it starts with. If a
+   name gets long, that's fine — `weekdayWithMondayFirst` beats `wd`.
+2. **No dense one-liners or clever chains.** A single expression that combines a lookup, a
+   transform, and a fallback in one line reads fast to the person who wrote it and slowly
+   to everyone else. Prefer a short sequence of named intermediate values over a chain of
+   `.filter().map().sort()` or nested ternaries — each step gets its own line and its own
+   name, so the function reads top-to-bottom like a paragraph.
+3. **No "weird" loops.** A loop should do one clearly-named thing per iteration. Avoid
+   mutating more than one variable per step without a comment explaining why; avoid
+   `do…while` unless the "always run once" semantics are the actual point; prefer a plain
+   `while`/`for…of` that a reader can narrate in one sentence.
+4. **Comment the WHY, every time it isn't obvious.** Not "increment i" — why the timezone
+   is re-anchored here, why this magic number is `24*60*60*1000`, why the ISO week
+   algorithm needs a fixed reference point. A reader should never have to reverse-engineer
+   an algorithm from bare code when one sentence would have told them.
+
+These are judgment calls, not something `verify` enforces (ARCHITECTURE §10 already says
+naming/readability stays human judgment) — so each slice's rewritten code is shown in full
+below rather than described, so it can be reviewed for the same style whether it's read now
+or against the eventual diff.
+
+---
+
+## Backlog A — readability pass
+
+### A1 — `web/js/core/dates.ts` (in depth) — **DONE**
+
+Executed as planned, with one addition the plan didn't call out: the "free" TS-import
+renames weren't limited to `ui/grid.ts` — a repo-wide grep turned up **9 files** importing
+the old short names directly (`core/machines.ts`, `core/weekend.ts`, `core/assistant.ts`,
+`ui/grid.ts`, `ui/machine-text.ts`(+test), `ui/navigation.ts`, `ui/views/stats.ts`,
+`ui/views/my-bookings.ts`, `ui/views/all-bookings.ts`, `app.ts`), all updated to the real
+names. Two of those (`my-bookings.ts`, `all-bookings.ts`) had a private `nextWd` closure
+built on the exact do-while-then-format shape `nextWeekday` had in `core/assistant.ts` —
+renamed to `nextWorkday` and rewritten as a plain `while` loop in all three places while
+already touching the line, per the new style rules (behavior-identical; each has its own
+green test file). `knip`'s `duplicates` check flagged the 7 legacy-bridge aliases as
+duplicate exports — a real, expected gate hit, resolved by deliberately disabling that one
+rule (`knip.json` → `"rules": {"duplicates": "off"}`), not by bypassing the gate. `verify`
+green (255/255 tests, 100% coverage on every touched file); Vite dev-server transform
+checked on every touched file (all HTTP 200) as a substitute for a full headless-browser
+click-through, since no browser driver (`chromium-cli`/Playwright) is available in this
+environment — worth a `/run-skill-generator` pass if that matters for future sessions.
+
+**The rename-cost split (grepped, not assumed).** `ymd`, `parseYmd`, `addDays`, `mondayOf`,
+`isWeekend`, `fmtLong`, `todayStr`, `weekdayRange`, `allDaysRange` are each called **dozens
+of times** by bare global name across `legacy.js` (confirmed by grep — e.g. `todayStr()`
+appears 9 times, `fmtLong()` 15 times, `mondayOf()` 7 times). `fmtShort`, `weekdayName`, and
+`isoWeek`, by contrast, are used **only** through `ui/grid.ts`'s typed `import` (2 call
+sites total) and `dates.test.ts` — `tsc` catches every reference immediately, so renaming
+those three is free.
+
+**Decision: don't touch `legacy.js` for this pass.** Editing dozens of scattered call sites
+in a file that Phase 7 (slice B10) deletes wholesale is churn against soon-dead code, and
+widens this commit's diff for no lasting benefit. Instead, following the same strangler
+pattern the project already uses everywhere else (E3 — thin adapters that name their retire
+phase): give every function its real, fully-descriptive name; keep the **old short names as
+a small block of one-line `export const` aliases** at the bottom of the file, explicitly
+commented as a temporary bridge for `legacy.js`, to be deleted in slice B10. New code must
+never import an alias — only the real name. `addDays` and `isWeekend` need no alias; they
+were never abbreviations.
+
+**Full rewritten file:**
+
+```ts
+// Pure date helpers extracted from the monolith (legacy.js). No DOM, no globals —
+// data → data, so they are trivially testable (this is where our tests concentrate).
+//
+// Convention (preserved from the original): the external currency is the ISO date
+// string 'YYYY-MM-DD'. Such strings sort correctly lexicographically and are used
+// directly as object keys in `bookings`. Date math runs in UTC so it never drifts
+// with the viewer's timezone; only `mondayOfDate`/`todayAsIsoDateString` read local
+// calendar components, exactly as the original did.
+//
+// Naming note: every function here is re-exported onto `window` in app.ts so the
+// not-yet-migrated `legacy.js` monolith can keep calling it — but `legacy.js` still
+// calls several of these by their OLD short name (`ymd`, `parseYmd`, `mondayOf`,
+// `fmtLong`, `todayStr`, `weekdayRange`, `allDaysRange`). Those old names survive ONLY
+// as the thin aliases at the bottom of this file; `legacy.js` itself is not edited
+// (E3/E8 — it's deleted whole in Phase 7 slice B10, not patched piecemeal). New
+// TypeScript code must always import the real, fully-named function.
+
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const WEEKDAY_NAMES = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'] as const;
+type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/** A Date → its UTC calendar day as 'YYYY-MM-DD'. */
+export function formatDateAsIsoString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** 'YYYY-MM-DD' → a Date at UTC midnight of that day. Malformed input → Invalid Date. */
+export function parseIsoDateString(isoDateString: string): Date {
+  const [year, month, day] = isoDateString.split('-');
+  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+}
+
+/** A new Date `numberOfDays` calendar days after `date` (UTC). Does not mutate `date`. */
+export function addDays(date: Date, numberOfDays: number): Date {
+  const resultDate = new Date(date);
+  resultDate.setUTCDate(resultDate.getUTCDate() + numberOfDays);
+  return resultDate;
+}
+
+/** The Monday (UTC midnight) of the ISO week containing `date`. Reads local Y/M/D, as the original. */
+export function mondayOfDate(date: Date): Date {
+  // Read the LOCAL calendar day (not UTC) so "today" matches the viewer's wall clock,
+  // then re-anchor it at UTC midnight so every later date computation stays timezone-safe.
+  const localCalendarDayAtUtcMidnight = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+  );
+  // getUTCDay() returns Sunday=0..Saturday=6. Shift it so Monday=0..Sunday=6, matching
+  // how the grid always displays weeks starting on Monday.
+  const weekdayWithMondayFirst = (localCalendarDayAtUtcMidnight.getUTCDay() + 6) % 7;
+  return addDays(localCalendarDayAtUtcMidnight, -weekdayWithMondayFirst);
+}
+
+/** True if `date` falls on a Saturday or Sunday (UTC). */
+export function isWeekend(date: Date): boolean {
+  const weekday = date.getUTCDay(); // Sunday=0, Saturday=6
+  return weekday === 0 || weekday === 6;
+}
+
+/** A Date → 'DD.MM.' in de-DE (UTC), e.g. grid column labels. */
+export function formatDateShort(date: Date): string {
+  return date.toLocaleDateString('de-DE', { timeZone: 'UTC', day: '2-digit', month: '2-digit' });
+}
+
+/** An ISO date string → a long de-DE label, e.g. 'Mo., 04.01.2021' (UTC). */
+export function formatDateLong(isoDateString: string): string {
+  return parseIsoDateString(isoDateString).toLocaleDateString('de-DE', {
+    timeZone: 'UTC',
+    weekday: 'short',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+/** A Date → its German 2-letter weekday abbreviation (UTC): 'So','Mo',…,'Sa'. */
+export function formatWeekdayName(date: Date): string {
+  return WEEKDAY_NAMES[date.getUTCDay() as WeekdayIndex];
+}
+
+/** The ISO 8601 week number (1–53) of `date`. */
+export function getIsoWeekNumber(date: Date): number {
+  // ISO 8601 identifies a week by the calendar year that contains its Thursday.
+  // Step 1: find the Thursday that falls in the same ISO week as `date`.
+  const weekdayWithMondayFirst = (date.getUTCDay() + 6) % 7; // Monday=0 … Sunday=6
+  const daysUntilThursdayOfThisWeek = 3 - weekdayWithMondayFirst;
+  const thursdayOfThisWeek = addDays(date, daysUntilThursdayOfThisWeek);
+
+  // Step 2: January 4th always falls in week 1 of its year (part of the ISO 8601
+  // definition), so it's a fixed, reliable point to count weeks from.
+  const januaryFourthOfThatYear = new Date(Date.UTC(thursdayOfThisWeek.getUTCFullYear(), 0, 4));
+  const weekdayOfJanuaryFourth = (januaryFourthOfThatYear.getUTCDay() + 6) % 7;
+
+  // Step 3: count whole weeks between the two Thursdays.
+  const daysBetweenTheTwoThursdays =
+    (thursdayOfThisWeek.getTime() - januaryFourthOfThatYear.getTime()) / MILLISECONDS_PER_DAY;
+  const weeksSinceWeekOne = Math.round((daysBetweenTheTwoThursdays - 3 + weekdayOfJanuaryFourth) / 7);
+
+  return 1 + weeksSinceWeekOne;
+}
+
+/** Today's local calendar day as 'YYYY-MM-DD' (reads local time, as the original). */
+export function todayAsIsoDateString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/** All weekdays (Mon–Fri) as ISO strings from `fromIsoDate` to `toIsoDate`, inclusive. */
+export function getWeekdaysInRange(fromIsoDate: string, toIsoDate: string): string[] {
+  const isoDatesInRange: string[] = [];
+  let currentDate = parseIsoDateString(fromIsoDate);
+  const endDate = parseIsoDateString(toIsoDate);
+  // Walk one calendar day at a time, keeping only workdays, until we pass the end date.
+  while (currentDate <= endDate) {
+    if (!isWeekend(currentDate)) {
+      isoDatesInRange.push(formatDateAsIsoString(currentDate));
+    }
+    currentDate = addDays(currentDate, 1);
+  }
+  return isoDatesInRange;
+}
+
+/** All calendar days (incl. weekends) as ISO strings from `fromIsoDate` to `toIsoDate`, inclusive. */
+export function getAllDaysInRange(fromIsoDate: string, toIsoDate: string): string[] {
+  const isoDatesInRange: string[] = [];
+  let currentDate = parseIsoDateString(fromIsoDate);
+  const endDate = parseIsoDateString(toIsoDate);
+  // Walk one calendar day at a time, keeping every day, until we pass the end date.
+  while (currentDate <= endDate) {
+    isoDatesInRange.push(formatDateAsIsoString(currentDate));
+    currentDate = addDays(currentDate, 1);
+  }
+  return isoDatesInRange;
+}
+
+// ---- Legacy bridge aliases -------------------------------------------------------
+// `legacy.js` calls these by their OLD short names as bare globals (see app.ts's
+// `Object.assign(window, dates)`) and is deliberately NOT edited by this pass — it is
+// retired whole in Phase 7 slice B10. Delete this entire block in that slice, at
+// which point every caller will be gone. No new code may import from here.
+export const ymd = formatDateAsIsoString;
+export const parseYmd = parseIsoDateString;
+export const mondayOf = mondayOfDate;
+export const fmtLong = formatDateLong;
+export const todayStr = todayAsIsoDateString;
+export const weekdayRange = getWeekdaysInRange;
+export const allDaysRange = getAllDaysInRange;
+```
+
+- **Must-haves:** every renamed function keeps its exact behavior — this is a pure
+  rename-and-restructure pass (E1: no logic change hides inside it). `ui/grid.ts`'s import
+  line (`import { parseYmd, isWeekend, isoWeek, weekdayName, fmtShort } from
+  '../core/dates.ts'`) and its two call sites (`isoWeek(...)`, `weekdayName(...)`,
+  `fmtShort(...)`) must be updated to the new names — `tsc` will fail loudly if any is
+  missed, so this is mechanical, not risky. `app.ts`'s one named import
+  (`import { mondayOf } from './core/dates.ts'`) and its one call site in `hydrateState()`
+  must move to `mondayOfDate` — the star-import bridge (`Object.assign(window, dates)`)
+  needs no change; it picks up every export automatically, old aliases included.
+- **Functionality:** byte-identical; `getIsoWeekNumber` is restructured (named steps
+  instead of one nested expression) but computes the same result — the existing test
+  cases already pin the tricky boundary (2020 is a 53-week ISO year) so a green re-run is
+  the proof, not a new test.
+- **Usability:** n/a (no UI).
+- **Tests:** update `dates.test.ts`'s imports to the new names (mechanical); no new test
+  cases needed since behavior is unchanged and coverage was already 100%. The alias block
+  needs no test of its own — `export const x = y` executes (and is thus "covered") the
+  moment the module loads, and the aliases are deleted with `legacy.js` in slice B10 rather
+  than exercised by anything the test suite calls.
+
+### A2 — `web/js/core/machines.ts`
+- **Must-haves:** all 8 exports are called by bare name in `legacy.js` — coordinate. Private params `m`, `s`, `d` throughout → `machine`, `slot`, `isoDate` (matches the doc-comments, which already use those words). `wd` in `dayAvailable` → `mondayIndexedWeekday` with a comment on the `(getUTCDay()+6)%7` Mo=0 remap (it's non-obvious and appears twice across this file and `render()` in legacy — worth a shared named constant/helper if Phase 7 touches both).
+- **Functionality:** unchanged.
+- **Tests:** `machines.test.ts` green unmodified.
+
+### A3 — `web/js/core/weekend.ts`
+- **Must-haves:** `sweepWeekends` is exported and called directly by every `core/booking.ts` reducer, not `legacy.js` — but `core/booking.ts` imports it by name, so still coordinate (grep `booking.ts`/`booking.test.ts`). Private: `mb`→`machineBookings`, `d`/`prev`→`isoDate`/`previousValue`, `dt`→`date`, `wd`→`weekday`. The Fri/Mon offset math (`wd===6?-1:-2`) deserves a one-line WHY comment: "Saturday is 1 day after Friday, Sunday is 2 days after."
+- **Tests:** `weekend.test.ts` green unmodified.
+
+### A4 — `web/js/core/assistant.ts` (largest, most abbreviation-heavy)
+- **Must-haves:** exported functions called directly in `legacy.js`: `anyRedund`, `freeDays`, `groupRuns`, `extendOpenRuns`, `pickFor` (in `runAssistant`, ~5 call sites, all in one function — cheap to fix). `treeFind`/`treeFindParent`/`treeIsAncestor`/`treeDetach`/`treeDevs`/`treeCleanup`/`treeDevUid` are only called through the one-line `asXxx` adapters (10 of them, lines 1436–1459, 2103) — rename-safe there too, just more call sites to touch. Types `AssistDev`/`AssistGrp`/`AssistNode`/`AssistContainer` are already good names. Function names worth expanding (all exported, so coordinate): `nodeNeed`→`effectiveNeed`, `nodeFree`→`isNodeSatisfiable`, `dayOk`→`isTreeSatisfiableOnDay`, `winFree`→`isSatisfiableAcrossWindow`, `pickNode`/`pickFor`→`chooseDevicesForNode`/`chooseDevicesForTree`. Private locals: `c` (child), `r`/`g`/`p` (result/group/parent), `cur`/`n` in `groupRuns`/`extendOpenRuns` → `currentRun`, `daysExtended`.
+- **Functionality:** unchanged; this is the highest logic-density module (N-of-M solver) — after renaming, re-read `runAssistant`'s call sites once more to make sure the new names still read naturally in context (`pickFor(AS_TREE, sel, isFreeDev)` → `chooseDevicesForTree(...)`).
+- **Tests:** `assistant.test.ts` (16+15 tests) green unmodified.
+
+### A5 — `web/js/core/booking.ts` (highest domain value)
+- **Must-haves:** none of its 8 exports are called by bare name in `legacy.js` — every call site is `mutate(fresh => bookCells(fresh, ...))` etc., already fully qualified, so **all renames here are effectively free** (still grep to be sure, but risk is low). Best targets: `fresh`→`freshServerData` (it's shadowing-prone — every reducer takes it, worth a shared doc note on why it's called "fresh": these reducers reapply against the just-fetched authoritative state, not the optimistic UI copy). `mb`/`fmb`→`machineBookings`. `m`→`machine`. The `isGroup`/`gid`/`extra` block in `applyBooking` is dense — a short inline comment on *why* a lone booking with a title still becomes a group (so it's deletable as a unit) would help future readers.
+- **Tests:** `booking.test.ts` (43 tests) green unmodified.
+
+### A6 — `web/js/state.ts`
+- **Must-haves:** `createStore` and `Store` are exported and imported by name in `app.ts` only (1 call site) — coordinate but trivial. Already very clean; only `k`/`fn`/`patch` are one-letter — expand to `key`/`listener`/`partialState`.
+- **Tests:** `state.test.ts` green unmodified.
+
+### A7 — `web/js/net/api.ts`, `net/sse.ts`
+- **Must-haves:** `api.ts`'s `API`, `apiGet`, `apiPost`, `validateData`, `normalizeState` are called by bare name in `legacy.js` (`readFile`, `persist`) — coordinate. `sse.ts`'s `applyUpdate`, `presenceInfo`, `isForeign` likewise called directly in `connectSSE`/`applyPresence` — coordinate (3 call sites, easy). Private: `d`/`o`/`r` in `api.ts` → `raw`/`payload`/`response`. `d.rev`/`d.log` reads bear a comment on why they're written back onto the raw object before `validateData` runs (mutate-then-validate — a little surprising).
+- **Tests:** `api.test.ts`/`sse.test.ts` green unmodified.
+
+### A8 — `web/js/ui/grid.ts`, `selection.ts`, `navigation.ts`, `machine-text.ts`
+- **Must-haves:** `grid.ts`'s `classifyCell`/`classifyDot`/`cellClass`/`weekHeaderCells` and `selection.ts`'s `computeSelCells`/`clampIndex` are called directly in `render()`/`refreshCell()`/`refreshDot()`/`paintSel()`/the keyboard handler — coordinate (grid.ts renames are Phase-7-adjacent anyway since B1 replaces `render()`; consider deferring grid.ts renames to land *with* B1 rather than as a separate pass, to avoid double-touching the same call sites). `navigation.ts`'s `nextFreeDay`/`prevFreeDay` are only called through the `nextFreeAfter`/`prevFreeBefore` wrappers — cheap. `machine-text.ts`'s three exports are called directly (`blockText`, admin rows, machine form) — coordinate, low count. Private: `r1`/`r2`/`c1`/`c2` in `computeSelCells` → `anchorRow`/`focusRow`/`anchorCol`/`focusCol`.
+- **Tests:** each module's test file green unmodified.
+
+### A9 — `web/js/ui/views/*.ts` (4 files)
+- **Must-haves:** `computeMyRuns`, `computeStats`, `computeAllRuns`/`filterAllRuns`, `filterAdminMachines` are all called directly in their respective `openXxx`/`renderXxx` functions — coordinate, but each is 1–2 call sites. Private: the repeated inline `nextWd`/`nextWeekday` closure duplicated in `all-bookings.ts` and `my-bookings.ts` is a real DRY gap worth fixing *as a readability-pass finding*, not just a rename — hoist it into `core/dates.ts` as `nextWeekday` (note: `core/assistant.ts` already has an identical private `nextWeekday`, so this would be the third copy — good candidate for a shared `core/dates.ts` export). Flag this as a small behavior-neutral consolidation, not a rename.
+- **Tests:** each view's test file green unmodified; if `nextWeekday` moves to `core/dates.ts`, add it to `dates.test.ts` and delete the now-redundant coverage in the three call sites' tests (still verified transitively).
+
+### A10 — `shared/types.ts`
+- **Must-haves:** every field name here is load-bearing (server wire format + client reads) — do **not** rename any field; this file's job is fidelity to the JSON on the wire. Readability pass here is comment-only: a few interfaces (`ServerData`, `AppState`) already have excellent doc-comments; `Booking`/`Machine` could use one line each cross-referencing which legacy field replaced which (already partially done for `redu`/`gid`/`gtitle`).
+- **Tests:** none (types only); `tsc --noEmit` is the check.
+
+### A11 — `server/*.ts` (backend, in scope per "each file")
+- **Must-haves:** not yet read in this pass — before touching, re-read `server/db.ts`/`model.ts`/`mutate.ts`/`bridge.ts`/`server.ts` the same way this session read the frontend, since ARCHITECTURE §17 notes it was decomposed for testability but not specifically for naming. Treat as its own slice with its own must-have list once read; don't guess here.
+- **Tests:** `server/*.test.ts` (99%+ cov) green unmodified.
+
+### A12 — `web/js/app.ts`
+- **Must-haves:** this file *is* the bridge — most of its content (the `Object.assign` calls) becomes dead once Phase 7 (B10) deletes `legacy.js`, so a deep readability pass here is low-value now; limit A12 to the `hydrateState`/`jsonSet` naming (`fallback`→`defaultJson` is clearer) and leave the bridge section alone until B10 deletes it outright.
+- **Tests:** none direct (impure entry, E5 smoke-only).
+
+**Suggested order for Backlog A:** A5, A6, A3 first (zero/near-zero coordination cost, real domain value) → A1, A2, A7, A9 (moderate, contained coordination) → A4 (biggest, still contained to `runAssistant` + the 10 adapters) → A8 deferred to land with Phase 7 B1/B2 rather than separately → A10/A11/A12 as time allows.
+
+---
+
+## Backlog B — Phase 7: view layer → React
+
+### Cross-cutting notes
+- **UI text stays German, verbatim.** Every string quoted below is production copy users read today — component ports must reproduce it exactly (E1); this is not the place to also translate or edit copy.
+- **DOM contract during the transition.** Until a slice's dependents are also migrated, its React output must keep the same tag names, classes, and `data-*` attributes legacy code queries via `document.querySelector`/`cellEl()` — otherwise not-yet-migrated code silently stops finding elements. Called out per-slice below where it matters most (B1/B2).
+- **String-building → data-building.** `ui/grid.ts`'s `weekHeaderCells` and `render()`'s inline template literals build HTML *strings*. React components should consume **data** (arrays of cell/row/header descriptors), not pre-built HTML — so porting a view often means splitting an existing "compute → stringify" function into "compute" (kept, reused) + a new component that renders the same data as JSX. Note this explicitly per slice rather than assuming today's exported shape ports unchanged.
+- **Testing convention:** React Testing Library + jsdom, query by role/text/label like a user would, not by class name. Each slice's test list below is additive to the pure-logic tests that already exist and stay untouched.
+- **Styling:** reuse `web/css/app.css` classes as-is (className props) — no CSS rewrite in Phase 7; that's out of scope and risks visual drift (same call ARCHITECTURE §16 already made for the modal-markup fold).
+
+### B0 — Setup
+- **Plan:** add `react`+`react-dom` (runtime deps) and `@types/react`, `@types/react-dom`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, jsdom (dev deps); set `tsconfig` `"jsx": "react-jsx"`; add a Vitest jsdom environment for `.tsx` tests; extend ESLint's complexity/fn-length/file-length rules to `.tsx`; write the guardrail edits (`CLAUDE.md`, `ARCHITECTURE.md §18` superseding §14/§15) as their own reasoned commit.
+- **Must-haves:** do **not** mount anything into the live app yet — prove the toolchain (build + lint + test) with one throwaway component and its RTL test, deleted or kept as B1's seed. Mounting the first real UI starts at B1, so B0 carries zero behavior risk.
+- **Functionality/usability:** none — no user-visible change.
+- **Tests:** one trivial RTL test asserting the pipeline works end to end (render + query + assert).
+
+### B1 — Grid (`render`, `refreshCell`, `refreshDot`, `ensureOverflow`)
+- **Must-haves (from `legacy.js:698–812`):** two header rows — machine-column head (rowspan 2, category toggle buttons with `aria-pressed`, single-click toggles a category via `catTap`'s 220 ms debounce, **double-click toggles every group in that category** via `toggleAllGroupsInCat` — this tap/dblclick disambiguation is a real, easy-to-drop interaction quirk, preserve exactly) + a `--theadh` CSS var set from measured header height (used by sticky group rows). Body: category header rows (collapsible via `S.cats`) → group header rows (collapsible via `S.collapsed`, Favorites is its own top-level "catrow", not a sub-group) → machine rows. **Collapse nuance:** a collapsed group still renders its rows when a machine-filter search is active (`!searchActive()` guard) — do not drop this. Row header: star toggle, 5-state today-dot (`classifyDot`: defekt/maint/busy/unavail/free), status tag text ("defekt"/"Wartung"/"Sperre geplant"), info icon, ⏭ button (always shown) + ⏮ button (only when `hasBack` is true). Cell: 4-state (`classifyCell`), `mine` highlight (case-insensitive name match), `nameColor()` background hash (depends on current theme — dark/light hue split), exact `aria-label`/`title` text per state.
+- **Design decision to make explicit:** `weekHeaderCells` currently returns HTML strings; port it to return header **data** and let the component render JSX (no `dangerouslySetInnerHTML`). Do this as part of B1, not silently — it's a real API change to a bridged module.
+- **Sequencing risk:** `paintSel()`/`document.querySelector('td.cell...')` (drag-select, context menu, keyboard nav — all still in `legacy.js` until B2) rely on the exact `td.cell[data-mid][data-date]` shape. Either (a) ship B1+B2 together in one slice, or (b) keep B1's cells emitting the identical attributes and have a temporary effect call the legacy `paintSel()`/`refreshDot` adapters after each render. Decide before starting; (a) is simpler and lower-risk given how tightly selection reads the grid DOM.
+- **Known-bug decision point:** the `wknd` class asymmetry between `render()`/`refreshCell()` (ARCHITECTURE known-bug) exists *because* there are two render paths. React eliminates the second path (its own diffing replaces `refreshCell`/`patchCells`), so B1 is the natural point to close this bug — call it out as an intentional, flagged behavior change (E2), not a silent side effect of the port.
+- **Functionality:** every state above renders identically; `ensureOverflow`'s "keep the grid wider than the viewport" growth loop still runs (a `useLayoutEffect` measuring `scrollWidth`, same `<100` extra-weeks guard).
+- **Usability:** identical, plus the bug fix above (flagged).
+- **Tests:** header shows correct KW/weekday/today-column for a fixed date; all 4 cell states render correct class/aria-label/title; `mine` highlight; category single-click vs double-click behave differently; collapsed-group-but-searching still shows rows; favorites float to their own group; star click toggles favorite.
+
+### B2 — Selection & keyboard navigation (`Sel`, mouse/keydown handlers)
+- **Must-haves (`legacy.js:827–1122`):** anchor/focus rectangle (reuses `ui/selection.ts` unchanged) as component/hook state; mousedown starts a new anchor (or, with Shift held and an existing anchor, extends from it); mouseover during a drag extends focus; mouseup ends the drag and opens the context menu **only if** the drag actually moved (`didDrag`) and covers >1 cell; arrow keys move focus with `clampIndex`, Shift+arrow extends, Enter opens (single cell → booking action, multi-cell → context menu), Escape clears; keyboard handling is suppressed while a modal is open or focus sits in an input/textarea/select; **growth interleaves with movement** — moving right past the last column grows `extraWeeks` and re-reads the index, moving left triggers `prependWeek()` and re-reads — this exact order must be preserved (a naive port that clamps before growing will feel subtly wrong at the grid edges). Auto-scroll during drag (45px edge threshold, 60ms interval, including auto-`prependWeek()` at the left edge).
+- **Functionality:** identical Excel-style selection.
+- **Usability:** this is the single highest fidelity-risk slice in Phase 7 — plan a manual side-by-side session against the still-running legacy app (or `789bfec`) before deleting the old code, not just a `verify` pass.
+- **Tests:** keyboard move + clamp at grid edges; Shift+arrow extends; Shift+click extends from anchor; multi-cell drag selects the right rectangle; Escape clears; Enter routes to the right action by selection size; drag near an edge triggers auto-scroll/auto-grow (mock `scrollLeft`/`getBoundingClientRect`).
+
+### B3 — Infinite scroll / week growth (`prependWeek`, scroll/wheel listeners, month-jump)
+- **Must-haves (`legacy.js:150–214, 547–600`):** `MAXW=12` week-window cap, beyond which the window **shifts** right instead of growing (keeps the DOM small); `extendPending` debounce guards re-entrancy; a 350ms "just scrolled programmatically" grace window prevents the jump-triggering-a-jump feedback loop the comments call out explicitly; a `wheel` listener compensates for the left edge not firing `scroll` events at `scrollLeft:0`; month/year selects sync from the **leftmost visible column** on scroll (rAF-throttled `updateJumpFromScroll`), and picking a month resets, re-renders, and jumps to the 1st.
+- **Functionality:** identical scroll/growth behavior — this is fundamentally imperative DOM/scroll-position code; a small custom hook (`useGridScroll`) wrapping a real ref is the honest React shape here, not a "pure" component.
+- **Usability:** preserve the anti-jump-back fix verbatim — it was a deliberately hard-won UX fix per the legacy comments.
+- **Tests:** jsdom doesn't lay out real pixel widths, so assert on *triggers* (store state: `extraWeeks++`/`startMonday` shift) under mocked `scrollLeft`/`scrollWidth`/`clientWidth`, not exact pixels.
+
+### B4 — Booking form, detail modal, undo toast
+- **Must-haves (`legacy.js:1211–1354`):** form is **sticky** (not dismissible by outside-click/Esc) while open; name defaults to `S.user`; date range books **every calendar day including weekends** in range, not just workdays (easy to get backwards); validation: name required, `from<=to`, and `dates.length*mids.length<=500`; on conflict, the form **reopens prefilled** (name/note preserved) with a capped list (first 15) of conflicts plus a "book only free" force button; on success the modal closes **before** the async write resolves (optimistic), followed by a 9s undo toast. Detail modal: contiguous same-name weekday-run detection vs. group (`gid`) detection are two different "delete more" affordances with different confirm copy; a "Statistik" shortcut opens Stats pre-filtered to that person.
+- **Functionality:** all of the above, byte-identical German copy.
+- **Usability:** preserve exact toast durations (3.5s default / 9s with undo) and the 15-item conflict-list cap.
+- **Tests:** validation messages for each invalid input; weekend-inclusive date range confirmed; conflict reopen preserves name/note and shows the force-book path; run-vs-group detection picks the right delete scope; undo restores prior values (including re-deleting a created cell when `prev:null`).
+
+### B5 — Four modals: my-bookings, stats, all-bookings, admin
+- **My-bookings** (`1688–1771`): run structure is **frozen at open** (`computeMyRuns` called once) but each run's *live* days are re-filtered against current data on every render, so deletions disappear without recomputing groupings; per-run expand/collapse keyed by `mid|firstDate`; "only my machines" filter button; per-day vs. per-run delete (run delete requires confirm when >1 day); "goto" expands the target's category/group before jumping (a filtered-out target wouldn't be visible otherwise).
+- **Stats** (`1773–1931`): 3 modes (Ressourcen/Personen/Wartung) via segmented control; category show/hide buttons apply only in Ressourcen mode; drilldown (machine→who booked it, person→their machines) with a back control; independent fold state per category/group; default range = Jan 1 of current year → today; range changes auto-recompute (validated `from<=to`) with no separate "compute" button.
+- **All-bookings** (`1622–1686`): person/machine substring filters, a group `<select>` grouped by category via `<optgroup>`, a date-overlap window, 5 sort keys (unknown key falls back to `termin`) persisted to `localStorage('mb_absort')`, 300-row cap labeled "(gekürzt)"; "goto" narrows the machine filter to just that row's machine before jumping (so it's guaranteed visible).
+- **Admin** (`1936–1983`): sort mode (manual/name/group) persisted to `localStorage('mb_admsort')`; ↑/↓ reorder buttons show **only** in manual mode; reorder silently no-ops across a group boundary (the reducer aborts — UI should handle that gracefully, not throw); edit/add routes to the machine form (B6); a button opens the log view.
+- **Functionality:** each view's pure kernel (`ui/views/*.ts`) is already 100%-tested and unchanged — these slices are pure wiring.
+- **Tests:** per view, assert the right reducer/filter is called with the right args on each control, and that persisted localStorage keys are read/written under their exact legacy names.
+
+### B6 — Machine form + group management
+- **Must-haves (`legacy.js:1984–2075`):** category + group `<select>` grouped by category, plus a free-text "new group" input that overrides the select when non-empty; redundancy field backed by a `<datalist>` of existing values; 7 weekday checkboxes serialize to a mask where **all-on stores nothing** (`null`, not `'1111111'`); a dynamic maintenance-slot list (add/remove/edit rows: type, from, until, note) validated (`from<=until` per slot) before save; save routes through `saveMachine` (new: slug from German transliteration + de-duplication suffix + same-group insertion index; edit: aborts gracefully if the machine was concurrently deleted — a real race, not a bug); delete requires a confirm naming the cascade ("inklusive aller zugehörigen Buchungen... nicht rückgängig").
+- **Functionality/usability:** identical; the slug/mask edge cases are the highest-value test targets, not the form chrome.
+- **Tests:** slug generation for ä/ö/ü/ß names + uniqueness suffixing (`-2`, `-3`, …); mask round-trip (all-on → `undefined`/omitted); a bad maintenance range blocks save with the right toast; editing a since-deleted machine aborts without throwing.
+
+### B7 — Assistant UI (device tree, drag-drop, results)
+- **Must-haves (`legacy.js:1424–1619`):** device checklist reuses the same collapsible fav/category/group tree as the "Filtern" dropdown, but toggles only add/remove a device (`asToggleId`) and immediately reflect into the work area; dragging a device onto another device creates a new "need 1 of 2" group with a color from a fixed hue cycle (`AS_HUES`, 8 colors); dropping onto a group's kids area joins it; dropping onto empty canvas returns a node to root; the need stepper is clamped `[1, childCount]`; a redundancy hint ("alle gleichwertigen Geräte hier?") shows when a group has more members than its need; before running, if `anyRedund` is true, a confirm dialog asks whether every equivalent device was added; results are day-runs meeting the minimum-consecutive-days input, each with an editable "days to book" number (clamped to the run's length, with a transient tooltip on clamp), a suggested-devices line (only shown when the tree contains ≥1 group), a "pin" button that **collapses** (not closes) the modal and filters+centers the grid on that run, and "Buchen…" opens the booking form pre-picked.
+- **React note:** native `dragstart`/`dragover`/`drop` map directly onto `onDragStart`/`onDragOver`/`onDrop` — no new dependency needed, keeps the zero-extra-runtime-dep intent for anything beyond React itself.
+- **Functionality:** all tree mutation logic is already pure and 100%-tested in `core/assistant.ts` — this slice is DOM/DnD wiring only.
+- **Tests:** each DnD action (group-onto, join, to-root, dissolve, change-need, remove) calls the right core function and re-renders; the redundancy confirm gate appears only when `anyRedund` is true; results list caps at 30 and respects the min-days filter.
+
+### B8 — Presence badge, collision banner, SSE hook
+- **Must-haves (`legacy.js:2169–2207` + `setPres`/`showCollision`/`queueRemote`):** presence badge shows a count + a hover title listing active names in **server-received order** (not alphabetized — `presenceInfo` only filters, doesn't sort); reconnect on name change; the `mb_presence` "share" toggle, when off, connects **without** a `user` query param so this browser doesn't appear in others' lists; `hello` stamps the "last updated" time; `update` events patch cells + revision and queue a toast **only for foreign changes** (case-insensitive `isForeign`); `structural` events trigger a full state reload; `onerror` flips a visible "⚠ offline" indicator with no custom retry logic (EventSource retries natively); the collision banner is **persistent** (manual-dismiss only), shown when the server reports partial write conflicts.
+- **Functionality:** `net/sse.ts`'s pure functions (`applyUpdate`/`presenceInfo`/`isForeign`) are unchanged and already 100%-tested — this slice is the `useEffect`-based `EventSource` lifecycle + the badge/banner components.
+- **Tests:** mock `EventSource`; assert a foreign `update` queues a toast while an own-name update doesn't; a `structural` event reloads state; `onerror` flips the offline indicator; toggling the presence share setting changes the connection URL.
+
+### B9 — Settings, help, log, name-prompt
+- **Must-haves (`legacy.js:123–147, 283–405, 2076–2085`):** theme select (auto/light/dark) applies immediately **and** forces a grid re-render (booking cell colors are hue-shifted by `nameColor()` per current theme — a theme change with no re-render leaves stale colors); presence checkbox reconnects SSE; compact checkbox toggles a `<body>` class; weekends checkbox resets `extraWeeks` and re-centers today; debug checkbox toggles the debug panel; a "reconnect" button re-runs `connectSSE`+`refreshNow`; the name-prompt modal is non-dismissible on first run only, Enter-to-save, and auto-focuses its input. Help and Log are the lowest-complexity slices — Help is static legend text with embedded icons, Log is a plain capped list with a "back to admin" button — good first ports to build component conventions on before B1/B2.
+- **Must-haves (localStorage keys — preserve verbatim so existing users' browsers upgrade losslessly):** `mb_theme`, `mb_presence`, `mb_compact`, `mb_weekends`, `mb_debug`, `mb_user`.
+- **Tests:** theme toggle updates `document.documentElement.dataset.theme` and triggers a grid re-render; each settings control reads/writes its exact legacy key; name-prompt blocks dismissal only on first run.
+
+### B10 — App shell; delete `legacy.js`; retire `window.S`
+- **Must-haves (`legacy.js:2209–2220, 69–90`):** boot tries `/api/state`; on failure, shows the start-screen error copy verbatim and hides the old file-picker buttons (`btnPickFile`/`btnReadOnly`/`fsaHint` — likely deletable outright by this point, confirm they're unused); on success, hides the start screen, shows toolbar+grid, fills the group filter, prompts for a name only when `!user && !readOnly`, applies the debug panel, prepends one buffer week, centers today, and starts live timers (SSE + focus-triggered silent refresh) **exactly once** even if re-invoked (the `liveTimersOn` guard).
+- **Functionality:** identical bootstrap sequence; `app.ts` shrinks to store hydration + `createRoot(...).render(<App/>)`; `window.S`/`window.render`/`window.notify` bridges are deleted along with the last legacy consumer.
+- **Tests:** mount `<App/>` with a mocked fetch returning valid/invalid `/api/state` and assert the right screen renders in each case; name-prompt appears exactly when `!user && !readOnly`; live timers start once even across remounts.
+
+**Suggested order for Backlog B:** B0 → B9 (Help/Log first, to build conventions cheaply) → B1+B2 together (see sequencing note) → B3 → B4 → B5 (4 commits) → B6 → B7 → B8 → B10.

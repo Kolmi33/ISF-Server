@@ -6,7 +6,7 @@
 // `compute()` closure in legacy — the DOM read of the range and the `f>o` validation stay in legacy.
 
 import type { Machine, Bookings } from '../../../../shared/types.ts';
-import { weekdayRange, allDaysRange } from '../../core/dates.ts';
+import { getWeekdaysInRange, getAllDaysInRange } from '../../core/dates.ts';
 import { maintSlots, isBlockedM } from '../../core/machines.ts';
 
 /** One person's day count on a single machine (the per-machine drilldown row). */
@@ -108,8 +108,8 @@ export function computeStats(
   from: string,
   to: string,
 ): Stats {
-  const days = weekdayRange(from, to);
-  const calDays = allDaysRange(from, to);
+  const days = getWeekdaysInRange(from, to);
+  const calDays = getAllDaysInRange(from, to);
   const { machRows, persons } = aggregateBookings(machines, bookings, days);
   const maint = aggregateMaint(machines, from, to, calDays);
   return { days, machRows, persons, maint };

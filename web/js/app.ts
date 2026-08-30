@@ -12,7 +12,7 @@
 
 import type { AppState } from '../../shared/types.ts';
 import * as dates from './core/dates.ts';
-import { mondayOf } from './core/dates.ts';
+import { mondayOfDate } from './core/dates.ts';
 import * as machines from './core/machines.ts';
 import * as weekend from './core/weekend.ts';
 import * as booking from './core/booking.ts';
@@ -71,7 +71,7 @@ function hydrateState(): AppState {
     data: null,
     readOnly: false,
     user: localStorage.getItem('mb_user') || '',
-    startMonday: mondayOf(new Date()),
+    startMonday: mondayOfDate(new Date()),
     weeks: 2,
     extraWeeks: 0,
     machSel: jsonSet('mb_machsel', '[]'),

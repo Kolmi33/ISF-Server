@@ -5,7 +5,7 @@
 // presentation and move with the views.)
 
 import type { Machine, MaintSlot, MachineCategory } from '../../../shared/types.ts';
-import { parseYmd } from './dates.ts';
+import { parseIsoDateString } from './dates.ts';
 
 /** A machine's category: 'messtechnik' for measurement devices, else 'maschine'. */
 export function catOf(m: Machine | null | undefined): MachineCategory {
@@ -58,7 +58,7 @@ export function anyMaint(m: Machine): boolean {
  */
 export function dayAvailable(m: Machine, d: string): boolean {
   if (!m.days || m.days.length !== 7) return true;
-  const wd = (parseYmd(d).getUTCDay() + 6) % 7; // Mo=0 … So=6
+  const wd = (parseIsoDateString(d).getUTCDay() + 6) % 7; // Mo=0 … So=6
   return m.days.charAt(wd) !== '0';
 }
 

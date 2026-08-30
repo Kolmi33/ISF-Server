@@ -2,5 +2,8 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": ["server/server.ts", "server/import.ts", "server/backfill.ts"],
   "project": ["{web,server,shared}/**/*.ts"],
-  "ignoreExportsUsedInFile": true
+  "ignoreExportsUsedInFile": true,
+  "rules": {
+    "duplicates": "off"
+  }
 }

@@ -2,7 +2,7 @@
 //
 // `createStore` is PURE: the initial state is injected (E4), so the store is unit-tested
 // in Node with no `localStorage`/DOM. `app.ts` hydrates the real initial state (localStorage
-// + `mondayOf(new Date())`) and bridges the live object as `window.S`, the legacy compat
+// + `mondayOfDate(new Date())`) and bridges the live object as `window.S`, the legacy compat
 // alias. `store` is the canonical abstraction from Phase 3.1 on; `window.S` only shrinks
 // (migration rule, §14). The store mutates its state object IN PLACE so the bridged
 // `window.S` reference legacy holds stays valid.

@@ -8,7 +8,7 @@
 // device leaf or a nested group (with a `need` count). The DOM rendering, drag-and-drop, and
 // the availability source (bookings/maintenance) stay in legacy.js; this is the pure kernel.
 
-import { parseYmd, addDays, isWeekend, ymd } from './dates.ts';
+import { parseIsoDateString, addDays, isWeekend, formatDateAsIsoString } from './dates.ts';
 
 /** A device leaf in the Assistant tree. */
 export interface AssistDev {
@@ -141,12 +141,12 @@ export function anyRedund(node: AssistContainer): boolean {
 }
 
 /** The next weekday (Mon–Fri) ISO date strictly after `s`, skipping weekends. */
-export function nextWeekday(s: string): string {
-  let d = parseYmd(s);
-  do {
-    d = addDays(d, 1);
-  } while (isWeekend(d));
-  return ymd(d);
+export function nextWeekday(isoDateString: string): string {
+  let candidateDate = addDays(parseIsoDateString(isoDateString), 1);
+  while (isWeekend(candidateDate)) {
+    candidateDate = addDays(candidateDate, 1);
+  }
+  return formatDateAsIsoString(candidateDate);
 }
 
 /** Of `days`, those on which the whole tree is satisfiable. */

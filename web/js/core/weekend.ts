@@ -7,7 +7,7 @@
 // original — the caller relies on that contract.
 
 import type { BookingData } from '../../../shared/types.ts';
-import { parseYmd, ymd, addDays } from './dates.ts';
+import { parseIsoDateString, formatDateAsIsoString, addDays } from './dates.ts';
 
 /** An orphaned weekend day that was removed, with the previous value for undo. */
 export interface WeekendUndo {
@@ -26,11 +26,11 @@ export function sweepWeekends(fresh: BookingData, mid: string): WeekendUndo[] {
   if (!mb) return [];
   const undo: WeekendUndo[] = [];
   for (const [d, prev] of Object.entries(mb)) {
-    const dt = parseYmd(d);
+    const dt = parseIsoDateString(d);
     const wd = dt.getUTCDay();
     if (wd !== 0 && wd !== 6) continue;
-    const fri = ymd(addDays(dt, wd === 6 ? -1 : -2));
-    const mon = ymd(addDays(dt, wd === 6 ? 2 : 1));
+    const fri = formatDateAsIsoString(addDays(dt, wd === 6 ? -1 : -2));
+    const mon = formatDateAsIsoString(addDays(dt, wd === 6 ? 2 : 1));
     // The bridge holds as long as Friday AND Monday are booked (any person).
     if (!(mb[fri] && mb[mon])) {
       undo.push({ mid, date: d, prev: { ...prev } });

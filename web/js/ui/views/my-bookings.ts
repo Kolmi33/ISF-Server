@@ -5,7 +5,7 @@
 // and today are injected (E4). Faithful port of legacy `computeMyRuns`.
 
 import type { Machine, Bookings } from '../../../../shared/types.ts';
-import { parseYmd, addDays, isWeekend, ymd } from '../../core/dates.ts';
+import { parseIsoDateString, addDays, isWeekend, formatDateAsIsoString } from '../../core/dates.ts';
 
 /** A run of consecutive workdays the user has booked on one machine (a bookable "series"). */
 export interface BookingRun {
@@ -26,22 +26,24 @@ export function computeMyRuns(
   today: string,
 ): BookingRun[] {
   const pl = user.toLowerCase();
-  const nextWd = (s: string): string => {
-    let d = parseYmd(s);
-    do {
-      d = addDays(d, 1);
-    } while (isWeekend(d));
-    return ymd(d);
+  const nextWorkday = (isoDateString: string): string => {
+    let candidateDate = addDays(parseIsoDateString(isoDateString), 1);
+    while (isWeekend(candidateDate)) {
+      candidateDate = addDays(candidateDate, 1);
+    }
+    return formatDateAsIsoString(candidateDate);
   };
   const runs: BookingRun[] = [];
   for (const m of machines) {
     const mb = bookings[m.id] || {};
     const ds = Object.keys(mb)
-      .filter((d) => d >= today && !isWeekend(parseYmd(d)) && mb[d]!.name.toLowerCase() === pl)
+      .filter(
+        (d) => d >= today && !isWeekend(parseIsoDateString(d)) && mb[d]!.name.toLowerCase() === pl,
+      )
       .sort();
     let cur: string[] = [];
     for (const d of ds) {
-      if (cur.length && nextWd(cur[cur.length - 1]!) === d) cur.push(d);
+      if (cur.length && nextWorkday(cur[cur.length - 1]!) === d) cur.push(d);
       else {
         if (cur.length) runs.push({ m, dates: cur });
         cur = [d];

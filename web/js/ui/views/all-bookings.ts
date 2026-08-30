@@ -5,7 +5,7 @@
 // filter criteria are injected (E4). Faithful port of legacy `computeAllRuns` + the list `renderList`.
 
 import type { Machine, Bookings } from '../../../../shared/types.ts';
-import { parseYmd, addDays, isWeekend, ymd } from '../../core/dates.ts';
+import { parseIsoDateString, addDays, isWeekend, formatDateAsIsoString } from '../../core/dates.ts';
 
 /** A booking run: consecutive workdays booked by one person on one machine, with the earliest ts. */
 export interface AllRun {
@@ -25,18 +25,18 @@ export function computeAllRuns(
   bookings: Bookings,
   today: string,
 ): AllRun[] {
-  const nextWd = (s: string): string => {
-    let d = parseYmd(s);
-    do {
-      d = addDays(d, 1);
-    } while (isWeekend(d));
-    return ymd(d);
+  const nextWorkday = (isoDateString: string): string => {
+    let candidateDate = addDays(parseIsoDateString(isoDateString), 1);
+    while (isWeekend(candidateDate)) {
+      candidateDate = addDays(candidateDate, 1);
+    }
+    return formatDateAsIsoString(candidateDate);
   };
   const runs: AllRun[] = [];
   for (const m of machines) {
     const mb = bookings[m.id] || {};
     const ds = Object.keys(mb)
-      .filter((d) => d >= today && !isWeekend(parseYmd(d)))
+      .filter((d) => d >= today && !isWeekend(parseIsoDateString(d)))
       .sort();
     const runTs = (arr: string[]): string =>
       arr
@@ -47,7 +47,7 @@ export function computeAllRuns(
     let curName: string | null = null;
     for (const d of ds) {
       const nm = mb[d]!.name;
-      if (cur.length && curName === nm && nextWd(cur[cur.length - 1]!) === d) cur.push(d);
+      if (cur.length && curName === nm && nextWorkday(cur[cur.length - 1]!) === d) cur.push(d);
       else {
         if (cur.length) runs.push({ m, name: curName!, dates: cur, ts: runTs(cur) });
         cur = [d];

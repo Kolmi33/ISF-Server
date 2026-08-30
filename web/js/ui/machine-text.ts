@@ -5,7 +5,7 @@
 // legacy call sites (`statusRangeText(m)`) are unchanged while tests stay deterministic (E4/E6).
 
 import type { Machine, MaintSlot } from '../../../shared/types.ts';
-import { fmtLong, todayStr } from '../core/dates.ts';
+import { formatDateLong, todayAsIsoDateString } from '../core/dates.ts';
 import { maintSlots, slotCovers } from '../core/machines.ts';
 
 const WD_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
@@ -13,8 +13,8 @@ const WD_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 /** One maintenance/defect slot as German text, e.g. `Wartung: <from> – <until> (note)`. */
 export function maintText(s: MaintSlot | null | undefined): string {
   if (!s) return '';
-  const f = s.from ? fmtLong(s.from) : 'sofort';
-  const u = s.until ? fmtLong(s.until) : 'unbegrenzt';
+  const f = s.from ? formatDateLong(s.from) : 'sofort';
+  const u = s.until ? formatDateLong(s.until) : 'unbegrenzt';
   return `${s.type === 'defekt' ? 'defekt' : 'Wartung'}: ${f} – ${u}${s.note ? ' (' + s.note + ')' : ''}`;
 }
 
@@ -22,7 +22,7 @@ export function maintText(s: MaintSlot | null | undefined): string {
  * A machine's status summary: the slot covering `today` if any, else the earliest slot by `from`,
  * plus a `· +N weitere` suffix when more than one slot exists. Empty when the machine has no slots.
  */
-export function statusRangeText(m: Machine, today: string = todayStr()): string {
+export function statusRangeText(m: Machine, today: string = todayAsIsoDateString()): string {
   const ss = maintSlots(m);
   if (!ss.length) return '';
   const active =

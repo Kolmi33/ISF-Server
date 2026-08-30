@@ -7,7 +7,13 @@
 // render carries aria/data attributes and richer titles that the patch path does not).
 
 import type { Booking } from '../../../shared/types.ts';
-import { parseYmd, isWeekend, isoWeek, weekdayName, fmtShort } from '../core/dates.ts';
+import {
+  parseIsoDateString,
+  isWeekend,
+  getIsoWeekNumber,
+  formatWeekdayName,
+  formatDateShort,
+} from '../core/dates.ts';
 
 /** The four mutually exclusive states a grid cell can be in, in priority order. */
 export type CellState = 'blocked' | 'booked' | 'unavail' | 'free';
@@ -67,10 +73,10 @@ export function weekHeaderCells(
   let dayRow = '';
   weeks.forEach((wk, i) => {
     if (i > 0) kwRow += '<th class="gap" rowspan="2" aria-hidden="true"></th>';
-    kwRow += `<th colspan="${daysPerWeek}" role="columnheader">KW ${isoWeek(parseYmd(wk[0]!))}</th>`;
+    kwRow += `<th colspan="${daysPerWeek}" role="columnheader">KW ${getIsoWeekNumber(parseIsoDateString(wk[0]!))}</th>`;
     for (const d of wk) {
-      const dd = parseYmd(d);
-      dayRow += `<th class="${d === today ? 'today' : ''} ${isWeekend(dd) ? 'wknd' : ''}" role="columnheader">${weekdayName(dd)}<br>${fmtShort(dd)}</th>`;
+      const dd = parseIsoDateString(d);
+      dayRow += `<th class="${d === today ? 'today' : ''} ${isWeekend(dd) ? 'wknd' : ''}" role="columnheader">${formatWeekdayName(dd)}<br>${formatDateShort(dd)}</th>`;
     }
   });
   return { kwRow, dayRow };

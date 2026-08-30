@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Machine } from '../../../shared/types.ts';
-import { fmtLong } from '../core/dates.ts';
+import { formatDateLong } from '../core/dates.ts';
 import { maintText, statusRangeText, daysMaskText } from './machine-text.ts';
 
 describe('maintText', () => {
@@ -10,14 +10,18 @@ describe('maintText', () => {
   });
   it('formats a bounded Wartung slot', () => {
     const s = { type: 'wartung', from: '2021-01-04', until: '2021-01-06' };
-    expect(maintText(s)).toBe(`Wartung: ${fmtLong('2021-01-04')} – ${fmtLong('2021-01-06')}`);
+    expect(maintText(s)).toBe(
+      `Wartung: ${formatDateLong('2021-01-04')} – ${formatDateLong('2021-01-06')}`,
+    );
   });
   it('uses sofort/unbegrenzt for open bounds and labels defekt', () => {
     expect(maintText({ type: 'defekt', from: '', until: '' })).toBe('defekt: sofort – unbegrenzt');
   });
   it('appends a note when present', () => {
     const s = { type: 'wartung', from: '2021-01-04', note: 'Kalibrierung' };
-    expect(maintText(s)).toBe(`Wartung: ${fmtLong('2021-01-04')} – unbegrenzt (Kalibrierung)`);
+    expect(maintText(s)).toBe(
+      `Wartung: ${formatDateLong('2021-01-04')} – unbegrenzt (Kalibrierung)`,
+    );
   });
 });
 
@@ -34,7 +38,7 @@ describe('statusRangeText', () => {
       maint: [{ type: 'wartung', from: '2021-01-01', until: '2021-12-31' }],
     };
     expect(statusRangeText(m, '2021-06-01')).toBe(
-      `Wartung: ${fmtLong('2021-01-01')} – ${fmtLong('2021-12-31')}`,
+      `Wartung: ${formatDateLong('2021-01-01')} – ${formatDateLong('2021-12-31')}`,
     );
   });
 
@@ -50,7 +54,7 @@ describe('statusRangeText', () => {
       ],
     };
     expect(statusRangeText(m, '2021-06-01')).toBe(
-      `defekt: sofort – ${fmtLong('2021-01-05')} · +1 weitere`,
+      `defekt: sofort – ${formatDateLong('2021-01-05')} · +1 weitere`,
     );
   });
 
@@ -65,7 +69,7 @@ describe('statusRangeText', () => {
       ],
     };
     expect(statusRangeText(m, '2021-06-01')).toBe(
-      `defekt: sofort – ${fmtLong('2021-01-05')} · +1 weitere`,
+      `defekt: sofort – ${formatDateLong('2021-01-05')} · +1 weitere`,
     );
   });
 });
