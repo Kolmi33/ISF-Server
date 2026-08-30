@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { Machine } from '../../../shared/types.ts';
 import {
-  catOf,
-  maintSlots,
+  categoryOf,
+  maintenanceSlots,
   slotCovers,
-  maintAt,
-  isBlockedM,
-  anyMaint,
+  maintenanceSlotAt,
+  isBlockedOnDate,
+  hasAnyMaintenanceSlot,
   dayAvailable,
   cellBookable,
 } from './machines.ts';
@@ -16,24 +16,24 @@ function machine(over: Partial<Machine> = {}): Machine {
   return { id: 'm1', name: 'Fräse', group: 'Werkstatt', ...over };
 }
 
-describe('catOf', () => {
+describe('categoryOf', () => {
   it("returns 'messtechnik' only when cat is exactly that", () => {
-    expect(catOf(machine({ cat: 'messtechnik' }))).toBe('messtechnik');
+    expect(categoryOf(machine({ cat: 'messtechnik' }))).toBe('messtechnik');
   });
   it("defaults to 'maschine' when cat is absent or different", () => {
-    expect(catOf(machine())).toBe('maschine');
-    expect(catOf(machine({ cat: 'sonstiges' }))).toBe('maschine');
+    expect(categoryOf(machine())).toBe('maschine');
+    expect(categoryOf(machine({ cat: 'sonstiges' }))).toBe('maschine');
   });
   it("treats null/undefined as 'maschine'", () => {
-    expect(catOf(null)).toBe('maschine');
-    expect(catOf(undefined)).toBe('maschine');
+    expect(categoryOf(null)).toBe('maschine');
+    expect(categoryOf(undefined)).toBe('maschine');
   });
 });
 
-describe('maintSlots', () => {
+describe('maintenanceSlots', () => {
   it('returns the structured maint array as-is when present', () => {
     const slots = [{ type: 'wartung', from: '2021-01-01' }];
-    expect(maintSlots(machine({ maint: slots }))).toBe(slots);
+    expect(maintenanceSlots(machine({ maint: slots }))).toBe(slots);
   });
   it('synthesizes one slot from the legacy status fields', () => {
     const m = machine({
@@ -42,18 +42,18 @@ describe('maintSlots', () => {
       statusUntil: '2021-01-08',
       statusNote: 'Motor',
     });
-    expect(maintSlots(m)).toEqual([
+    expect(maintenanceSlots(m)).toEqual([
       { type: 'defekt', from: '2021-01-04', until: '2021-01-08', note: 'Motor' },
     ]);
   });
   it('fills empty strings for missing legacy status bounds', () => {
-    expect(maintSlots(machine({ status: 'wartung' }))).toEqual([
+    expect(maintenanceSlots(machine({ status: 'wartung' }))).toEqual([
       { type: 'wartung', from: '', until: '', note: '' },
     ]);
   });
   it("returns [] for status 'ok' or no status at all", () => {
-    expect(maintSlots(machine({ status: 'ok' }))).toEqual([]);
-    expect(maintSlots(machine())).toEqual([]);
+    expect(maintenanceSlots(machine({ status: 'ok' }))).toEqual([]);
+    expect(maintenanceSlots(machine())).toEqual([]);
   });
 });
 
@@ -76,19 +76,19 @@ describe('slotCovers', () => {
   });
 });
 
-describe('maintAt / isBlockedM / anyMaint', () => {
+describe('maintenanceSlotAt / isBlockedOnDate / hasAnyMaintenanceSlot', () => {
   const m = machine({ status: 'defekt', statusFrom: '2021-01-04', statusUntil: '2021-01-08' });
-  it('maintAt returns the covering slot or null', () => {
-    expect(maintAt(m, '2021-01-06')?.type).toBe('defekt');
-    expect(maintAt(m, '2021-02-01')).toBeNull();
+  it('maintenanceSlotAt returns the covering slot or null', () => {
+    expect(maintenanceSlotAt(m, '2021-01-06')?.type).toBe('defekt');
+    expect(maintenanceSlotAt(m, '2021-02-01')).toBeNull();
   });
-  it('isBlockedM reflects coverage', () => {
-    expect(isBlockedM(m, '2021-01-06')).toBe(true);
-    expect(isBlockedM(m, '2021-02-01')).toBe(false);
+  it('isBlockedOnDate reflects coverage', () => {
+    expect(isBlockedOnDate(m, '2021-01-06')).toBe(true);
+    expect(isBlockedOnDate(m, '2021-02-01')).toBe(false);
   });
-  it('anyMaint reflects whether any slot exists', () => {
-    expect(anyMaint(m)).toBe(true);
-    expect(anyMaint(machine())).toBe(false);
+  it('hasAnyMaintenanceSlot reflects whether any slot exists', () => {
+    expect(hasAnyMaintenanceSlot(m)).toBe(true);
+    expect(hasAnyMaintenanceSlot(machine())).toBe(false);
   });
 });
 

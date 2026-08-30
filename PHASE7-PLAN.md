@@ -276,10 +276,28 @@ export const allDaysRange = getAllDaysInRange;
   moment the module loads, and the aliases are deleted with `legacy.js` in slice B10 rather
   than exercised by anything the test suite calls.
 
-### A2 — `web/js/core/machines.ts`
-- **Must-haves:** all 8 exports are called by bare name in `legacy.js` — coordinate. Private params `m`, `s`, `d` throughout → `machine`, `slot`, `isoDate` (matches the doc-comments, which already use those words). `wd` in `dayAvailable` → `mondayIndexedWeekday` with a comment on the `(getUTCDay()+6)%7` Mo=0 remap (it's non-obvious and appears twice across this file and `render()` in legacy — worth a shared named constant/helper if Phase 7 touches both).
-- **Functionality:** unchanged.
-- **Tests:** `machines.test.ts` green unmodified.
+### A2 — `web/js/core/machines.ts` — **DONE**
+Grepped first this time (learned from A5's mistake): `catOf`, `maintSlots`, `maintAt`,
+`isBlockedM`, `anyMaint` are each called by bare name **dozens of times** in `legacy.js`;
+`slotCovers`, `dayAvailable`, `cellBookable` are not called there at all (only used inside
+this file or via typed imports). Of the five bridged ones, all five ARE genuine
+abbreviations (`cat`, `maint`×3, the unexplained `M` suffix) — unlike A5's exports, these
+needed real renames: `catOf`→`categoryOf`, `maintSlots`→`maintenanceSlots`,
+`maintAt`→`maintenanceSlotAt`, `isBlockedM`→`isBlockedOnDate`, `anyMaint`→
+`hasAnyMaintenanceSlot`. Handled with the same alias-bridge pattern as A1 (dates.ts):
+real names in the module, old names as a small aliased block for `legacy.js`, deleted in
+slice B10. `dayAvailable`/`slotCovers`/`cellBookable` were already full words — untouched
+except internal params (`m`/`d`/`s` → `machine`/`isoDate`/`slot`).
+
+Three other TS files import the renamed functions directly (not through the bridge) and
+needed updating too: `core/booking.ts` (`isBlockedM`/`maintAt`→ new names, `dayAvailable`
+unchanged), `ui/machine-text.ts` (`maintSlots`→`maintenanceSlots`), `ui/views/stats.ts`
+(`maintSlots`/`isBlockedM`→ new names) — all mechanical, `tsc`-checked.
+
+- **Tests:** `machines.test.ts` (18) rewritten to import/call the new names (mechanical,
+  same assertions); `booking.test.ts` (32), `machine-text.test.ts` (11),
+  `stats.test.ts` (7) all green unmodified — they only call the still-exported reducer/
+  view functions, never the renamed machine predicates directly.
 
 ### A3 — `web/js/core/weekend.ts`
 - **Must-haves:** `sweepWeekends` is exported and called directly by every `core/booking.ts` reducer, not `legacy.js` — but `core/booking.ts` imports it by name, so still coordinate (grep `booking.ts`/`booking.test.ts`). Private: `mb`→`machineBookings`, `d`/`prev`→`isoDate`/`previousValue`, `dt`→`date`, `wd`→`weekday`. The Fri/Mon offset math (`wd===6?-1:-2`) deserves a one-line WHY comment: "Saturday is 1 day after Friday, Sunday is 2 days after."

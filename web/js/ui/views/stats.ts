@@ -7,7 +7,7 @@
 
 import type { Machine, Bookings } from '../../../../shared/types.ts';
 import { getWeekdaysInRange, getAllDaysInRange } from '../../core/dates.ts';
-import { maintSlots, isBlockedM } from '../../core/machines.ts';
+import { maintenanceSlots, isBlockedOnDate } from '../../core/machines.ts';
 
 /** One person's day count on a single machine (the per-machine drilldown row). */
 export interface StatsPersonDays {
@@ -83,11 +83,11 @@ function aggregateMaint(
   let inst = 0;
   let days = 0;
   for (const m of machines) {
-    const inRange = maintSlots(m).filter(
+    const inRange = maintenanceSlots(m).filter(
       (s) => (!s.until || s.until >= from) && (!s.from || s.from <= to),
     );
     let dc = 0;
-    for (const d of calDays) if (isBlockedM(m, d)) dc++;
+    for (const d of calDays) if (isBlockedOnDate(m, d)) dc++;
     if (inRange.length || dc) {
       rows.push({ m, inst: inRange.length, days: dc });
       inst += inRange.length;

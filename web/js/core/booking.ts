@@ -18,7 +18,7 @@
 // none of those renames need any change outside this file.
 
 import type { Booking, BookingData, Machine, MaintSlot } from '../../../shared/types.ts';
-import { dayAvailable, isBlockedM, maintAt } from './machines.ts';
+import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from './machines.ts';
 import { sweepWeekends } from './weekend.ts';
 
 /** A cell change, with the previous value for undo (`null` = the cell was empty). */
@@ -70,11 +70,11 @@ function findConflicts(
     const machineBookings = freshServerData.bookings[machineId] || {};
     for (const date of dates) {
       if (!dayAvailable(machine, date)) continue; // unavailable weekdays are silently skipped
-      if (isBlockedM(machine, date)) {
+      if (isBlockedOnDate(machine, date)) {
         conflicts.push({
           mid: machineId,
           date,
-          by: `gesperrt (${maintAt(machine, date)?.type || 'Wartung'})`,
+          by: `gesperrt (${maintenanceSlotAt(machine, date)?.type || 'Wartung'})`,
         });
       } else if (machineBookings[date]) {
         conflicts.push({ mid: machineId, date, by: machineBookings[date].name });
@@ -96,7 +96,7 @@ function writeMachineCells(
   const undo: CellUndo[] = [];
   for (const date of dates) {
     // Never overwrite an existing cell, and respect blocks + unavailable weekdays.
-    if (machineBookings[date] || isBlockedM(machine, date) || !dayAvailable(machine, date)) {
+    if (machineBookings[date] || isBlockedOnDate(machine, date) || !dayAvailable(machine, date)) {
       continue;
     }
     machineBookings[date] = buildCell();

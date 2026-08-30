@@ -6,7 +6,7 @@
 
 import type { Machine, MaintSlot } from '../../../shared/types.ts';
 import { formatDateLong, todayAsIsoDateString } from '../core/dates.ts';
-import { maintSlots, slotCovers } from '../core/machines.ts';
+import { maintenanceSlots, slotCovers } from '../core/machines.ts';
 
 const WD_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
@@ -23,7 +23,7 @@ export function maintText(s: MaintSlot | null | undefined): string {
  * plus a `· +N weitere` suffix when more than one slot exists. Empty when the machine has no slots.
  */
 export function statusRangeText(m: Machine, today: string = todayAsIsoDateString()): string {
-  const ss = maintSlots(m);
+  const ss = maintenanceSlots(m);
   if (!ss.length) return '';
   const active =
     ss.find((s) => slotCovers(s, today)) ||
