@@ -721,11 +721,55 @@ branch entirely.
   month-jump action lands on the exact date the unit tests predict (verified by hand against
   the real ISO-week math, not just "it changed"). No console errors.
 
-### B4 — Booking form, detail modal, undo toast
-- **Must-haves (`legacy.js:1211–1354`):** form is **sticky** (not dismissible by outside-click/Esc) while open; name defaults to `S.user`; date range books **every calendar day including weekends** in range, not just workdays (easy to get backwards); validation: name required, `from<=to`, and `dates.length*mids.length<=500`; on conflict, the form **reopens prefilled** (name/note preserved) with a capped list (first 15) of conflicts plus a "book only free" force button; on success the modal closes **before** the async write resolves (optimistic), followed by a 9s undo toast. Detail modal: contiguous same-name weekday-run detection vs. group (`gid`) detection are two different "delete more" affordances with different confirm copy; a "Statistik" shortcut opens Stats pre-filtered to that person.
-- **Functionality:** all of the above, byte-identical German copy.
-- **Usability:** preserve exact toast durations (3.5s default / 9s with undo) and the 15-item conflict-list cap.
-- **Tests:** validation messages for each invalid input; weekend-inclusive date range confirmed; conflict reopen preserves name/note and shows the force-book path; run-vs-group detection picks the right delete scope; undo restores prior values (including re-deleting a created cell when `prev:null`).
+### B4 — Booking form, detail modal, undo toast — **DONE**
+Executed as planned, with one shape decision made explicit up front and the scope drawn
+precisely at the plan's own boundary (the remote-change queue stays B8's; the checklist stays
+B7's).
+
+**Shape decision (E2 — flagged, not silently absorbed):** legacy closes the booking form
+immediately, then reopens a fresh one prefilled with the same values if the write hits a
+conflict. `window.mutate`'s reducer call is itself synchronous (it applies to the in-memory
+`S.data`; only the network persist afterward is a real background task — its own comment says
+so), so closing first buys no real responsiveness, only an extra close+reopen flicker.
+`BookingForm.tsx` instead keeps the same modal mounted throughout and shows the conflict list as
+component state, closing only once the outcome is actually known (a clean success, or
+Abbrechen). The visible result for the user is identical or smoother — recorded here precisely
+so it reads as a deliberate call, not a drift from the port.
+
+**New pure logic, not just wiring:** `core/booking-queries.ts` (7 tests) — the contiguous
+same-name-workday-run detection and the gid-based booking-group collection, pulled out of
+`openBookingDetail`'s body as pure read-only queries (the write-path reducers were already pure
+in `core/booking.ts`; this was the one read-only piece still living in the DOM-adjacent
+function). `ui/escape-html.ts` (3 tests) — a small, deliberately-named XSS-prevention utility:
+the still-legacy `askConfirm` dialog takes its body as a raw HTML string, so any user-entered
+value going into it (a booker's name, a group title) has to be escaped at that one seam.
+
+**Also completed in this slice, as previously flagged:** `refreshCell`/`refreshDot`/`patchCells`
+(B2's plan note: "belong with whichever slice ports the booking form") now live in
+`ui/cell-patch.ts` — legacy's own targeted-DOM-patch performance path, still called from the
+still-legacy `mutate`'s optimistic-apply step. `toast`/`offerUndo` moved to `ui/toast.ts`,
+needed by this slice's own validation messages and used identically by every other write path.
+
+**Scope held at the plan's boundary:** `queueRemote`/`runRemoteQ`/`remoteMsg` (the
+cross-tab change-notification queue) stay in `legacy.js` for B8, which the plan already named as
+theirs. `machineChecklist`/`wireChecklistFilter` (the assistant's device tree) stay for B7.
+`window.mutate` itself stays legacy — it's cross-cutting infrastructure every write path calls
+into, not something specific to the booking form, and no plan slice claims it by name.
+
+- **Tests:** `BookingForm.test.tsx` (9) — machine list + defaults, all three validation
+  messages, weekend-inclusive booking confirmed via the actual reducer call, the conflict list
+  (with its 15-item cap) shown in place rather than via close+reopen, the force-book path, and
+  Abbrechen. `BookingDetailModal.test.tsx` (16) — facts shown/hidden correctly, the Statistik
+  shortcut, run-vs-group detection picking the right hint and delete button (never both), both
+  delete confirmations' declined path, single-day delete, and `openCellAction`'s three routes
+  (blocked/unavailable toast, existing booking → detail, free → form). `cell-patch.test.ts` (13)
+  and `toast.test.ts` (9) cover the patch path and the toast/undo mechanics directly. `web/js/ui/**`
+  coverage 99.66%/93.97%; `.../ui/components` 99.62%/90.39%.
+- **Browser-verified (E5), live:** double-clicking a free cell opens the form; booking with a
+  note closes it and shows the undo toast; the cell renders booked with the entered name;
+  double-clicking it opens the detail modal (correctly showing the note-derived booking group);
+  "Diesen Tag löschen" closes the modal, frees the cell, and offers undo; clicking undo restores
+  the booking. No console errors through the whole cycle.
 
 ### B5 — Four modals: my-bookings, stats, all-bookings, admin
 - **My-bookings** (`1688–1771`): run structure is **frozen at open** (`computeMyRuns` called once) but each run's *live* days are re-filtered against current data on every render, so deletions disappear without recomputing groupings; per-run expand/collapse keyed by `mid|firstDate`; "only my machines" filter button; per-day vs. per-run delete (run delete requires confirm when >1 day); "goto" expands the target's category/group before jumping (a filtered-out target wouldn't be visible otherwise).

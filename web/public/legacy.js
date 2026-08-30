@@ -467,60 +467,9 @@ function toggleFav(mid){
    gotoNextFree()/gotoPrevFree(): ⏭/⏮-Sprünge je Maschine (Zeiger in
    nextFreePtr; Wechsel der Maschine setzt die übrigen Zeiger zurück).
    ================================================================= */
-/* Sel, paintSel, clearSel → ui/grid-interaction.ts (window bridge). Phase 7 slice B2. */
-function cellEl(mid,date){ return document.querySelector(`td.cell[data-mid="${CSS.escape(mid)}"][data-date="${date}"]`); }
-
-/* =================================================================
-   GEZIELTES ZELL-PATCHING (Performance)
-   Nach Buchen/Löschen werden nur die betroffenen Zellen im DOM
-   aktualisiert statt das komplette Raster neu zu bauen. Die Liste der
-   betroffenen Zellen liefern die Undo-Einträge der Mutation gratis mit.
-   Strukturelle Änderungen (Maschinen anlegen/löschen/sortieren, Status)
-   und Fremdänderungen per Refresh lösen den vollständigen Neuaufbau aus
-   (render(), ab 4.1c über den Store: notify() → abonniertes render()).
-   ================================================================= */
-function refreshCell(mid, date){
-  const el=cellEl(mid, date); if(!el) return; // z. B. Wochenendtag: keine Zelle
-  const m=machById(mid); if(!m) return;
-  const tS=todayStr(); const isToday=date===tS;
-  const b=getBooking(mid, date);
-  // Gleiche Zustands-/Klassenlogik wie render() (ui/grid.ts). Der Patch-Pfad setzt bewusst
-  // KEIN wknd (siehe ARCHITECTURE §15); aria/kfocus bleiben erhalten (paintSel danach).
-  const st=classifyCell(isBlockedM(m,date), b, dayAvailable(m,date));
-  if(st==='blocked'){
-    el.className=cellClass('blocked',{today:isToday});
-    el.style.background=''; el.title=blockText(m,date); el.textContent=b?b.name:'';
-  } else if(st==='booked'){
-    el.className=cellClass('booked',{mine:isMine(S.user,b.name),today:isToday});
-    el.style.background=nameColor(b.name);
-    el.title=b.name+(b.note?' — '+b.note:'');
-    el.textContent=b.name;
-  } else if(st==='unavail'){
-    el.className=cellClass('unavail',{today:isToday});
-    el.style.background=''; el.title='an diesem Wochentag nicht verfügbar'; el.textContent='';
-  } else {
-    el.className=cellClass('free',{today:isToday});
-    el.style.background=''; el.title=''; el.textContent='';
-  }
-}
-function refreshDot(mid){
-  const any=cellEl(mid, S.visD[0]); if(!any) return;
-  const row=any.closest('tr'); if(!row) return;
-  const dot=row.querySelector('.dot'); if(!dot) return;   // Wartung/defekt nutzt .statdot (Blitz) – bleibt statisch
-  const m=machById(mid); if(!m) return;
-  const tS=todayStr(); const tb=getBooking(mid, tS);
-  // .dot existiert nur auf Zeilen ohne heutige Sperre → classifyDot(null,…) liefert busy/unavail/frei.
-  const st=classifyDot(null, tb, dayAvailable(m, tS));   // → ui/grid.ts
-  if(st==='busy'){ dot.className='dot busy'; dot.title='heute belegt: '+tb.name; }
-  else if(st==='unavail'){ dot.className='dot unavail'; dot.title='an diesem Wochentag nicht verfügbar'; }
-  else { dot.className='dot free'; dot.title='heute frei'; }
-}
-function patchCells(entries){
-  const mids=new Set();
-  for(const e of entries){ refreshCell(e.mid, e.date); mids.add(e.mid); }
-  mids.forEach(refreshDot);
-  paintSel(); // Auswahl-/Fokusmarker wiederherstellen (className wurde ersetzt)
-}
+/* Sel, paintSel, clearSel → ui/grid-interaction.ts (window bridge). Phase 7 slice B2.
+   cellEl, refreshCell, refreshDot, patchCells → ui/cell-patch.ts (window bridge).
+   Phase 7 slice B4. */
 
 /* Zum nächsten freien Werktag einer Maschine springen.
    Mehrfach drückbar: jeder Klick springt RELATIV vom zuletzt gefundenen Slot weiter.
@@ -578,17 +527,7 @@ function gotoPrevFree(mid){
   else toast(`${m.name}: bereits am heutigen Tag.`);
 }
 
-function openCellAction(mid,date){
-  const m=machById(mid); if(!m) return;
-  const b=getBooking(mid,date);
-  if(isBlockedM(m,date) && !b){
-    toast(`${m.name}: ${blockText(m,date)}`); return;
-  }
-  if(!dayAvailable(m,date) && !b){
-    toast(`${m.name}: an diesem Wochentag nicht verfügbar (verfügbar: ${daysMaskText(m)}).`); return;
-  }
-  b ? openBookingDetail(m,date,b) : openBookingForm([mid],date,date);
-}
+/* openCellAction → ui/components/BookingDetailModal.tsx (window bridge). Phase 7 slice B4. */
 
 /* gridEl, drag-select + auto-scroll, the grid's mousedown/mouseover/click/dblclick →
    ui/grid-interaction.ts (window bridge). Phase 7 slice B2. */
@@ -679,20 +618,7 @@ document.getElementById('modalReopen').addEventListener('click',expandModal);
 // Klick auf den Hintergrund bzw. Esc schließt nur, wenn der Dialog NICHT sticky ist.
 document.getElementById('overlay').addEventListener('click',ev=>{ if(ev.target.id==='overlay' && !modalSticky) closeModal(); });
 document.addEventListener('keydown',ev=>{ if(ev.key==='Escape' && !modalSticky) closeModal(); });
-let toastTimer;
-function toast(msg, undoFn, ms){
-  const t=document.getElementById('toast');
-  if(undoFn){
-    t.innerHTML=esc(msg)+' <button id="undoBtn">↩ Rückgängig</button>';
-    t.classList.add('action');
-    document.getElementById('undoBtn').onclick=()=>{ t.classList.remove('show','action'); undoFn(); };
-  } else {
-    t.textContent=msg; t.classList.remove('action');
-  }
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>t.classList.remove('show','action'), ms || (undoFn?9000:3500));
-}
+/* toast → ui/toast.ts (window bridge). Phase 7 slice B4. */
 /* --- Benachrichtigungen über Änderungen der Kollegen (jede einzeln) ---
    Beim Abgleich neu hinzugekommene fremde Protokolleinträge werden nacheinander
    unten eingeblendet. Eine kleine Warteschlange zeigt sie einzeln (je ~2,6 s)
@@ -724,151 +650,9 @@ function runRemoteQ(){
   setTimeout(runRemoteQ, 2800);
 }
 
-/* Bietet nach einer Aktion 9 s lang „Rückgängig" an. entries: [{mid,date,prev}] */
-function offerUndo(msg, entries, label){
-  if(!entries || !entries.length){ toast(msg); return; }
-  toast(msg, async ()=>{
-    const res=await mutate(fresh=>{
-      for(const e of entries){
-        fresh.bookings[e.mid]=fresh.bookings[e.mid]||{};
-        if(e.prev) fresh.bookings[e.mid][e.date]=e.prev;
-        else delete fresh.bookings[e.mid][e.date];
-      }
-      return {ok:1, undo:entries}; // gleiche Zellen -> Patch-Pfad statt Voll-Render
-    }, 'Rückgängig: '+label);
-    if(res && !res.abort) toast('Rückgängig gemacht ✓');
-  });
-}
-
-/* =================================================================
-   BUCHEN
-   openBookingForm(mids, von, bis): EIN Formular für 1..n Maschinen (Einzel-
-   klick, Bereichsauswahl und Assistent nutzen denselben Weg).
-   submitBooking(): bucht alle Werktage im Zeitraum über mutate(). Konflikte
-   (belegt oder gesperrt) werden gegen den FRISCHEN Dateistand ermittelt und
-   im Dialog gelistet – „Nur freie Termine buchen" überspringt sie. Jede
-   erfolgreiche Buchung bekommt 9 s Rückgängig (offerUndo).
-   ================================================================= */
-function openBookingForm(mids, from, to){
-  const machines = mids.map(id=>machById(id)).filter(Boolean);
-  openModal(`
-    <h2>Buchen</h2>
-    <div class="formrow"><label>Maschine(n)</label><div style="flex:1">${machines.map(m=>esc(m.name)).join('<br>')}</div></div>
-    <div class="formrow"><label>Name</label><input type="text" id="bkName" value="${esc(S.user)}"></div>
-    <div class="formrow"><label>Von</label><input type="date" id="bkFrom" value="${from}">
-      <label style="min-width:auto">Bis</label><input type="date" id="bkTo" value="${to}"></div>
-    <div class="formrow"><label>Notiz</label><input type="text" id="bkNote" placeholder="optional – Zweck / Kommentar"></div>
-    <div id="bkConflicts"></div>
-    <div class="modal-actions">
-      <button class="btn" onclick="closeModal()">Abbrechen</button>
-      <button class="btn primary" id="bkSave">Buchen</button>
-    </div>`, {sticky:true});
-  document.getElementById('bkSave').onclick = ()=>submitBooking(mids,false);
-}
-function genGid(){ return 'g_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
-async function submitBooking(mids, skipConflicts){
-  const name=document.getElementById('bkName').value.trim();
-  const from=document.getElementById('bkFrom').value, to=document.getElementById('bkTo').value;
-  const note=document.getElementById('bkNote').value.trim();
-  const title=note;   // Titel & Notiz zusammengelegt: dient zugleich als Gruppentitel
-  if(!name){ toast('Bitte Namen eingeben.'); return; }
-  if(!from||!to||from>to){ toast('Bitte gültigen Zeitraum wählen.'); return; }
-  // ALLE Tage buchen (inkl. Wochenenden im Zeitraum): so ist die Maschine
-  // auch Sa/So Teil der Serie und nicht scheinbar „frei"
-  const dates=allDaysRange(from,to);
-  if(!dates.length){ toast('Bitte gültigen Zeitraum wählen.'); return; }
-  if(dates.length*mids.length>500){ toast('Zeitraum zu groß (max. ~500 Einzelbuchungen).'); return; }
-
-  closeModal(); // Dialog SOFORT schließen – das Speichern läuft im Anschluss, Ergebnis kommt als Toast
-
-  // Konflikt-Prüfung + Anwenden liegt in core/booking.ts (bookCells, window-Bridge);
-  // die Impuritäten (Zeitstempel, Gruppen-ID) werden injiziert (E4).
-  const res = await mutate(
-    fresh=>bookCells(fresh, mids, dates, {name, note, title, skipConflicts, ts:new Date().toISOString(), newGid:genGid}),
-    `Buchung: ${name}, ${mids.length} Maschine(n), ${from} bis ${to}`);
-
-  if(res && res.conflicts){
-    // Konflikte: Formular mit denselben Werten und der Konfliktliste wieder öffnen
-    openBookingForm(mids, from, to);
-    document.getElementById('bkName').value=name;
-    document.getElementById('bkNote').value=note;
-    const m2n=id=>{const m=machById(id); return m?m.name:id;};
-    const list=res.conflicts.slice(0,15).map(c=>`• ${esc(m2n(c.mid))} ${fmtLong(c.date)}: ${esc(c.by)}`).join('<br>');
-    document.getElementById('bkConflicts').innerHTML =
-      `<div class="conflictbox"><b>${res.conflicts.length} Termin(e) bereits belegt / gesperrt:</b><br>${list}${res.conflicts.length>15?'<br>…':''}</div>
-       <div class="modal-actions" style="margin-top:4px">
-         <button class="btn primary" id="bkForce">Nur freie Termine buchen</button></div>`;
-    document.getElementById('bkForce').onclick=()=>submitBooking(mids,true);
-    return;
-  }
-  if(res && !res.abort){ offerUndo(`${res.count} Buchung(en) eingetragen ✓`, res.undo, 'Buchung'); }
-}
-
-/* ================= Booking detail / delete ================= */
-function openBookingDetail(m, date, b){
-  // find contiguous run of same name on this machine (weekday-adjacent)
-  const run=[date];
-  const mb=S.data.bookings[m.id]||{};
-  const step=(s,dir)=>{ let d=parseYmd(s); do{ d=addDays(d,dir); }while(isWeekend(d)); return ymd(d); };
-  let d=date; while(mb[step(d,-1)] && mb[step(d,-1)].name===b.name){ d=step(d,-1); run.unshift(d); }
-  d=date; while(mb[step(d,1)] && mb[step(d,1)].name===b.name){ d=step(d,1); run.push(d); }
-  // Buchungsgruppe: alle Zellen (über alle Maschinen) mit derselben gid
-  const gid=b.gid||null;
-  let gMids=new Set(), gDates=new Set();
-  if(gid){
-    for(const mid of Object.keys(S.data.bookings)){ const bb=S.data.bookings[mid];
-      for(const dd of Object.keys(bb)){ if(bb[dd] && bb[dd].gid===gid){ gMids.add(mid); gDates.add(dd); } } }
-  }
-  const gDatesArr=[...gDates].sort();
-  const gWorkdays=gDatesArr.filter(x=>!isWeekend(parseYmd(x)));
-  const gTitle=b.gtitle||'';
-  openModal(`
-    <h2>Buchung</h2>
-    <div class="formrow"><label>Maschine</label><div>${esc(m.name)}</div></div>
-    <div class="formrow"><label>Datum</label><div>${fmtLong(date)}</div></div>
-    <div class="formrow"><label>Gebucht von</label><div><b>${esc(b.name)}</b></div>
-      <button class="btn small" id="bdStats" title="Personenstatistik von ${esc(b.name)} öffnen">${ic('chart')} Statistik</button></div>
-    ${b.note?`<div class="formrow"><label>Notiz</label><div>${esc(b.note)}</div></div>`:''}
-    ${b.ts?`<div class="formrow"><label>Eingetragen</label><div class="hint" style="margin:0">${new Date(b.ts).toLocaleString('de-DE')}</div></div>`:''}
-    ${gid?`<p class="hint">${ic('folder')} Teil einer Buchungsgruppe${gTitle?`: <b>${esc(gTitle)}</b>`:''} — ${gMids.size} Maschine${gMids.size===1?'':'n'}, ${gWorkdays.length} Werktag${gWorkdays.length===1?'':'e'} (${fmtLong(gDatesArr[0])} – ${fmtLong(gDatesArr[gDatesArr.length-1])})</p>`
-      : (run.length>1?`<p class="hint">Diese Buchung ist Teil einer Serie: ${fmtLong(run[0])} – ${fmtLong(run[run.length-1])} (${run.length} Werktage)</p>`:'')}
-    <div class="modal-actions" style="justify-content:flex-start;flex-wrap:wrap">
-      <button class="btn" onclick="closeModal()">Schließen</button>
-      ${gid?`<button class="btn danger" id="bdDelGroup">Ganze Buchungsgruppe löschen</button>`
-           :(run.length>1?`<button class="btn danger" id="bdDelRun">Ganze Serie löschen</button>`:'')}
-      <button class="btn danger" id="bdDel">Diesen Tag löschen</button>
-    </div>`);
-  document.getElementById('bdStats').onclick=()=>{ openStats(b.name.toLowerCase()); };
-  const del=async dates=>{
-    closeModal(); // sofort zu – Löschung läuft im Anschluss
-    const res=await mutate(
-      fresh=>deleteCells(fresh, m.id, b.name, dates), // → core/booking.ts (Löschen + Wochenend-Sweep)
-      `Gelöscht: ${b.name} auf ${m.name}, ${dates.length} Tag(e)`);
-    if(res&&!res.abort){ offerUndo(`${res.n} Buchung(en) gelöscht.`, res.undo, 'Löschen'); }
-  };
-  document.getElementById('bdDel').onclick=()=>del([date]);
-  const btnRun=document.getElementById('bdDelRun');
-  if(btnRun) btnRun.onclick=async ()=>{
-    if(await askConfirm({
-      title:'Ganze Serie löschen?',
-      body:`<b>${esc(b.name)}</b> auf <b>${esc(m.name)}</b><br>${esc(fmtLong(run[0]))} – ${esc(fmtLong(run[run.length-1]))} (${run.length} Werktage)`,
-      yes:`${run.length} Tage löschen`
-    })) del(run);
-  };
-  const btnGrp=document.getElementById('bdDelGroup');
-  if(btnGrp) btnGrp.onclick=async ()=>{
-    if(!await askConfirm({
-      title:'Ganze Buchungsgruppe löschen?',
-      body:`<b>${esc(gTitle||'Buchung')}</b> von <b>${esc(b.name)}</b><br>${gMids.size} Maschine${gMids.size===1?'':'n'}, ${gWorkdays.length} Werktag${gWorkdays.length===1?'':'e'}: ${esc(fmtLong(gDatesArr[0]))} – ${esc(fmtLong(gDatesArr[gDatesArr.length-1]))}`,
-      yes:'Buchungsgruppe löschen'
-    })) return;
-    closeModal();
-    const res=await mutate(
-      fresh=>deleteGroup(fresh, gid), // → core/booking.ts (alle Zellen dieser gid + Sweep)
-      `Gruppe gelöscht: ${gTitle||gid} (${b.name})`);
-    if(res && !res.abort) offerUndo(`Buchungsgruppe gelöscht (${res.n} Tag(e)).`, res.undo, 'Löschen');
-  };
-}
+/* offerUndo → ui/toast.ts (window bridge). openBookingForm, submitBooking, genGid →
+   ui/components/BookingForm.tsx (window bridge). openBookingDetail →
+   ui/components/BookingDetailModal.tsx (window bridge). Phase 7 slice B4. */
 
 /* ================= Booking assistant =================
    machineChecklist(): Ressourcen-Checkliste mit Kategorie-Slider (Alle /

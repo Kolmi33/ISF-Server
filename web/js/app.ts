@@ -34,11 +34,16 @@ import * as logModal from './ui/components/LogModal.tsx';
 import * as askUserNameModal from './ui/components/AskUserNameModal.tsx';
 import * as settingsModal from './ui/components/SettingsModal.tsx';
 import * as gridComponent from './ui/components/Grid.tsx';
+import * as cellPatch from './ui/cell-patch.ts';
+import * as toastModule from './ui/toast.ts';
+import * as bookingFormModal from './ui/components/BookingForm.tsx';
+import * as bookingDetailModal from './ui/components/BookingDetailModal.tsx';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
-import type { Machine } from '../../shared/types.ts';
+import type { BookingData, Machine } from '../../shared/types.ts';
 import type { Cell } from './ui/selection.ts';
+import type { CellUndo, Conflict } from './core/booking.ts';
 
 declare global {
   interface Window {
@@ -81,15 +86,53 @@ declare global {
      *  exposed here so the React Grid can read it for the row header's "back" button. */
     nextFreePtr: Record<string, string>;
     prevFreeBefore: (machine: Machine, fromIso: string) => string | null;
-    /** Still legacy — the context menu, next-free jump, and single-cell booking action
-     *  (Phase 7 slices B4/B5). ui/grid-interaction.ts (B2) only calls these. */
+    /** Still legacy — the context menu and next-free jump (Phase 7 slice B5's context menu;
+     *  the next-free jump has no slice of its own yet). ui/grid-interaction.ts (B2) only
+     *  calls these. */
     hideCtx: () => void;
     showCtx: (x: number, y: number) => void;
     gotoPrevFree: (mid: string) => void;
     gotoNextFree: (mid: string) => void;
+    /** Bridged from ui/components/BookingDetailModal.tsx (Phase 7 slice B4); called by
+     *  ui/grid-interaction.ts's (B2) click/dblclick/Enter routing. */
     openCellAction: (mid: string, date: string) => void;
     /** Still legacy — favorite toggle (Phase 7 slice B6, machine/group management). */
     toggleFav: (mid: string) => void;
+    /** Still legacy — machine lookup by id (an internally-memoized Map, rebuilt whenever
+     *  `S.data.machines` is replaced by a new array reference). */
+    machById: (mid: string) => Machine | undefined;
+    /** Still legacy — the optimistic write pipeline every mutation goes through: applies `fn`
+     *  to the in-memory `S.data` synchronously, logs the action, repaints (patch or full), then
+     *  persists to the server in the background. Returns `fn`'s own result (or `null` in
+     *  read-only mode). */
+    mutate: (
+      fn: (fresh: BookingData) => unknown,
+      logAction: string,
+    ) => Promise<{
+      abort?: boolean;
+      conflicts?: Conflict[];
+      count?: number;
+      n?: number;
+      undo?: CellUndo[];
+    } | null>;
+    /** Still legacy — the Ja/Nein confirm dialog (`#confirm2`), used by the booking detail
+     *  modal's (B4) two "delete more" confirmations. */
+    askConfirm: (options: {
+      title?: string;
+      body?: string;
+      yes?: string;
+      no?: string;
+      danger?: boolean;
+    }) => Promise<boolean>;
+    /** Still legacy — opens Stats (Phase 7 slice B5) pre-filtered to one person; called from
+     *  the booking detail modal's (B4) "Statistik" shortcut. */
+    openStats: (personFilter?: string) => void;
+    /** Bridged from ui/cell-patch.ts (Phase 7 slice B4); called by the still-legacy `mutate`'s
+     *  optimistic-apply path to patch only the cells a write actually touched. */
+    patchCells: (entries: readonly { mid: string; date: string }[]) => void;
+    /** Bridged from ui/components/BookingForm.tsx (Phase 7 slice B4); called by legacy's
+     *  still-unported context menu ("Buchen…") and the assistant. */
+    openBookingForm: (machineIds: readonly string[], from: string, to: string) => void;
     /** Bridged from ui/grid-scroll.ts (Phase 7 slice B3); called by ui/grid-interaction.ts's
      *  (B2) drag-auto-scroll and arrow-key growth at the grid's edges. */
     prependWeek: () => void;
@@ -129,6 +172,10 @@ Object.assign(window, logModal);
 Object.assign(window, askUserNameModal);
 Object.assign(window, settingsModal);
 Object.assign(window, gridComponent);
+Object.assign(window, cellPatch);
+Object.assign(window, toastModule);
+Object.assign(window, bookingFormModal);
+Object.assign(window, bookingDetailModal);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);
