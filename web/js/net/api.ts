@@ -17,9 +17,9 @@ export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 
 /** GET `path` as JSON; throws `Server <status>` on a non-2xx response. */
 export async function apiGet(path: string, fetchFn: FetchLike = fetch): Promise<unknown> {
-  const r = await fetchFn(API + path);
-  if (!r.ok) throw new Error('Server ' + r.status);
-  return r.json();
+  const response = await fetchFn(API + path);
+  if (!response.ok) throw new Error('Server ' + response.status);
+  return response.json();
 }
 
 /** POST `body` as JSON to `path`; returns the parsed JSON response. */
@@ -28,12 +28,12 @@ export async function apiPost(
   body: unknown,
   fetchFn: FetchLike = fetch,
 ): Promise<unknown> {
-  const r = await fetchFn(API + path, {
+  const response = await fetchFn(API + path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return r.json();
+  return response.json();
 }
 
 /**
@@ -41,14 +41,16 @@ export async function apiPost(
  * `machines` must be an array and `bookings` an object, else throw; `log` is coerced to an
  * array and `revision` to a number. Mutates and returns the given object.
  */
-export function validateData(d: unknown): ServerData {
-  if (!d || typeof d !== 'object') throw new Error('kein JSON-Objekt');
-  const o = d as Record<string, unknown>;
-  if (!Array.isArray(o.machines)) throw new Error('machines fehlt/ungültig');
-  if (!o.bookings || typeof o.bookings !== 'object') throw new Error('bookings fehlt/ungültig');
-  o.log = Array.isArray(o.log) ? o.log : [];
-  if (typeof o.revision !== 'number') o.revision = 0; // Alt-Dateien ohne Revision
-  return o as unknown as ServerData;
+export function validateData(data: unknown): ServerData {
+  if (!data || typeof data !== 'object') throw new Error('kein JSON-Objekt');
+  const record = data as Record<string, unknown>;
+  if (!Array.isArray(record.machines)) throw new Error('machines fehlt/ungültig');
+  if (!record.bookings || typeof record.bookings !== 'object') {
+    throw new Error('bookings fehlt/ungültig');
+  }
+  record.log = Array.isArray(record.log) ? record.log : [];
+  if (typeof record.revision !== 'number') record.revision = 0; // Alt-Dateien ohne Revision
+  return record as unknown as ServerData;
 }
 
 /**
@@ -56,9 +58,9 @@ export function validateData(d: unknown): ServerData {
  * `readFile`'s post-fetch step): carry the server's `rev` into the client field
  * `revision` (`rev || 0`), default `log`, then validate.
  */
-export function normalizeState(raw: unknown): ServerData {
-  const d = raw as Record<string, unknown>;
-  d.revision = (d.rev as number) || 0;
-  d.log = (d.log as unknown[]) || [];
-  return validateData(d);
+export function normalizeState(rawState: unknown): ServerData {
+  const record = rawState as Record<string, unknown>;
+  record.revision = (record.rev as number) || 0;
+  record.log = (record.log as unknown[]) || [];
+  return validateData(record);
 }

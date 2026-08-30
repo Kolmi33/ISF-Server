@@ -48,26 +48,36 @@ function aggregateBookings(
 ): { machRows: StatsMachineRow[]; persons: Map<string, StatsPerson> } {
   const machRows: StatsMachineRow[] = [];
   const persons = new Map<string, StatsPerson>();
-  for (const m of machines) {
-    const mb = bookings[m.id] || {};
-    let n = 0;
-    const pmap = new Map<string, StatsPersonDays>();
-    for (const d of days) {
-      const b = mb[d];
-      if (!b || !b.name) continue;
-      n++;
-      const k = b.name.toLowerCase();
-      pmap.set(k, { name: b.name, days: (pmap.get(k)?.days ?? 0) + 1 });
-      if (!persons.has(k)) persons.set(k, { name: b.name, days: 0, machines: new Map() });
-      const e = persons.get(k)!;
-      e.days++;
-      e.machines.set(m.name, (e.machines.get(m.name) || 0) + 1);
+  for (const machine of machines) {
+    const machineBookings = bookings[machine.id] || {};
+    let bookedWorkdayCount = 0;
+    const personDaysOnThisMachine = new Map<string, StatsPersonDays>();
+    for (const date of days) {
+      const booking = machineBookings[date];
+      if (!booking || !booking.name) continue;
+      bookedWorkdayCount++;
+      const personKey = booking.name.toLowerCase();
+
+      // Tally this person's days on this one machine (the per-machine drilldown row).
+      const priorDaysOnThisMachine = personDaysOnThisMachine.get(personKey)?.days ?? 0;
+      personDaysOnThisMachine.set(personKey, {
+        name: booking.name,
+        days: priorDaysOnThisMachine + 1,
+      });
+
+      // Also tally this person's cross-machine total (the persons-mode overview).
+      if (!persons.has(personKey)) {
+        persons.set(personKey, { name: booking.name, days: 0, machines: new Map() });
+      }
+      const personEntry = persons.get(personKey)!;
+      personEntry.days++;
+      personEntry.machines.set(machine.name, (personEntry.machines.get(machine.name) || 0) + 1);
     }
     machRows.push({
-      m,
-      n,
-      pct: days.length ? Math.round((n * 100) / days.length) : 0,
-      persons: pmap,
+      m: machine,
+      n: bookedWorkdayCount,
+      pct: days.length ? Math.round((bookedWorkdayCount * 100) / days.length) : 0,
+      persons: personDaysOnThisMachine,
     });
   }
   return { machRows, persons };
@@ -80,21 +90,23 @@ function aggregateMaint(
   calDays: string[],
 ): Stats['maint'] {
   const rows: StatsMaintRow[] = [];
-  let inst = 0;
-  let days = 0;
-  for (const m of machines) {
-    const inRange = maintenanceSlots(m).filter(
-      (s) => (!s.until || s.until >= from) && (!s.from || s.from <= to),
+  let totalSlotCount = 0;
+  let totalBlockedDayCount = 0;
+  for (const machine of machines) {
+    const slotsInRange = maintenanceSlots(machine).filter(
+      (slot) => (!slot.until || slot.until >= from) && (!slot.from || slot.from <= to),
     );
-    let dc = 0;
-    for (const d of calDays) if (isBlockedOnDate(m, d)) dc++;
-    if (inRange.length || dc) {
-      rows.push({ m, inst: inRange.length, days: dc });
-      inst += inRange.length;
-      days += dc;
+    let blockedDayCount = 0;
+    for (const date of calDays) {
+      if (isBlockedOnDate(machine, date)) blockedDayCount++;
+    }
+    if (slotsInRange.length || blockedDayCount) {
+      rows.push({ m: machine, inst: slotsInRange.length, days: blockedDayCount });
+      totalSlotCount += slotsInRange.length;
+      totalBlockedDayCount += blockedDayCount;
     }
   }
-  return { rows, inst, days };
+  return { rows, inst: totalSlotCount, days: totalBlockedDayCount };
 }
 
 /**

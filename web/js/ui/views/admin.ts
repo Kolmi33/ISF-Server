@@ -19,13 +19,18 @@ export function filterAdminMachines(
   sort: string,
   query: string,
 ): Machine[] {
-  const q = query.toLowerCase();
+  const lowercaseQuery = query.toLowerCase();
   const rows = machines.slice();
-  if (sort === 'name') rows.sort((a, b) => a.name.localeCompare(b.name, 'de'));
-  else if (sort === 'group')
+  if (sort === 'name') {
+    rows.sort((machineA, machineB) => machineA.name.localeCompare(machineB.name, 'de'));
+  } else if (sort === 'group') {
     rows.sort(
-      (a, b) =>
-        (a.group || '').localeCompare(b.group || '', 'de') || a.name.localeCompare(b.name, 'de'),
+      (machineA, machineB) =>
+        (machineA.group || '').localeCompare(machineB.group || '', 'de') ||
+        machineA.name.localeCompare(machineB.name, 'de'),
     );
-  return rows.filter((m) => (m.name + ' ' + m.group).toLowerCase().includes(q));
+  }
+  return rows.filter((machine) =>
+    (machine.name + ' ' + machine.group).toLowerCase().includes(lowercaseQuery),
+  );
 }

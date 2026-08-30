@@ -25,7 +25,7 @@ export function computeMyRuns(
   user: string,
   today: string,
 ): BookingRun[] {
-  const pl = user.toLowerCase();
+  const lowercaseUser = user.toLowerCase();
   const nextWorkday = (isoDateString: string): string => {
     let candidateDate = addDays(parseIsoDateString(isoDateString), 1);
     while (isWeekend(candidateDate)) {
@@ -34,23 +34,30 @@ export function computeMyRuns(
     return formatDateAsIsoString(candidateDate);
   };
   const runs: BookingRun[] = [];
-  for (const m of machines) {
-    const mb = bookings[m.id] || {};
-    const ds = Object.keys(mb)
+  for (const machine of machines) {
+    const machineBookings = bookings[machine.id] || {};
+    const myBookedWorkdays = Object.keys(machineBookings)
       .filter(
-        (d) => d >= today && !isWeekend(parseIsoDateString(d)) && mb[d]!.name.toLowerCase() === pl,
+        (date) =>
+          date >= today &&
+          !isWeekend(parseIsoDateString(date)) &&
+          machineBookings[date]!.name.toLowerCase() === lowercaseUser,
       )
       .sort();
-    let cur: string[] = [];
-    for (const d of ds) {
-      if (cur.length && nextWorkday(cur[cur.length - 1]!) === d) cur.push(d);
-      else {
-        if (cur.length) runs.push({ m, dates: cur });
-        cur = [d];
+    let currentRunDates: string[] = [];
+    for (const date of myBookedWorkdays) {
+      const continuesCurrentRun =
+        currentRunDates.length &&
+        nextWorkday(currentRunDates[currentRunDates.length - 1]!) === date;
+      if (continuesCurrentRun) {
+        currentRunDates.push(date);
+      } else {
+        if (currentRunDates.length) runs.push({ m: machine, dates: currentRunDates });
+        currentRunDates = [date];
       }
     }
-    if (cur.length) runs.push({ m, dates: cur });
+    if (currentRunDates.length) runs.push({ m: machine, dates: currentRunDates });
   }
-  runs.sort((a, b) => (a.dates[0]! < b.dates[0]! ? -1 : 1));
+  runs.sort((runA, runB) => (runA.dates[0]! < runB.dates[0]! ? -1 : 1));
   return runs;
 }

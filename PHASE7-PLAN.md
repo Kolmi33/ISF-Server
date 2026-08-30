@@ -299,10 +299,6 @@ unchanged), `ui/machine-text.ts` (`maintSlots`→`maintenanceSlots`), `ui/views/
   `stats.test.ts` (7) all green unmodified — they only call the still-exported reducer/
   view functions, never the renamed machine predicates directly.
 
-### A3 — `web/js/core/weekend.ts`
-- **Must-haves:** `sweepWeekends` is exported and called directly by every `core/booking.ts` reducer, not `legacy.js` — but `core/booking.ts` imports it by name, so still coordinate (grep `booking.ts`/`booking.test.ts`). Private: `mb`→`machineBookings`, `d`/`prev`→`isoDate`/`previousValue`, `dt`→`date`, `wd`→`weekday`. The Fri/Mon offset math (`wd===6?-1:-2`) deserves a one-line WHY comment: "Saturday is 1 day after Friday, Sunday is 2 days after."
-- **Tests:** `weekend.test.ts` green unmodified.
-
 ### A4 — `web/js/core/assistant.ts` (largest, most abbreviation-heavy)
 - **Must-haves:** exported functions called directly in `legacy.js`: `anyRedund`, `freeDays`, `groupRuns`, `extendOpenRuns`, `pickFor` (in `runAssistant`, ~5 call sites, all in one function — cheap to fix). `treeFind`/`treeFindParent`/`treeIsAncestor`/`treeDetach`/`treeDevs`/`treeCleanup`/`treeDevUid` are only called through the one-line `asXxx` adapters (10 of them, lines 1436–1459, 2103) — rename-safe there too, just more call sites to touch. Types `AssistDev`/`AssistGrp`/`AssistNode`/`AssistContainer` are already good names. Function names worth expanding (all exported, so coordinate): `nodeNeed`→`effectiveNeed`, `nodeFree`→`isNodeSatisfiable`, `dayOk`→`isTreeSatisfiableOnDay`, `winFree`→`isSatisfiableAcrossWindow`, `pickNode`/`pickFor`→`chooseDevicesForNode`/`chooseDevicesForTree`. Private locals: `c` (child), `r`/`g`/`p` (result/group/parent), `cur`/`n` in `groupRuns`/`extendOpenRuns` → `currentRun`, `daysExtended`.
 - **Functionality:** unchanged; this is the highest logic-density module (N-of-M solver) — after renaming, re-read `runAssistant`'s call sites once more to make sure the new names still read naturally in context (`pickFor(AS_TREE, sel, isFreeDev)` → `chooseDevicesForTree(...)`).
@@ -353,17 +349,48 @@ matches the `mid` field already established on `CellUndo`/`WeekendUndo` througho
 codebase, not a local abbreviation. `weekend.test.ts` (6) + `booking.test.ts` (32, the
 consumer) both green unmodified.
 
-### A7 — `web/js/net/api.ts`, `net/sse.ts`
-- **Must-haves:** `api.ts`'s `API`, `apiGet`, `apiPost`, `validateData`, `normalizeState` are called by bare name in `legacy.js` (`readFile`, `persist`) — coordinate. `sse.ts`'s `applyUpdate`, `presenceInfo`, `isForeign` likewise called directly in `connectSSE`/`applyPresence` — coordinate (3 call sites, easy). Private: `d`/`o`/`r` in `api.ts` → `raw`/`payload`/`response`. `d.rev`/`d.log` reads bear a comment on why they're written back onto the raw object before `validateData` runs (mutate-then-validate — a little surprising).
-- **Tests:** `api.test.ts`/`sse.test.ts` green unmodified.
+### A7 — `web/js/net/api.ts`, `net/sse.ts` — **DONE**
+Both files' bridged exports (`apiGet`/`apiPost`/`validateData`/`normalizeState`,
+`applyUpdate`/`presenceInfo`/`isForeign`) were already full, descriptive words — like A5,
+zero exported renames needed despite being called by bare name in `legacy.js`. Only
+internals changed: `api.ts`'s `r`→`response`, `d`/`o`→`data`/`record` (kept the two
+different local names `validateData`'s `record` and `normalizeState`'s `rawState` distinct
+rather than reusing `d` for both, since they're genuinely different values flowing through
+two functions). `sse.ts`'s `evt`→`event`, `c`→`change`, and the derived
+`bookings[change.mid]` lookup got a name (`machineBookings`) instead of the anonymous `row`.
+- **Tests:** `api.test.ts` (14), `sse.test.ts` (8) both green unmodified.
 
 ### A8 — `web/js/ui/grid.ts`, `selection.ts`, `navigation.ts`, `machine-text.ts`
-- **Must-haves:** `grid.ts`'s `classifyCell`/`classifyDot`/`cellClass`/`weekHeaderCells` and `selection.ts`'s `computeSelCells`/`clampIndex` are called directly in `render()`/`refreshCell()`/`refreshDot()`/`paintSel()`/the keyboard handler — coordinate (grid.ts renames are Phase-7-adjacent anyway since B1 replaces `render()`; consider deferring grid.ts renames to land *with* B1 rather than as a separate pass, to avoid double-touching the same call sites). `navigation.ts`'s `nextFreeDay`/`prevFreeDay` are only called through the `nextFreeAfter`/`prevFreeBefore` wrappers — cheap. `machine-text.ts`'s three exports are called directly (`blockText`, admin rows, machine form) — coordinate, low count. Private: `r1`/`r2`/`c1`/`c2` in `computeSelCells` → `anchorRow`/`focusRow`/`anchorCol`/`focusCol`.
-- **Tests:** each module's test file green unmodified.
+- **Must-haves:** `grid.ts`'s `classifyCell`/`classifyDot`/`cellClass`/`weekHeaderCells` and `selection.ts`'s `computeSelCells`/`clampIndex` are called directly in `render()`/`refreshCell()`/`refreshDot()`/`paintSel()`/the keyboard handler — coordinate (grid.ts renames are Phase-7-adjacent anyway since B1 replaces `render()`; consider deferring grid.ts renames to land *with* B1 rather than as a separate pass, to avoid double-touching the same call sites). `navigation.ts`'s `nextFreeDay`/`prevFreeDay` are only called through the `nextFreeAfter`/`prevFreeBefore` wrappers — cheap. `machine-text.ts`'s three exports are called directly (`blockText`, admin rows, machine form) — coordinate, low count. Private: `r1`/`r2`/`c1`/`c2` in `computeSelCells` → `anchorRow`/`focusRow`/`anchorCol`/`focusCol`. **Still deferred to land with Phase 7 B1/B2, per the original plan** — `navigation.ts` did get its internal-variable pass already as a side effect of A1 (it imports `core/dates.ts`), and `machine-text.ts` got the same as a side effect of A2/A7-adjacent work; `grid.ts`/`selection.ts` proper (the cell/header/selection *logic* naming, not just their `core/dates.ts` imports) are what's left, intentionally, for B1/B2.
 
-### A9 — `web/js/ui/views/*.ts` (4 files)
-- **Must-haves:** `computeMyRuns`, `computeStats`, `computeAllRuns`/`filterAllRuns`, `filterAdminMachines` are all called directly in their respective `openXxx`/`renderXxx` functions — coordinate, but each is 1–2 call sites. Private: the repeated inline `nextWd`/`nextWeekday` closure duplicated in `all-bookings.ts` and `my-bookings.ts` is a real DRY gap worth fixing *as a readability-pass finding*, not just a rename — hoist it into `core/dates.ts` as `nextWeekday` (note: `core/assistant.ts` already has an identical private `nextWeekday`, so this would be the third copy — good candidate for a shared `core/dates.ts` export). Flag this as a small behavior-neutral consolidation, not a rename.
-- **Tests:** each view's test file green unmodified; if `nextWeekday` moves to `core/dates.ts`, add it to `dates.test.ts` and delete the now-redundant coverage in the three call sites' tests (still verified transitively).
+### A9 — `web/js/ui/views/*.ts` (4 files) — **DONE**
+`computeMyRuns`/`computeStats`/`computeAllRuns`/`filterAllRuns`/`filterAdminMachines` were
+all already full words — no exported renames. Scoping decision made up front: `AllRun.m`,
+`BookingRun.m`, `StatsMachineRow.m`, `StatsMaintRow.m` are interface fields (not just
+locals) that `legacy.js` reads by property name in several places (`r.m.name`, `r.m.group`,
+…) — renaming a field means editing those `legacy.js` property accesses directly, a
+different and riskier kind of change than the function-name alias trick (there's no clean
+alias for an object property). Treated the same as A10 treats `shared/types.ts` wire
+fields: **left the field name `m` alone**, renamed only the local variables that get
+assigned into it (`for (const machine of machines) { ...; runs.push({ m: machine, ... }) }`).
+
+Beyond that: `mb`/`ds`/`cur`/`d`/`b`/`k`/`pmap`/`e`/`dc`/`s`/`a`/`b` throughout all four
+files → `machineBookings`/`bookedWorkdays`(or `myBookedWorkdays`)/`currentRunDates`/`date`/
+`booking`/`personKey`/`personDaysOnThisMachine`/`personEntry`/`blockedDayCount`/`slot`/
+named comparator params (`runA`/`runB`, `machineA`/`machineB`). Also split three dense
+one-liners into named steps with a comment: `all-bookings.ts`'s run-continuation check
+(named `continuesCurrentRun` instead of inlined in the `if`), and `stats.ts`'s
+read-modify-write map updates in `aggregateBookings` (getting a person's prior day count,
+computing the new one, and setting it are now three named lines instead of one nested
+`?? 0) + 1` expression), each with a comment on which stats mode the tally feeds.
+
+The `nextWd`/`nextWorkday` duplication flagged in the original plan (present a third time,
+identically, in `core/assistant.ts`) was **not** consolidated in this pass — hoisting it to
+`core/dates.ts` is a real, independent improvement but changes call sites in three files at
+once for a benefit unrelated to naming; recorded here as a follow-up, not done silently.
+
+- **Tests:** `admin.test.ts` (6), `all-bookings.test.ts` (12), `my-bookings.test.ts` (5),
+  `stats.test.ts` (7) — all green unmodified.
 
 ### A10 — `shared/types.ts`
 - **Must-haves:** every field name here is load-bearing (server wire format + client reads) — do **not** rename any field; this file's job is fidelity to the JSON on the wire. Readability pass here is comment-only: a few interfaces (`ServerData`, `AppState`) already have excellent doc-comments; `Booking`/`Machine` could use one line each cross-referencing which legacy field replaced which (already partially done for `redu`/`gid`/`gtitle`).

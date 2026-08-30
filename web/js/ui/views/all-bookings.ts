@@ -33,30 +33,50 @@ export function computeAllRuns(
     return formatDateAsIsoString(candidateDate);
   };
   const runs: AllRun[] = [];
-  for (const m of machines) {
-    const mb = bookings[m.id] || {};
-    const ds = Object.keys(mb)
-      .filter((d) => d >= today && !isWeekend(parseIsoDateString(d)))
+  for (const machine of machines) {
+    const machineBookings = bookings[machine.id] || {};
+    const bookedWorkdays = Object.keys(machineBookings)
+      .filter((date) => date >= today && !isWeekend(parseIsoDateString(date)))
       .sort();
-    const runTs = (arr: string[]): string =>
-      arr
-        .map((d) => mb[d]!.ts || '') // d is always a key of mb here
+    // The earliest creation timestamp among a run's days (empty string if none have one).
+    const earliestTimestamp = (runDates: string[]): string =>
+      runDates
+        .map((date) => machineBookings[date]!.ts || '') // date is always a key of machineBookings here
         .filter(Boolean)
         .sort()[0] || '';
-    let cur: string[] = [];
-    let curName: string | null = null;
-    for (const d of ds) {
-      const nm = mb[d]!.name;
-      if (cur.length && curName === nm && nextWorkday(cur[cur.length - 1]!) === d) cur.push(d);
-      else {
-        if (cur.length) runs.push({ m, name: curName!, dates: cur, ts: runTs(cur) });
-        cur = [d];
-        curName = nm;
+    let currentRunDates: string[] = [];
+    let currentRunName: string | null = null;
+    for (const date of bookedWorkdays) {
+      const bookedByName = machineBookings[date]!.name;
+      const continuesCurrentRun =
+        currentRunDates.length &&
+        currentRunName === bookedByName &&
+        nextWorkday(currentRunDates[currentRunDates.length - 1]!) === date;
+      if (continuesCurrentRun) {
+        currentRunDates.push(date);
+      } else {
+        if (currentRunDates.length) {
+          runs.push({
+            m: machine,
+            name: currentRunName!,
+            dates: currentRunDates,
+            ts: earliestTimestamp(currentRunDates),
+          });
+        }
+        currentRunDates = [date];
+        currentRunName = bookedByName;
       }
     }
-    if (cur.length) runs.push({ m, name: curName!, dates: cur, ts: runTs(cur) });
+    if (currentRunDates.length) {
+      runs.push({
+        m: machine,
+        name: currentRunName!,
+        dates: currentRunDates,
+        ts: earliestTimestamp(currentRunDates),
+      });
+    }
   }
-  runs.sort((a, b) => (a.dates[0]! < b.dates[0]! ? -1 : 1));
+  runs.sort((runA, runB) => (runA.dates[0]! < runB.dates[0]! ? -1 : 1));
   return runs;
 }
 
@@ -71,17 +91,19 @@ export interface AllBookingsFilter {
 }
 
 /** The sort comparators, keyed by the modal's sort dropdown values. Faithful to legacy `sorters`. */
-const sorters: Record<string, (a: AllRun, b: AllRun) => number> = {
-  termin: (a, b) => (a.dates[0]! < b.dates[0]! ? -1 : a.dates[0]! > b.dates[0]! ? 1 : 0),
-  erstellt: (a, b) => (b.ts || '').localeCompare(a.ts || ''),
-  bereich: (a, b) =>
-    (a.m.group || '').localeCompare(b.m.group || '', 'de') ||
-    a.m.name.localeCompare(b.m.name, 'de') ||
-    (a.dates[0]! < b.dates[0]! ? -1 : 1),
-  maschine: (a, b) =>
-    a.m.name.localeCompare(b.m.name, 'de') || (a.dates[0]! < b.dates[0]! ? -1 : 1),
-  person: (a, b) =>
-    (a.name || '').localeCompare(b.name || '', 'de') || (a.dates[0]! < b.dates[0]! ? -1 : 1),
+const sorters: Record<string, (runA: AllRun, runB: AllRun) => number> = {
+  termin: (runA, runB) =>
+    runA.dates[0]! < runB.dates[0]! ? -1 : runA.dates[0]! > runB.dates[0]! ? 1 : 0,
+  erstellt: (runA, runB) => (runB.ts || '').localeCompare(runA.ts || ''),
+  bereich: (runA, runB) =>
+    (runA.m.group || '').localeCompare(runB.m.group || '', 'de') ||
+    runA.m.name.localeCompare(runB.m.name, 'de') ||
+    (runA.dates[0]! < runB.dates[0]! ? -1 : 1),
+  maschine: (runA, runB) =>
+    runA.m.name.localeCompare(runB.m.name, 'de') || (runA.dates[0]! < runB.dates[0]! ? -1 : 1),
+  person: (runA, runB) =>
+    (runA.name || '').localeCompare(runB.name || '', 'de') ||
+    (runA.dates[0]! < runB.dates[0]! ? -1 : 1),
 };
 
 /**
@@ -89,18 +111,21 @@ const sorters: Record<string, (a: AllRun, b: AllRun) => number> = {
  * matches; the date window keeps runs that overlap `[from, to]`; an unknown sort key falls back to
  * `termin`. Faithful port of the filter+sort+slice in legacy `renderList`.
  */
-export function filterAllRuns(runs: readonly AllRun[], f: AllBookingsFilter): AllRun[] {
-  const p = f.person.trim().toLowerCase();
-  const mq = f.mach.trim().toLowerCase();
+export function filterAllRuns(
+  runs: readonly AllRun[],
+  filterCriteria: AllBookingsFilter,
+): AllRun[] {
+  const lowercasePerson = filterCriteria.person.trim().toLowerCase();
+  const lowercaseMachine = filterCriteria.mach.trim().toLowerCase();
   return runs
     .filter(
-      (r) =>
-        (!p || r.name.toLowerCase().includes(p)) &&
-        (!mq || r.m.name.toLowerCase().includes(mq)) &&
-        (!f.group || r.m.group === f.group) &&
-        (!f.from || r.dates[r.dates.length - 1]! >= f.from) &&
-        (!f.to || r.dates[0]! <= f.to),
+      (run) =>
+        (!lowercasePerson || run.name.toLowerCase().includes(lowercasePerson)) &&
+        (!lowercaseMachine || run.m.name.toLowerCase().includes(lowercaseMachine)) &&
+        (!filterCriteria.group || run.m.group === filterCriteria.group) &&
+        (!filterCriteria.from || run.dates[run.dates.length - 1]! >= filterCriteria.from) &&
+        (!filterCriteria.to || run.dates[0]! <= filterCriteria.to),
     )
-    .sort(sorters[f.sort] || sorters.termin)
+    .sort(sorters[filterCriteria.sort] || sorters.termin)
     .slice(0, 300);
 }

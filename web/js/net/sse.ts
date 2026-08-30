@@ -45,15 +45,15 @@ export interface UpdateResult {
  * repaint plus the revision to adopt. Faithful port of the legacy `update` handler's
  * inner loop (a truthy `val` sets the cell, a falsy one deletes it).
  */
-export function applyUpdate(evt: SseUpdate, bookings: Bookings): UpdateResult {
+export function applyUpdate(event: SseUpdate, bookings: Bookings): UpdateResult {
   const patch: CellRef[] = [];
-  for (const c of evt.changes || []) {
-    const row = (bookings[c.mid] = bookings[c.mid] || {});
-    if (c.val) row[c.day] = c.val;
-    else delete row[c.day];
-    patch.push({ mid: c.mid, date: c.day });
+  for (const change of event.changes || []) {
+    const machineBookings = (bookings[change.mid] = bookings[change.mid] || {});
+    if (change.val) machineBookings[change.day] = change.val;
+    else delete machineBookings[change.day];
+    patch.push({ mid: change.mid, date: change.day });
   }
-  return { rev: typeof evt.rev === 'number' ? evt.rev : null, patch };
+  return { rev: typeof event.rev === 'number' ? event.rev : null, patch };
 }
 
 /**
