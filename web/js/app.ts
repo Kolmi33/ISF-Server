@@ -31,7 +31,11 @@ import * as helpModal from './ui/components/HelpModal.tsx';
 import * as logModal from './ui/components/LogModal.tsx';
 import * as askUserNameModal from './ui/components/AskUserNameModal.tsx';
 import * as settingsModal from './ui/components/SettingsModal.tsx';
+import * as gridComponent from './ui/components/Grid.tsx';
+import { createRoot } from 'react-dom/client';
+import { createElement } from 'react';
 import { createStore } from './state.ts';
+import type { Machine } from '../../shared/types.ts';
 
 declare global {
   interface Window {
@@ -54,6 +58,18 @@ declare global {
     applyDebug: () => void;
     dbgOn: () => boolean;
     centerToday: () => void;
+    /** Still legacy — the grid's category ein-/ausklappen and jump-to-next-free-day logic
+     *  (Phase 7 slice B2). The React Grid (B1) only calls these; it doesn't own them. */
+    catTap: (category: string) => void;
+    catTapCancel: () => void;
+    toggleAllGroupsInCat: (category: string) => void;
+    paintSel: () => void;
+    syncJumpControls: () => void;
+    ensureOverflow: () => void;
+    /** Still legacy — mid → the last free day jumped to (Phase 7 slice B2 owns writing it;
+     *  exposed here so the React Grid can read it for the row header's "back" button). */
+    nextFreePtr: Record<string, string>;
+    prevFreeBefore: (machine: Machine, fromIso: string) => string | null;
   }
 }
 
@@ -77,6 +93,7 @@ Object.assign(window, helpModal);
 Object.assign(window, logModal);
 Object.assign(window, askUserNameModal);
 Object.assign(window, settingsModal);
+Object.assign(window, gridComponent);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);
@@ -120,3 +137,10 @@ store.subscribe(() => {
 window.notify = () => {
   store.notify();
 };
+
+// Phase 7 slice B1 — the grid itself is now a React component (`ui/components/Grid.tsx`),
+// mounted once here onto the `<table id="grid">` legacy already renders into (it manages
+// `#grid`'s `<thead>`/`<tbody>` directly, replacing the empty ones from index.html). Its own
+// `render()` export becomes `window.render` (bridged above), so the store subscription just
+// above keeps driving it exactly as it drove legacy's `render()` before this slice.
+createRoot(document.getElementById('grid')!).render(createElement(gridComponent.Grid));

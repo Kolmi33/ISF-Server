@@ -6,16 +6,8 @@
 // stay in the legacy adapter for now (E3/E5); they legitimately differ per caller (the full
 // render carries aria/data attributes and richer titles that the patch path does not).
 
-import type { Booking, Bookings, Machine } from '../../../shared/types.ts';
-import {
-  parseIsoDateString,
-  isWeekend,
-  getIsoWeekNumber,
-  formatWeekdayName,
-  formatDateShort,
-  addDays,
-  formatDateAsIsoString,
-} from '../core/dates.ts';
+import type { Booking, Bookings, Machine, MachineCategory } from '../../../shared/types.ts';
+import { addDays, formatDateAsIsoString } from '../core/dates.ts';
 import { categoryOf, maintenanceSlotAt } from '../core/machines.ts';
 
 /** The four mutually exclusive states a grid cell can be in, in priority order. */
@@ -59,30 +51,6 @@ export function cellClass(state: CellState, opts: CellClassOpts = {}): string {
   if (opts.today) c += ' today';
   if (opts.weekend) c += ' wknd';
   return c;
-}
-
-/**
- * Build the two grid header rows' date columns (the `KW …` row and the weekday/date row) from
- * the visible weeks. Pure over `core/dates` — the machine-column head (category toggles) and the
- * `<tr>`/`</tr>` framing stay in the legacy adapter. Faithful port of the header loop in
- * `render()`: the `KW` row carries a rowspan-2 gap `<th>` between weeks; the weekday row does not.
- */
-export function weekHeaderCells(
-  weeks: readonly string[][],
-  daysPerWeek: number,
-  today: string,
-): { kwRow: string; dayRow: string } {
-  let kwRow = '';
-  let dayRow = '';
-  weeks.forEach((wk, i) => {
-    if (i > 0) kwRow += '<th class="gap" rowspan="2" aria-hidden="true"></th>';
-    kwRow += `<th colspan="${daysPerWeek}" role="columnheader">KW ${getIsoWeekNumber(parseIsoDateString(wk[0]!))}</th>`;
-    for (const d of wk) {
-      const dd = parseIsoDateString(d);
-      dayRow += `<th class="${d === today ? 'today' : ''} ${isWeekend(dd) ? 'wknd' : ''}" role="columnheader">${formatWeekdayName(dd)}<br>${formatDateShort(dd)}</th>`;
-    }
-  });
-  return { kwRow, dayRow };
 }
 
 /** The state of a machine's "today" indicator dot in its row header. */
@@ -179,4 +147,150 @@ export function nameColor(name: string, isDarkTheme: boolean): string {
 export function maintenanceKindToday(machine: Machine, today: string): string | null {
   const slot = maintenanceSlotAt(machine, today);
   return slot ? slot.type : null;
+}
+
+/** One row of the grid body: a category header, a group header, or a machine's data row. */
+export type GridRow =
+  | { kind: 'category'; category: MachineCategory; collapsed: boolean }
+  | {
+      kind: 'group';
+      group: string;
+      isFavoritesGroup: boolean;
+      collapsed: boolean;
+      machineCount: number;
+    }
+  | { kind: 'machine'; machine: Machine };
+
+export interface BuildGridRowsOptions {
+  /** Groups checked in the "Gruppen" filter; empty means no group filter is active. */
+  selectedGroups: ReadonlySet<string>;
+  /** Machines checked in the "Filtern" picker; empty means no machine filter is active. */
+  selectedMachineIds: ReadonlySet<string>;
+  /** Categories currently expanded (their machines/groups shown). */
+  openCategories: ReadonlySet<string>;
+  /** Groups currently collapsed (their machine rows hidden, but the group header still shows). */
+  collapsedGroups: ReadonlySet<string>;
+  favoriteIds: ReadonlySet<string>;
+}
+
+/** How many machines display under each group header (favorites counted in their own group). */
+function countMachinesByGroup(
+  orderedList: readonly Machine[],
+  favoriteIds: ReadonlySet<string>,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const machine of orderedList) {
+    const group = displayGroup(machine, favoriteIds);
+    counts.set(group, (counts.get(group) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** True if `machine` is hidden entirely by an active group or machine filter (not even a row
+ *  is emitted for it — unlike a closed category/collapsed group, which still shows a header). */
+function isHiddenByFilter(
+  machine: Machine,
+  isFavoritesGroup: boolean,
+  options: Pick<BuildGridRowsOptions, 'selectedGroups' | 'selectedMachineIds'>,
+): boolean {
+  const { selectedGroups, selectedMachineIds } = options;
+  if (selectedGroups.size > 0 && !isFavoritesGroup && !selectedGroups.has(machine.group)) {
+    return true;
+  }
+  return selectedMachineIds.size > 0 && !selectedMachineIds.has(machine.id);
+}
+
+/** Tracks which category/group `buildGridRows` is currently walking through, and whether the
+ *  current category is closed — the small state machine `render()`'s loop used to carry
+ *  as three local variables. */
+class GridRowsCursor {
+  category: MachineCategory | null = null;
+  group: string | null = null;
+  isCategoryClosed = false;
+
+  /** Advance into `machine`'s category, pushing a header row if it's a new one. Returns
+   *  `false` when the category is closed and everything under it should stay hidden. */
+  enterCategory(
+    machine: Machine,
+    isFavoritesGroup: boolean,
+    openCategories: ReadonlySet<string>,
+    isMachineFilterActive: boolean,
+    rows: GridRow[],
+  ): boolean {
+    const category = categoryOf(machine);
+    if (!isFavoritesGroup && category !== this.category) {
+      this.category = category;
+      this.group = null; // force the new category's first group header to (re-)emit
+      const isOpen = openCategories.has(category);
+      this.isCategoryClosed = !isOpen && !isMachineFilterActive;
+      rows.push({ kind: 'category', category, collapsed: !isOpen });
+    }
+    return isFavoritesGroup || !this.isCategoryClosed;
+  }
+
+  /** Advance into `machine`'s group, pushing a header row if it's a new one. */
+  enterGroup(
+    group: string,
+    isFavoritesGroup: boolean,
+    machineCountByGroup: ReadonlyMap<string, number>,
+    collapsedGroups: ReadonlySet<string>,
+    rows: GridRow[],
+  ): void {
+    if (group === this.group) return;
+    this.group = group;
+    rows.push({
+      kind: 'group',
+      group,
+      isFavoritesGroup,
+      collapsed: collapsedGroups.has(group),
+      machineCount: machineCountByGroup.get(group) ?? 0,
+    });
+  }
+}
+
+/**
+ * The flat list of rows `render()` builds the grid body from, in order. This is the trickiest
+ * part of `render()` to port faithfully: as it walks `orderedMachines()`, it tracks the
+ * category and group it is currently inside and emits a header row whenever either changes.
+ * A closed category hides everything under it, including its group headers; a collapsed group
+ * hides only its machine rows — its own header stays visible so it can be reopened. An active
+ * machine filter ("Filtern") overrides both category and group collapsing, so a filtered-in
+ * machine is never hidden by a fold the user made before filtering.
+ *
+ * Kept as a pure function returning data (not building HTML) precisely because this state
+ * machine is easy to get subtly wrong — testing it in isolation, once, is worth more than
+ * re-reading a large JSX loop every time the grid changes.
+ */
+export function buildGridRows(
+  machines: readonly Machine[],
+  options: BuildGridRowsOptions,
+): GridRow[] {
+  const { openCategories, collapsedGroups, favoriteIds, selectedMachineIds } = options;
+  const isMachineFilterActive = selectedMachineIds.size > 0;
+  const orderedList = orderedMachines(machines, favoriteIds);
+  const machineCountByGroup = countMachinesByGroup(orderedList, favoriteIds);
+
+  const rows: GridRow[] = [];
+  const cursor = new GridRowsCursor();
+
+  for (const machine of orderedList) {
+    const group = displayGroup(machine, favoriteIds);
+    const isFavoritesGroup = group === FAVORITES_GROUP_LABEL;
+    if (isHiddenByFilter(machine, isFavoritesGroup, options)) continue;
+
+    const categoryIsOpen = cursor.enterCategory(
+      machine,
+      isFavoritesGroup,
+      openCategories,
+      isMachineFilterActive,
+      rows,
+    );
+    if (!categoryIsOpen) continue; // category closed: hide its group headers and rows
+
+    cursor.enterGroup(group, isFavoritesGroup, machineCountByGroup, collapsedGroups, rows);
+    if (collapsedGroups.has(group) && !isMachineFilterActive) continue; // group collapsed: hide row only
+
+    rows.push({ kind: 'machine', machine });
+  }
+  return rows;
 }

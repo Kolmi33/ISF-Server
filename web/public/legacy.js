@@ -574,112 +574,9 @@ function visibleDates(){
   return out;
 }
 
-function render(){
-  const weeks = visibleDates();
-  S.visD = weeks.flat();
-  S.visM = [];
-  const tS = todayStr();
-  const thead = document.querySelector('#grid thead');
-  const tbody = document.querySelector('#grid tbody');
-
-  // Header: two rows (KW + weekday/date). Im Maschinenspalten-Kopf sitzen die
-  // Kategorie-Umschalter: „an" = Kategorie im Raster aufgeklappt, „aus" =
-  // eingeklappt (die Kopfzeile bleibt sichtbar). Derselbe Zustand (S.cats)
-  // wird auch vom Slider im Filter-Dropdown und der Kategorie-Kopfzeile gesetzt.
-  const catBtns=CATS.map(([c,l])=>`<button class="catbtn ${S.cats.has(c)?'on':''}" data-cat="${c}"
-    title="${l} ${S.cats.has(c)?'einklappen':'aufklappen'}" aria-pressed="${S.cats.has(c)}">${catIco(c)}<span class="lbl">${l}</span></button>`).join('');
-  const N=dpw();
-  const hdr=weekHeaderCells(weeks, N, tS);   // → ui/grid.ts (nur Datums-Spaltenköpfe)
-  const h1=`<tr role="row"><th class="machcol" rowspan="2" role="columnheader"><div class="catseg" role="group" aria-label="Kategorien ein-/ausklappen">${catBtns}</div><span id="colResize" title="Spaltenbreite ziehen"></span></th>`+hdr.kwRow;
-  const h2=`<tr role="row">`+hdr.dayRow;
-  thead.innerHTML=h1+'</tr>'+h2+'</tr>';
-  thead.querySelectorAll('.catbtn').forEach(b=>{
-    b.onclick=ev=>{ ev.stopPropagation(); catTap(b.dataset.cat); };                          // Einfach: Kategorie ein/aus
-    b.ondblclick=ev=>{ ev.stopPropagation(); catTapCancel(); toggleAllGroupsInCat(b.dataset.cat); }; // Doppel: alle Bereiche auf/zu
-    b.title = b.title + ' · Doppelklick: alle Bereiche auf-/zuklappen';
-  });
-  document.documentElement.style.setProperty('--theadh', (thead.offsetHeight||47)+'px'); // für klebende Bereichszeilen
-
-  // Body
-  const gcount=new Map(); // Maschinen je (Anzeige-)Bereich für die Kopfzeilen
-  for(const mm of orderedMachines()){ const g=displayGroup(mm); gcount.set(g,(gcount.get(g)||0)+1); }
-  const totalCol = weeks.length*N + (weeks.length-1); // Tages- + Lückenspalten
-  const dlbl={}; for(const d of S.visD) dlbl[d]=fmtLong(d); // Datums-Labels für aria (einmal je Render)
-  let html=''; let curGroup=null; let curCat=null; let curCatClosed=false;
-  for(const m of orderedMachines()){
-    const dg=displayGroup(m); // Favoriten erscheinen in der Gruppe „★ Favoriten" ganz oben
-    if(S.groupsSel.size && dg!==FAVGRP && !S.groupsSel.has(m.group)) continue;
-    if(!matchesSearch(m)) continue;
-    // Hauptkategorie-Kopfzeile (nicht über den Favoriten). Top-Ebene, im selben
-    // Stil wie „★ Favoriten"; einklappbar über S.cats – abgewählte Kategorie bleibt
-    // als Kopf sichtbar, nur ihre Bereiche/Zeilen werden ausgeblendet. Explizit
-    // gewählte Maschinen (Häkchenfilter) heben das Einklappen auf.
-    if(dg!==FAVGRP && catOf(m)!==curCat){
-      curCat=catOf(m); curGroup=null;
-      curCatClosed = !S.cats.has(curCat) && !searchActive();
-      html+=`<tr class="grouprow catrow ${!S.cats.has(curCat)?'collapsed':''}" role="row" data-catgroup="${curCat}">
-        <td role="rowheader" aria-expanded="${S.cats.has(curCat)}"><span class="arrow">▼</span> ${esc(catLabel(curCat))}</td><td colspan="${totalCol}" style="background:var(--grpbg)" aria-hidden="true"></td></tr>`;
-    }
-    if(dg!==FAVGRP && curCatClosed) continue;   // Kategorie zugeklappt → Bereiche/Zeilen überspringen
-    if(dg!==curGroup){
-      curGroup=dg;
-      // „★ Favoriten" ist eine eigene Top-Ebene → gleiche Dicke/Stil wie die
-      // Kategorie-Kopfzeilen (catrow); normale Bereiche bleiben eine Ebene darunter.
-      const isFav = curGroup===FAVGRP;
-      html+=`<tr class="grouprow ${isFav?'catrow':''} ${S.collapsed.has(curGroup)?'collapsed':''}" role="row" data-group="${esc(curGroup)}">
-        <td role="rowheader" aria-expanded="${!S.collapsed.has(curGroup)}"><span class="arrow">▼</span> ${esc(curGroup)}<span class="gcount">${gcount.get(curGroup)||0}</span></td><td colspan="${totalCol}" style="background:var(--grpbg)" aria-hidden="true"></td></tr>`;
-    }
-    if(S.collapsed.has(dg) && !searchActive()) continue;
-    S.visM.push(m.id);
-    const hasStatus = anyMaint(m);
-    const mkind = maintKind(m);   // heute aktive Sperre-Art (oder null, wenn nur geplant)
-    const statusTag = hasStatus?`<span class="tag ${esc(mkind||'wartung')}" title="${esc(statusRangeText(m))}">${mkind==='defekt'?'defekt':(mkind?'Wartung':'Sperre geplant')}</span>`:'';
-    const infoIcon = m.info?` <span class="machinfo" title="${esc(m.info)}">${ic('info')}</span>`:'';
-    // Heute-Indikator am Zeilenanfang (CSS-Punkt mit Textalternative)
-    const tb=getBooking(m.id,tS);
-    const dslot = maintAt(m,tS);
-    const dstate = classifyDot(dslot?dslot.type:null, tb, dayAvailable(m,tS));   // → ui/grid.ts
-    const dot = (dstate==='defekt'||dstate==='maint')
-      ? `<span class="statdot ${dstate==='defekt'?'broken':'maint'}" role="img" aria-label="heute ${dstate==='defekt'?'defekt':'in Wartung'}" title="heute gesperrt – ${esc(blockText(m,tS))}">${ic('bolt')}</span>`
-      : dstate==='busy' ? `<span class="dot busy" role="img" aria-label="heute belegt von ${esc(tb.name)}" title="heute belegt: ${esc(tb.name)}"></span>`
-           : dstate==='unavail' ? `<span class="dot unavail" role="img" aria-label="heute nicht verfügbar" title="an diesem Wochentag nicht verfügbar (verfügbar: ${esc(daysMaskText(m))})"></span>`
-           : `<span class="dot free" role="img" aria-label="heute frei" title="heute frei"></span>`;
-    const star=`<span class="favstar ${S.favs.has(m.id)?'fav':''}" data-fav="${esc(m.id)}" role="button" aria-label="${S.favs.has(m.id)?'Favorit entfernen':'Als Favorit anheften'}" title="${S.favs.has(m.id)?'Favorit entfernen':'Als Favorit anheften'}">${S.favs.has(m.id)?'★':'☆'}</span>`;
-    const nextBtn=`<span class="nextfree" data-nf="${esc(m.id)}" role="button" aria-label="Zum nächsten freien Termin von ${esc(m.name)}" title="Zum nächsten freien Termin springen (mehrfach drückbar)">${ic('next')}</span>`;
-    const hasBack = !!(nextFreePtr[m.id] && (prevFreeBefore(m, nextFreePtr[m.id]) || nextFreePtr[m.id]!==tS));
-    const backBtn = hasBack?`<span class="nextfree back" data-nb="${esc(m.id)}" role="button" aria-label="Eine freie Zelle zurück" title="Eine freie Zelle zurück (bis heute)">${ic('prev')}</span>`:'';
-    html+=`<tr role="row"><td class="machcol ${hasBack?'hasback':''}" role="rowheader" title="${esc(m.name)} (${esc(m.group)})${m.info?' — '+esc(m.info):''}${hasStatus?' — '+esc(statusRangeText(m)):''}">${star}${dot}${esc(m.name)}${infoIcon} ${statusTag}${backBtn}${nextBtn}</td>`;
-    const mnm=esc(m.name);
-    weeks.forEach((wk,i)=>{
-      if(i>0) html+='<td class="gap" aria-hidden="true"></td>';
-      wk.forEach(d=>{
-        const b=getBooking(m.id,d);
-        const isToday=d===tS;
-        const weekend=isWeekend(parseYmd(d));
-        // Zell-Zustand + Klassen-Stamm aus ui/grid.ts (window-Bridge); Attribute/Titel je
-        // Zustand unterschiedlich → hier zusammengesetzt. aria-label: Screenreader liest
-        // beim Fokuswechsel Maschine + Datum + Status.
-        const st=classifyCell(isBlockedM(m,d), b, dayAvailable(m,d));
-        const attrs=`role="gridcell" data-mid="${esc(m.id)}" data-date="${d}"`;
-        if(st==='blocked'){
-          html+=`<td class="${cellClass('blocked',{today:isToday,weekend})}" ${attrs} aria-label="${mnm}, ${dlbl[d]}, gesperrt" title="${esc(blockText(m,d))}">${b?esc(b.name):''}</td>`;
-        } else if(st==='booked'){
-          const mine=isMine(S.user, b.name);
-          html+=`<td class="${cellClass('booked',{mine,today:isToday,weekend})}" ${attrs} style="background:${nameColor(b.name)}" aria-label="${mnm}, ${dlbl[d]}, belegt von ${esc(b.name)}" title="${esc(b.name)}${b.note?' — '+esc(b.note):''}${b.gtitle?' — 📁 '+esc(b.gtitle):''}">${esc(b.name)}</td>`;
-        } else if(st==='unavail'){
-          html+=`<td class="${cellClass('unavail',{today:isToday,weekend})}" ${attrs} aria-label="${mnm}, ${dlbl[d]}, nicht verfügbar" title="an diesem Wochentag nicht verfügbar (verfügbar: ${esc(daysMaskText(m))})"></td>`;
-        } else {
-          html+=`<td class="${cellClass('free',{today:isToday,weekend})}" ${attrs} aria-label="${mnm}, ${dlbl[d]}, frei"></td>`;
-        }
-      });
-    });
-    html+='</tr>';
-  }
-  tbody.innerHTML=html;
-  paintSel(); // Auswahl/Fokus nach dem Neuaufbau wieder setzen
-  syncJumpControls();
-  requestAnimationFrame(ensureOverflow);
-}
+/* render() → ui/components/Grid.tsx + ui/components/GridBody.tsx (window bridge). The React
+   grid mounts once onto #grid in app.ts; its own `render()` export replaces this function and
+   is called by the same store subscription that used to call this one. Phase 7 slice B1. */
 /* Grid immer breiter als der Viewport halten, damit man in jeder Wochenansicht
    nach rechts scrollen kann (löst dann das automatische Anhängen weiterer Wochen aus) */
 function ensureOverflow(){
@@ -770,7 +667,8 @@ function patchCells(entries){
 /* Zum nächsten freien Werktag einer Maschine springen.
    Mehrfach drückbar: jeder Klick springt RELATIV vom zuletzt gefundenen Slot weiter.
    Ist ab dem Slot nichts mehr gebucht/gesperrt (dauerhaft frei), wird der Knopf ausgegraut. */
-const nextFreePtr={};        // mid -> zuletzt angesprungener freier Tag (ISO)
+const nextFreePtr=window.nextFreePtr={};  // mid -> zuletzt angesprungener freier Tag (ISO)
+                              // window-exponiert: Grid.tsx liest ihn für den "Zurück"-Button (B1)
 function gotoDateCenter(dISO){
   requestAnimationFrame(()=>centerCol(dISO)); // instant, mittig – kein Zurückspringen mehr
 }

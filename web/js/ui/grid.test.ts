@@ -5,7 +5,6 @@ import {
   classifyCell,
   isMine,
   cellClass,
-  weekHeaderCells,
   classifyDot,
   displayGroup,
   orderedMachines,
@@ -13,7 +12,9 @@ import {
   visibleWeeks,
   nameColor,
   maintenanceKindToday,
+  buildGridRows,
   FAVORITES_GROUP_LABEL,
+  type GridRow,
 } from './grid.ts';
 
 const machine = (over: Partial<Machine> = {}): Machine => ({
@@ -69,34 +70,6 @@ describe('cellClass', () => {
     );
     expect(cellClass('free', { today: true })).toBe('cell free today');
     expect(cellClass('free', { weekend: true })).toBe('cell free wknd');
-  });
-});
-
-describe('weekHeaderCells', () => {
-  // Real ISO anchors (TZ=UTC pinned): 2021-01-04 is Mon of ISO week 1; 2021-01-11 week 2.
-  const w1 = ['2021-01-04', '2021-01-05', '2021-01-06', '2021-01-07', '2021-01-08'];
-  const w2 = ['2021-01-11', '2021-01-12', '2021-01-13', '2021-01-14', '2021-01-15'];
-
-  it('builds one KW header per week with a rowspan-2 gap between them', () => {
-    const { kwRow } = weekHeaderCells([w1, w2], 5, '2021-01-05');
-    expect(kwRow).toContain('KW 1');
-    expect(kwRow).toContain('KW 2');
-    expect(kwRow).toContain('colspan="5"');
-    expect((kwRow.match(/class="gap"/g) || []).length).toBe(1); // only between weeks
-  });
-
-  it('builds one day header per date and marks exactly the today column', () => {
-    const { dayRow } = weekHeaderCells([w1, w2], 5, '2021-01-05');
-    expect((dayRow.match(/<th /g) || []).length).toBe(10);
-    expect((dayRow.match(/class="today /g) || []).length).toBe(1); // 2021-01-05, not weekend
-    expect(dayRow).not.toContain('wknd'); // Mon–Fri only
-  });
-
-  it('marks weekend columns with wknd and leaves weekdays unmarked', () => {
-    // 2021-01-09 Sat, 2021-01-10 Sun are weekend; 2021-01-04 Mon is not.
-    const { dayRow } = weekHeaderCells([['2021-01-04', '2021-01-09', '2021-01-10']], 3, 'x');
-    expect((dayRow.match(/wknd/g) || []).length).toBe(2);
-    expect(dayRow).toContain('class=" "'); // the Monday: neither today nor weekend
   });
 });
 
@@ -187,5 +160,114 @@ describe('maintenanceKindToday', () => {
     });
     expect(maintenanceKindToday(blocked, '2021-06-01')).toBe('defekt');
     expect(maintenanceKindToday(machine(), '2021-06-01')).toBeNull();
+  });
+});
+
+describe('buildGridRows', () => {
+  const noFilter = {
+    selectedGroups: new Set<string>(),
+    selectedMachineIds: new Set<string>(),
+    openCategories: new Set<string>(),
+    collapsedGroups: new Set<string>(),
+    favoriteIds: new Set<string>(),
+  };
+
+  const machineRows = (rows: GridRow[]): string[] =>
+    rows.filter((r) => r.kind === 'machine').map((r) => r.machine.id);
+
+  it('emits one category header and one group header per new category/group', () => {
+    const a = machine({ id: 'a', group: 'G1' });
+    const b = machine({ id: 'b', group: 'G1' });
+    const c = machine({ id: 'c', group: 'G2', cat: 'messtechnik' });
+    const rows = buildGridRows([a, b, c], {
+      ...noFilter,
+      openCategories: new Set(['maschine', 'messtechnik']),
+    });
+    expect(rows.map((r) => r.kind)).toEqual([
+      'category',
+      'group',
+      'machine',
+      'machine',
+      'category',
+      'group',
+      'machine',
+    ]);
+    expect(machineRows(rows)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('gives the group header the total machine count for that group, not the visible count', () => {
+    const a = machine({ id: 'a', group: 'G1' });
+    const b = machine({ id: 'b', group: 'G1' });
+    const rows = buildGridRows([a, b], { ...noFilter, openCategories: new Set(['maschine']) });
+    const groupRow = rows.find((r) => r.kind === 'group');
+    expect(groupRow).toMatchObject({ machineCount: 2 });
+  });
+
+  it('a closed category hides its group headers and machine rows, but the category header stays', () => {
+    const a = machine({ id: 'a', group: 'G1' });
+    const rows = buildGridRows([a], { ...noFilter, openCategories: new Set() }); // maschine not open
+    expect(rows).toEqual([{ kind: 'category', category: 'maschine', collapsed: true }]);
+  });
+
+  it('a collapsed group hides its machine row, but the group header stays (so it can reopen)', () => {
+    const a = machine({ id: 'a', group: 'G1' });
+    const rows = buildGridRows([a], {
+      ...noFilter,
+      openCategories: new Set(['maschine']),
+      collapsedGroups: new Set(['G1']),
+    });
+    expect(rows.map((r) => r.kind)).toEqual(['category', 'group']);
+    expect(rows[1]).toMatchObject({ collapsed: true });
+  });
+
+  it('the group filter hides non-matching machines entirely, but never a favorite', () => {
+    const kept = machine({ id: 'kept', group: 'G1' });
+    const dropped = machine({ id: 'dropped', group: 'G2' });
+    const favoriteInOtherGroup = machine({ id: 'fav', group: 'G2' });
+    const rows = buildGridRows([kept, dropped, favoriteInOtherGroup], {
+      ...noFilter,
+      openCategories: new Set(['maschine']),
+      selectedGroups: new Set(['G1']),
+      favoriteIds: new Set(['fav']),
+    });
+    expect(machineRows(rows)).toEqual(['fav', 'kept']); // favorites are listed first
+  });
+
+  it('an active machine filter overrides both a closed category and a collapsed group', () => {
+    const a = machine({ id: 'a', group: 'G1' });
+    const rows = buildGridRows([a], {
+      ...noFilter,
+      openCategories: new Set(), // category closed
+      collapsedGroups: new Set(['G1']), // group collapsed
+      selectedMachineIds: new Set(['a']), // but explicitly filtered in
+    });
+    expect(machineRows(rows)).toEqual(['a']);
+  });
+
+  it('a machine filter that excludes a machine hides it, even with everything else open', () => {
+    const a = machine({ id: 'a', group: 'G1' });
+    const b = machine({ id: 'b', group: 'G1' });
+    const rows = buildGridRows([a, b], {
+      ...noFilter,
+      openCategories: new Set(['maschine']),
+      selectedMachineIds: new Set(['a']),
+    });
+    expect(machineRows(rows)).toEqual(['a']);
+  });
+
+  it('favorites form their own leading pseudo-group with no category header of its own', () => {
+    const fav = machine({ id: 'fav', group: 'G1' });
+    const other = machine({ id: 'other', group: 'G1' });
+    const rows = buildGridRows([fav, other], {
+      ...noFilter,
+      openCategories: new Set(['maschine']),
+      favoriteIds: new Set(['fav']),
+    });
+    expect(rows[0]).toMatchObject({
+      kind: 'group',
+      group: FAVORITES_GROUP_LABEL,
+      isFavoritesGroup: true,
+    });
+    expect(rows.map((r) => r.kind)).toEqual(['group', 'machine', 'category', 'group', 'machine']);
   });
 });

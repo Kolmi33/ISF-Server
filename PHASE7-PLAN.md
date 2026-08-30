@@ -554,14 +554,71 @@ fixed to `**/*.test.{ts,tsx}`.
   Full `verify` green: 256/256 tests, 100% coverage on every touched file including the new
   `.tsx`.
 
-### B1 — Grid (`render`, `refreshCell`, `refreshDot`, `ensureOverflow`)
-- **Must-haves (from `legacy.js:698–812`):** two header rows — machine-column head (rowspan 2, category toggle buttons with `aria-pressed`, single-click toggles a category via `catTap`'s 220 ms debounce, **double-click toggles every group in that category** via `toggleAllGroupsInCat` — this tap/dblclick disambiguation is a real, easy-to-drop interaction quirk, preserve exactly) + a `--theadh` CSS var set from measured header height (used by sticky group rows). Body: category header rows (collapsible via `S.cats`) → group header rows (collapsible via `S.collapsed`, Favorites is its own top-level "catrow", not a sub-group) → machine rows. **Collapse nuance:** a collapsed group still renders its rows when a machine-filter search is active (`!searchActive()` guard) — do not drop this. Row header: star toggle, 5-state today-dot (`classifyDot`: defekt/maint/busy/unavail/free), status tag text ("defekt"/"Wartung"/"Sperre geplant"), info icon, ⏭ button (always shown) + ⏮ button (only when `hasBack` is true). Cell: 4-state (`classifyCell`), `mine` highlight (case-insensitive name match), `nameColor()` background hash (depends on current theme — dark/light hue split), exact `aria-label`/`title` text per state.
-- **Design decision to make explicit:** `weekHeaderCells` currently returns HTML strings; port it to return header **data** and let the component render JSX (no `dangerouslySetInnerHTML`). Do this as part of B1, not silently — it's a real API change to a bridged module.
-- **Sequencing risk:** `paintSel()`/`document.querySelector('td.cell...')` (drag-select, context menu, keyboard nav — all still in `legacy.js` until B2) rely on the exact `td.cell[data-mid][data-date]` shape. Either (a) ship B1+B2 together in one slice, or (b) keep B1's cells emitting the identical attributes and have a temporary effect call the legacy `paintSel()`/`refreshDot` adapters after each render. Decide before starting; (a) is simpler and lower-risk given how tightly selection reads the grid DOM.
-- **Known-bug decision point:** the `wknd` class asymmetry between `render()`/`refreshCell()` (ARCHITECTURE known-bug) exists *because* there are two render paths. React eliminates the second path (its own diffing replaces `refreshCell`/`patchCells`), so B1 is the natural point to close this bug — call it out as an intentional, flagged behavior change (E2), not a silent side effect of the port.
-- **Functionality:** every state above renders identically; `ensureOverflow`'s "keep the grid wider than the viewport" growth loop still runs (a `useLayoutEffect` measuring `scrollWidth`, same `<100` extra-weeks guard).
-- **Usability:** identical, plus the bug fix above (flagged).
-- **Tests:** header shows correct KW/weekday/today-column for a fixed date; all 4 cell states render correct class/aria-label/title; `mine` highlight; category single-click vs double-click behave differently; collapsed-group-but-searching still shows rows; favorites float to their own group; star click toggles favorite.
+### B1 — Grid (`render`) — **DONE**
+Executed as a pure-extraction commit followed by the component commit.
+
+**Sequencing risk resolved, not just mitigated:** before writing the component, re-reading
+`legacy.js` showed the mouse/keyboard/selection handlers (still B2) are wired via **event
+delegation** on `#grid`/`document`, not per-cell listeners — they resolve `data-mid`/
+`data-date` via `document.querySelector` at event time, not a reference captured at render
+time. So B1 only had to reproduce the exact DOM contract (`td.cell`, `data-mid`/`data-date`,
+`tr[data-group]`/`[data-catgroup]`, `.favstar[data-fav]`, `.nextfree[data-nf]`/`[data-nb]`)
+for B2's still-legacy code to keep working completely unmodified — confirmed live (see below),
+not just by inspection. B1 and B2 shipped independently after all, no combined slice needed.
+
+**`buildGridRows` (ui/grid.ts):** the category/group collapse state machine — the trickiest
+part of `render()` to port faithfully — was pulled out as its own pure function returning row
+*data* (open/collapsed category and group headers, machine rows, in order) rather than being
+re-implemented inline in JSX. 8 dedicated tests cover the collapse/filter interactions called
+out in the original must-haves (closed category hides group headers too; collapsed group keeps
+its own header; an active machine filter overrides both; favorites form a header-less
+top-level group). Landed as its own commit before the component.
+
+**`Grid.tsx` + `GridBody.tsx`:** split across two files purely to stay under the 400-line
+budget (one component, conceptually). `weekHeaderCells` (the old HTML-string header helper)
+was deleted rather than adapted — once `render()`'s only caller is gone, building the header as
+plain JSX over the same `core/dates` primitives is the honest React shape, per the original
+"make this decision explicitly" note. Store subscription: rather than exporting `subscribeToStoreChanges`
+from `app.ts` (a circular import), `Grid.tsx`'s own `render()` export **becomes** `window.render`
+— the store's existing `store.subscribe(() => { if (window.S.data) window.render(); })` needed
+zero changes. A module-level `windowRenderTrigger` ref, set by the mounted `Grid`'s own
+`useEffect`, is what that `render()` calls through to force a re-render.
+
+**One legacy touch beyond deleting `render()`'s body:** `nextFreePtr` (the "last jumped-to free
+day" cursor the row header's back-button reads) was a plain `const` in `legacy.js`, invisible
+outside its own scope even though the function that *reads* it moved out. Fixed with a one-line
+declaration-site change — `const nextFreePtr=window.nextFreePtr={};` — so both the local bare
+name (all of B2's still-legacy read/write sites) and the new bridge see the same live object.
+
+**Known-bug note:** the `wknd` class asymmetry between `render()`/`refreshCell()`
+(ARCHITECTURE known-bug) is *not* closed by this slice — `refreshCell`/`refreshDot` still exist
+in `legacy.js`, still called by other still-legacy code paths unrelated to the full grid
+re-render. Left for whichever slice actually retires them.
+
+**Real bug caught by the tests, not by the app running correctly:** the first draft keyed body
+rows as `` `g:${row.group}` ``, assuming a group name was unique across the whole grid. It
+isn't — the same group name can appear under two different categories (a real fixture in
+`Grid.test.tsx` hit this immediately: React warned about a duplicate key, `g:Halle 1`). Fixed
+by keying group/category header rows on their array position instead (stable across re-renders
+since `buildGridRows` always rebuilds the same order from the same data); machine rows keep
+their own id as the key.
+
+- **Tests:** `Grid.test.tsx` (16) — header KW/weekday/today columns; category and group header
+  rows; booked cell mine vs. not-mine; blocked/unavail/free cell classes and titles; favorite
+  star + info icon; "Sperre geplant" for a planned-only slot; the back-jump button; the
+  category-button click/dblclick bridge; the `S.visM`/`S.visD` side effect; the post-render
+  `paintSel`/`syncJumpControls`/`ensureOverflow` calls; `render()`'s re-render behavior. Plus 8
+  new `buildGridRows` tests in `grid.test.ts` (33 total in that file now).
+- **Browser-verified (E5), live, not just inspected:** ran the real backend + Vite dev server
+  in the persistent Playwright container against the bundled seed data (245 machines). Screenshot
+  confirms header/category/group/machine rows, cell coloring and status dots render correctly.
+  Clicking a free cell through Playwright selects it (`td.cell.sel`, `aria-selected="true"`) via
+  legacy's *unmodified* delegated click handler; clicking a category toggle button collapses it
+  (`grouprow catrow collapsed`) via legacy's *unmodified* `catTap` — direct proof the DOM-contract
+  approach above actually holds, not just an assumption. No console errors either run.
+- Deleted `ToolchainProbe.tsx`/`.test.tsx` (B0's placeholder, superseded now that a real
+  component exists) and `weekHeaderCells` + its 3 tests (dead once `render()`'s body was
+  deleted — nothing else called it).
 
 ### B2 — Selection & keyboard navigation (`Sel`, mouse/keydown handlers)
 - **Must-haves (`legacy.js:827–1122`):** anchor/focus rectangle (reuses `ui/selection.ts` unchanged) as component/hook state; mousedown starts a new anchor (or, with Shift held and an existing anchor, extends from it); mouseover during a drag extends focus; mouseup ends the drag and opens the context menu **only if** the drag actually moved (`didDrag`) and covers >1 cell; arrow keys move focus with `clampIndex`, Shift+arrow extends, Enter opens (single cell → booking action, multi-cell → context menu), Escape clears; keyboard handling is suppressed while a modal is open or focus sits in an input/textarea/select; **growth interleaves with movement** — moving right past the last column grows `extraWeeks` and re-reads the index, moving left triggers `prependWeek()` and re-reads — this exact order must be preserved (a naive port that clamps before growing will feel subtly wrong at the grid edges). Auto-scroll during drag (45px edge threshold, 60ms interval, including auto-`prependWeek()` at the left edge).

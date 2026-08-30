@@ -1,0 +1,344 @@
+// The booking grid's body rows (Phase 7 slice B1) — split out of Grid.tsx purely to stay
+// under the file-length budget; conceptually still one component, `Grid`'s direct child.
+// See Grid.tsx's header comment for the event-delegation/DOM-contract background.
+
+import { Fragment } from 'react';
+import type { Booking, Machine } from '../../../../shared/types.ts';
+import { isWeekend, parseIsoDateString } from '../../core/dates.ts';
+import {
+  dayAvailable,
+  hasAnyMaintenanceSlot,
+  isBlockedOnDate,
+  maintenanceSlotAt,
+} from '../../core/machines.ts';
+import { daysMaskText, maintText, statusRangeText } from '../machine-text.ts';
+import {
+  cellClass,
+  classifyCell,
+  classifyDot,
+  getBooking,
+  isMine,
+  maintenanceKindToday,
+  nameColor,
+  type GridRow,
+} from '../grid.ts';
+import { Icon } from './Icon.tsx';
+
+const CATEGORY_LABELS: Record<string, string> = {
+  maschine: 'Maschinen',
+  messtechnik: 'Messtechnik',
+};
+
+function isDarkTheme(): boolean {
+  return document.documentElement.dataset.theme === 'dark';
+}
+
+/** The today-indicator dot (or maintenance icon) at the start of a machine's row. */
+function TodayDot({ machine, today }: { machine: Machine; today: string }) {
+  const booking = getBooking(window.S.data!.bookings, machine.id, today);
+  const slot = maintenanceSlotAt(machine, today);
+  const state = classifyDot(slot?.type ?? null, booking, dayAvailable(machine, today));
+
+  if (state === 'defekt' || state === 'maint') {
+    return (
+      <span
+        className={`statdot ${state === 'defekt' ? 'broken' : 'maint'}`}
+        role="img"
+        aria-label={`heute ${state === 'defekt' ? 'defekt' : 'in Wartung'}`}
+        title={`heute gesperrt – ${maintText(slot)}`}
+      >
+        <Icon name="bolt" />
+      </span>
+    );
+  }
+  if (state === 'busy') {
+    return (
+      <span
+        className="dot busy"
+        role="img"
+        aria-label={`heute belegt von ${booking!.name}`}
+        title={`heute belegt: ${booking!.name}`}
+      />
+    );
+  }
+  if (state === 'unavail') {
+    return (
+      <span
+        className="dot unavail"
+        role="img"
+        aria-label="heute nicht verfügbar"
+        title={`an diesem Wochentag nicht verfügbar (verfügbar: ${daysMaskText(machine)})`}
+      />
+    );
+  }
+  return <span className="dot free" role="img" aria-label="heute frei" title="heute frei" />;
+}
+
+/** The title tooltip for a booked cell: the booker's name, plus their note and/or the
+ *  booking-group title when present. Faithful port of `render()`'s inline title string. */
+function bookedCellTitle(booking: Booking): string {
+  let title = booking.name;
+  if (booking.note) title += ' — ' + booking.note;
+  if (booking.gtitle) title += ' — 📁 ' + booking.gtitle;
+  return title;
+}
+
+interface CellAttrs {
+  machine: Machine;
+  isoDate: string;
+  isToday: boolean;
+  weekend: boolean;
+  dateLabel: string;
+}
+
+/** One data cell: a machine × date intersection, already classified as blocked. */
+function BlockedCell({ machine, isoDate, isToday, weekend, dateLabel }: CellAttrs) {
+  const booking = getBooking(window.S.data!.bookings, machine.id, isoDate);
+  return (
+    <td
+      className={cellClass('blocked', { today: isToday, weekend })}
+      role="gridcell"
+      data-mid={machine.id}
+      data-date={isoDate}
+      aria-label={`${machine.name}, ${dateLabel}, gesperrt`}
+      title={maintText(maintenanceSlotAt(machine, isoDate))}
+    >
+      {booking?.name ?? ''}
+    </td>
+  );
+}
+
+/** One data cell, already classified as booked (and not blocked). */
+function BookedCell({ machine, isoDate, isToday, weekend, dateLabel }: CellAttrs) {
+  const booking = getBooking(window.S.data!.bookings, machine.id, isoDate)!;
+  const mine = isMine(window.S.user, booking.name);
+  return (
+    <td
+      className={cellClass('booked', { mine, today: isToday, weekend })}
+      role="gridcell"
+      data-mid={machine.id}
+      data-date={isoDate}
+      style={{ background: nameColor(booking.name, isDarkTheme()) }}
+      aria-label={`${machine.name}, ${dateLabel}, belegt von ${booking.name}`}
+      title={bookedCellTitle(booking)}
+    >
+      {booking.name}
+    </td>
+  );
+}
+
+/** One data cell: a machine × date intersection. Faithful port of `render()`'s cell branch.
+ *  `dateLabel` is this date's German long-form text for aria-labels, precomputed once per
+ *  render (not per cell) since it's the same value for every machine on a given date. */
+function GridCell({
+  machine,
+  isoDate,
+  today,
+  dateLabel,
+}: Omit<CellAttrs, 'isToday' | 'weekend'> & { today: string }) {
+  const isToday = isoDate === today;
+  const weekend = isWeekend(parseIsoDateString(isoDate));
+  const booking = getBooking(window.S.data!.bookings, machine.id, isoDate);
+  const state = classifyCell(
+    isBlockedOnDate(machine, isoDate),
+    booking,
+    dayAvailable(machine, isoDate),
+  );
+  const cellProps = { machine, isoDate, isToday, weekend, dateLabel };
+
+  if (state === 'blocked') return <BlockedCell {...cellProps} />;
+  if (state === 'booked') return <BookedCell {...cellProps} />;
+  if (state === 'unavail') {
+    return (
+      <td
+        className={cellClass('unavail', { today: isToday, weekend })}
+        role="gridcell"
+        data-mid={machine.id}
+        data-date={isoDate}
+        aria-label={`${machine.name}, ${dateLabel}, nicht verfügbar`}
+        title={`an diesem Wochentag nicht verfügbar (verfügbar: ${daysMaskText(machine)})`}
+      />
+    );
+  }
+  return (
+    <td
+      className={cellClass('free', { today: isToday, weekend })}
+      role="gridcell"
+      data-mid={machine.id}
+      data-date={isoDate}
+      aria-label={`${machine.name}, ${dateLabel}, frei`}
+    />
+  );
+}
+
+/**
+ * Whether the "jump back to a previous free day" button shows for `machine` today: only once
+ * the user has jumped forward at least once (legacy tracks that per-machine cursor in the
+ * still-legacy `nextFreePtr`) and there is somewhere to go back to. Faithful port of `render()`'s
+ * `hasBack` calculation.
+ */
+function hasBackJumpButton(machine: Machine, today: string): boolean {
+  const lastJumpedTo = window.nextFreePtr[machine.id];
+  if (!lastJumpedTo) return false;
+  return !!window.prevFreeBefore(machine, lastJumpedTo) || lastJumpedTo !== today;
+}
+
+/** The row-header's maintenance/defect status badge, shown only when a slot exists. */
+function StatusTag({ machine, today }: { machine: Machine; today: string }) {
+  if (!hasAnyMaintenanceSlot(machine)) return null;
+  const kind = maintenanceKindToday(machine, today);
+  return (
+    <span className={`tag ${kind || 'wartung'}`} title={statusRangeText(machine)}>
+      {kind === 'defekt' ? 'defekt' : kind ? 'Wartung' : 'Sperre geplant'}
+    </span>
+  );
+}
+
+/** The row-header's "jump to next/previous free day" buttons (back only once reachable). */
+function JumpButtons({ machine, today }: { machine: Machine; today: string }) {
+  return (
+    <>
+      {hasBackJumpButton(machine, today) && (
+        <span
+          className="nextfree back"
+          data-nb={machine.id}
+          role="button"
+          aria-label="Eine freie Zelle zurück"
+          title="Eine freie Zelle zurück (bis heute)"
+        >
+          <Icon name="prev" />
+        </span>
+      )}
+      <span
+        className="nextfree"
+        data-nf={machine.id}
+        role="button"
+        aria-label={`Zum nächsten freien Termin von ${machine.name}`}
+        title="Zum nächsten freien Termin springen (mehrfach drückbar)"
+      >
+        <Icon name="next" />
+      </span>
+    </>
+  );
+}
+
+/** The row-header cell's title tooltip: machine, group, its info note and status range. */
+function machineRowTitle(machine: Machine): string {
+  let title = `${machine.name} (${machine.group})`;
+  if (machine.info) title += ' — ' + machine.info;
+  if (hasAnyMaintenanceSlot(machine)) title += ' — ' + statusRangeText(machine);
+  return title;
+}
+
+/** The row-header cell's content: favorite star, today-dot, name, status tag, jump buttons. */
+function MachineRowHeaderCell({ machine, today }: { machine: Machine; today: string }) {
+  const isFavorite = window.S.favs.has(machine.id);
+  return (
+    <td
+      className={`machcol ${hasBackJumpButton(machine, today) ? 'hasback' : ''}`}
+      role="rowheader"
+      title={machineRowTitle(machine)}
+    >
+      <span
+        className={`favstar ${isFavorite ? 'fav' : ''}`}
+        data-fav={machine.id}
+        role="button"
+        aria-label={isFavorite ? 'Favorit entfernen' : 'Als Favorit anheften'}
+        title={isFavorite ? 'Favorit entfernen' : 'Als Favorit anheften'}
+      >
+        {isFavorite ? '★' : '☆'}
+      </span>
+      <TodayDot machine={machine} today={today} />
+      {machine.name}
+      {machine.info && (
+        <>
+          {' '}
+          <span className="machinfo" title={machine.info}>
+            <Icon name="info" />
+          </span>
+        </>
+      )}{' '}
+      <StatusTag machine={machine} today={today} />
+      <JumpButtons machine={machine} today={today} />
+    </td>
+  );
+}
+
+function MachineRow({
+  machine,
+  weeks,
+  today,
+  dateLabels,
+}: {
+  machine: Machine;
+  weeks: string[][];
+  today: string;
+  dateLabels: ReadonlyMap<string, string>;
+}) {
+  return (
+    <tr role="row">
+      <MachineRowHeaderCell machine={machine} today={today} />
+      {weeks.map((week, weekIndex) => (
+        <Fragment key={week[0]}>
+          {weekIndex > 0 && <td className="gap" aria-hidden="true" />}
+          {week.map((isoDate) => (
+            <GridCell
+              machine={machine}
+              isoDate={isoDate}
+              today={today}
+              dateLabel={dateLabels.get(isoDate)!}
+              key={isoDate}
+            />
+          ))}
+        </Fragment>
+      ))}
+    </tr>
+  );
+}
+
+/** One row of the grid body: a category header, a group header, or a machine's data row.
+ *  Faithful port of `render()`'s body loop, now driven by the pure `buildGridRows` (ui/grid.ts). */
+export function GridBodyRow({
+  row,
+  columnCount,
+  weeks,
+  today,
+  dateLabels,
+}: {
+  row: GridRow;
+  columnCount: number;
+  weeks: string[][];
+  today: string;
+  dateLabels: ReadonlyMap<string, string>;
+}) {
+  if (row.kind === 'category') {
+    return (
+      <tr
+        className={`grouprow catrow ${row.collapsed ? 'collapsed' : ''}`}
+        role="row"
+        data-catgroup={row.category}
+      >
+        <td role="rowheader" aria-expanded={!row.collapsed}>
+          <span className="arrow">▼</span> {CATEGORY_LABELS[row.category] ?? row.category}
+        </td>
+        <td colSpan={columnCount} style={{ background: 'var(--grpbg)' }} aria-hidden="true" />
+      </tr>
+    );
+  }
+  if (row.kind === 'group') {
+    return (
+      <tr
+        className={`grouprow ${row.isFavoritesGroup ? 'catrow' : ''} ${row.collapsed ? 'collapsed' : ''}`}
+        role="row"
+        data-group={row.group}
+      >
+        <td role="rowheader" aria-expanded={!row.collapsed}>
+          <span className="arrow">▼</span> {row.group}
+          <span className="gcount">{row.machineCount}</span>
+        </td>
+        <td colSpan={columnCount} style={{ background: 'var(--grpbg)' }} aria-hidden="true" />
+      </tr>
+    );
+  }
+  return <MachineRow machine={row.machine} weeks={weeks} today={today} dateLabels={dateLabels} />;
+}
