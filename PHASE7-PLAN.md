@@ -605,10 +605,58 @@ fixed to `**/*.test.{ts,tsx}`.
 - **Functionality:** `net/sse.ts`'s pure functions (`applyUpdate`/`presenceInfo`/`isForeign`) are unchanged and already 100%-tested — this slice is the `useEffect`-based `EventSource` lifecycle + the badge/banner components.
 - **Tests:** mock `EventSource`; assert a foreign `update` queues a toast while an own-name update doesn't; a `structural` event reloads state; `onerror` flips the offline indicator; toggling the presence share setting changes the connection URL.
 
-### B9 — Settings, help, log, name-prompt
-- **Must-haves (`legacy.js:123–147, 283–405, 2076–2085`):** theme select (auto/light/dark) applies immediately **and** forces a grid re-render (booking cell colors are hue-shifted by `nameColor()` per current theme — a theme change with no re-render leaves stale colors); presence checkbox reconnects SSE; compact checkbox toggles a `<body>` class; weekends checkbox resets `extraWeeks` and re-centers today; debug checkbox toggles the debug panel; a "reconnect" button re-runs `connectSSE`+`refreshNow`; the name-prompt modal is non-dismissible on first run only, Enter-to-save, and auto-focuses its input. Help and Log are the lowest-complexity slices — Help is static legend text with embedded icons, Log is a plain capped list with a "back to admin" button — good first ports to build component conventions on before B1/B2.
+### B9 — Settings, help, log, name-prompt — **Help + Log DONE; Settings + name-prompt still open**
+
+**Shared infrastructure built first (`web/js/ui/modal.tsx`), needed by every remaining modal
+slice, not just B9.** `legacy.js`'s `openModal(html)`/`closeModal()` own a single shared
+`#modal`/`#overlay` pair by replacing `#modal`'s innerHTML per open — a React root can't
+safely coexist with code that mutates its container directly (React loses track and warns/
+misbehaves on the next render). `openReactModal(node, {sticky?})`/`closeReactModal()` mirror
+the legacy DOM chrome (focus save/restore, overlay class, the `modalReopen` tab) but create a
+**fresh React root on every open and unmount it on close** — bracketing the node's ownership
+so legacy's still-active modals (opened before or after) never fight over it. `legacy.js`'s
+own `modalSticky`/`lastFocusEl` closure variables aren't exported, so this module keeps
+entirely independent copies; document-level capture-phase Escape/click listeners take full
+ownership of dismissal whenever a React modal is the one currently open (checked via
+`currentRoot !== null`), and no-op immediately otherwise — legacy's own bubble-phase
+listeners never see the event when a React modal owns it, and keep working unchanged for
+legacy's own modals. Retire this whole file in slice B10.
+
+**A real bug caught by writing modal.tsx's own tests, not by the app running correctly**:
+the first version bound the overlay-click listener directly to the `#overlay` element
+captured once, instead of delegating from `document` (like the keydown listener already
+did) — if that element were ever replaced, the listener would silently stop firing. Fixed to
+match the keydown listener's already-correct document-delegated pattern before it ever
+shipped. `modal.test.tsx` (9 tests) covers open/close, focus restore, sticky vs. non-sticky
+Escape and outside-click, and the no-op-when-nothing-open case explicitly.
+
+**Help** (`legacy.js:283–345`): fully static legend text — ported as real JSX (not
+`dangerouslySetInnerHTML`; the exact German copy transcribed carefully, cross-checked
+against the original line-by-line, then verified with a real Playwright screenshot compared
+against the running legacy version) rather than an HTML blob, split into five small
+`XxxSection` components to clear the 60-line function budget the `.tsx` gate now enforces
+same as everywhere else. A new `Icon` component replaces legacy's `ic(name)` string helper
+with the same `<svg class="ic"><use href="#i-NAME"/></svg>` markup as JSX.
+
+**Log** (`legacy.js:2076–2085`): a snapshot of `window.S.data.log` at open time (matches the
+original — it was never a live subscription while the modal was open, so no store-reactivity
+needed here). Its "Zurück" button still calls the not-yet-migrated `window.openAdmin()` —
+the same cross-direction bridging every extraction in this project has used all along, just
+reversed (React calling a still-legacy global instead of legacy calling a bridged one).
+React's own text-interpolation escaping (`{value}`) replaces every `esc()` call from the
+original — nothing extra needed, confirmed by a test that renders a name containing `<b>`
+and asserts it shows as literal text.
+
+`legacy.js`'s own `function openHelp(){...}`/`function openLog(){...}` bodies are deleted
+outright (comments left pointing at the new modules); the button bindings
+(`btnHelp.onclick=openHelp`, `adLog.onclick=openLog`) are untouched bare-identifier
+references, so they resolve through the `app.ts` bridge automatically — zero call-site edits,
+same as every core/net/ui extraction all session.
+
+- **Must-haves (`legacy.js:123–147, 358–405`, still open):** theme select (auto/light/dark) applies immediately **and** forces a grid re-render (booking cell colors are hue-shifted by `nameColor()` per current theme — a theme change with no re-render leaves stale colors); presence checkbox reconnects SSE; compact checkbox toggles a `<body>` class; weekends checkbox resets `extraWeeks` and re-centers today; debug checkbox toggles the debug panel; a "reconnect" button re-runs `connectSSE`+`refreshNow`; the name-prompt modal is non-dismissible on first run only (its `sticky` option maps directly onto the new `openReactModal`'s), Enter-to-save, and auto-focuses its input.
 - **Must-haves (localStorage keys — preserve verbatim so existing users' browsers upgrade losslessly):** `mb_theme`, `mb_presence`, `mb_compact`, `mb_weekends`, `mb_debug`, `mb_user`.
-- **Tests:** theme toggle updates `document.documentElement.dataset.theme` and triggers a grid re-render; each settings control reads/writes its exact legacy key; name-prompt blocks dismissal only on first run.
+- **Tests (Settings/name-prompt, still open):** theme toggle updates `document.documentElement.dataset.theme` and triggers a grid re-render; each settings control reads/writes its exact legacy key; name-prompt blocks dismissal only on first run.
+- **Verification (done slices):** `HelpModal.test.tsx` (3), `LogModal.test.tsx` (5), `modal.test.tsx` (9) — 17 new tests, all green. Real Playwright screenshots of both modals in the running app (seeded backend + Vite dev server) — pixel-faithful to the original, zero console errors on open or close.
 
 ### B10 — App shell; delete `legacy.js`; retire `window.S`
 - **Must-haves (`legacy.js:2209–2220, 69–90`):** boot tries `/api/state`; on failure, shows the start-screen error copy verbatim and hides the old file-picker buttons (`btnPickFile`/`btnReadOnly`/`fsaHint` — likely deletable outright by this point, confirm they're unused); on success, hides the start screen, shows toolbar+grid, fills the group filter, prompts for a name only when `!user && !readOnly`, applies the debug panel, prepends one buffer week, centers today, and starts live timers (SSE + focus-triggered silent refresh) **exactly once** even if re-invoked (the `liveTimersOn` guard).

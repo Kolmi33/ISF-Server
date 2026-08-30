@@ -1,0 +1,54 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, act } from '@testing-library/react';
+import { LogModal, openLog } from './LogModal.tsx';
+
+describe('LogModal', () => {
+  it('shows a placeholder when there are no entries', () => {
+    render(<LogModal entries={[]} />);
+    expect(screen.getByText('Noch keine Einträge.')).toBeInTheDocument();
+    expect(screen.getByText('letzte 0')).toBeInTheDocument();
+  });
+
+  it('lists entries newest-first as given, capped at 200 and labeled with the real count', () => {
+    const entries = Array.from({ length: 250 }, (_, i) => ({
+      ts: '2021-01-04T10:00:00.000Z',
+      user: `User${i}`,
+      action: `Action${i}`,
+    }));
+    render(<LogModal entries={entries} />);
+    expect(screen.getByText('letzte 200')).toBeInTheDocument();
+    expect(screen.getByText('User0', { exact: false })).toBeInTheDocument();
+    expect(screen.queryByText('User200', { exact: false })).not.toBeInTheDocument();
+  });
+
+  it("escapes nothing extra — user/action render as plain text via React's own escaping", () => {
+    render(
+      <LogModal entries={[{ ts: '2021-01-04T10:00:00.000Z', user: '<b>x</b>', action: 'y' }]} />,
+    );
+    expect(screen.getByText('<b>x</b>', { exact: false })).toBeInTheDocument();
+  });
+});
+
+describe('openLog', () => {
+  beforeEach(() => {
+    document.body.innerHTML = `
+      <div id="overlay"><div id="modal" tabindex="-1"></div></div>
+      <div id="modalReopen"></div>`;
+    window.S = {
+      data: { log: [{ ts: '2021-01-04T10:00:00.000Z', user: 'A', action: 'B' }] },
+    } as never;
+    window.openAdmin = vi.fn();
+  });
+
+  it('opens with a snapshot of window.S.data.log', () => {
+    act(() => openLog());
+    expect(screen.getByText('letzte 1')).toBeInTheDocument();
+  });
+
+  it('"Zurück" calls the still-legacy openAdmin global', () => {
+    act(() => openLog());
+    screen.getByRole('button', { name: 'Zurück' }).click();
+    expect(window.openAdmin).toHaveBeenCalledOnce();
+  });
+});

@@ -279,69 +279,7 @@ function saveFilters(){
   localStorage.setItem('mb_machsel', JSON.stringify([...S.machSel]));
   localStorage.setItem('mb_groupssel', JSON.stringify([...S.groupsSel]));
 }
-/* Legende + Tastaturkürzel */
-function openHelp(){
-  openModal(`
-    <h2>${ic('help')} Legende &amp; Bedienung</h2>
-    <div class="statgrp">Farben &amp; Markierungen im Raster</div>
-    <div class="hint" style="font-size:13px;line-height:1.7">
-      <b>Farbige Zelle</b> = Buchung; die Farbe ergibt sich aus dem Namen der Person (immer gleich).<br>
-      <b>Blauer Rahmen</b> = deine eigene Buchung.<br>
-      <b>Oranger Rahmen</b> = Tastatur-Fokus.<br>
-      <b>Blaue Tönung</b> = aktuelle Markierung (Ziehen/Shift).<br>
-      <b>Schraffierte Zelle</b> = Maschine gesperrt (Wartung/defekt, ggf. zeitlich begrenzt).<br>
-      <b>Ausgegraute Zelle</b> = an diesem Wochentag nicht verfügbar (nicht buchbar).<br>
-      <span class="dot free"></span> heute frei · <span class="dot busy"></span> heute belegt · <span class="statdot maint">${ic('bolt')}</span> Wartung / <span class="statdot broken">${ic('bolt')}</span> defekt · <span class="dot unavail"></span> heute nicht verfügbar (vor dem Maschinennamen).<br>
-      <b style="color:var(--star)">★</b> = Favorit (erscheint oben in „★ Favoriten"), ☆ zum Anheften.<br>
-      ${ic('next')} springt zum nächsten freien Termin der Maschine (mehrfach drückbar), ${ic('prev')} wieder zurück bis heute.
-    </div>
-    <div class="statgrp">Maus</div>
-    <div class="hint" style="font-size:13px;line-height:1.7">
-      <b>Klick</b> = Zelle auswählen · <b>Doppelklick</b> = Buchen bzw. Buchung öffnen ·
-      <b>Ziehen</b> = Bereich markieren (am Rand scrollt es automatisch weiter) ·
-      <b>Shift+Klick</b> = Auswahl bis zur Zelle aufspannen · Loslassen öffnet das Buchen/Löschen-Menü.
-    </div>
-    <div class="statgrp">Tastatur</div>
-    <div class="hint" style="font-size:13px;line-height:1.7">
-      <b>Pfeiltasten</b> = Zelle bewegen · <b>Shift+Pfeile</b> = Auswahl erweitern ·
-      <b>Enter</b> = Buchen/Menü öffnen · <b>Esc</b> = Auswahl/Dialog schließen.
-    </div>
-    <div class="statgrp">Buchen</div>
-    <div class="hint" style="font-size:13px;line-height:1.7">
-      Beim Buchen wird der <b>gesamte Zeitraum inkl. Wochenenden</b> gebucht und als <b>Buchungsgruppe</b>
-      zusammengefasst (gemeinsam löschbar über das Zellen-Detail). Das Feld <b>Notiz</b> dient zugleich als
-      Gruppentitel. Gesperrte Tage (Wartung/defekt) und nicht verfügbare Wochentage werden übersprungen.
-    </div>
-    <div class="statgrp">${ic('compass')} Buchungsassistent</div>
-    <div class="hint" style="font-size:13px;line-height:1.7">
-      Geräte in der Liste anhaken – sie erscheinen unter „Ausgewählte Geräte". Standard: <b>alle</b> müssen
-      gleichzeitig frei sein. Gleichwertige Geräte per <b>Drag &amp; Drop</b> aufeinander ziehen bildet eine
-      <b>Bedarfsgruppe</b>; über die Zahl legst du fest, wie viele davon frei sein müssen („N von …"). Gruppen
-      lassen sich verschachteln. Ergebnisse springen ins Raster (Assistent klappt dabei nur ein – Tab links
-      zum Wiederaufklappen); ist nach der letzten Buchung alles frei, sind die Tage offen wählbar.
-    </div>
-    <div class="statgrp">${ic('table')} Buchungslisten &amp; Statistik</div>
-    <div class="hint" style="font-size:13px;line-height:1.7">
-      <b>Alle Buchungen</b>: filtern nach Person/Maschine/Bereich/Zeitraum und sortieren (Termin, zuletzt
-      gebucht, Bereich, Maschine, Person); je Eintrag steht auch, wann gebucht wurde.
-      <b>Statistik</b>: Zeitraum standardmäßig ab 1. Januar; drei Tabs <b>${ic('factory')} Ressourcen</b>,
-      <b>${ic('user')} Personen</b> und <b>${ic('bolt')} Wartung</b> (Anzahl der Wartungs-/Ausfall-Instanzen
-      und gesperrte Tage je Maschine).
-    </div>
-    <div class="statgrp">${ic('wrench')} Verwalten</div>
-    <div class="hint" style="font-size:13px;line-height:1.7">
-      Maschinen/Messtechnik anlegen &amp; bearbeiten (sortierbar: manuell, alphabetisch, nach Bereich).
-      Pro Gerät: <b>verfügbare Wochentage</b> (nicht gewählte sind im Plan ausgegraut &amp; nicht buchbar)
-      und beliebig viele <b>Wartungs-/Ausfall-Slots</b> („in Wartung"/„defekt" mit Zeitraum). Diese
-      überlagern Buchungen (grau schraffiert), verhindern neue Buchungen und sind nur hier lösch-/änderbar.
-    </div>
-    <div class="statgrp">Daten</div>
-    <div class="hint" style="font-size:13px;line-height:1.7">
-      Der Plan aktualisiert sich automatisch. Jede Buchung/Löschung lässt sich 9 Sekunden lang rückgängig
-      machen. Tägliche Backups liegen als buchungen_backup_JJJJ-MM-TT.json im Datenordner.
-    </div>
-    <div class="modal-actions"><button class="btn primary" onclick="closeModal()">Alles klar</button></div>`);
-}
+/* openHelp() → ui/components/HelpModal.tsx (window bridge). Phase 7 slice B9. */
 document.getElementById('btnHelp').onclick=openHelp;
 
 /* ================= Einstellungen (pro Gerät) ================= */
@@ -2073,16 +2011,7 @@ function openMachineForm(mid){
     fillGroupSel(); openAdmin(); toast('Maschine gelöscht.');
   };
 }
-function openLog(){
-  const log=S.data.log||[];
-  openModal(`
-    <h2>${ic('doc')} Änderungsprotokoll <span class="tag">letzte ${Math.min(log.length,200)}</span></h2>
-    <div class="resultlist" style="max-height:420px">
-      ${log.slice(0,200).map(l=>`<div class="logrow"><span class="ts">${new Date(l.ts).toLocaleString('de-DE')}</span><b>${esc(l.user)}</b>: ${esc(l.action)}</div>`).join('')||'<p class="hint">Noch keine Einträge.</p>'}
-    </div>
-    <div class="modal-actions"><button class="btn" id="lgBack">Zurück</button><button class="btn" onclick="closeModal()">Schließen</button></div>`);
-  document.getElementById('lgBack').onclick=openAdmin;
-}
+/* openLog() → ui/components/LogModal.tsx (window bridge). Phase 7 slice B9. */
 
 /* =================================================================
    BACKEND-ADAPTER (Server-Variante)
