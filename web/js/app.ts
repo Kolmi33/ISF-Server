@@ -29,6 +29,8 @@ import * as viewAdmin from './ui/views/admin.ts';
 import * as machineText from './ui/machine-text.ts';
 import * as helpModal from './ui/components/HelpModal.tsx';
 import * as logModal from './ui/components/LogModal.tsx';
+import * as askUserNameModal from './ui/components/AskUserNameModal.tsx';
+import * as settingsModal from './ui/components/SettingsModal.tsx';
 import { createStore } from './state.ts';
 
 declare global {
@@ -42,6 +44,16 @@ declare global {
     notify: () => void;
     /** Still legacy (Phase 7 slice B5) — called from the React LogModal's "Zurück" button. */
     openAdmin: () => void;
+    /** Still legacy — DOM/presence-chip side effects the React name-prompt/settings call. */
+    updateUserChip: () => void;
+    dbg: (kind: string, msg: string) => void;
+    presenceTick: () => Promise<void>;
+    applyTheme: () => void;
+    connectSSE: () => void;
+    refreshNow: (silent: boolean) => Promise<void>;
+    applyDebug: () => void;
+    dbgOn: () => boolean;
+    centerToday: () => void;
   }
 }
 
@@ -63,6 +75,8 @@ Object.assign(window, viewAdmin);
 Object.assign(window, machineText);
 Object.assign(window, helpModal);
 Object.assign(window, logModal);
+Object.assign(window, askUserNameModal);
+Object.assign(window, settingsModal);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);

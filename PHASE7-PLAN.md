@@ -605,7 +605,7 @@ fixed to `**/*.test.{ts,tsx}`.
 - **Functionality:** `net/sse.ts`'s pure functions (`applyUpdate`/`presenceInfo`/`isForeign`) are unchanged and already 100%-tested — this slice is the `useEffect`-based `EventSource` lifecycle + the badge/banner components.
 - **Tests:** mock `EventSource`; assert a foreign `update` queues a toast while an own-name update doesn't; a `structural` event reloads state; `onerror` flips the offline indicator; toggling the presence share setting changes the connection URL.
 
-### B9 — Settings, help, log, name-prompt — **Help + Log DONE; Settings + name-prompt still open**
+### B9 — Settings, help, log, name-prompt — **DONE**
 
 **Shared infrastructure built first (`web/js/ui/modal.tsx`), needed by every remaining modal
 slice, not just B9.** `legacy.js`'s `openModal(html)`/`closeModal()` own a single shared
@@ -653,14 +653,44 @@ outright (comments left pointing at the new modules); the button bindings
 references, so they resolve through the `app.ts` bridge automatically — zero call-site edits,
 same as every core/net/ui extraction all session.
 
-- **Must-haves (`legacy.js:123–147, 358–405`, still open):** theme select (auto/light/dark) applies immediately **and** forces a grid re-render (booking cell colors are hue-shifted by `nameColor()` per current theme — a theme change with no re-render leaves stale colors); presence checkbox reconnects SSE; compact checkbox toggles a `<body>` class; weekends checkbox resets `extraWeeks` and re-centers today; debug checkbox toggles the debug panel; a "reconnect" button re-runs `connectSSE`+`refreshNow`; the name-prompt modal is non-dismissible on first run only (its `sticky` option maps directly onto the new `openReactModal`'s), Enter-to-save, and auto-focuses its input.
-- **Must-haves (localStorage keys — preserve verbatim so existing users' browsers upgrade losslessly):** `mb_theme`, `mb_presence`, `mb_compact`, `mb_weekends`, `mb_debug`, `mb_user`.
-- **Tests (Settings/name-prompt, still open):** theme toggle updates `document.documentElement.dataset.theme` and triggers a grid re-render; each settings control reads/writes its exact legacy key; name-prompt blocks dismissal only on first run.
-- **Verification (done slices):** `HelpModal.test.tsx` (3), `LogModal.test.tsx` (5), `modal.test.tsx` (9) — 17 new tests, all green. Real Playwright screenshots of both modals in the running app (seeded backend + Vite dev server) — pixel-faithful to the original, zero console errors on open or close.
+**AskUserNameModal** (`legacy.js:123–135`): `firstRun` controls only whether the Cancel
+button renders — **not** whether Escape/outside-click dismiss the modal. The original never
+passed `{sticky:true}` here at all, so a first-run user genuinely can dismiss without setting
+a name (no Cancel button is the only affordance difference); ported that exactly rather than
+"fixing" it into a real modal-block, confirmed by a test that opens it with `firstRun=true`
+and shows Escape still closes it. Mutates `window.S.user` directly (matching every other
+legacy write to `S` — there's no store-level "set user" action to route through yet), then
+calls the still-legacy `updateUserChip`/`dbg`/`presenceTick` globals for the side effects
+that aren't modal-related.
+
+**SettingsModal** (`legacy.js:296–343`): seven rows, each reading/writing its exact original
+localStorage key (`mb_theme`/`mb_presence`/`mb_compact`/`mb_weekends`/`mb_debug`) and calling
+the same still-legacy globals for side effects outside the modal's own concern
+(`applyTheme`/`notify`, `presenceTick`, `centerToday`, `applyDebug`, `connectSSE`+
+`refreshNow`) — split into one small row component per setting from the start, both to stay
+under the 60-line budget and because each row's read/write logic is independent (no shared
+local state to thread through). Verified live: selecting "Dunkel" in the running app actually
+re-themes the whole grid, not just the modal, confirming the bridge to `applyTheme`/`notify`
+works end to end — screenshotted in both light and dark before/after.
+
+`legacy.js`'s own `function askUserName(){...}`/`function openSettings(){...}` bodies
+deleted outright; button/chip bindings (`userChip.onclick`, `btnSettings.onclick`) are
+untouched bare-identifier references, resolving through the `app.ts` bridge automatically.
+
+**A test-writing gotcha worth recording**: React's checkbox/radio inputs track their
+`checked` state through an internal value-tracker that a raw `element.checked = x` followed
+by a manually-dispatched `change` event doesn't update correctly — the fix is a real
+`element.click()`, which both toggles the DOM property and fires the event React's synthetic
+system actually listens for. Hit this on all four `SettingsModal` checkbox tests before
+switching to `.click()`.
+
+- **Must-haves (localStorage keys — preserve verbatim so existing users' browsers upgrade losslessly):** `mb_theme`, `mb_presence`, `mb_compact`, `mb_weekends`, `mb_debug`, `mb_user`. All confirmed unchanged.
+- **Verification:** `HelpModal.test.tsx` (3), `LogModal.test.tsx` (5), `modal.test.tsx` (9), `AskUserNameModal.test.tsx` (4), `SettingsModal.test.tsx` (7) — 28 new tests, all green. Real Playwright screenshots of every screen in the running app (seeded backend + Vite dev server): first-run name-prompt (no Cancel button, confirmed by screenshot not just a flaky locator — see the false-positive note below), Settings in light and dark, live theme switching. Zero console errors anywhere in B9.
+- **A test-tooling false positive, not a product bug:** a Playwright locator (`button:has-text("Abbrechen")`) initially reported a Cancel button present on first run when the screenshot showed none — it was matching the always-present-but-hidden confirm-dialog's `#cfNo` button elsewhere in the DOM (`.count()` doesn't filter by visibility), not the name-prompt. Confirmed by the screenshot itself, not fixed in product code.
 
 ### B10 — App shell; delete `legacy.js`; retire `window.S`
 - **Must-haves (`legacy.js:2209–2220, 69–90`):** boot tries `/api/state`; on failure, shows the start-screen error copy verbatim and hides the old file-picker buttons (`btnPickFile`/`btnReadOnly`/`fsaHint` — likely deletable outright by this point, confirm they're unused); on success, hides the start screen, shows toolbar+grid, fills the group filter, prompts for a name only when `!user && !readOnly`, applies the debug panel, prepends one buffer week, centers today, and starts live timers (SSE + focus-triggered silent refresh) **exactly once** even if re-invoked (the `liveTimersOn` guard).
 - **Functionality:** identical bootstrap sequence; `app.ts` shrinks to store hydration + `createRoot(...).render(<App/>)`; `window.S`/`window.render`/`window.notify` bridges are deleted along with the last legacy consumer.
 - **Tests:** mount `<App/>` with a mocked fetch returning valid/invalid `/api/state` and assert the right screen renders in each case; name-prompt appears exactly when `!user && !readOnly`; live timers start once even across remounts.
 
-**Suggested order for Backlog B:** B0 → B9 (Help/Log first, to build conventions cheaply) → B1+B2 together (see sequencing note) → B3 → B4 → B5 (4 commits) → B6 → B7 → B8 → B10.
+**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1+B2 together (see sequencing note, next up) → B3 → B4 → B5 (4 commits) → B6 → B7 → B8 → B10.

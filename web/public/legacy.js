@@ -120,19 +120,7 @@ function updateUserChip(){
   document.getElementById('userChip').innerHTML =
     '<span id="presBadge" title="'+esc(presCache.title)+'">'+esc(presCache.txt)+'</span>'+ic('user')+' '+esc(S.user||'Name?');
 }
-function askUserName(firstRun){
-  openModal(`
-    <h2>Wie heißt du?</h2>
-    <div class="formrow"><label>Name</label><input type="text" id="unInput" value="${esc(S.user)}" placeholder="Nachname"></div>
-    <div class="modal-actions">${firstRun?'':'<button class="btn" onclick="closeModal()">Abbrechen</button>'}
-      <button class="btn primary" id="unSave">Speichern</button></div>`);
-  const inp=document.getElementById('unInput'); inp.focus();
-  const save=()=>{ const v=inp.value.trim(); if(!v){ inp.focus(); return; }
-    S.user=v; localStorage.setItem('mb_user',v); updateUserChip(); closeModal(); notify();
-    dbg('user','Name gesetzt: '+v); presenceTick(); };
-  document.getElementById('unSave').onclick=save;
-  inp.onkeydown=e=>{ if(e.key==='Enter') save(); };
-}
+/* askUserName() → ui/components/AskUserNameModal.tsx (window bridge). Phase 7 slice B9. */
 /* Einfachklick = Namen ändern (kurz verzögert, damit ein Doppelklick nicht
    erst das Namensfenster öffnet); Doppelklick = aktive Nutzer anzeigen. */
 let userClickTimer=null;
@@ -293,54 +281,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{ appl
 if(localStorage.getItem('mb_compact')==='on') document.body.classList.add('compact');
 
 
-function openSettings(){
-  const theme=localStorage.getItem('mb_theme')||'auto';
-  const presence=localStorage.getItem('mb_presence')!=='off';
-  const compact=localStorage.getItem('mb_compact')==='on';
-  const weekends=localStorage.getItem('mb_weekends')==='on';
-  openModal(`
-    <h2>${ic('gear')} Einstellungen</h2>
-    <div class="formrow"><label>Datenquelle</label>
-      <div style="flex:1"><b>Server</b> <span class="hint" style="margin:0">(zentrale Datenbank · Live-Updates)</span></div>
-      <button class="btn" id="setFolder">${ic('refresh')} Neu verbinden</button></div>
-    <div class="formrow"><label>Design</label>
-      <select id="setTheme">
-        <option value="auto" ${theme==='auto'?'selected':''}>Wie System</option>
-        <option value="light" ${theme==='light'?'selected':''}>Hell</option>
-        <option value="dark" ${theme==='dark'?'selected':''}>Dunkel</option>
-      </select></div>
-    <div class="formrow"><label>Anwesenheit</label>
-      <label style="min-width:auto"><input type="checkbox" id="setPresence" ${presence?'checked':''}> meinen Namen als „aktiv" teilen</label></div>
-    <div class="formrow"><label>Ansicht</label>
-      <label style="min-width:auto"><input type="checkbox" id="setCompact" ${compact?'checked':''}> kompakte Zeilen (mehr Maschinen sichtbar)</label></div>
-    <div class="formrow"><label>Wochenenden</label>
-      <label style="min-width:auto"><input type="checkbox" id="setWeekends" ${weekends?'checked':''}> Samstag &amp; Sonntag anzeigen (grau markiert)</label></div>
-    <div class="formrow"><label>Name</label>
-      <div style="flex:1"><b>${esc(S.user||'–')}</b></div>
-      <button class="btn" id="setName">${ic('user')} Ändern…</button></div>
-    <div class="formrow"><label>Debug</label>
-      <label style="min-width:auto"><input type="checkbox" id="setDebug" ${dbgOn()?'checked':''}> Debug-Panel anzeigen (protokolliert Schreiben, Updates, Nutzer, Fehler)</label></div>
-    <div class="modal-actions"><button class="btn primary" onclick="closeModal()">Fertig</button></div>`);
-  document.getElementById('setTheme').onchange = ev=>{
-    localStorage.setItem('mb_theme', ev.target.value); applyTheme(); notify();
-  };
-  document.getElementById('setPresence').onchange = ev=>{
-    localStorage.setItem('mb_presence', ev.target.checked?'on':'off'); presenceTick();
-  };
-  document.getElementById('setWeekends').onchange = ev=>{
-    localStorage.setItem('mb_weekends', ev.target.checked?'on':'off');
-    S.extraWeeks=0; notify(); centerToday();
-  };
-  document.getElementById('setCompact').onchange = ev=>{
-    localStorage.setItem('mb_compact', ev.target.checked?'on':'off');
-    document.body.classList.toggle('compact', ev.target.checked);
-  };
-  document.getElementById('setName').onclick = ()=>askUserName(false);
-  document.getElementById('setDebug').onchange = ev=>{
-    localStorage.setItem('mb_debug', ev.target.checked?'on':'off'); applyDebug();
-  };
-  document.getElementById('setFolder').onclick = ()=>{ connectSSE(); refreshNow(false); };
-}
+/* openSettings() → ui/components/SettingsModal.tsx (window bridge). Phase 7 slice B9. */
 
 /* --- Ressourcenfilter „Filtern": Dropdown mit Suchfeld, Klappbaum und
    Checkboxen. Die Kategorie-Buttons (Maschinen/Messtechnik) filtern NUR die
