@@ -1,5 +1,6 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import reactHooks from 'eslint-plugin-react-hooks';
 
 // Flat config. The rules encode ARCHITECTURE.md §5 + §10 as machine checks.
 export default tseslint.config(
@@ -19,13 +20,20 @@ export default tseslint.config(
 
   // New source: the full standard.
   {
-    files: ['{web,server,shared}/**/*.ts'],
+    files: ['{web,server,shared}/**/*.{ts,tsx}'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
       complexity: ['error', 12],
       'max-lines-per-function': ['error', { max: 60, skipBlankLines: true, skipComments: true }],
       'max-lines': ['error', { max: 400, skipBlankLines: true, skipComments: true }],
     },
+  },
+
+  // React components (Phase 7, ARCHITECTURE §18): catches real bugs — a hook called
+  // conditionally, or an effect/callback with a stale/missing dependency.
+  {
+    ...reactHooks.configs['recommended-latest'],
+    files: ['web/js/**/*.tsx'],
   },
 
   // Pure core: no DOM, no I/O, no imports from side-effect layers.
@@ -67,7 +75,7 @@ export default tseslint.config(
 
   // Tests and config files are exempt from size/any budgets.
   {
-    files: ['**/*.test.ts', '*.config.ts', '*.config.js', 'eslint.config.js'],
+    files: ['**/*.test.ts', '**/*.test.tsx', '*.config.ts', '*.config.js', 'eslint.config.js'],
     rules: {
       'max-lines-per-function': 'off',
       'max-lines': 'off',

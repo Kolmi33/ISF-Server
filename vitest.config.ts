@@ -5,12 +5,12 @@ export default defineConfig({
     // Pure-logic modules run in Node; UI modules that need the DOM can opt into
     // 'jsdom' per-file via a `// @vitest-environment jsdom` docblock later.
     environment: 'node',
-    include: ['{web,server,shared,test}/**/*.test.ts'],
+    include: ['{web,server,shared,test}/**/*.test.{ts,tsx}'],
     globals: true,
     setupFiles: ['./test/setup.ts'],
     coverage: {
       provider: 'v8',
-      include: ['web/js/**/*.ts', 'server/**/*.ts', 'shared/**/*.ts'],
+      include: ['web/js/**/*.{ts,tsx}', 'server/**/*.ts', 'shared/**/*.ts'],
       // app.ts is the boot/bridge entry (side effects, exercised by browser smoke,
       // not unit tests) — excluded like the legacy shim. shared/types.ts and
       // server/types.ts are type-only (compile to nothing). server/server.ts and
@@ -24,7 +24,7 @@ export default defineConfig({
         'server/server.ts',
         'server/import.ts',
         'server/backfill.ts',
-        '**/*.test.ts',
+        '**/*.test.{ts,tsx}',
       ],
       reporter: ['text', 'json-summary'],
       // Armed from Phase 2 (ARCHITECTURE §10): pure core is pinned hard. The pure store

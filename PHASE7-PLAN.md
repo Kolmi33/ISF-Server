@@ -522,11 +522,32 @@ code, the same reasoning applied throughout this pass.
 - **Testing convention:** React Testing Library + jsdom, query by role/text/label like a user would, not by class name. Each slice's test list below is additive to the pure-logic tests that already exist and stay untouched.
 - **Styling:** reuse `web/css/app.css` classes as-is (className props) — no CSS rewrite in Phase 7; that's out of scope and risks visual drift (same call ARCHITECTURE §16 already made for the modal-markup fold).
 
-### B0 — Setup
-- **Plan:** add `react`+`react-dom` (runtime deps) and `@types/react`, `@types/react-dom`, `@testing-library/react`, `@testing-library/jest-dom`, `@testing-library/user-event`, jsdom (dev deps); set `tsconfig` `"jsx": "react-jsx"`; add a Vitest jsdom environment for `.tsx` tests; extend ESLint's complexity/fn-length/file-length rules to `.tsx`; write the guardrail edits (`CLAUDE.md`, `ARCHITECTURE.md §18` superseding §14/§15) as their own reasoned commit.
-- **Must-haves:** do **not** mount anything into the live app yet — prove the toolchain (build + lint + test) with one throwaway component and its RTL test, deleted or kept as B1's seed. Mounting the first real UI starts at B1, so B0 carries zero behavior risk.
-- **Functionality/usability:** none — no user-visible change.
-- **Tests:** one trivial RTL test asserting the pipeline works end to end (render + query + assert).
+### B0 — Setup — **DONE**
+Executed as planned, two commits: (1) the guardrail change alone — `CLAUDE.md`'s runtime-dep
+rule scoped to backend, `ARCHITECTURE.md §5` rule 6 likewise, new `§18` recording the
+decision and superseding §14/§15; no code. (2) The actual toolchain: `react`+`react-dom` as
+real `dependencies` (the project's first non-dev runtime deps on the frontend side);
+`@types/react`, `@types/react-dom`, `@testing-library/react`, `@testing-library/jest-dom`,
+`eslint-plugin-react-hooks`, `jsdom` as dev deps; `tsconfig.json` → `"jsx": "react-jsx"`;
+`eslint.config.js` → `.tsx` added to the existing `.ts` globs (same complexity-12/60-line/
+400-line budgets) plus `eslint-plugin-react-hooks`'s `recommended-latest` flat config scoped
+to `web/js/**/*.tsx`; `knip.json`'s `project` glob and `vitest.config.ts`'s `include`/
+coverage `include`/`exclude` all extended to `.tsx`; `test/setup.ts` imports
+`@testing-library/jest-dom/vitest`. `web/js/ui/components/ToolchainProbe.tsx` + its test
+prove the whole pipeline (tsc's jsx transform, ESLint, Prettier, knip, Vitest+jsdom+RTL) —
+not wired into `index.html`/`app.ts`, to be deleted once B1 lands a real component.
+
+**One correction caught by the gate itself, not by me:** `@testing-library/user-event` was
+added preemptively (for future click/type interaction tests) and `knip` correctly flagged
+it as unused — nothing in B0 exercises it yet. Removed via `npm uninstall` rather than
+suppressed; will be re-added in whichever slice first needs simulated user interaction. A
+second gap I *did* catch myself before running knip: the coverage `exclude` list only had
+`**/*.test.ts`, so `ToolchainProbe.test.tsx` was initially counted in its own coverage —
+fixed to `**/*.test.{ts,tsx}`.
+
+- **Tests:** `ToolchainProbe.test.tsx` (1) — render + `getByTestId` + `toHaveTextContent`.
+  Full `verify` green: 256/256 tests, 100% coverage on every touched file including the new
+  `.tsx`.
 
 ### B1 — Grid (`render`, `refreshCell`, `refreshDot`, `ensureOverflow`)
 - **Must-haves (from `legacy.js:698–812`):** two header rows — machine-column head (rowspan 2, category toggle buttons with `aria-pressed`, single-click toggles a category via `catTap`'s 220 ms debounce, **double-click toggles every group in that category** via `toggleAllGroupsInCat` — this tap/dblclick disambiguation is a real, easy-to-drop interaction quirk, preserve exactly) + a `--theadh` CSS var set from measured header height (used by sticky group rows). Body: category header rows (collapsible via `S.cats`) → group header rows (collapsible via `S.collapsed`, Favorites is its own top-level "catrow", not a sub-group) → machine rows. **Collapse nuance:** a collapsed group still renders its rows when a machine-filter search is active (`!searchActive()` guard) — do not drop this. Row header: star toggle, 5-state today-dot (`classifyDot`: defekt/maint/busy/unavail/free), status tag text ("defekt"/"Wartung"/"Sperre geplant"), info icon, ⏭ button (always shown) + ⏮ button (only when `hasBack` is true). Cell: 4-state (`classifyCell`), `mine` highlight (case-insensitive name match), `nameColor()` background hash (depends on current theme — dark/light hue split), exact `aria-label`/`title` text per state.
