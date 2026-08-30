@@ -14,3 +14,5 @@ package-lock.json
 *.yml
 Dockerfile
 .githooks/
+# Claude Code's own local tooling config — not project source, already gitignored globally.
+.claude/
