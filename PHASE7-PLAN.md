@@ -772,7 +772,26 @@ into, not something specific to the booking form, and no plan slice claims it by
   the booking. No console errors through the whole cycle.
 
 ### B5 — Four modals: my-bookings, stats, all-bookings, admin
-- **My-bookings** (`1688–1771`): run structure is **frozen at open** (`computeMyRuns` called once) but each run's *live* days are re-filtered against current data on every render, so deletions disappear without recomputing groupings; per-run expand/collapse keyed by `mid|firstDate`; "only my machines" filter button; per-day vs. per-run delete (run delete requires confirm when >1 day); "goto" expands the target's category/group before jumping (a filtered-out target wouldn't be visible otherwise).
+- **My-bookings** — **DONE.** Run structure is **frozen at open** (`computeMyRuns` runs once,
+  via a `useState` initializer that never re-runs on re-render — verified directly: re-rendering
+  the mounted component with new bookings data does NOT pick up a new run, exactly the intended
+  behavior) but each run's *live* days are re-filtered against `window.S.data.bookings` fresh on
+  every render (a plain, un-memoized computation — deleting a day just makes it disappear from
+  its run without recomputing groupings, and a delete's own success handler forces exactly one
+  re-render to show it). Per-run expand/collapse keyed by `mid|firstDate`, in component state
+  (not DOM classes, unlike the grid). "Nur meine Maschinen" filter button only renders when at
+  least one run exists. Per-day vs. per-run delete; a run delete confirms only when it actually
+  spans >1 live day (not >1 *original* day — matches legacy's live-count check exactly). "Goto"
+  expands the target's category and group before jumping (a filtered-out target wouldn't be
+  visible otherwise), reuses B3's `resetView`/`prependWeek`/`gotoDate` directly (no window
+  round-trip — all three were already gated). Component: `MyBookingsModal.tsx`, 13 tests.
+  Browser-verified (E5): booking a cell, opening My Bookings, and clicking "Im Plan anzeigen"
+  correctly closes the modal and lands the grid's selection on that exact cell. One real
+  diagnostic-script gotcha hit along the way (not a product bug): the first "free" cell in the
+  default view can be dated *before* the app's own reckoning of today if picked via a
+  browser-side UTC calendar comparison instead of the app's own `todayAsIsoDateString()` —
+  `computeMyRuns` correctly filters such a booking out as already in the past, which briefly
+  looked like a missing-entry bug in the modal before the test script itself was fixed.
 - **Stats** (`1773–1931`): 3 modes (Ressourcen/Personen/Wartung) via segmented control; category show/hide buttons apply only in Ressourcen mode; drilldown (machine→who booked it, person→their machines) with a back control; independent fold state per category/group; default range = Jan 1 of current year → today; range changes auto-recompute (validated `from<=to`) with no separate "compute" button.
 - **All-bookings** (`1622–1686`): person/machine substring filters, a group `<select>` grouped by category via `<optgroup>`, a date-overlap window, 5 sort keys (unknown key falls back to `termin`) persisted to `localStorage('mb_absort')`, 300-row cap labeled "(gekürzt)"; "goto" narrows the machine filter to just that row's machine before jumping (so it's guaranteed visible).
 - **Admin** (`1936–1983`): sort mode (manual/name/group) persisted to `localStorage('mb_admsort')`; ↑/↓ reorder buttons show **only** in manual mode; reorder silently no-ops across a group boundary (the reducer aborts — UI should handle that gracefully, not throw); edit/add routes to the machine form (B6); a button opens the log view.

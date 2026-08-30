@@ -38,6 +38,7 @@ import * as cellPatch from './ui/cell-patch.ts';
 import * as toastModule from './ui/toast.ts';
 import * as bookingFormModal from './ui/components/BookingForm.tsx';
 import * as bookingDetailModal from './ui/components/BookingDetailModal.tsx';
+import * as myBookingsModal from './ui/components/MyBookingsModal.tsx';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
@@ -101,6 +102,10 @@ declare global {
     /** Still legacy — machine lookup by id (an internally-memoized Map, rebuilt whenever
      *  `S.data.machines` is replaced by a new array reference). */
     machById: (mid: string) => Machine | undefined;
+    /** Still legacy — persists the machine/group filter selections; toolbar chip refresh for
+     *  the same filter. Called by the My Bookings modal's (B5) "only my machines" shortcut. */
+    saveFilters: () => void;
+    updateMachBtn: () => void;
     /** Still legacy — the optimistic write pipeline every mutation goes through: applies `fn`
      *  to the in-memory `S.data` synchronously, logs the action, repaints (patch or full), then
      *  persists to the server in the background. Returns `fn`'s own result (or `null` in
@@ -176,6 +181,7 @@ Object.assign(window, cellPatch);
 Object.assign(window, toastModule);
 Object.assign(window, bookingFormModal);
 Object.assign(window, bookingDetailModal);
+Object.assign(window, myBookingsModal);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);
