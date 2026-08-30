@@ -6,14 +6,17 @@
 // stay in the legacy adapter for now (E3/E5); they legitimately differ per caller (the full
 // render carries aria/data attributes and richer titles that the patch path does not).
 
-import type { Booking } from '../../../shared/types.ts';
+import type { Booking, Bookings, Machine } from '../../../shared/types.ts';
 import {
   parseIsoDateString,
   isWeekend,
   getIsoWeekNumber,
   formatWeekdayName,
   formatDateShort,
+  addDays,
+  formatDateAsIsoString,
 } from '../core/dates.ts';
+import { categoryOf, maintenanceSlotAt } from '../core/machines.ts';
 
 /** The four mutually exclusive states a grid cell can be in, in priority order. */
 export type CellState = 'blocked' | 'booked' | 'unavail' | 'free';
@@ -101,4 +104,79 @@ export function classifyDot(
   if (booking) return 'busy';
   if (!available) return 'unavail';
   return 'free';
+}
+
+/** The group header a machine's row appears under: its favorite label, or its own group. */
+export const FAVORITES_GROUP_LABEL = '★ Favoriten';
+
+/** Which group header `machine`'s row appears under (favorites float to their own group). */
+export function displayGroup(machine: Machine, favoriteIds: ReadonlySet<string>): string {
+  return favoriteIds.has(machine.id) ? FAVORITES_GROUP_LABEL : machine.group;
+}
+
+/**
+ * The grid's row order: favorited machines first (in their original relative order), then
+ * everyone else with Maschinen before Messtechnik (a stable sort, so ties keep their
+ * existing order). Faithful port of legacy `orderedMachines`.
+ */
+export function orderedMachines(
+  machines: readonly Machine[],
+  favoriteIds: ReadonlySet<string>,
+): Machine[] {
+  const isMesstechnik = (machine: Machine): number =>
+    categoryOf(machine) === 'messtechnik' ? 1 : 0;
+  const favorites = machines.filter((machine) => favoriteIds.has(machine.id));
+  const everyoneElse = machines
+    .filter((machine) => !favoriteIds.has(machine.id))
+    .slice()
+    .sort((machineA, machineB) => isMesstechnik(machineA) - isMesstechnik(machineB));
+  return favorites.concat(everyoneElse);
+}
+
+/** The booking on `machineId` for `isoDate`, or undefined if that cell is free. */
+export function getBooking(
+  bookings: Bookings,
+  machineId: string,
+  isoDate: string,
+): Booking | undefined {
+  return bookings[machineId]?.[isoDate];
+}
+
+/**
+ * The grid's visible date columns, grouped into weeks: `weekCount` weeks of `daysPerWeek`
+ * days each (5 for Mon–Fri, 7 for Mon–Sun), starting at `startMonday`. Faithful port of
+ * legacy `visibleDates`.
+ */
+export function visibleWeeks(
+  startMonday: Date,
+  weekCount: number,
+  daysPerWeek: number,
+): string[][] {
+  const weeks: string[][] = [];
+  for (let weekIndex = 0; weekIndex < weekCount; weekIndex++) {
+    const week: string[] = [];
+    for (let dayIndex = 0; dayIndex < daysPerWeek; dayIndex++) {
+      week.push(formatDateAsIsoString(addDays(startMonday, weekIndex * 7 + dayIndex)));
+    }
+    weeks.push(week);
+  }
+  return weeks;
+}
+
+/**
+ * A deterministic background color for a booking, hashed from the booker's name so the same
+ * person always gets the same color. `isDarkTheme` is injected (E4) rather than read from
+ * `document.documentElement.dataset.theme` directly. Faithful port of legacy `nameColor`.
+ */
+export function nameColor(name: string, isDarkTheme: boolean): string {
+  let hash = 0;
+  for (const character of name) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  const hue = hash % 360;
+  return isDarkTheme ? `hsl(${hue} 35% 30%)` : `hsl(${hue} 55% 88%)`;
+}
+
+/** The type of the maintenance/defect slot active on `machine` today, or null if none. */
+export function maintenanceKindToday(machine: Machine, today: string): string | null {
+  const slot = maintenanceSlotAt(machine, today);
+  return slot ? slot.type : null;
 }

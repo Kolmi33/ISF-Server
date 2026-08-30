@@ -1,6 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import type { Booking } from '../../../shared/types.ts';
-import { classifyCell, isMine, cellClass, weekHeaderCells, classifyDot } from './grid.ts';
+import type { Booking, Machine } from '../../../shared/types.ts';
+import { parseIsoDateString } from '../core/dates.ts';
+import {
+  classifyCell,
+  isMine,
+  cellClass,
+  weekHeaderCells,
+  classifyDot,
+  displayGroup,
+  orderedMachines,
+  getBooking,
+  visibleWeeks,
+  nameColor,
+  maintenanceKindToday,
+  FAVORITES_GROUP_LABEL,
+} from './grid.ts';
+
+const machine = (over: Partial<Machine> = {}): Machine => ({
+  id: 'm1',
+  name: 'Fräse',
+  group: 'Werkstatt',
+  ...over,
+});
 
 const bk: Booking = { name: 'anna' };
 
@@ -90,5 +111,81 @@ describe('classifyDot', () => {
     expect(classifyDot(null, bk, true)).toBe('busy');
     expect(classifyDot(null, null, false)).toBe('unavail');
     expect(classifyDot(undefined, null, true)).toBe('free');
+  });
+});
+
+describe('displayGroup', () => {
+  it('floats a favorited machine to the favorites group regardless of its real group', () => {
+    expect(displayGroup(machine({ id: 'fav' }), new Set(['fav']))).toBe(FAVORITES_GROUP_LABEL);
+  });
+  it('uses the machine`s own group when not a favorite', () => {
+    expect(displayGroup(machine({ group: 'Halle 1' }), new Set())).toBe('Halle 1');
+  });
+});
+
+describe('orderedMachines', () => {
+  it('lists favorites first, in their original relative order', () => {
+    const a = machine({ id: 'a' });
+    const b = machine({ id: 'b' });
+    const c = machine({ id: 'c' });
+    expect(orderedMachines([a, b, c], new Set(['c', 'a']))).toEqual([a, c, b]);
+  });
+  it('among non-favorites, keeps Maschinen before Messtechnik (stable sort)', () => {
+    const messtechnik = machine({ id: 'mt', cat: 'messtechnik' });
+    const maschine = machine({ id: 'ma' });
+    expect(orderedMachines([messtechnik, maschine], new Set())).toEqual([maschine, messtechnik]);
+  });
+});
+
+describe('getBooking', () => {
+  it('returns the booking when the cell is occupied', () => {
+    const bookings = { m1: { '2021-01-04': bk } };
+    expect(getBooking(bookings, 'm1', '2021-01-04')).toBe(bk);
+  });
+  it('is undefined for an unknown machine or an empty day', () => {
+    expect(getBooking({}, 'm1', '2021-01-04')).toBeUndefined();
+    expect(getBooking({ m1: {} }, 'm1', '2021-01-04')).toBeUndefined();
+  });
+});
+
+describe('visibleWeeks', () => {
+  it('builds weekCount weeks of daysPerWeek consecutive ISO dates from startMonday', () => {
+    expect(visibleWeeks(parseIsoDateString('2021-01-04'), 2, 5)).toEqual([
+      ['2021-01-04', '2021-01-05', '2021-01-06', '2021-01-07', '2021-01-08'],
+      ['2021-01-11', '2021-01-12', '2021-01-13', '2021-01-14', '2021-01-15'],
+    ]);
+  });
+  it('includes the weekend when daysPerWeek is 7', () => {
+    expect(visibleWeeks(parseIsoDateString('2021-01-04'), 1, 7)).toEqual([
+      [
+        '2021-01-04',
+        '2021-01-05',
+        '2021-01-06',
+        '2021-01-07',
+        '2021-01-08',
+        '2021-01-09',
+        '2021-01-10',
+      ],
+    ]);
+  });
+});
+
+describe('nameColor', () => {
+  it('is deterministic for the same name and theme', () => {
+    expect(nameColor('Kolmanovskyi', false)).toBe(nameColor('Kolmanovskyi', false));
+  });
+  it('uses a darker lightness for the dark theme', () => {
+    expect(nameColor('anna', true)).toMatch(/35% 30%/);
+    expect(nameColor('anna', false)).toMatch(/55% 88%/);
+  });
+});
+
+describe('maintenanceKindToday', () => {
+  it('is the active slot type, or null when none is active today', () => {
+    const blocked = machine({
+      maint: [{ type: 'defekt', from: '2021-01-01', until: '2021-12-31' }],
+    });
+    expect(maintenanceKindToday(blocked, '2021-06-01')).toBe('defekt');
+    expect(maintenanceKindToday(machine(), '2021-06-01')).toBeNull();
   });
 });
