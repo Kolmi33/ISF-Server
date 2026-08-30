@@ -6,27 +6,27 @@ import type { Db } from './db.js';
 import { getMeta } from './db.js';
 import type { BookingOut, BookingRow, MachineOut, MachineRow, StateOut } from './types.js';
 
-/** True if machine `m` is blocked (maintenance/defect) on ISO date `day`. */
-export function isBlocked(m: MachineRow, day: string): boolean {
-  return !!(
-    m.status &&
-    m.status !== 'ok' &&
-    (!m.statusFrom || day >= m.statusFrom) &&
-    (!m.statusUntil || day <= m.statusUntil)
-  );
+/** True if machine `machine` is blocked (maintenance/defect) on ISO date `day`. */
+export function isBlocked(machine: MachineRow, day: string): boolean {
+  const hasActiveNonOkStatus = !!machine.status && machine.status !== 'ok';
+  const isAfterStatusStart = !machine.statusFrom || day >= machine.statusFrom;
+  const isBeforeStatusEnd = !machine.statusUntil || day <= machine.statusUntil;
+  return hasActiveNonOkStatus && isAfterStatusStart && isBeforeStatusEnd;
 }
 
-/** Add the optional wire fields to `o` only when the row has them set. */
-function addOptionalFields(o: MachineOut, r: MachineRow): void {
-  if (r.cat) o.cat = r.cat;
-  if (r.statusFrom) o.statusFrom = r.statusFrom;
-  if (r.statusUntil) o.statusUntil = r.statusUntil;
-  if (r.redu) o.redu = r.redu; // Redundanz-Markierung (nur Label)
-  if (r.days) o.days = r.days; // verfügbare Wochentage (Maske Mo..So)
-  if (r.maint) {
+/** Add the optional wire fields to `wireShape` only when the row has them set. */
+function addOptionalFields(wireShape: MachineOut, row: MachineRow): void {
+  if (row.cat) wireShape.cat = row.cat;
+  if (row.statusFrom) wireShape.statusFrom = row.statusFrom;
+  if (row.statusUntil) wireShape.statusUntil = row.statusUntil;
+  if (row.redu) wireShape.redu = row.redu; // Redundanz-Markierung (nur Label)
+  if (row.days) wireShape.days = row.days; // verfügbare Wochentage (Maske Mo..So)
+  if (row.maint) {
     try {
-      const a = JSON.parse(r.maint) as unknown;
-      if (Array.isArray(a) && a.length) o.maint = a;
+      const parsedMaintenance = JSON.parse(row.maint) as unknown;
+      if (Array.isArray(parsedMaintenance) && parsedMaintenance.length) {
+        wireShape.maint = parsedMaintenance;
+      }
     } catch {
       /* ignore malformed maint JSON — omit the field */
     }
@@ -34,28 +34,28 @@ function addOptionalFields(o: MachineOut, r: MachineRow): void {
 }
 
 /** Map a `machines` row to its wire shape (adds optional fields only when set). */
-export function machineOut(r: MachineRow): MachineOut {
-  const o: MachineOut = {
-    id: r.id,
-    name: r.name,
-    group: r.grp,
-    status: r.status || 'ok',
-    statusNote: r.statusNote || '',
-    info: r.info || '',
+export function machineOut(row: MachineRow): MachineOut {
+  const wireShape: MachineOut = {
+    id: row.id,
+    name: row.name,
+    group: row.grp,
+    status: row.status || 'ok',
+    statusNote: row.statusNote || '',
+    info: row.info || '',
   };
-  addOptionalFields(o, r);
-  return o;
+  addOptionalFields(wireShape, row);
+  return wireShape;
 }
 
 /** Map a booking value (a full row, or the fields the mutate builds) to its wire shape. */
 export function bookingOut(
-  r: Pick<BookingRow, 'name' | 'ts' | 'note' | 'gid' | 'gtitle'>,
+  row: Pick<BookingRow, 'name' | 'ts' | 'note' | 'gid' | 'gtitle'>,
 ): BookingOut {
-  const o: BookingOut = { name: r.name, ts: r.ts };
-  if (r.note) o.note = r.note;
-  if (r.gid) o.gid = r.gid;
-  if (r.gtitle) o.gtitle = r.gtitle;
-  return o;
+  const wireShape: BookingOut = { name: row.name, ts: row.ts };
+  if (row.note) wireShape.note = row.note;
+  if (row.gid) wireShape.gid = row.gid;
+  if (row.gtitle) wireShape.gtitle = row.gtitle;
+  return wireShape;
 }
 
 /** Read the full team-wide state (revision + groups + machines + bookings). */
@@ -64,11 +64,16 @@ export function getState(db: Db): StateOut {
     db.prepare('SELECT * FROM machines ORDER BY sort, name').all() as unknown as MachineRow[]
   ).map(machineOut);
   const bookings: Record<string, Record<string, BookingOut>> = {};
-  for (const r of db.prepare('SELECT * FROM bookings').all() as unknown as BookingRow[]) {
-    (bookings[r.mid] ||= {})[r.day] = bookingOut(r);
+  for (const row of db.prepare('SELECT * FROM bookings').all() as unknown as BookingRow[]) {
+    (bookings[row.mid] ||= {})[row.day] = bookingOut(row);
   }
   return {
+    // `|| '0'` guards a never-set meta row; `|| 0` guards parseInt returning NaN on a
+    // corrupt/non-numeric value (mirrors db.ts's bumpRev).
     rev: parseInt(getMeta(db, 'revision') || '0') || 0,
+    // Unlike `maint` above (which can hold old free-form seed data), `groups` and
+    // `revision` are only ever written by this server itself via setMeta — malformed
+    // JSON here would mean DB corruption, not bad input, so it's allowed to throw.
     groups: JSON.parse(getMeta(db, 'groups') || '[]') as string[],
     machines,
     bookings,

@@ -26,8 +26,13 @@ export type Broadcast = (event: string, data: unknown) => void;
 type Stmt = ReturnType<Db['prepare']>;
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
-const clip = (v: unknown, n: number): string | null =>
-  v == null ? null : String(v).slice(0, n) || null;
+/**
+ * Clamp an untrusted value to a plain string of at most `maxLength` characters, or null
+ * when the input is null/undefined OR the clamped result would be empty (`|| null` after
+ * `.slice` catches both "no value" and "value was an empty string").
+ */
+const clip = (value: unknown, maxLength: number): string | null =>
+  value == null ? null : String(value).slice(0, maxLength) || null;
 
 function logAction(db: Db, who: string, action: string): void {
   try {
@@ -62,53 +67,59 @@ interface InMachine {
 /** Validate the whole machine list; return an error message or null. */
 function structuralError(machines: InMachine[]): string | null {
   if (machines.length === 0 || machines.length > 5000) return 'Ungültige Maschinenliste';
-  const seen = new Set<string>();
-  for (const m of machines) {
-    if (
-      !m ||
-      typeof m.id !== 'string' ||
-      !m.id.trim() ||
-      typeof m.name !== 'string' ||
-      !m.name.trim()
-    )
-      return 'Maschine ohne gültige id/name';
-    if (seen.has(m.id)) return 'Doppelte Maschinen-id: ' + m.id;
-    seen.add(m.id);
+  const seenIds = new Set<string>();
+  for (const machine of machines) {
+    const hasValidId = !!machine && typeof machine.id === 'string' && !!machine.id.trim();
+    const hasValidName = !!machine && typeof machine.name === 'string' && !!machine.name.trim();
+    if (!hasValidId || !hasValidName) return 'Maschine ohne gültige id/name';
+    if (seenIds.has(machine.id as string)) return 'Doppelte Maschinen-id: ' + machine.id;
+    seenIds.add(machine.id as string);
   }
   return null;
 }
 
 /** Validate + serialise a machine's maintenance slots to JSON, or null if none. */
-function cleanMaint(m: InMachine): string | null {
-  if (!Array.isArray(m.maint)) return null;
-  const a = (m.maint as unknown[]).slice(0, 50).map((s) => {
-    const t = (s || {}) as { type?: unknown; from?: unknown; until?: unknown; note?: unknown };
-    return {
-      type: t.type === 'defekt' ? 'defekt' : 'wartung',
-      from: DAY_RE.test(String(t.from || '')) ? String(t.from) : '',
-      until: DAY_RE.test(String(t.until || '')) ? String(t.until) : '',
-      ...(t.note ? { note: String(t.note).slice(0, 200) } : {}),
+function cleanMaint(machine: InMachine): string | null {
+  if (!Array.isArray(machine.maint)) return null;
+  const cleanedSlots = (machine.maint as unknown[]).slice(0, 50).map((rawSlot) => {
+    const slot = (rawSlot || {}) as {
+      type?: unknown;
+      from?: unknown;
+      until?: unknown;
+      note?: unknown;
     };
+    const type = slot.type === 'defekt' ? 'defekt' : 'wartung';
+    const from = DAY_RE.test(String(slot.from || '')) ? String(slot.from) : '';
+    const until = DAY_RE.test(String(slot.until || '')) ? String(slot.until) : '';
+    const note = slot.note ? String(slot.note).slice(0, 200) : null;
+    return { type, from, until, ...(note ? { note } : {}) };
   });
-  return a.length ? JSON.stringify(a) : null;
+  return cleanedSlots.length ? JSON.stringify(cleanedSlots) : null;
 }
 
 /** Insert one machine row from an untrusted client machine (server-side clamps/validates). */
-function insertMachine(im: Stmt, m: InMachine, i: number): void {
-  im.run(
-    clip(m.id, 80),
-    clip(m.name, 200),
-    clip(m.group, 120),
-    m.cat === 'messtechnik' ? 'messtechnik' : null,
-    m.status === 'wartung' || m.status === 'defekt' ? m.status : 'ok',
-    clip(m.statusNote, 200),
-    DAY_RE.test(String(m.statusFrom || '')) ? String(m.statusFrom) : null,
-    DAY_RE.test(String(m.statusUntil || '')) ? String(m.statusUntil) : null,
-    clip(m.info, 300),
-    clip(m.redu, 120),
-    /^[01]{7}$/.test(String(m.days || '')) ? String(m.days) : null,
-    cleanMaint(m),
-    i,
+function insertMachine(insertStatement: Stmt, machine: InMachine, sortIndex: number): void {
+  const validStatusFrom = DAY_RE.test(String(machine.statusFrom || ''))
+    ? String(machine.statusFrom)
+    : null;
+  const validStatusUntil = DAY_RE.test(String(machine.statusUntil || ''))
+    ? String(machine.statusUntil)
+    : null;
+  const validDaysMask = /^[01]{7}$/.test(String(machine.days || '')) ? String(machine.days) : null;
+  insertStatement.run(
+    clip(machine.id, 80),
+    clip(machine.name, 200),
+    clip(machine.group, 120),
+    machine.cat === 'messtechnik' ? 'messtechnik' : null,
+    machine.status === 'wartung' || machine.status === 'defekt' ? machine.status : 'ok',
+    clip(machine.statusNote, 200),
+    validStatusFrom,
+    validStatusUntil,
+    clip(machine.info, 300),
+    clip(machine.redu, 120),
+    validDaysMask,
+    cleanMaint(machine),
+    sortIndex,
   );
 }
 
@@ -120,31 +131,30 @@ function applyStructural(
   note: string | null,
   broadcast: Broadcast,
 ): MutateResult {
-  const err = structuralError(machines);
-  if (err) return { error: err };
+  const validationError = structuralError(machines);
+  if (validationError) return { error: validationError };
   db.exec('BEGIN');
   try {
     db.exec('DELETE FROM machines');
-    const im =
+    const insertStatement =
       db.prepare(`INSERT INTO machines(id,name,grp,cat,status,statusNote,statusFrom,statusUntil,info,redu,days,maint,sort)
                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`);
-    machines.forEach((m, i) => insertMachine(im, m, i));
-    if (Array.isArray(groups))
-      setMeta(
-        db,
-        'groups',
-        JSON.stringify(groups.map((g) => String(g).slice(0, 120)).slice(0, 500)),
-      );
+    machines.forEach((machine, sortIndex) => insertMachine(insertStatement, machine, sortIndex));
+    if (Array.isArray(groups)) {
+      // Clamp each group name (120 chars), then cap the whole list (500 groups).
+      const clampedGroupNames = groups.map((group) => String(group).slice(0, 120));
+      setMeta(db, 'groups', JSON.stringify(clampedGroupNames.slice(0, 500)));
+    }
     db.exec('DELETE FROM bookings WHERE mid NOT IN (SELECT id FROM machines)'); // orphans (deleted machine)
     if (note) logAction(db, who, note);
     db.exec('COMMIT');
-  } catch (e) {
+  } catch (error) {
     try {
       db.exec('ROLLBACK');
     } catch {
       /* ignore */
     }
-    console.error('mutate/structural:', (e as Error).message);
+    console.error('mutate/structural:', (error as Error).message);
     return { error: 'Speichern fehlgeschlagen' };
   }
   const rev = bumpRev(db);
@@ -156,52 +166,70 @@ function applyStructural(
 
 /** Validate the cell list against the current machines; return an error or null. */
 function validateCells(cells: CellDelta[], machineById: Map<string, MachineRow>): string | null {
-  for (const c of cells) {
-    if (!c || typeof c.mid !== 'string' || !DAY_RE.test(c.day || '')) return 'Ungültige Zelle';
-    if (!machineById.has(c.mid)) return 'Unbekannte Maschine: ' + c.mid;
-    if (c.val && !String(c.val.name || '').trim()) return 'Name fehlt';
+  for (const cell of cells) {
+    if (!cell || typeof cell.mid !== 'string' || !DAY_RE.test(cell.day || '')) {
+      return 'Ungültige Zelle';
+    }
+    if (!machineById.has(cell.mid)) return 'Unbekannte Maschine: ' + cell.mid;
+    if (cell.val && !String(cell.val.name || '').trim()) return 'Name fehlt';
   }
   return null;
 }
 
+/** The three prepared statements `writeCell` needs, named for what each one does. */
+interface BookingStatements {
+  findExistingBooking: Stmt;
+  upsertBooking: Stmt;
+  deleteBooking: Stmt;
+}
+
 /** Apply one cell (set or delete) inside the open transaction, collecting change/conflict. */
 function writeCell(
-  c: CellDelta,
-  m: MachineRow,
-  stmts: { cur: Stmt; up: Stmt; dl: Stmt },
+  cell: CellDelta,
+  machine: MachineRow,
+  statements: BookingStatements,
   changes: MutateChange[],
   conflicts: MutateConflict[],
 ): void {
-  const now = stmts.cur.get(c.mid, c.day) as BookingRow | undefined;
-  if (c.val) {
+  const existingBooking = statements.findExistingBooking.get(cell.mid, cell.day) as
+    BookingRow | undefined;
+  if (cell.val) {
     // set / book — enforce our own block rule + never overwrite a foreign booking
-    const name = String(c.val.name).trim();
-    if (isBlocked(m, c.day)) {
-      conflicts.push({ mid: c.mid, day: c.day, by: `gesperrt (${m.status})` });
+    const name = String(cell.val.name).trim();
+    if (isBlocked(machine, cell.day)) {
+      conflicts.push({ mid: cell.mid, day: cell.day, by: `gesperrt (${machine.status})` });
       return;
     }
-    if (now && now.name !== name) {
-      conflicts.push({ mid: c.mid, day: c.day, by: now.name });
+    if (existingBooking && existingBooking.name !== name) {
+      conflicts.push({ mid: cell.mid, day: cell.day, by: existingBooking.name });
       return;
     }
-    const val = {
+    const newBooking = {
       name,
-      note: clip(c.val.note, 500),
-      ts: clip(c.val.ts, 40) || new Date().toISOString(),
-      gid: clip(c.val.gid, 40),
-      gtitle: clip(c.val.gtitle, 200),
+      note: clip(cell.val.note, 500),
+      ts: clip(cell.val.ts, 40) || new Date().toISOString(),
+      gid: clip(cell.val.gid, 40),
+      gtitle: clip(cell.val.gtitle, 200),
     };
-    stmts.up.run(c.mid, c.day, val.name, val.note, val.ts, val.gid, val.gtitle);
-    changes.push({ mid: c.mid, day: c.day, val: bookingOut(val) });
+    statements.upsertBooking.run(
+      cell.mid,
+      cell.day,
+      newBooking.name,
+      newBooking.note,
+      newBooking.ts,
+      newBooking.gid,
+      newBooking.gtitle,
+    );
+    changes.push({ mid: cell.mid, day: cell.day, val: bookingOut(newBooking) });
   } else {
     // delete — abort the cell if it was taken over by someone else in the meantime
-    if (now && c.prev && now.name !== c.prev.name) {
-      conflicts.push({ mid: c.mid, day: c.day, by: now.name });
+    if (existingBooking && cell.prev && existingBooking.name !== cell.prev.name) {
+      conflicts.push({ mid: cell.mid, day: cell.day, by: existingBooking.name });
       return;
     }
-    if (now) {
-      stmts.dl.run(c.mid, c.day);
-      changes.push({ mid: c.mid, day: c.day, val: null });
+    if (existingBooking) {
+      statements.deleteBooking.run(cell.mid, cell.day);
+      changes.push({ mid: cell.mid, day: cell.day, val: null });
     }
   }
 }
@@ -209,14 +237,15 @@ function writeCell(
 /** Add server-side weekend bridges for the machines the client just changed (6.3, ADD
  *  direction), appending them to `changes` so they broadcast to every client. */
 function addWeekendBridges(db: Db, changes: MutateChange[]): void {
-  const affected = [...new Set(changes.map((c) => c.mid))];
-  const bridges = maintainBridges(db, affected, new Date().toISOString());
-  for (const b of bridges)
+  const affectedMachineIds = [...new Set(changes.map((change) => change.mid))];
+  const bridges = maintainBridges(db, affectedMachineIds, new Date().toISOString());
+  for (const bridge of bridges) {
     changes.push({
-      mid: b.mid,
-      day: b.day,
-      val: bookingOut({ name: b.name, ts: null, note: null, gid: null, gtitle: null }),
+      mid: bridge.mid,
+      day: bridge.day,
+      val: bookingOut({ name: bridge.name, ts: null, note: null, gid: null, gtitle: null }),
     });
+  }
 }
 
 function applyCells(
@@ -230,34 +259,39 @@ function applyCells(
   if (cells.length > 1000) return { error: 'Zu viele Zellen (max. 1000)' };
   const machineById = new Map(
     (db.prepare('SELECT * FROM machines').all() as unknown as MachineRow[]).map(
-      (m) => [m.id, m] as const,
+      (machine) => [machine.id, machine] as const,
     ),
   );
-  const err = validateCells(cells, machineById);
-  if (err) return { error: err };
+  const validationError = validateCells(cells, machineById);
+  if (validationError) return { error: validationError };
   const changes: MutateChange[] = [];
   const conflicts: MutateConflict[] = [];
   let applied = 0;
   db.exec('BEGIN');
   try {
-    const stmts = {
-      cur: db.prepare('SELECT * FROM bookings WHERE mid=? AND day=?'),
-      up: db.prepare(`INSERT INTO bookings(mid,day,name,note,ts,gid,gtitle) VALUES(?,?,?,?,?,?,?)
+    const statements: BookingStatements = {
+      findExistingBooking: db.prepare('SELECT * FROM bookings WHERE mid=? AND day=?'),
+      upsertBooking:
+        db.prepare(`INSERT INTO bookings(mid,day,name,note,ts,gid,gtitle) VALUES(?,?,?,?,?,?,?)
                       ON CONFLICT(mid,day) DO UPDATE SET name=excluded.name,note=excluded.note,ts=excluded.ts,gid=excluded.gid,gtitle=excluded.gtitle`),
-      dl: db.prepare('DELETE FROM bookings WHERE mid=? AND day=?'),
+      deleteBooking: db.prepare('DELETE FROM bookings WHERE mid=? AND day=?'),
     };
-    for (const c of cells) writeCell(c, machineById.get(c.mid)!, stmts, changes, conflicts);
-    applied = changes.length; // client-requested changes (bridges below are extra)
+    for (const cell of cells) {
+      writeCell(cell, machineById.get(cell.mid)!, statements, changes, conflicts);
+    }
+    // Must run BEFORE addWeekendBridges below — `applied` counts only the client's own
+    // requested changes, and addWeekendBridges appends more entries to `changes`.
+    applied = changes.length;
     if (bridge) addWeekendBridges(db, changes);
     if (note) logAction(db, who, note);
     db.exec('COMMIT');
-  } catch (e) {
+  } catch (error) {
     try {
       db.exec('ROLLBACK');
     } catch {
       /* ignore */
     }
-    console.error('mutate/cells:', (e as Error).message);
+    console.error('mutate/cells:', (error as Error).message);
     return { error: 'Speichern fehlgeschlagen' };
   }
   const rev = bumpRev(db);

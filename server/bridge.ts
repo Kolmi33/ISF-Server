@@ -18,10 +18,15 @@ export interface Bridge {
   name: string;
 }
 
-// UTC date helpers (match core/dates semantics; server is decoupled from web/).
-const parseYmd = (s: string): Date => new Date(s + 'T00:00:00Z');
-const ymd = (d: Date): string => d.toISOString().slice(0, 10);
-const addDays = (d: Date, n: number): Date => new Date(d.getTime() + n * 86400000);
+// UTC date helpers, deliberately separate from web/js/core/dates.ts (the server is
+// decoupled from the frontend) but named the same way for a reader moving between them.
+const parseIsoDateString = (isoDateString: string): Date => new Date(isoDateString + 'T00:00:00Z');
+const formatDateAsIsoString = (date: Date): string => date.toISOString().slice(0, 10);
+const addDays = (date: Date, numberOfDays: number): Date =>
+  new Date(date.getTime() + numberOfDays * 86400000);
+
+// JavaScript's Date#getUTCDay(): Sunday=0, Monday=1, ... Saturday=6.
+const FRIDAY_WEEKDAY_NUMBER = 5;
 
 /**
  * The Sat/Sun days that sit inside a continuous Fri→Mon series but are not yet booked.
@@ -29,54 +34,61 @@ const addDays = (d: Date, n: number): Date => new Date(d.getTime() + n * 8640000
  * Saturday and/or Sunday between them is returned, carrying the Friday's name.
  */
 export function missingBridges(bookings: BookingMap): Bridge[] {
-  const adds: Bridge[] = [];
-  for (const mid of Object.keys(bookings)) {
-    const mb = bookings[mid]!;
-    for (const d of Object.keys(mb)) {
-      const dt = parseYmd(d);
-      if (dt.getUTCDay() !== 5) continue; // Fridays only
-      const name = mb[d]!.name;
-      const sat = ymd(addDays(dt, 1));
-      const sun = ymd(addDays(dt, 2));
-      const mon = ymd(addDays(dt, 3));
-      if (mb[mon]) {
+  const missing: Bridge[] = [];
+  for (const machineId of Object.keys(bookings)) {
+    const machineBookings = bookings[machineId]!;
+    for (const bookedDay of Object.keys(machineBookings)) {
+      const fridayDate = parseIsoDateString(bookedDay);
+      if (fridayDate.getUTCDay() !== FRIDAY_WEEKDAY_NUMBER) continue;
+      const name = machineBookings[bookedDay]!.name;
+      const saturdayIsoDate = formatDateAsIsoString(addDays(fridayDate, 1));
+      const sundayIsoDate = formatDateAsIsoString(addDays(fridayDate, 2));
+      const mondayIsoDate = formatDateAsIsoString(addDays(fridayDate, 3));
+      if (machineBookings[mondayIsoDate]) {
         // the series runs across the weekend (Monday booked, any person)
-        if (!mb[sat]) adds.push({ mid, day: sat, name });
-        if (!mb[sun]) adds.push({ mid, day: sun, name });
+        if (!machineBookings[saturdayIsoDate]) {
+          missing.push({ mid: machineId, day: saturdayIsoDate, name });
+        }
+        if (!machineBookings[sundayIsoDate]) {
+          missing.push({ mid: machineId, day: sundayIsoDate, name });
+        }
       }
     }
   }
-  return adds;
+  return missing;
 }
 
 /** Read the bookings (id → day → name) for the given machines into a BookingMap. */
-function bookingsFor(db: Db, mids: readonly string[]): BookingMap {
-  const q = db.prepare('SELECT day, name FROM bookings WHERE mid=?');
-  const map: BookingMap = {};
-  for (const mid of mids) {
-    const rows = q.all(mid) as unknown as { day: string; name: string }[];
-    const mb: Record<string, { name: string }> = {};
-    for (const r of rows) mb[r.day] = { name: r.name };
-    map[mid] = mb;
+function bookingsFor(db: Db, machineIds: readonly string[]): BookingMap {
+  const selectBookingsForMachine = db.prepare('SELECT day, name FROM bookings WHERE mid=?');
+  const bookingsByMachine: BookingMap = {};
+  for (const machineId of machineIds) {
+    const rows = selectBookingsForMachine.all(machineId) as unknown as {
+      day: string;
+      name: string;
+    }[];
+    const bookingsByDay: Record<string, { name: string }> = {};
+    for (const row of rows) bookingsByDay[row.day] = { name: row.name };
+    bookingsByMachine[machineId] = bookingsByDay;
   }
-  return map;
+  return bookingsByMachine;
 }
 
 /**
- * Insert any missing weekend bridges for `mids` (never overwriting an existing cell), using
- * the given timestamp. Meant to run INSIDE an already-open transaction (the mutate path);
- * returns the bridges inserted so the caller can broadcast them. `ON CONFLICT DO NOTHING`
- * makes it safe even if a day filled concurrently.
+ * Insert any missing weekend bridges for `machineIds` (never overwriting an existing cell),
+ * using the given timestamp. Meant to run INSIDE an already-open transaction (the mutate
+ * path); returns the bridges inserted so the caller can broadcast them. `ON CONFLICT DO
+ * NOTHING` makes it safe even if a day filled concurrently.
  */
-export function maintainBridges(db: Db, mids: readonly string[], ts: string): Bridge[] {
-  if (!mids.length) return [];
-  const adds = missingBridges(bookingsFor(db, mids));
-  if (!adds.length) return [];
-  const up = db.prepare(
+export function maintainBridges(db: Db, machineIds: readonly string[], ts: string): Bridge[] {
+  if (!machineIds.length) return [];
+  const missing = missingBridges(bookingsFor(db, machineIds));
+  if (!missing.length) return [];
+  const insertBridge = db.prepare(
     'INSERT INTO bookings(mid,day,name,ts) VALUES(?,?,?,?) ON CONFLICT(mid,day) DO NOTHING',
   );
-  for (const a of adds) up.run(a.mid, a.day, a.name, ts);
-  return adds;
+  for (const bridge of missing) insertBridge.run(bridge.mid, bridge.day, bridge.name, ts);
+  return missing;
 }
 
 /**
@@ -85,26 +97,26 @@ export function maintainBridges(db: Db, mids: readonly string[], ts: string): Br
  * number inserted. This is a production data write when run against live data.
  */
 export function backfillBridges(db: Db): number {
-  const mids = (
+  const allMachineIds = (
     db.prepare('SELECT DISTINCT mid FROM bookings').all() as unknown as { mid: string }[]
-  ).map((r) => r.mid);
-  const adds = missingBridges(bookingsFor(db, mids));
-  if (!adds.length) return 0;
+  ).map((row) => row.mid);
+  const missing = missingBridges(bookingsFor(db, allMachineIds));
+  if (!missing.length) return 0;
   const ts = new Date().toISOString();
-  const up = db.prepare(
+  const insertBridge = db.prepare(
     'INSERT INTO bookings(mid,day,name,ts) VALUES(?,?,?,?) ON CONFLICT(mid,day) DO NOTHING',
   );
   db.exec('BEGIN');
   try {
-    for (const a of adds) up.run(a.mid, a.day, a.name, ts);
+    for (const bridge of missing) insertBridge.run(bridge.mid, bridge.day, bridge.name, ts);
     db.exec('COMMIT');
-  } catch (e) {
+  } catch (error) {
     try {
       db.exec('ROLLBACK');
     } catch {
       /* ignore */
     }
-    throw e;
+    throw error;
   }
-  return adds.length;
+  return missing.length;
 }
