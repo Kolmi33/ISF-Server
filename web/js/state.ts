@@ -12,37 +12,40 @@
 
 import type { AppState } from '../../shared/types.ts';
 
+/** A function notified with the current state every time the store changes. */
+type StateListener = (state: AppState) => void;
+
 export interface Store {
   /** The live state object (bridged as `window.S`; same reference throughout). */
   state: AppState;
-  get<K extends keyof AppState>(k: K): AppState[K];
-  /** Shallow-merge `patch` into state (in place), then `notify()`. */
-  set(patch: Partial<AppState>): void;
+  get<Key extends keyof AppState>(key: Key): AppState[Key];
+  /** Shallow-merge `partialState` into state (in place), then `notify()`. */
+  set(partialState: Partial<AppState>): void;
   /** Register a subscriber; returns an unsubscribe function. */
-  subscribe(fn: (s: AppState) => void): () => void;
+  subscribe(listener: StateListener): () => void;
   notify(): void;
 }
 
-export function createStore(initial: AppState): Store {
-  const state = initial;
-  const subs = new Set<(s: AppState) => void>();
+export function createStore(initialState: AppState): Store {
+  const state = initialState;
+  const subscribers = new Set<StateListener>();
   const store: Store = {
     state,
-    get(k) {
-      return state[k];
+    get(key) {
+      return state[key];
     },
-    set(patch) {
-      Object.assign(state, patch);
+    set(partialState) {
+      Object.assign(state, partialState);
       store.notify();
     },
-    subscribe(fn) {
-      subs.add(fn);
+    subscribe(listener) {
+      subscribers.add(listener);
       return () => {
-        subs.delete(fn);
+        subscribers.delete(listener);
       };
     },
     notify() {
-      for (const fn of subs) fn(state);
+      for (const listener of subscribers) listener(state);
     },
   };
   return store;

@@ -19,22 +19,27 @@ export interface WeekendUndo {
 /**
  * Remove orphaned Sat/Sun entries for machine `mid`: a weekend day survives only while
  * both the Friday before and the Monday after are booked (by anyone). Mutates
- * `fresh.bookings[mid]`; returns the removed entries as undo records.
+ * `freshServerData.bookings[mid]`; returns the removed entries as undo records.
  */
-export function sweepWeekends(fresh: BookingData, mid: string): WeekendUndo[] {
-  const mb = fresh.bookings[mid];
-  if (!mb) return [];
+export function sweepWeekends(freshServerData: BookingData, mid: string): WeekendUndo[] {
+  const machineBookings = freshServerData.bookings[mid];
+  if (!machineBookings) return [];
   const undo: WeekendUndo[] = [];
-  for (const [d, prev] of Object.entries(mb)) {
-    const dt = parseIsoDateString(d);
-    const wd = dt.getUTCDay();
-    if (wd !== 0 && wd !== 6) continue;
-    const fri = formatDateAsIsoString(addDays(dt, wd === 6 ? -1 : -2));
-    const mon = formatDateAsIsoString(addDays(dt, wd === 6 ? 2 : 1));
+  for (const [isoDate, previousValue] of Object.entries(machineBookings)) {
+    const date = parseIsoDateString(isoDate);
+    const weekday = date.getUTCDay();
+    const isSaturday = weekday === 6;
+    const isSunday = weekday === 0;
+    if (!isSaturday && !isSunday) continue;
+    // Saturday's Friday is 1 day back and its Monday 2 days forward; Sunday's Friday
+    // is 2 days back and its Monday 1 day forward.
+    const fridayIsoDate = formatDateAsIsoString(addDays(date, isSaturday ? -1 : -2));
+    const mondayIsoDate = formatDateAsIsoString(addDays(date, isSaturday ? 2 : 1));
     // The bridge holds as long as Friday AND Monday are booked (any person).
-    if (!(mb[fri] && mb[mon])) {
-      undo.push({ mid, date: d, prev: { ...prev } });
-      delete mb[d];
+    const bridgeStillHolds = machineBookings[fridayIsoDate] && machineBookings[mondayIsoDate];
+    if (!bridgeStillHolds) {
+      undo.push({ mid, date: isoDate, prev: { ...previousValue } });
+      delete machineBookings[isoDate];
     }
   }
   return undo;

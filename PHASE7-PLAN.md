@@ -316,9 +316,24 @@ land after the last machine of their group, to stay visually grouped with siblin
 - **Tests:** `booking.test.ts` (32 tests) green, unmodified — parameter names aren't part
   of any call site, so nothing there needed to change.
 
-### A6 — `web/js/state.ts`
-- **Must-haves:** `createStore` and `Store` are exported and imported by name in `app.ts` only (1 call site) — coordinate but trivial. Already very clean; only `k`/`fn`/`patch` are one-letter — expand to `key`/`listener`/`partialState`.
-- **Tests:** `state.test.ts` green unmodified.
+### A6 — `web/js/state.ts` — **DONE**
+`createStore`/`Store` are used only by `app.ts` (not window-bridged at all, so not even
+visible to `legacy.js`) — zero coordination. Renamed every one-letter internal:
+`k`→`key`, `fn`→`listener` (+ a new `StateListener` type alias so the callback shape is
+named once instead of repeated three times), `patch`→`partialState`, `subs`→`subscribers`,
+`initial`→`initialState`. `state.test.ts` (6 tests) green unmodified.
+
+### A3 — `web/js/core/weekend.ts` — **DONE**
+`sweepWeekends` is exported but never called by bare name in `legacy.js` (grepped — only
+mentioned in comments; the real callers are `core/booking.ts`'s reducers) — free. Renamed
+`fresh`→`freshServerData`, `mb`→`machineBookings`, the `[d, prev]` destructure →
+`[isoDate, previousValue]`, `dt`→`date`, `wd`→`weekday` (replaced by two named booleans
+`isSaturday`/`isSunday` at the point they're used, reads clearer than re-deriving `wd===6`
+twice), `fri`/`mon`→`fridayIsoDate`/`mondayIsoDate`, and named the final truthiness check
+`bridgeStillHolds` instead of an inline `if(!(...))`. `mid` kept as a parameter name — it
+matches the `mid` field already established on `CellUndo`/`WeekendUndo` throughout the
+codebase, not a local abbreviation. `weekend.test.ts` (6) + `booking.test.ts` (32, the
+consumer) both green unmodified.
 
 ### A7 — `web/js/net/api.ts`, `net/sse.ts`
 - **Must-haves:** `api.ts`'s `API`, `apiGet`, `apiPost`, `validateData`, `normalizeState` are called by bare name in `legacy.js` (`readFile`, `persist`) — coordinate. `sse.ts`'s `applyUpdate`, `presenceInfo`, `isForeign` likewise called directly in `connectSSE`/`applyPresence` — coordinate (3 call sites, easy). Private: `d`/`o`/`r` in `api.ts` → `raw`/`payload`/`response`. `d.rev`/`d.log` reads bear a comment on why they're written back onto the raw object before `validateData` runs (mutate-then-validate — a little surprising).
