@@ -6,6 +6,13 @@
 #   Type-check:     docker compose -f docker-compose.dev.yml run --rm dev npm run check
 #   Vite dev server:docker compose -f docker-compose.dev.yml run --rm --service-ports dev npm run dev
 #
+#   UI smoke checks (Phase 7, ARCHITECTURE §18) use Playwright (dev-only, no runtime cost).
+#   Its browser binary is cached in the playwright_browsers volume below and survives a
+#   `--rm` container, but the system libraries it needs (installed via `apt`) do NOT --
+#   they're part of the container's root filesystem, which `--rm` discards. Run once per
+#   fresh container that will drive a browser:
+#     docker compose -f docker-compose.dev.yml run --rm dev npx playwright install-deps chromium
+#
 services:
   dev:
     image: node:22
@@ -13,6 +20,7 @@ services:
     volumes:
       - .:/app                      # source is bind-mounted (host edits are live)
       - node_modules:/app/node_modules  # deps stay in the Linux VM (fast, correct native bins)
+      - playwright_browsers:/root/.cache/ms-playwright  # browser binaries (dev-only UI smoke)
     environment:
       - CHOKIDAR_USEPOLLING=true     # reliable file-watching across the Windows->container boundary
     extra_hosts:
@@ -22,3 +30,4 @@ services:
 
 volumes:
   node_modules:
+  playwright_browsers:

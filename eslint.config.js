@@ -82,4 +82,13 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
     },
   },
+
+  // Dev-only Node scripts (e.g. the Playwright UI smoke driver, ARCHITECTURE §18) — plain
+  // JS, so (unlike server/*.ts) typescript-eslint isn't managing `no-undef` for them.
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly' },
+    },
+  },
 );

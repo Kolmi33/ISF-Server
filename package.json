@@ -22,6 +22,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "deadcode": "knip",
+    "ui:smoke": "node scripts/ui-smoke.mjs",
     "verify": "npm run format:check && npm run check && npm run lint && npm run deadcode && npm run test:cov"
   },
   "dependencies": {
@@ -40,6 +41,7 @@
     "eslint-plugin-react-hooks": "^5.0.0",
     "jsdom": "^25.0.1",
     "knip": "^5.36.0",
+    "playwright": "^1.62.1",
     "prettier": "^3.3.3",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.13.0",
