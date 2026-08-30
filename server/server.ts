@@ -13,44 +13,52 @@ import { getState } from './model.js';
 import { applyMutate } from './mutate.js';
 import type { MutateBody } from './types.js';
 
-const __dir = dirname(fileURLToPath(import.meta.url));
+const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '3000');
 const HOST = process.env.HOST || '0.0.0.0';
-const DB_PATH = process.env.DB_PATH || join(__dir, '..', 'data', 'buchungen.db');
+const DB_PATH = process.env.DB_PATH || join(currentDirectory, '..', 'data', 'buchungen.db');
 const IMPORT_JSON = process.env.IMPORT_JSON || join(dirname(DB_PATH), 'buchungen.json');
 const BACKUP_DIR = process.env.BACKUP_DIR || join(dirname(DB_PATH), 'backups');
 const BACKUP_KEEP = parseInt(process.env.BACKUP_KEEP || '30');
 const WEEKEND_BRIDGE = process.env.WEEKEND_BRIDGE !== 'off'; // 6.3 maintain hook (on unless disabled)
-const PUBLIC_DIR = join(__dir, '..', 'public');
-const BUNDLED_JSON = join(__dir, '..', 'buchungen.json'); // shipped in the image (Dockerfile copies it)
+const PUBLIC_DIR = join(currentDirectory, '..', 'public');
+const BUNDLED_JSON = join(currentDirectory, '..', 'buchungen.json'); // shipped in the image (Dockerfile copies it)
 
 const db = openDb(DB_PATH);
 // First-run seed: DB empty? Import from the volume (/data/buchungen.json), else from the
 // image-bundled buchungen.json (no docker cp needed).
 try {
-  const seedPath = existsSync(IMPORT_JSON)
-    ? IMPORT_JSON
-    : existsSync(BUNDLED_JSON)
-      ? BUNDLED_JSON
-      : IMPORT_JSON;
-  const r = importFromJson(db, seedPath);
-  if (r && !r.skipped)
-    log('Import', `Erstimport (${seedPath}): ${r.machines} Maschinen, ${r.bookings} Buchungen`);
-} catch (e) {
-  if (existsSync(IMPORT_JSON) || existsSync(BUNDLED_JSON))
-    console.error('Import fehlgeschlagen:', (e as Error).message);
+  // Prefer the volume-mounted JSON (a previous deployment's data); fall back to the
+  // image-bundled JSON (first-ever deploy); if neither exists, use the volume path anyway
+  // so the read below fails with a clear "file not found" instead of silently no-op-ing.
+  let seedPath = IMPORT_JSON;
+  if (!existsSync(IMPORT_JSON) && existsSync(BUNDLED_JSON)) {
+    seedPath = BUNDLED_JSON;
+  }
+  const importResult = importFromJson(db, seedPath);
+  if (importResult && !importResult.skipped) {
+    log(
+      'Import',
+      `Erstimport (${seedPath}): ${importResult.machines} Maschinen, ${importResult.bookings} Buchungen`,
+    );
+  }
+} catch (error) {
+  if (existsSync(IMPORT_JSON) || existsSync(BUNDLED_JSON)) {
+    console.error('Import fehlgeschlagen:', (error as Error).message);
+  }
 }
 
 // ---------- helpers ----------
-const ymd = (d: Date): string => d.toISOString().slice(0, 10);
+// Deliberately separate from web/js/core/dates.ts and server/bridge.ts's own copy (each
+// layer is decoupled) but named the same way for a reader moving between them.
+const formatDateAsIsoString = (date: Date): string => date.toISOString().slice(0, 10);
 
 // ---------- SSE clients ----------
 const clients = new Set<ServerResponse>();
 const clientNames = new Map<ServerResponse, string>(); // res -> user name (for presence)
 function presenceUsers(): string[] {
-  return [...new Set([...clientNames.values()].filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b, 'de'),
-  );
+  const distinctNames = [...new Set([...clientNames.values()].filter(Boolean))];
+  return distinctNames.sort((nameA, nameB) => nameA.localeCompare(nameB, 'de'));
 }
 function broadcast(event: string, data: unknown): void {
   const line = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -81,24 +89,28 @@ function log(user: string, action: string): void {
 function runBackup(): void {
   try {
     mkdirSync(BACKUP_DIR, { recursive: true });
-    const name = `buchungen_${ymd(new Date())}.db`;
-    const dest = join(BACKUP_DIR, name);
-    if (!existsSync(dest)) {
-      db.exec(`VACUUM INTO '${dest.replace(/'/g, "''")}'`); // clean consistent copy, safe while running
-      const olds = readdirSync(BACKUP_DIR)
-        .filter((n) => /^buchungen_\d{4}-\d{2}-\d{2}\.db$/.test(n))
+    const backupFileName = `buchungen_${formatDateAsIsoString(new Date())}.db`;
+    const backupPath = join(BACKUP_DIR, backupFileName);
+    if (!existsSync(backupPath)) {
+      // Single quotes inside a SQLite string literal are escaped by doubling them.
+      db.exec(`VACUUM INTO '${backupPath.replace(/'/g, "''")}'`); // clean consistent copy, safe while running
+      const oldestFirstBackupFileNames = readdirSync(BACKUP_DIR)
+        .filter((fileName) => /^buchungen_\d{4}-\d{2}-\d{2}\.db$/.test(fileName))
         .sort();
-      for (const n of olds.slice(0, -BACKUP_KEEP)) {
+      // Keep only the newest BACKUP_KEEP files: a negative slice bound drops everything
+      // except the last BACKUP_KEEP entries, so this list is everything OLDER than that.
+      const filesToDelete = oldestFirstBackupFileNames.slice(0, -BACKUP_KEEP);
+      for (const fileName of filesToDelete) {
         try {
-          rmSync(join(BACKUP_DIR, n));
+          rmSync(join(BACKUP_DIR, fileName));
         } catch {
           /* ignore */
         }
       }
-      console.log('Backup:', dest);
+      console.log('Backup:', backupPath);
     }
-  } catch (e) {
-    console.error('Backup fehlgeschlagen:', (e as Error).message);
+  } catch (error) {
+    console.error('Backup fehlgeschlagen:', (error as Error).message);
   }
 }
 runBackup();
@@ -123,17 +135,17 @@ function send(
 }
 function readBody(req: IncomingMessage): Promise<MutateBody | null> {
   return new Promise((resolve) => {
-    let b = '';
-    req.on('data', (c) => {
-      b += c;
-      if (b.length > 1e6) {
+    let bodyText = '';
+    req.on('data', (chunk) => {
+      bodyText += chunk;
+      if (bodyText.length > 1e6) {
         req.destroy();
         resolve(null);
       } // overflow: finish immediately (no hanging handler)
     });
     req.on('end', () => {
       try {
-        resolve(b ? (JSON.parse(b) as MutateBody) : {});
+        resolve(bodyText ? (JSON.parse(bodyText) as MutateBody) : {});
       } catch {
         resolve(null);
       }
@@ -156,7 +168,7 @@ function openStream(req: IncomingMessage, res: ServerResponse, url: URL): void {
   clients.add(res);
   clientNames.set(res, (url.searchParams.get('user') || '').trim());
   sendPresence();
-  const hb = setInterval(() => {
+  const heartbeatInterval = setInterval(() => {
     try {
       res.write(': ping\n\n');
     } catch {
@@ -164,21 +176,23 @@ function openStream(req: IncomingMessage, res: ServerResponse, url: URL): void {
     }
   }, 25000);
   req.on('close', () => {
-    clearInterval(hb);
+    clearInterval(heartbeatInterval);
     clients.delete(res);
     clientNames.delete(res);
     sendPresence();
   });
 }
 
-async function serveStatic(res: ServerResponse, p: string): Promise<void> {
-  const file = p === '/' ? '/index.html' : p;
-  if (file.includes('..')) return send(res, 400, { error: 'bad path' });
-  const abs = join(PUBLIC_DIR, file);
+async function serveStatic(res: ServerResponse, urlPath: string): Promise<void> {
+  const filePath = urlPath === '/' ? '/index.html' : urlPath;
+  if (filePath.includes('..')) return send(res, 400, { error: 'bad path' });
+  const absolutePath = join(PUBLIC_DIR, filePath);
   try {
-    const data = await readFile(abs);
+    const data = await readFile(absolutePath);
     res
-      .writeHead(200, { 'Content-Type': MIME[extname(abs)] || 'application/octet-stream' })
+      .writeHead(200, {
+        'Content-Type': MIME[extname(absolutePath)] || 'application/octet-stream',
+      })
       .end(data);
   } catch {
     send(res, 404, { error: 'not found' });
@@ -187,25 +201,26 @@ async function serveStatic(res: ServerResponse, p: string): Promise<void> {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://x');
-  const p = url.pathname;
+  const urlPath = url.pathname;
   try {
-    if (p === '/api/health')
+    if (urlPath === '/api/health') {
       return send(res, 200, {
         ok: true,
         rev: parseInt(getMeta(db, 'revision') || '0') || 0,
         clients: clients.size,
       });
-    if (p === '/api/state') return send(res, 200, getState(db));
-    if (p === '/api/stream') return openStream(req, res, url);
-    if (req.method === 'POST' && p === '/api/mutate') {
+    }
+    if (urlPath === '/api/state') return send(res, 200, getState(db));
+    if (urlPath === '/api/stream') return openStream(req, res, url);
+    if (req.method === 'POST' && urlPath === '/api/mutate') {
       const body = await readBody(req);
       if (body === null) return send(res, 400, { error: 'Ungültige oder zu große Anfrage' });
-      const out = applyMutate(db, body, broadcast, WEEKEND_BRIDGE);
-      return send(res, out.error ? 400 : 200, out);
+      const result = applyMutate(db, body, broadcast, WEEKEND_BRIDGE);
+      return send(res, result.error ? 400 : 200, result);
     }
-    return serveStatic(res, p);
-  } catch (e) {
-    console.error(e);
+    return serveStatic(res, urlPath);
+  } catch (error) {
+    console.error(error);
     return send(res, 500, { error: 'Serverfehler' });
   }
 });

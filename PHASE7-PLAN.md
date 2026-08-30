@@ -418,17 +418,96 @@ once for a benefit unrelated to naming; recorded here as a follow-up, not done s
 - **Tests:** `admin.test.ts` (6), `all-bookings.test.ts` (12), `my-bookings.test.ts` (5),
   `stats.test.ts` (7) — all green unmodified.
 
-### A10 — `shared/types.ts`
-- **Must-haves:** every field name here is load-bearing (server wire format + client reads) — do **not** rename any field; this file's job is fidelity to the JSON on the wire. Readability pass here is comment-only: a few interfaces (`ServerData`, `AppState`) already have excellent doc-comments; `Booking`/`Machine` could use one line each cross-referencing which legacy field replaced which (already partially done for `redu`/`gid`/`gtitle`).
+### A10 — `shared/types.ts` — **reviewed, no changes made**
+Every field name here is load-bearing (server wire format + client reads) — confirmed
+**not** renaming any field is correct; this file's job is fidelity to the JSON on the wire.
+On rereading with the comment-only lens the plan proposed: `ServerData`/`AppState` already
+have excellent doc-comments, and every field that isn't self-evident (`redu`, `gid`,
+`gtitle`, `cat`, `days`) already carries one. Adding cross-reference comments to the
+self-evident fields (`Booking.name`, `Machine.info`, etc.) would be comment noise against
+P5 ("comments explain WHY... not WHAT"), not an improvement — so this file is left
+untouched rather than churned for its own sake.
 - **Tests:** none (types only); `tsc --noEmit` is the check.
 
-### A11 — `server/*.ts` (backend, in scope per "each file")
-- **Must-haves:** not yet read in this pass — before touching, re-read `server/db.ts`/`model.ts`/`mutate.ts`/`bridge.ts`/`server.ts` the same way this session read the frontend, since ARCHITECTURE §17 notes it was decomposed for testability but not specifically for naming. Treat as its own slice with its own must-have list once read; don't guess here.
-- **Tests:** `server/*.test.ts` (99%+ cov) green unmodified.
+### A11 — `server/*.ts` (backend, all 8 files) — **DONE**
+Read every backend file (via an Explore agent survey, then directly before editing) rather
+than guessing, per the plan's own note. One fact changed the whole risk profile up front:
+**zero exported identifiers from `server/*.ts` are imported anywhere outside `server/`
+itself** (confirmed by grep) — unlike the frontend, no backend rename needs a bridge alias
+or cross-file coordination beyond a file's own test. Every exported name across all 8 files
+was already descriptive (no abbreviated exports anywhere in the backend) — this pass is
+entirely internal params/locals plus a handful of structural splits and missing comments.
 
-### A12 — `web/js/app.ts`
-- **Must-haves:** this file *is* the bridge — most of its content (the `Object.assign` calls) becomes dead once Phase 7 (B10) deletes `legacy.js`, so a deep readability pass here is low-value now; limit A12 to the `hydrateState`/`jsonSet` naming (`fallback`→`defaultJson` is clearer) and leave the bridge section alone until B10 deletes it outright.
-- **Tests:** none direct (impure entry, E5 smoke-only).
+- **`db.ts`:** `k`/`v`/`r` → `key`/`value`/`row` throughout `getMeta`/`setMeta`/`bumpRev`;
+  `im`/`ib` → `insertMachine`/`insertBooking`; `m`/`i` → `machine`/`sortIndex`; `mb`/`b`/`nb`
+  → `machineBookings`/`booking`/`insertedCount`; `j`/`e` → `seedJson`/`error`. Added a
+  comment on `bumpRev`'s double-fallback (`|| '0' || 0`) pattern, which recurs unexplained
+  in `model.ts` and `server.ts` too.
+- **`model.ts`:** `isBlocked`'s 4-clause boolean split into three named booleans
+  (`hasActiveNonOkStatus`/`isAfterStatusStart`/`isBeforeStatusEnd`); `m`/`o`/`r` →
+  `machine`/`wireShape`/`row`; `a` → `parsedMaintenance`. Added the double-fallback comment
+  (mirrors `db.ts`) and a note on why `groups`/`revision`'s `JSON.parse` trusts the value
+  (only ever written by this server itself via `setMeta`) while `maint`'s guards with
+  try/catch (can hold old free-form seed data) — previously an unexplained asymmetry.
+- **`mutate.ts`** (largest, most abbreviation-heavy): `v`/`n` → `value`/`maxLength` in
+  `clip`, with a comment on its two null triggers; `m` → `machine` throughout; `s`/`t` →
+  `rawSlot`/`slot` in `cleanMaint`, whose dense map body became four named steps; `im`/`i`
+  → `insertStatement`/`sortIndex`; `err` → `validationError`; `c` → `cell`/`change`/`child`
+  depending on context; the `stmts.cur/up/dl` bag (three abbreviated keys) became a named
+  `BookingStatements` interface with `findExistingBooking`/`upsertBooking`/`deleteBooking`;
+  a comment now explains why `applied = changes.length` must run **before**
+  `addWeekendBridges` mutates `changes` further — a real ordering dependency that was
+  previously only implicit in argument order.
+- **`bridge.ts`:** added a `FRIDAY_WEEKDAY_NUMBER` constant for the previously magic `5`;
+  `sat`/`sun`/`mon` → `saturdayIsoDate`/`sundayIsoDate`/`mondayIsoDate`; `mids`/`mid` (local
+  variables, **not** the `Bridge.mid` field, which is left alone — same field-name policy
+  as the frontend's A9/A10) → `machineIds`/`machineId`; the file's own private
+  `parseYmd`/`ymd` date helpers (deliberately separate from `web/js/core/dates.ts` — the
+  server is decoupled from the frontend) renamed to `parseIsoDateString`/
+  `formatDateAsIsoString` for a reader moving between the two layers.
+- **`server.ts`** (the impure entry shell, no dedicated test): `__dir` → `currentDirectory`
+  (also in `backfill.ts`/`import.ts`, which redeclare it identically); its own duplicate
+  `ymd` → `formatDateAsIsoString` (same rationale as `bridge.ts`); the nested ternary
+  picking the seed path became an `if` with a comment on the three-way precedence; the
+  presence dedupe/sort chain got named intermediate steps; `runBackup`'s `name`/`dest`/
+  `olds`/`n` → `backupFileName`/`backupPath`/`oldestFirstBackupFileNames`/`fileName`, with
+  new comments on the `VACUUM INTO` quote-escaping and the negative-slice retention logic
+  (both previously unexplained); `readBody`'s `b`/`c` → `bodyText`/`chunk`; `serveStatic`'s
+  `p`/`abs` → `urlPath`/`absolutePath`; the main handler's `p`/`out` → `urlPath`/`result`.
+  **Kept `req`/`res` as-is** — Node's own universal HTTP convention, and renaming them
+  would reduce recognizability for any Node-familiar reader rather than improve it (the
+  same reasoning as keeping `db`, already established in A11's earlier files).
+- **`backfill.ts`/`import.ts`:** `__dir` → `currentDirectory`; `n`/`r` → `insertedBridgeCount`/
+  `importResult`; `import.ts`'s 3-way fallback chain for the seed path (CLI arg → env var →
+  default) got a named `firstPositionalArg` step instead of one inline `.find()`.
+- **`types.ts`:** reviewed, no changes — every field-level abbreviation (`grp`, `mid`,
+  `gid`, `gtitle`, `redu`, `cat`) is schema-coupled (mirrors either a SQL column name or
+  the shared wire contract), the same category A10 already put out of scope for
+  `shared/types.ts`. The file's existing JSDoc already explains the ones that need it
+  (`grp` specifically, since it's the SQL-reserved-word workaround).
+
+**Verification (E5 — no test file for `server.ts`/`backfill.ts`/`import.ts`):** compiled
+with `tsc -p tsconfig.server.json` (clean), then actually **ran** the compiled server
+against a throwaway DB on a scratch port and exercised it for real: `/api/health`,
+`/api/state`, a structural mutate (machine creation), a cell mutate (booking), a second
+booking that triggered the weekend auto-bridge (booked Fri 2027-01-08 + Mon 2027-01-11 →
+Sat/Sun auto-filled with the same name, confirming `bridge.ts`'s renamed
+`missingBridges`/`maintainBridges` work end-to-end through `mutate.ts`'s renamed
+`addWeekendBridges`), and the SSE `/api/stream` endpoint (got a real `hello` event). All
+correct; container torn down after.
+
+- **Tests:** `db.test.ts` (6), `model.test.ts` (9), `mutate.test.ts` (19), `bridge.test.ts`
+  (8) all green unmodified — every test calls exports positionally, none reference internal
+  names.
+
+### A12 — `web/js/app.ts` — **DONE**
+Done exactly as scoped: `jsonSet`'s `fallback` param renamed to `defaultJson` (clearer —
+it's specifically a JSON string default, not a general fallback value). The bridge section
+(`Object.assign(window, ...)` × 15) deliberately left untouched — it becomes dead code the
+moment Phase 7 slice B10 deletes `legacy.js`, so touching it now is churn against soon-dead
+code, the same reasoning applied throughout this pass.
+- **Tests:** none direct (impure entry, E5 smoke-only) — covered by A11's server smoke and
+  the full `verify` run.
 
 **Suggested order for Backlog A:** A5, A6, A3 first (zero/near-zero coordination cost, real domain value) → A1, A2, A7, A9 (moderate, contained coordination) → A4 (biggest, still contained to `runAssistant` + the 10 adapters) → A8 deferred to land with Phase 7 B1/B2 rather than separately → A10/A11/A12 as time allows.
 

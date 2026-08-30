@@ -9,10 +9,10 @@ import { backfillBridges } from './bridge.js';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dir = dirname(fileURLToPath(import.meta.url));
-const DB_PATH = process.env.DB_PATH || join(__dir, '..', 'data', 'buchungen.db');
+const currentDirectory = dirname(fileURLToPath(import.meta.url));
+const DB_PATH = process.env.DB_PATH || join(currentDirectory, '..', 'data', 'buchungen.db');
 
 const db = openDb(DB_PATH);
-const n = backfillBridges(db);
-console.log(`Weekend-Bridges eingefügt: ${n} → ${DB_PATH}`);
+const insertedBridgeCount = backfillBridges(db);
+console.log(`Weekend-Bridges eingefügt: ${insertedBridgeCount} → ${DB_PATH}`);
 db.close();

@@ -62,8 +62,8 @@ Object.assign(window, machineText);
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);
 // the store owns the object, `window.S` bridges it for the legacy layer. Faithful to the
 // former `const S = {…}` at the top of legacy.js.
-function jsonSet(key: string, fallback: string): Set<string> {
-  return new Set<string>(JSON.parse(localStorage.getItem(key) || fallback));
+function jsonSet(key: string, defaultJson: string): Set<string> {
+  return new Set<string>(JSON.parse(localStorage.getItem(key) || defaultJson));
 }
 
 function hydrateState(): AppState {
