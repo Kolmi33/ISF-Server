@@ -290,9 +290,31 @@ export const allDaysRange = getAllDaysInRange;
 - **Functionality:** unchanged; this is the highest logic-density module (N-of-M solver) — after renaming, re-read `runAssistant`'s call sites once more to make sure the new names still read naturally in context (`pickFor(AS_TREE, sel, isFreeDev)` → `chooseDevicesForTree(...)`).
 - **Tests:** `assistant.test.ts` (16+15 tests) green unmodified.
 
-### A5 — `web/js/core/booking.ts` (highest domain value)
-- **Must-haves:** none of its 8 exports are called by bare name in `legacy.js` — every call site is `mutate(fresh => bookCells(fresh, ...))` etc., already fully qualified, so **all renames here are effectively free** (still grep to be sure, but risk is low). Best targets: `fresh`→`freshServerData` (it's shadowing-prone — every reducer takes it, worth a shared doc note on why it's called "fresh": these reducers reapply against the just-fetched authoritative state, not the optimistic UI copy). `mb`/`fmb`→`machineBookings`. `m`→`machine`. The `isGroup`/`gid`/`extra` block in `applyBooking` is dense — a short inline comment on *why* a lone booking with a title still becomes a group (so it's deletable as a unit) would help future readers.
-- **Tests:** `booking.test.ts` (43 tests) green unmodified.
+### A5 — `web/js/core/booking.ts` (highest domain value) — **DONE**
+
+Correction on execution: the plan's "none of its 8 exports are called by bare name" was
+**wrong** — a grep found all 8 (`bookCells`, `deleteCells`, `deleteOwnCells`,
+`deleteSelectedCells`, `deleteGroup`, `saveMachine`, `deleteMachine`, `moveMachine`) called
+by bare name in `legacy.js`, one call site each (inside `mutate(fresh => ...)` callbacks).
+It didn't change the outcome, though: those 8 names were already full, descriptive words —
+`bookCells` isn't an abbreviation of anything — so none of them needed renaming. The actual
+rename-and-restructure pass only touched **internal parameters and locals**
+(`fresh`→`freshServerData`, `mb`/`fmb`→`machineBookings`, `m`→`machine`, `mid` params kept —
+it's the shared `Booking.mid` field name, not a local abbreviation — `n`→`deletedCount`,
+`gid` locals →`groupId`, `idx`→`insertionIndex`/`machineIndex`, `i`/`j`→named indices), which
+are invisible to every caller — genuinely free, as the plan intended, just not for the
+reason it gave.
+
+Two structural cleanups beyond pure renaming, both behavior-preserving (confirmed by the
+existing 32 tests staying green untouched): `applyBooking`'s dense
+`{name, ...(note?{note}:{}), ts, ...extra}` spread-chain became an explicit
+`buildBookingCellFactory` that assigns fields with plain `if`s; `saveMachine`'s reverse
+`for` loop with a bodyless `if`/`break` for finding the insertion index became a named
+`findGroupInsertionIndex` helper with an early `return` and a WHY comment (new machines
+land after the last machine of their group, to stay visually grouped with siblings).
+
+- **Tests:** `booking.test.ts` (32 tests) green, unmodified — parameter names aren't part
+  of any call site, so nothing there needed to change.
 
 ### A6 — `web/js/state.ts`
 - **Must-haves:** `createStore` and `Store` are exported and imported by name in `app.ts` only (1 call site) — coordinate but trivial. Already very clean; only `k`/`fn`/`patch` are one-letter — expand to `key`/`listener`/`partialState`.

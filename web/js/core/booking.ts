@@ -9,6 +9,13 @@
 // booking apply/conflict reducer, the run delete, and the machine CRUD (save/delete/
 // reorder). Gate-only: they POST to /api/mutate, so they are verified by exhaustive
 // unit tests rather than a production-write browser smoke (ARCHITECTURE §15).
+//
+// Naming note: each exported function here IS called by its bare name in `legacy.js`
+// (inside a `mutate(fresh => bookCells(fresh, ...))` callback, via the window bridge),
+// so the exported names themselves are left exactly as they were — they were already
+// full, descriptive words, not abbreviations. Only the INTERNAL parameters and local
+// variables below are renamed; a parameter's name is never visible to a caller, so
+// none of those renames need any change outside this file.
 
 import type { Booking, BookingData, Machine, MaintSlot } from '../../../shared/types.ts';
 import { dayAvailable, isBlockedM, maintAt } from './machines.ts';
@@ -52,62 +59,87 @@ export interface BookResult {
 
 /** Conflicts against the fresh data: blocked days and already-booked days. */
 function findConflicts(
-  fresh: BookingData,
-  mids: readonly string[],
+  freshServerData: BookingData,
+  machineIds: readonly string[],
   dates: readonly string[],
 ): Conflict[] {
   const conflicts: Conflict[] = [];
-  for (const mid of mids) {
-    const m = fresh.machines.find((x) => x.id === mid);
-    if (!m) continue;
-    const mb = fresh.bookings[mid] || {};
-    for (const d of dates) {
-      if (!dayAvailable(m, d)) continue; // unavailable weekdays are silently skipped
-      if (isBlockedM(m, d))
-        conflicts.push({ mid, date: d, by: `gesperrt (${maintAt(m, d)?.type || 'Wartung'})` });
-      else if (mb[d]) conflicts.push({ mid, date: d, by: mb[d].name });
+  for (const machineId of machineIds) {
+    const machine = freshServerData.machines.find((candidate) => candidate.id === machineId);
+    if (!machine) continue;
+    const machineBookings = freshServerData.bookings[machineId] || {};
+    for (const date of dates) {
+      if (!dayAvailable(machine, date)) continue; // unavailable weekdays are silently skipped
+      if (isBlockedM(machine, date)) {
+        conflicts.push({
+          mid: machineId,
+          date,
+          by: `gesperrt (${maintAt(machine, date)?.type || 'Wartung'})`,
+        });
+      } else if (machineBookings[date]) {
+        conflicts.push({ mid: machineId, date, by: machineBookings[date].name });
+      }
     }
   }
   return conflicts;
 }
 
-/** Write the bookable `dates` on one machine (`make` builds a fresh cell each time). */
+/** Write the bookable `dates` on one machine (`buildCell` builds a fresh cell each time). */
 function writeMachineCells(
-  fresh: BookingData,
-  m: Machine,
+  freshServerData: BookingData,
+  machine: Machine,
   dates: readonly string[],
-  make: () => Booking,
+  buildCell: () => Booking,
 ): CellUndo[] {
-  const mb = (fresh.bookings[m.id] = fresh.bookings[m.id] || {});
+  const machineBookings = (freshServerData.bookings[machine.id] =
+    freshServerData.bookings[machine.id] || {});
   const undo: CellUndo[] = [];
-  for (const d of dates) {
-    // never overwrite / respect blocks + unavailable weekdays
-    if (mb[d] || isBlockedM(m, d) || !dayAvailable(m, d)) continue;
-    mb[d] = make();
-    undo.push({ mid: m.id, date: d, prev: null });
+  for (const date of dates) {
+    // Never overwrite an existing cell, and respect blocks + unavailable weekdays.
+    if (machineBookings[date] || isBlockedM(machine, date) || !dayAvailable(machine, date)) {
+      continue;
+    }
+    machineBookings[date] = buildCell();
+    undo.push({ mid: machine.id, date, prev: null });
   }
   return undo;
 }
 
-/** Write the free cells into `fresh` and return the applied count + undo records. */
+/** Build the fields for a newly booked cell, given the current booking's shared gid/title. */
+function buildBookingCellFactory(
+  options: Pick<BookOptions, 'name' | 'note' | 'ts'>,
+  groupId: string | null,
+  groupTitle: string,
+): () => Booking {
+  return () => {
+    const cell: Booking = { name: options.name, ts: options.ts };
+    if (options.note) cell.note = options.note;
+    if (groupId) {
+      cell.gid = groupId;
+      if (groupTitle) cell.gtitle = groupTitle;
+    }
+    return cell;
+  };
+}
+
+/** Write the free cells into `freshServerData` and return the applied count + undo records. */
 function applyBooking(
-  fresh: BookingData,
-  mids: readonly string[],
+  freshServerData: BookingData,
+  machineIds: readonly string[],
   dates: readonly string[],
-  opts: BookOptions,
+  options: BookOptions,
 ): { count: number; undo: CellUndo[] } {
-  const { name, note, title, ts, newGid } = opts;
-  // A shared gid ties the cells together when this action creates more than one cell
-  // (several machines and/or days) OR a title was given.
-  const isGroup = mids.length > 1 || dates.length > 1 || !!title;
-  const gid = isGroup ? newGid() : null;
-  const extra = gid ? { gid, ...(title ? { gtitle: title } : {}) } : {};
-  const make = (): Booking => ({ name, ...(note ? { note } : {}), ts, ...extra });
+  // A shared group id ties the cells together when this action creates more than one
+  // cell (several machines and/or days) OR a title was given.
+  const isGroup = machineIds.length > 1 || dates.length > 1 || !!options.title;
+  const groupId = isGroup ? options.newGid() : null;
+  const buildCell = buildBookingCellFactory(options, groupId, options.title);
+
   const undo: CellUndo[] = [];
-  for (const mid of mids) {
-    const m = fresh.machines.find((x) => x.id === mid);
-    if (!m) continue;
-    undo.push(...writeMachineCells(fresh, m, dates, make));
+  for (const machineId of machineIds) {
+    const machine = freshServerData.machines.find((candidate) => candidate.id === machineId);
+    if (!machine) continue;
+    undo.push(...writeMachineCells(freshServerData, machine, dates, buildCell));
   }
   return { count: undo.length, undo };
 }
@@ -119,14 +151,14 @@ function applyBooking(
  * Faithful port of the `submitBooking` mutate callback.
  */
 export function bookCells(
-  fresh: BookingData,
+  freshServerData: BookingData,
   mids: readonly string[],
   dates: readonly string[],
-  opts: BookOptions,
+  options: BookOptions,
 ): BookResult {
-  const conflicts = findConflicts(fresh, mids, dates);
-  if (conflicts.length && !opts.skipConflicts) return { abort: true, conflicts };
-  return applyBooking(fresh, mids, dates, opts);
+  const conflicts = findConflicts(freshServerData, mids, dates);
+  if (conflicts.length && !options.skipConflicts) return { abort: true, conflicts };
+  return applyBooking(freshServerData, mids, dates, options);
 }
 
 /**
@@ -135,23 +167,24 @@ export function bookCells(
  * (including the swept weekend days). Faithful port of the booking-detail `del`.
  */
 export function deleteCells(
-  fresh: BookingData,
+  freshServerData: BookingData,
   mid: string,
   name: string,
   dates: readonly string[],
 ): { n: number; undo: CellUndo[] } {
-  const fmb = fresh.bookings[mid] || {};
-  let n = 0;
+  const machineBookings = freshServerData.bookings[mid] || {};
+  let deletedCount = 0;
   const undo: CellUndo[] = [];
-  for (const dd of dates) {
-    if (fmb[dd] && fmb[dd].name === name) {
-      undo.push({ mid, date: dd, prev: { ...fmb[dd] } });
-      delete fmb[dd];
-      n++;
+  for (const date of dates) {
+    const existingBooking = machineBookings[date];
+    if (existingBooking && existingBooking.name === name) {
+      undo.push({ mid, date, prev: { ...existingBooking } });
+      delete machineBookings[date];
+      deletedCount++;
     }
   }
-  undo.push(...sweepWeekends(fresh, mid)); // remove orphaned Sat/Sun bridge days too
-  return { n, undo };
+  undo.push(...sweepWeekends(freshServerData, mid)); // remove orphaned Sat/Sun bridge days too
+  return { n: deletedCount, undo };
 }
 
 /**
@@ -161,25 +194,25 @@ export function deleteCells(
  * clicked cell's exact stored name).
  */
 export function deleteOwnCells(
-  fresh: BookingData,
+  freshServerData: BookingData,
   mid: string,
   user: string,
   dates: readonly string[],
 ): { n: number; undo: CellUndo[] } {
-  const mb = fresh.bookings[mid] || {};
-  const u = user.toLowerCase();
-  let n = 0;
+  const machineBookings = freshServerData.bookings[mid] || {};
+  const lowercaseUser = user.toLowerCase();
+  let deletedCount = 0;
   const undo: CellUndo[] = [];
-  for (const d of dates) {
-    const b = mb[d];
-    if (b && b.name.toLowerCase() === u) {
-      undo.push({ mid, date: d, prev: { ...b } });
-      delete mb[d];
-      n++;
+  for (const date of dates) {
+    const existingBooking = machineBookings[date];
+    if (existingBooking && existingBooking.name.toLowerCase() === lowercaseUser) {
+      undo.push({ mid, date, prev: { ...existingBooking } });
+      delete machineBookings[date];
+      deletedCount++;
     }
   }
-  undo.push(...sweepWeekends(fresh, mid));
-  return { n, undo };
+  undo.push(...sweepWeekends(freshServerData, mid));
+  return { n: deletedCount, undo };
 }
 
 /** A cell address (machine + ISO date) for the selection delete. */
@@ -193,47 +226,50 @@ export interface CellRef {
  * each machine in `mids`. Faithful port of the marquee-selection context-menu delete.
  */
 export function deleteSelectedCells(
-  fresh: BookingData,
+  freshServerData: BookingData,
   cells: readonly CellRef[],
   mids: readonly string[],
 ): { n: number; undo: CellUndo[] } {
-  let n = 0;
+  let deletedCount = 0;
   const undo: CellUndo[] = [];
-  for (const c of cells) {
-    const mb = fresh.bookings[c.mid];
-    if (!mb) continue;
-    const b = mb[c.date];
-    if (!b) continue;
-    undo.push({ mid: c.mid, date: c.date, prev: { ...b } });
-    delete mb[c.date];
-    n++;
+  for (const cellRef of cells) {
+    const machineBookings = freshServerData.bookings[cellRef.mid];
+    if (!machineBookings) continue;
+    const existingBooking = machineBookings[cellRef.date];
+    if (!existingBooking) continue;
+    undo.push({ mid: cellRef.mid, date: cellRef.date, prev: { ...existingBooking } });
+    delete machineBookings[cellRef.date];
+    deletedCount++;
   }
-  for (const mid of mids) undo.push(...sweepWeekends(fresh, mid));
-  return { n, undo };
+  for (const mid of mids) undo.push(...sweepWeekends(freshServerData, mid));
+  return { n: deletedCount, undo };
 }
 
 /**
  * Delete every cell belonging to booking-group `gid` across all machines, then sweep
  * the affected machines. Faithful port of the booking-detail "delete whole group".
  */
-export function deleteGroup(fresh: BookingData, gid: string): { n: number; undo: CellUndo[] } {
-  let n = 0;
+export function deleteGroup(
+  freshServerData: BookingData,
+  groupId: string,
+): { n: number; undo: CellUndo[] } {
+  let deletedCount = 0;
   const undo: CellUndo[] = [];
-  const affected = new Set<string>();
-  for (const mid of Object.keys(fresh.bookings)) {
-    const fmb = fresh.bookings[mid]!;
-    for (const dd of Object.keys(fmb)) {
-      const b = fmb[dd];
-      if (b && b.gid === gid) {
-        undo.push({ mid, date: dd, prev: { ...b } });
-        delete fmb[dd];
-        n++;
-        affected.add(mid);
+  const affectedMachineIds = new Set<string>();
+  for (const mid of Object.keys(freshServerData.bookings)) {
+    const machineBookings = freshServerData.bookings[mid]!;
+    for (const date of Object.keys(machineBookings)) {
+      const existingBooking = machineBookings[date];
+      if (existingBooking && existingBooking.gid === groupId) {
+        undo.push({ mid, date, prev: { ...existingBooking } });
+        delete machineBookings[date];
+        deletedCount++;
+        affectedMachineIds.add(mid);
       }
     }
   }
-  for (const mid of affected) undo.push(...sweepWeekends(fresh, mid));
-  return { n, undo };
+  for (const mid of affectedMachineIds) undo.push(...sweepWeekends(freshServerData, mid));
+  return { n: deletedCount, undo };
 }
 
 /** The machine-form fields (already trimmed/validated by the form) a save applies. */
@@ -250,37 +286,66 @@ export interface MachineForm {
 }
 
 /** Apply the form fields onto a machine object (add-or-clear each optional field). */
-function applyFields(o: Machine, f: MachineForm): void {
-  o.name = f.name;
-  o.group = f.group;
-  o.info = f.info;
-  if (f.redu) o.redu = f.redu;
-  else delete o.redu; // redundancy marker (label only)
-  if (f.daysMask) o.days = f.daysMask;
-  else delete o.days; // available weekdays
-  if (f.maint.length) o.maint = f.maint;
-  else delete o.maint; // maintenance/defect slots
-  delete o.status;
-  delete o.statusNote;
-  delete o.statusFrom;
-  delete o.statusUntil; // legacy single-status replaced by maint
-  if (f.cat === 'messtechnik') o.cat = 'messtechnik';
-  else delete o.cat; // 'maschine' = default (no field)
+function applyFormFieldsToMachine(machine: Machine, form: MachineForm): void {
+  machine.name = form.name;
+  machine.group = form.group;
+  machine.info = form.info;
+  if (form.redu) machine.redu = form.redu;
+  else delete machine.redu; // redundancy marker (label only)
+  if (form.daysMask) machine.days = form.daysMask;
+  else delete machine.days; // available weekdays
+  if (form.maint.length) machine.maint = form.maint;
+  else delete machine.maint; // maintenance/defect slots
+  delete machine.status;
+  delete machine.statusNote;
+  delete machine.statusFrom;
+  delete machine.statusUntil; // legacy single-status replaced by maint
+  if (form.cat === 'messtechnik') machine.cat = 'messtechnik';
+  else delete machine.cat; // 'maschine' = default (no field)
 }
 
-/** Derive a URL-safe machine id base from a name (German transliteration). */
+/**
+ * Derive a URL-safe machine id base from a name: lowercase, German umlauts/ß spelled
+ * out (so "Prüfgerät" -> "pruefgeraet"), everything else that isn't a-z0-9 collapsed
+ * to a single hyphen, and leading/trailing hyphens trimmed.
+ */
 function slugify(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .replace(/ä/g, 'ae')
-      .replace(/ö/g, 'oe')
-      .replace(/ü/g, 'ue')
-      .replace(/ß/g, 'ss')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 40) || 'maschine'
-  );
+  const transliterated = name
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss');
+  const slug = transliterated
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40);
+  return slug || 'maschine';
+}
+
+/** A unique machine id starting from `baseSlug`, appending `-2`, `-3`, … until free. */
+function findUniqueMachineId(machines: readonly Machine[], baseSlug: string): string {
+  let candidateId = baseSlug;
+  let suffix = 2;
+  while (machines.some((machine) => machine.id === candidateId)) {
+    candidateId = `${baseSlug}-${suffix}`;
+    suffix++;
+  }
+  return candidateId;
+}
+
+/**
+ * Where to insert a newly created machine: right after the last existing machine of
+ * the same group, so new machines stay grouped with their siblings instead of always
+ * landing at the very end of the list. Falls back to the end when the group is new.
+ */
+function findGroupInsertionIndex(machines: readonly Machine[], group: string): number {
+  for (let index = machines.length - 1; index >= 0; index--) {
+    if (machines[index]!.group === group) {
+      return index + 1;
+    }
+  }
+  return machines.length;
 }
 
 /**
@@ -290,40 +355,32 @@ function slugify(name: string): string {
  * `mfSave` mutate callback (returns nothing on success, `{abort:true}` on failure).
  */
 export function saveMachine(
-  fresh: BookingData,
+  freshServerData: BookingData,
   mid: string | null,
   form: MachineForm,
 ): { abort: true } | void {
   if (mid) {
-    const fm = fresh.machines.find((x) => x.id === mid);
-    if (!fm) return { abort: true };
-    applyFields(fm, form);
+    const existingMachine = freshServerData.machines.find((candidate) => candidate.id === mid);
+    if (!existingMachine) return { abort: true };
+    applyFormFieldsToMachine(existingMachine, form);
     return;
   }
-  const base = slugify(form.name);
-  let id = base;
-  let n = 2;
-  while (fresh.machines.some((x) => x.id === id)) id = `${base}-${n++}`;
-  let idx = fresh.machines.length;
-  for (let i = fresh.machines.length - 1; i >= 0; i--)
-    if (fresh.machines[i]!.group === form.group) {
-      idx = i + 1;
-      break;
-    }
-  const nm = { id } as Machine;
-  applyFields(nm, form);
-  fresh.machines.splice(idx, 0, nm);
+  const newMachineId = findUniqueMachineId(freshServerData.machines, slugify(form.name));
+  const insertionIndex = findGroupInsertionIndex(freshServerData.machines, form.group);
+  const newMachine = { id: newMachineId } as Machine;
+  applyFormFieldsToMachine(newMachine, form);
+  freshServerData.machines.splice(insertionIndex, 0, newMachine);
 }
 
 /**
  * Remove machine `mid` and all its bookings. Faithful port of the `mfDel` mutate
  * callback (`{abort:true}` if the machine is already gone).
  */
-export function deleteMachine(fresh: BookingData, mid: string): { abort: true } | void {
-  const i = fresh.machines.findIndex((x) => x.id === mid);
-  if (i < 0) return { abort: true };
-  fresh.machines.splice(i, 1);
-  delete fresh.bookings[mid];
+export function deleteMachine(freshServerData: BookingData, mid: string): { abort: true } | void {
+  const machineIndex = freshServerData.machines.findIndex((candidate) => candidate.id === mid);
+  if (machineIndex < 0) return { abort: true };
+  freshServerData.machines.splice(machineIndex, 1);
+  delete freshServerData.bookings[mid];
 }
 
 /**
@@ -331,10 +388,22 @@ export function deleteMachine(fresh: BookingData, mid: string): { abort: true } 
  * with its neighbour. Aborts at the list ends or across a group boundary (reorder is
  * only allowed inside the same group). Faithful port of the admin `moveById`.
  */
-export function moveMachine(fresh: BookingData, id: string, dir: number): { abort: true } | void {
-  const idx = fresh.machines.findIndex((m) => m.id === id);
-  const j = idx + dir;
-  if (idx < 0 || j < 0 || j >= fresh.machines.length) return { abort: true };
-  if (fresh.machines[idx]!.group !== fresh.machines[j]!.group) return { abort: true };
-  [fresh.machines[idx], fresh.machines[j]] = [fresh.machines[j]!, fresh.machines[idx]!];
+export function moveMachine(
+  freshServerData: BookingData,
+  id: string,
+  dir: number,
+): { abort: true } | void {
+  const machineIndex = freshServerData.machines.findIndex((machine) => machine.id === id);
+  const neighborIndex = machineIndex + dir;
+  const machines = freshServerData.machines;
+  if (machineIndex < 0 || neighborIndex < 0 || neighborIndex >= machines.length) {
+    return { abort: true };
+  }
+  if (machines[machineIndex]!.group !== machines[neighborIndex]!.group) {
+    return { abort: true };
+  }
+  [machines[machineIndex], machines[neighborIndex]] = [
+    machines[neighborIndex]!,
+    machines[machineIndex]!,
+  ];
 }
