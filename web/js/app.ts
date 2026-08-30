@@ -21,6 +21,7 @@ import * as api from './net/api.ts';
 import * as sse from './net/sse.ts';
 import * as grid from './ui/grid.ts';
 import * as selection from './ui/selection.ts';
+import * as gridInteraction from './ui/grid-interaction.ts';
 import * as navigation from './ui/navigation.ts';
 import * as viewMyBookings from './ui/views/my-bookings.ts';
 import * as viewStats from './ui/views/stats.ts';
@@ -58,18 +59,32 @@ declare global {
     applyDebug: () => void;
     dbgOn: () => boolean;
     centerToday: () => void;
-    /** Still legacy — the grid's category ein-/ausklappen and jump-to-next-free-day logic
-     *  (Phase 7 slice B2). The React Grid (B1) only calls these; it doesn't own them. */
+    /** Still legacy — the grid's category ein-/ausklappen. Called by both the React Grid
+     *  (B1, its toggle buttons) and ui/grid-interaction.ts (B2, its group-row click/dblclick). */
     catTap: (category: string) => void;
     catTapCancel: () => void;
     toggleAllGroupsInCat: (category: string) => void;
+    /** Bridged from ui/grid-interaction.ts (Phase 7 slice B2); called by the React Grid's
+     *  post-render effect and by legacy's still-unported `jumpToSlot`. */
     paintSel: () => void;
     syncJumpControls: () => void;
     ensureOverflow: () => void;
-    /** Still legacy — mid → the last free day jumped to (Phase 7 slice B2 owns writing it;
-     *  exposed here so the React Grid can read it for the row header's "back" button). */
+    /** Still legacy (Phase 7 slice B2 owns *reading* it) — mid → the last free day jumped to;
+     *  exposed here so the React Grid can read it for the row header's "back" button. */
     nextFreePtr: Record<string, string>;
     prevFreeBefore: (machine: Machine, fromIso: string) => string | null;
+    /** Still legacy — the context menu, next-free jump, and single-cell booking action
+     *  (Phase 7 slices B4/B5). ui/grid-interaction.ts (B2) only calls these. */
+    hideCtx: () => void;
+    showCtx: (x: number, y: number) => void;
+    gotoPrevFree: (mid: string) => void;
+    gotoNextFree: (mid: string) => void;
+    openCellAction: (mid: string, date: string) => void;
+    /** Still legacy — favorite toggle (Phase 7 slice B6, machine/group management) and the
+     *  week-growth-to-the-left used by drag-auto-scroll and arrow-key nav at the grid's edges
+     *  (Phase 7 slice B3). */
+    toggleFav: (mid: string) => void;
+    prependWeek: () => void;
   }
 }
 
@@ -83,6 +98,7 @@ Object.assign(window, api);
 Object.assign(window, sse);
 Object.assign(window, grid);
 Object.assign(window, selection);
+Object.assign(window, gridInteraction);
 Object.assign(window, navigation);
 Object.assign(window, viewMyBookings);
 Object.assign(window, viewStats);
@@ -144,3 +160,9 @@ window.notify = () => {
 // `render()` export becomes `window.render` (bridged above), so the store subscription just
 // above keeps driving it exactly as it drove legacy's `render()` before this slice.
 createRoot(document.getElementById('grid')!).render(createElement(gridComponent.Grid));
+
+// Phase 7 slice B2 — selection, drag-select and keyboard navigation (`ui/grid-interaction.ts`).
+// Wired once at boot, same as legacy's own top-level `gridEl.addEventListener(...)` calls did;
+// event delegation means it doesn't matter that the React grid mounted just above hasn't
+// necessarily painted its rows yet.
+gridInteraction.initGridInteraction();

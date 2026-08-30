@@ -1,0 +1,436 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest';
+import type { AppState } from '../../../shared/types.ts';
+import { initGridInteraction, paintSel, clearSel, Sel } from './grid-interaction.ts';
+
+/** Minimal grid markup: two machine rows × two dates, plus the group/category header rows
+ *  and the `#gridWrap` scroll container the drag-auto-scroll code measures. Faithful to the
+ *  exact classes/attributes `Grid.tsx`/`GridBody.tsx` render (B1). */
+function buildGridDom(): void {
+  document.body.innerHTML = `
+    <div id="gridWrap">
+      <table id="grid">
+        <tbody>
+          <tr class="grouprow catrow" data-catgroup="maschine"><td>Maschinen</td></tr>
+          <tr class="grouprow" data-group="Halle 1"><td>Halle 1</td></tr>
+          <tr>
+            <td class="machcol"><span class="favstar" data-fav="m1"></span></td>
+            <td class="cell free" data-mid="m1" data-date="2021-01-04"></td>
+            <td class="cell free" data-mid="m1" data-date="2021-01-05"></td>
+          </tr>
+          <tr>
+            <td class="machcol">
+              <span class="nextfree back" data-nb="m2"></span>
+              <span class="nextfree" data-nf="m2"></span>
+            </td>
+            <td class="cell free" data-mid="m2" data-date="2021-01-04"></td>
+            <td class="cell free" data-mid="m2" data-date="2021-01-05"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="overlay"></div>`;
+}
+
+function stubWindowGlobals(): void {
+  window.S = {
+    visM: ['m1', 'm2'],
+    visD: ['2021-01-04', '2021-01-05'],
+    collapsed: new Set(),
+    extraWeeks: 0,
+  } as unknown as AppState;
+  window.hideCtx = vi.fn();
+  window.showCtx = vi.fn();
+  window.notify = vi.fn();
+  window.render = vi.fn();
+  window.prependWeek = vi.fn();
+  window.toggleFav = vi.fn();
+  window.gotoPrevFree = vi.fn();
+  window.gotoNextFree = vi.fn();
+  window.openCellAction = vi.fn();
+  window.catTap = vi.fn();
+  window.catTapCancel = vi.fn();
+  window.toggleAllGroupsInCat = vi.fn();
+}
+
+function cell(mid: string, date: string): HTMLElement {
+  return document.querySelector(`td.cell[data-mid="${mid}"][data-date="${date}"]`)!;
+}
+
+function mousedownOn(el: Element, options: MouseEventInit = {}): void {
+  el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, ...options }));
+}
+
+function mouseoverOn(el: Element): void {
+  el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+}
+
+function mouseupOn(el: Element, options: MouseEventInit = {}): void {
+  el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, ...options }));
+}
+
+function clickOn(el: Element): void {
+  el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+}
+
+function dblclickOn(el: Element): void {
+  el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+}
+
+function keydown(key: string, options: KeyboardEventInit = {}): void {
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options }),
+  );
+}
+
+// The grid DOM and its event listeners are built exactly once, matching `initGridInteraction`'s
+// real one-time-at-boot contract (its `document`-level listeners would otherwise accumulate
+// across tests if a fresh `#grid` were rebuilt — and re-listened-to — per test). Each test only
+// resets the mutable bits: `Sel` state, `window.S`/mocks, scroll position, and localStorage.
+beforeAll(() => {
+  // jsdom doesn't implement these two DOM APIs at all — stub them once, globally, rather than
+  // per-test. `scrollIntoView` is called unconditionally by keyboard nav; `elementFromPoint`
+  // only matters to the drag-auto-scroll tests, which override this default via `vi.spyOn`.
+  Element.prototype.scrollIntoView = vi.fn();
+  document.elementFromPoint = vi.fn().mockReturnValue(null);
+  buildGridDom();
+  initGridInteraction();
+});
+
+beforeEach(() => {
+  stubWindowGlobals();
+  localStorage.clear();
+  document.getElementById('gridWrap')!.scrollLeft = 0;
+  document.getElementById('gridWrap')!.scrollTop = 0;
+  document.getElementById('overlay')!.classList.remove('open');
+  clearSel(); // also repaints, clearing any leftover .sel/.kfocus from the previous test
+  vi.clearAllMocks();
+});
+
+describe('paintSel / clearSel', () => {
+  it('paints the anchor↔focus rectangle and gives the focus cell a roving tabindex', () => {
+    Sel.anchor = { mid: 'm1', date: '2021-01-04' };
+    Sel.focus = { mid: 'm2', date: '2021-01-05' };
+    paintSel();
+    expect(cell('m1', '2021-01-04').className).toContain('sel');
+    expect(cell('m1', '2021-01-05').className).toContain('sel');
+    expect(cell('m2', '2021-01-04').className).toContain('sel');
+    expect(cell('m2', '2021-01-05')).toHaveClass('sel', 'kfocus');
+    expect(cell('m2', '2021-01-05').getAttribute('aria-selected')).toBe('true');
+    expect(cell('m2', '2021-01-05').getAttribute('tabindex')).toBe('0');
+  });
+
+  it('clears previous marks before repainting a smaller selection', () => {
+    Sel.anchor = { mid: 'm1', date: '2021-01-04' };
+    Sel.focus = { mid: 'm2', date: '2021-01-05' };
+    paintSel();
+    Sel.anchor = Sel.focus = { mid: 'm1', date: '2021-01-04' };
+    paintSel();
+    expect(cell('m2', '2021-01-05').className).not.toContain('sel');
+    expect(cell('m2', '2021-01-05').getAttribute('aria-selected')).toBeNull();
+  });
+
+  it('clearSel resets the selection and hides the context menu', () => {
+    Sel.anchor = { mid: 'm1', date: '2021-01-04' };
+    Sel.focus = { mid: 'm1', date: '2021-01-04' };
+    paintSel();
+    clearSel();
+    expect(Sel.anchor).toBeNull();
+    expect(Sel.cells).toEqual([]);
+    expect(cell('m1', '2021-01-04').className).not.toContain('sel');
+    expect(window.hideCtx).toHaveBeenCalledOnce();
+  });
+});
+
+describe('drag-to-select', () => {
+  it('mousedown on a cell starts a new single-cell selection', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    expect(Sel.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(Sel.dragging).toBe(true);
+    expect(Sel.didDrag).toBe(false);
+    expect(cell('m1', '2021-01-04')).toHaveClass('sel');
+  });
+
+  it('ignores a non-primary mouse button', () => {
+    mousedownOn(cell('m1', '2021-01-04'), { button: 2 });
+    expect(Sel.anchor).toBeNull();
+  });
+
+  it('mouseover during a drag extends the focus to the hovered cell', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    mouseoverOn(cell('m2', '2021-01-05'));
+    expect(Sel.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
+    expect(Sel.didDrag).toBe(true);
+    expect(Sel.cells).toHaveLength(4); // the full m1..m2 × both-dates rectangle
+  });
+
+  it('mouseover before any mousedown is a no-op (no focus to extend)', () => {
+    mouseoverOn(cell('m2', '2021-01-05'));
+    expect(Sel.focus).toBeNull();
+  });
+
+  it('shift+mousedown with an existing anchor spans a rectangle instead of starting fresh', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    mouseupOn(document.body);
+    mousedownOn(cell('m2', '2021-01-05'), { shiftKey: true });
+    expect(Sel.anchor).toEqual({ mid: 'm1', date: '2021-01-04' }); // unchanged
+    expect(Sel.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
+    expect(Sel.didDrag).toBe(true);
+  });
+
+  it('mouseup ends the drag and opens the context menu only for a real multi-cell drag', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    mouseoverOn(cell('m2', '2021-01-05'));
+    mouseupOn(document.body, { clientX: 10, clientY: 20 });
+    expect(Sel.dragging).toBe(false);
+    expect(window.showCtx).toHaveBeenCalledWith(10, 20);
+  });
+
+  it('mouseup after a plain click (no drag movement) does not open the context menu', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    mouseupOn(document.body);
+    expect(window.showCtx).not.toHaveBeenCalled();
+  });
+
+  it('mouseup while not dragging is a no-op', () => {
+    mouseupOn(document.body);
+    expect(window.showCtx).not.toHaveBeenCalled();
+  });
+});
+
+describe('click handling', () => {
+  it('clicking a favorite star toggles that machine as a favorite', () => {
+    clickOn(document.querySelector('.favstar[data-fav="m1"]')!);
+    expect(window.toggleFav).toHaveBeenCalledWith('m1');
+  });
+
+  it('clicking the "jump back" button goes to the previous free day', () => {
+    clickOn(document.querySelector('[data-nb="m2"]')!);
+    expect(window.gotoPrevFree).toHaveBeenCalledWith('m2');
+  });
+
+  it('clicking the "jump to next free" button goes to the next free day', () => {
+    clickOn(document.querySelector('[data-nf="m2"]')!);
+    expect(window.gotoNextFree).toHaveBeenCalledWith('m2');
+  });
+
+  it('clicking a category header row toggles that category', () => {
+    clickOn(document.querySelector('tr[data-catgroup="maschine"] td')!);
+    expect(window.catTap).toHaveBeenCalledWith('maschine');
+  });
+
+  it('clicking a group header row toggles and persists its collapsed state', () => {
+    clickOn(document.querySelector('tr[data-group="Halle 1"] td')!);
+    expect(window.S.collapsed.has('Halle 1')).toBe(true);
+    expect(JSON.parse(localStorage.getItem('mb_collapsed')!)).toEqual(['Halle 1']);
+    expect(window.notify).toHaveBeenCalledOnce();
+
+    clickOn(document.querySelector('tr[data-group="Halle 1"] td')!);
+    expect(window.S.collapsed.has('Halle 1')).toBe(false);
+  });
+
+  it('a plain click that ends a drag just clears didDrag, without any other action', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    mouseoverOn(cell('m2', '2021-01-05'));
+    clickOn(cell('m2', '2021-01-05'));
+    expect(Sel.didDrag).toBe(false);
+    expect(window.openCellAction).not.toHaveBeenCalled();
+  });
+
+  it('a plain click that was not a drag does nothing (selection already happened on mousedown)', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    clickOn(cell('m1', '2021-01-04'));
+    expect(window.openCellAction).not.toHaveBeenCalled();
+  });
+});
+
+describe('double-click handling', () => {
+  it('double-clicking a category header toggles every group in that category', () => {
+    dblclickOn(document.querySelector('tr[data-catgroup="maschine"] td')!);
+    expect(window.catTapCancel).toHaveBeenCalledOnce();
+    expect(window.toggleAllGroupsInCat).toHaveBeenCalledWith('maschine');
+  });
+
+  it('double-clicking a cell opens its booking action', () => {
+    dblclickOn(cell('m1', '2021-01-04'));
+    expect(window.openCellAction).toHaveBeenCalledWith('m1', '2021-01-04');
+  });
+});
+
+describe('keyboard navigation', () => {
+  it('the first arrow press (nothing focused yet) focuses the first visible cell without moving', () => {
+    keydown('ArrowRight');
+    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(Sel.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
+  });
+
+  it('ArrowRight/ArrowDown move focus by one column/row and reset the anchor to match', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    keydown('ArrowRight');
+    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-05' });
+    expect(Sel.anchor).toEqual(Sel.focus);
+    keydown('ArrowDown');
+    expect(Sel.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
+  });
+
+  it('Shift+Arrow extends the selection without moving the anchor', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    keydown('ArrowRight', { shiftKey: true });
+    expect(Sel.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-05' });
+    expect(Sel.cells).toHaveLength(2);
+  });
+
+  it('clamps at the top/left edge instead of moving past it', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    keydown('ArrowLeft');
+    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-04' }); // clamped, unchanged
+    keydown('ArrowUp');
+    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
+  });
+
+  it('moving past the right edge grows the grid directly via extraWeeks + render()', () => {
+    mousedownOn(cell('m2', '2021-01-05')); // last column
+    keydown('ArrowRight');
+    expect(window.S.extraWeeks).toBe(1);
+    expect(window.render).toHaveBeenCalledOnce();
+  });
+
+  it('moving past the left edge calls prependWeek() to grow backwards', () => {
+    // window.prependWeek is a no-op stub here, so the column index stays -1 and clamps to 0 —
+    // this test only proves the call happens, not the resulting column (that needs a real
+    // prependWeek that actually unshifts S.visD, which is still legacy / out of B2's scope).
+    mousedownOn(cell('m1', '2021-01-04')); // first column
+    keydown('ArrowLeft');
+    expect(window.prependWeek).toHaveBeenCalledOnce();
+  });
+
+  it('does nothing when the grid has no visible rows/columns yet', () => {
+    window.S.visM = [];
+    window.S.visD = [];
+    keydown('ArrowRight');
+    expect(Sel.focus).toBeNull();
+  });
+
+  it("Enter on a single-cell selection opens that cell's booking action", () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    keydown('Enter');
+    expect(window.openCellAction).toHaveBeenCalledWith('m1', '2021-01-04');
+  });
+
+  it('Enter on a multi-cell selection opens the context menu instead', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    mouseoverOn(cell('m2', '2021-01-05'));
+    mouseupOn(document.body);
+    keydown('Enter');
+    expect(window.showCtx).toHaveBeenCalled();
+    expect(window.openCellAction).not.toHaveBeenCalled();
+  });
+
+  it('Enter with nothing focused does nothing', () => {
+    keydown('Enter');
+    expect(window.openCellAction).not.toHaveBeenCalled();
+    expect(window.showCtx).not.toHaveBeenCalled();
+  });
+
+  it('Escape clears the selection', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    keydown('Escape');
+    expect(Sel.anchor).toBeNull();
+  });
+
+  it('is suppressed while a modal is open', () => {
+    document.getElementById('overlay')!.classList.add('open');
+    keydown('ArrowRight');
+    expect(Sel.focus).toBeNull();
+  });
+
+  it('is suppressed while typing into a form field', () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input); // must be attached for the keydown to bubble to document
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    expect(Sel.focus).toBeNull();
+    input.remove(); // the grid DOM built in beforeAll is shared across every test in this file
+  });
+
+  it('ignores keys that are not arrows/Enter/Escape', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    keydown('a');
+    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-04' }); // unchanged
+  });
+});
+
+describe('drag auto-scroll at the grid edges', () => {
+  function stubGridWrapGeometry(overrides: Partial<DOMRect> = {}): void {
+    const rect = {
+      left: 100,
+      right: 500,
+      top: 50,
+      bottom: 400,
+      width: 400,
+      height: 350,
+      x: 100,
+      y: 50,
+      toJSON() {},
+      ...overrides,
+    } as DOMRect;
+    document.getElementById('gridWrap')!.getBoundingClientRect = () => rect;
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    stubGridWrapGeometry();
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(cell('m2', '2021-01-05'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('scrolls right and re-extends the focus when dragging near the right edge', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 490, clientY: 200 }));
+    vi.advanceTimersByTime(60);
+    expect(document.getElementById('gridWrap')!.scrollLeft).toBeGreaterThan(0);
+    expect(Sel.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
+  });
+
+  it('scrolls left, or grows a week when already at the start, near the left edge', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 110, clientY: 200 }));
+    vi.advanceTimersByTime(60);
+    expect(window.prependWeek).toHaveBeenCalled(); // scrollLeft starts at 0 in jsdom
+
+    document.getElementById('gridWrap')!.scrollLeft = 50;
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 110, clientY: 200 }));
+    vi.advanceTimersByTime(60);
+    expect(document.getElementById('gridWrap')!.scrollLeft).toBeLessThan(50);
+  });
+
+  it('scrolls down near the bottom edge and up near the top edge (once already scrolled)', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 300, clientY: 390 }));
+    vi.advanceTimersByTime(60);
+    expect(document.getElementById('gridWrap')!.scrollTop).toBeGreaterThan(0);
+
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 300, clientY: 55 }));
+    vi.advanceTimersByTime(60);
+    expect(document.getElementById('gridWrap')!.scrollTop).toBeLessThan(24);
+  });
+
+  it('stops auto-scrolling once the drag ends', () => {
+    mousedownOn(cell('m1', '2021-01-04'));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 490, clientY: 200 }));
+    mouseupOn(document.body);
+    const scrollLeftAtMouseup = document.getElementById('gridWrap')!.scrollLeft;
+    vi.advanceTimersByTime(300);
+    expect(document.getElementById('gridWrap')!.scrollLeft).toBe(scrollLeftAtMouseup);
+  });
+
+  it('does nothing mid-air when not dragging or the grid wrapper is missing', () => {
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 490, clientY: 200 }));
+    vi.advanceTimersByTime(60);
+    expect(document.getElementById('gridWrap')!.scrollLeft).toBe(0); // never started dragging
+  });
+});

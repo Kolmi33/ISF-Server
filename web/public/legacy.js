@@ -600,17 +600,8 @@ function ensureOverflow(){
    gotoNextFree()/gotoPrevFree(): ⏭/⏮-Sprünge je Maschine (Zeiger in
    nextFreePtr; Wechsel der Maschine setzt die übrigen Zeiger zurück).
    ================================================================= */
-const Sel = { anchor:null, focus:null, cells:[], dragging:false, didDrag:false };
+/* Sel, paintSel, clearSel → ui/grid-interaction.ts (window bridge). Phase 7 slice B2. */
 function cellEl(mid,date){ return document.querySelector(`td.cell[data-mid="${CSS.escape(mid)}"][data-date="${date}"]`); }
-// Auswahl-Rechteck (Anker↔Fokus über S.visM×S.visD) → ui/selection.ts (computeSelCells).
-function paintSel(){
-  document.querySelectorAll('td.cell.sel').forEach(el=>{ el.classList.remove('sel'); el.removeAttribute('aria-selected'); });
-  document.querySelectorAll('td.cell.kfocus').forEach(el=>{ el.classList.remove('kfocus'); el.removeAttribute('tabindex'); });
-  Sel.cells=computeSelCells(Sel.anchor, Sel.focus, S.visM, S.visD);
-  for(const c of Sel.cells){ const el=cellEl(c.mid,c.date); if(el){ el.classList.add('sel'); el.setAttribute('aria-selected','true'); } }
-  if(Sel.focus){ const el=cellEl(Sel.focus.mid,Sel.focus.date); if(el){ el.classList.add('kfocus'); el.setAttribute('tabindex','0'); } } // roving tabindex
-}
-function clearSel(){ Sel.anchor=Sel.focus=null; Sel.cells=[]; paintSel(); hideCtx(); }
 
 /* =================================================================
    GEZIELTES ZELL-PATCHING (Performance)
@@ -732,96 +723,8 @@ function openCellAction(mid,date){
   b ? openBookingDetail(m,date,b) : openBookingForm([mid],date,date);
 }
 
-const gridEl=document.querySelector('#grid');
-/* Auto-Scroll während des Ziehens: am Rand weiterscrollen, damit man über den
-   sichtbaren Bereich hinaus markieren kann (Wochen hängen sich automatisch an) */
-let dragPos=null, dragScrollTimer=null;
-function startDragScroll(){ clearInterval(dragScrollTimer); dragScrollTimer=setInterval(dragAutoScroll, 60); }
-function stopDragScroll(){ clearInterval(dragScrollTimer); dragScrollTimer=null; dragPos=null; }
-document.addEventListener('mousemove', ev=>{ if(Sel.dragging) dragPos={x:ev.clientX, y:ev.clientY}; });
-function dragAutoScroll(){
-  if(!Sel.dragging || !dragPos) return;
-  const el=document.getElementById('gridWrap');
-  const r=el.getBoundingClientRect();
-  const machw=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--machw'))||230;
-  const edge=45; let moved=false;
-  if(dragPos.x > r.right-edge){ el.scrollLeft+=30; moved=true; }
-  else if(dragPos.x < r.left+machw+edge){
-    if(el.scrollLeft<=0) prependWeek(); else el.scrollLeft-=30;
-    moved=true;
-  }
-  if(dragPos.y > r.bottom-edge){ el.scrollTop+=24; moved=true; }
-  else if(dragPos.y < r.top+60 && el.scrollTop>0){ el.scrollTop-=24; moved=true; }
-  if(moved && Sel.focus){
-    // Zelle unter dem (stillstehenden) Cursor neu ermitteln und Auswahl erweitern
-    const x=Math.min(Math.max(dragPos.x, r.left+machw+6), r.right-6);
-    const y=Math.min(Math.max(dragPos.y, r.top+55), r.bottom-6);
-    const t=document.elementFromPoint(x,y);
-    const td=t && t.closest ? t.closest('td.cell') : null;
-    if(td && (td.dataset.mid!==Sel.focus.mid || td.dataset.date!==Sel.focus.date)){
-      Sel.focus={mid:td.dataset.mid, date:td.dataset.date};
-      Sel.didDrag=true;
-      paintSel();
-    }
-  }
-}
-gridEl.addEventListener('mousedown', ev=>{
-  if(ev.button!==0) return;
-  const td=ev.target.closest('td.cell'); if(!td) return;
-  hideCtx();
-  if(ev.shiftKey && Sel.anchor){
-    // Shift+Klick: Auswahl vom bestehenden Anker bis zu dieser Zelle aufspannen
-    Sel.dragging=true; Sel.didDrag=true;
-    Sel.focus={mid:td.dataset.mid, date:td.dataset.date};
-    paintSel();
-    ev.preventDefault();
-    startDragScroll();
-    return;
-  }
-  Sel.dragging=true; Sel.didDrag=false;
-  Sel.anchor={mid:td.dataset.mid, date:td.dataset.date};
-  Sel.focus={...Sel.anchor};
-  paintSel();
-  ev.preventDefault(); // no text selection while dragging
-  startDragScroll();
-});
-gridEl.addEventListener('mouseover', ev=>{
-  if(!Sel.dragging) return;
-  const td=ev.target.closest('td.cell'); if(!td) return;
-  if(td.dataset.mid!==Sel.focus.mid || td.dataset.date!==Sel.focus.date){
-    Sel.focus={mid:td.dataset.mid, date:td.dataset.date};
-    Sel.didDrag=true;
-    paintSel();
-  }
-});
-document.addEventListener('mouseup', ev=>{
-  if(!Sel.dragging) return;
-  Sel.dragging=false;
-  stopDragScroll();
-  if(Sel.didDrag && Sel.cells.length>1) showCtx(ev.clientX, ev.clientY);
-});
-gridEl.addEventListener('click', ev=>{
-  const fs = ev.target.closest('.favstar');
-  if(fs){ toggleFav(fs.dataset.fav); return; }
-  const nb = ev.target.closest('[data-nb]');
-  if(nb){ gotoPrevFree(nb.dataset.nb); return; }
-  const nf = ev.target.closest('[data-nf]');
-  if(nf){ gotoNextFree(nf.dataset.nf); return; }
-  const gr = ev.target.closest('tr.grouprow');
-  if(gr){
-    if(gr.dataset.catgroup){ catTap(gr.dataset.catgroup); return; }  // Einfach: Kategorie ein/aus · Doppel (siehe dblclick): alle Bereiche
-    const g=gr.dataset.group;
-    S.collapsed.has(g)?S.collapsed.delete(g):S.collapsed.add(g);
-    localStorage.setItem('mb_collapsed',JSON.stringify([...S.collapsed])); notify(); return; }
-  if(Sel.didDrag){ Sel.didDrag=false; return; } // drag end, not a click
-  // single click only selects the cell (via mousedown) – booking opens on double-click
-});
-gridEl.addEventListener('dblclick', ev=>{
-  const gr = ev.target.closest('tr.grouprow');
-  if(gr && gr.dataset.catgroup){ catTapCancel(); toggleAllGroupsInCat(gr.dataset.catgroup); return; } // alle Bereiche der Kategorie auf/zu
-  const td = ev.target.closest('td.cell'); if(!td) return;
-  openCellAction(td.dataset.mid, td.dataset.date);
-});
+/* gridEl, drag-select + auto-scroll, the grid's mousedown/mouseover/click/dblclick →
+   ui/grid-interaction.ts (window bridge). Phase 7 slice B2. */
 
 /* Context menu on selection */
 function showCtx(x,y){
@@ -864,39 +767,9 @@ document.addEventListener('mousedown', ev=>{
   if(m.style.display!=='none' && !m.contains(ev.target)) hideCtx();
 });
 
-/* Keyboard navigation: arrows move, Shift+arrows extend, Enter opens, Escape clears */
-document.addEventListener('keydown', ev=>{
-  if(document.getElementById('overlay').classList.contains('open')) return;
-  const t=ev.target;
-  if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT')) return;
-  const arrows={ArrowLeft:[0,-1], ArrowRight:[0,1], ArrowUp:[-1,0], ArrowDown:[1,0]};
-  if(arrows[ev.key]){
-    ev.preventDefault();
-    if(!S.visM.length || !S.visD.length) return;
-    if(!Sel.focus){
-      Sel.focus={mid:S.visM[0], date:S.visD[0]}; Sel.anchor={...Sel.focus};
-    } else {
-      const [dr,dc]=arrows[ev.key];
-      let r=S.visM.indexOf(Sel.focus.mid)+dr, c=S.visD.indexOf(Sel.focus.date)+dc;
-      if(c>=S.visD.length && S.extraWeeks<150){ S.extraWeeks++; render(); } // grow to the right (interner Wachstums-Pfad → direkt)
-      if(c<0 && S.extraWeeks<150){ prependWeek(); c=S.visD.indexOf(Sel.focus.date)+dc; } // grow to the left
-      r=clampIndex(r, S.visM.length); // → ui/selection.ts
-      c=clampIndex(c, S.visD.length);
-      Sel.focus={mid:S.visM[r], date:S.visD[c]};
-      if(!ev.shiftKey) Sel.anchor={...Sel.focus};
-    }
-    paintSel();
-    const el=cellEl(Sel.focus.mid, Sel.focus.date);
-    if(el) el.scrollIntoView({block:'nearest', inline:'nearest'});
-  } else if(ev.key==='Enter' && Sel.focus){
-    ev.preventDefault();
-    if(Sel.cells.length>1){
-      const el=cellEl(Sel.focus.mid, Sel.focus.date);
-      const r=el?el.getBoundingClientRect():{right:120,bottom:120};
-      showCtx(r.right, r.bottom);
-    } else openCellAction(Sel.focus.mid, Sel.focus.date);
-  } else if(ev.key==='Escape'){ clearSel(); }
-});
+/* The grid's own keydown listener (arrow nav, Enter, Escape) → ui/grid-interaction.ts
+   (window bridge). Phase 7 slice B2. (The separate Escape-closes-modal listener below is
+   unrelated and stays here.) */
 
 /* =================================================================
    MODAL / TOAST / UNDO

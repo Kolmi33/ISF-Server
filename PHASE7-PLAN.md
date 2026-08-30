@@ -620,11 +620,47 @@ their own id as the key.
   component exists) and `weekHeaderCells` + its 3 tests (dead once `render()`'s body was
   deleted — nothing else called it).
 
-### B2 — Selection & keyboard navigation (`Sel`, mouse/keydown handlers)
-- **Must-haves (`legacy.js:827–1122`):** anchor/focus rectangle (reuses `ui/selection.ts` unchanged) as component/hook state; mousedown starts a new anchor (or, with Shift held and an existing anchor, extends from it); mouseover during a drag extends focus; mouseup ends the drag and opens the context menu **only if** the drag actually moved (`didDrag`) and covers >1 cell; arrow keys move focus with `clampIndex`, Shift+arrow extends, Enter opens (single cell → booking action, multi-cell → context menu), Escape clears; keyboard handling is suppressed while a modal is open or focus sits in an input/textarea/select; **growth interleaves with movement** — moving right past the last column grows `extraWeeks` and re-reads the index, moving left triggers `prependWeek()` and re-reads — this exact order must be preserved (a naive port that clamps before growing will feel subtly wrong at the grid edges). Auto-scroll during drag (45px edge threshold, 60ms interval, including auto-`prependWeek()` at the left edge).
-- **Functionality:** identical Excel-style selection.
-- **Usability:** this is the single highest fidelity-risk slice in Phase 7 — plan a manual side-by-side session against the still-running legacy app (or `789bfec`) before deleting the old code, not just a `verify` pass.
-- **Tests:** keyboard move + clamp at grid edges; Shift+arrow extends; Shift+click extends from anchor; multi-cell drag selects the right rectangle; Escape clears; Enter routes to the right action by selection size; drag near an edge triggers auto-scroll/auto-grow (mock `scrollLeft`/`getBoundingClientRect`).
+### B2 — Selection & keyboard navigation (`Sel`, mouse/keydown handlers) — **DONE**
+Executed as planned, with one scope narrowing and one shape decision made explicit up front.
+
+**Not a React component.** `paintSel`'s whole reason to exist (legacy's own comment: "GEZIELTES
+ZELL-PATCHING (Performance)") is to update only the cells whose selection state changed, by
+toggling classes on the exact DOM nodes the React Grid (B1) already renders — routing selection
+through React state would mean re-rendering the whole grid on every `mouseover` during a drag.
+`web/js/ui/grid-interaction.ts` is a plain gated TypeScript module, the same shape `modal.tsx`'s
+document-level dismissal listeners already use alongside their React content: it owns the `Sel`
+state and attaches its listeners once (`initGridInteraction()`, called from `app.ts` at boot),
+but reads/writes the live DOM directly, exactly as legacy did.
+
+**Scope narrowed, not expanded:** legacy's `refreshCell`/`refreshDot`/`patchCells` (targeted
+DOM patching after a booking write) were deliberately left in `legacy.js`, untouched — their
+only caller is `mutate()`'s success path, which is still entirely legacy. They belong with
+whichever slice ports the booking form (B4), not this one; porting them here would have meant
+guessing at an interface B4 hasn't been designed around yet.
+
+**One legacy touch beyond deleting the ported functions' bodies:** `Sel` itself, plus `paintSel`/
+`clearSel`, are re-exported under their old bare names at the bottom of the new module (the
+established "Legacy bridge aliases" pattern) — `jumpToSlot`, `prependWeek`, and `showCtx` (all
+still legacy) read and mutate `Sel` directly by dozens of call sites apiece, and none of those
+are this slice's concern to touch.
+
+**Tests:** `grid-interaction.test.ts` (39) — drag-select (mousedown/mouseover/mouseup, single
+vs. multi-cell, the `didDrag` distinction between a drag-end and a plain click), shift+click
+extending from an existing anchor, favorite/next-free/prev-free/category/group click routing,
+double-click routing, the full keyboard suite (arrow move + clamp at both edges, Shift+arrow
+extend, right-edge growth via direct `extraWeeks++`/`render()`, left-edge `prependWeek()`,
+Enter by selection size, Escape, suppression while a modal is open or a form field has focus),
+and — despite the module comment initially assuming otherwise — the drag-auto-scroll edge
+geometry itself, once `Element.prototype.scrollIntoView` and `document.elementFromPoint` (both
+entirely unimplemented in jsdom) were stubbed. `web/js/ui/**` coverage: 99.47%/94.92%.
+
+**Browser-verified (E5), live:** drag-selecting a rectangle opens the context menu with the
+right cell count; "Abbrechen" closes it and clears the selection; a plain click selects exactly
+one cell; arrow keys move the roving-tabindex focus; Shift+arrow extends the selection; Escape
+clears it. No console errors. (The single side-by-side risk the original plan called out —
+auto-scroll/auto-grow at the drag edges — is covered by the jsdom geometry tests above in lieu
+of a separate manual session, since the geometry math itself is now unit-tested branch by
+branch, not just exercised by hand.)
 
 ### B3 — Infinite scroll / week growth (`prependWeek`, scroll/wheel listeners, month-jump)
 - **Must-haves (`legacy.js:150–214, 547–600`):** `MAXW=12` week-window cap, beyond which the window **shifts** right instead of growing (keeps the DOM small); `extendPending` debounce guards re-entrancy; a 350ms "just scrolled programmatically" grace window prevents the jump-triggering-a-jump feedback loop the comments call out explicitly; a `wheel` listener compensates for the left edge not firing `scroll` events at `scrollLeft:0`; month/year selects sync from the **leftmost visible column** on scroll (rAF-throttled `updateJumpFromScroll`), and picking a month resets, re-renders, and jumps to the 1st.
