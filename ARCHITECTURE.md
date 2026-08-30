@@ -92,7 +92,9 @@ concrete shape those principles take here:
 4. **Conserve behavior.** When in doubt, the old code's behavior is the spec. Tests encode it;
    the git baseline `789bfec` is the reference.
 5. **Types are the contract.** Domain shapes live once in `shared/types.ts`, used by both sides.
-6. **Zero runtime dependencies stay zero.** Dev tooling is fine; the shipped image is lean.
+6. **Backend runtime dependencies stay zero.** Dev tooling is fine; the shipped server
+   image uses only Node built-ins. The frontend's runtime now includes `react`/`react-dom`
+   (Phase 7, §18 — a deliberate, reasoned exception, not a drift from this rule).
 
 (Workflow rules — small reversible commits, one module per commit — are in `CLAUDE.md`.)
 
@@ -584,3 +586,38 @@ auto-bridged Sat/Sun with the Friday's name; the backfill CLI inserted 1782 lega
 temp DB. **The live backfill and the deploy that enables the maintain hook are production actions and were NOT
 performed — they await explicit authorization** (a daily VACUUM backup exists; the client sweep removes bridges
 again if a series later breaks, so both directions are reversible).
+
+## 18. Phase 7 — view layer → React (guardrail change, DECIDED 2026-08-30)
+
+### The decision
+§14 and §15 each evaluated adopting a framework for the view layer and declined, on the
+measured evidence at the time (a large `innerHTML`-string renderer + hand-tuned DOM patches,
+where a rewrite would mean touching effectively all of it while also breaking §5 rule 6's
+zero-runtime-dependency invariant). That evidence hasn't changed — this is not a correction
+of §14/§15's analysis. What changed is the standing decision to build the reworked frontend
+in React going forward, made explicitly by the project owner. §14/§15 are superseded by this
+section for any future view-layer question; their measurements remain useful history.
+
+### The guardrail change
+`ARCHITECTURE §5` rule 6 and `CLAUDE.md`'s "Do not add runtime dependencies" guardrail are
+both narrowed to **backend only**. The frontend's runtime now includes exactly two
+dependencies: `react` and `react-dom`. No other runtime dependency, on either side, without
+another explicit, reasoned change like this one — the zero-dependency discipline still
+applies everywhere it hasn't been deliberately lifted.
+
+### Scope and approach
+Phase 7 replaces `legacy.js`'s DOM/render layer with React components, **reusing every
+`core/`/`net/`/`state.ts`/`ui/*` module completely unchanged** — this is a view-layer swap,
+not a rewrite of the already-tested domain logic. `legacy.js` is deleted whole once every
+screen has a React equivalent (mirrors the strangler pattern §14/E3 already established:
+bridge new code in, thin adapter for anything still coupled, delete the old code only once
+nothing depends on it). The full per-slice backlog (B0–B10), each slice's grounded
+must-haves, and the rationale for every naming/structure decision live in
+**`PHASE7-PLAN.md`** (project root) — the living companion doc to this section, updated as
+each slice lands, the same way `PROGRESS.md` tracks Phases 0–6.
+
+### Testing
+React Testing Library + jsdom, queried by role/text/label as a user would — not by class
+name or implementation detail. `vitest.config.ts`'s existing per-file `jsdom` opt-in
+(`// @vitest-environment jsdom`) is used as-is; pure-logic tests stay on the `node`
+environment they already run in.

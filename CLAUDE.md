@@ -87,11 +87,15 @@ Full standard: **`PRINCIPLES.md`** (P0–P6). Conflict order:
 Project-specific rules (full list `ARCHITECTURE.md §5`) — the ones that bite daily:
 - Conserve behavior (baseline commit `789bfec` is the reference).
 - Pure `core/` has no DOM. · One authoritative server write path; never trust the client.
-- State changes go through the store. · Runtime stays zero-dependency.
+- State changes go through the store. · Backend runtime stays zero-dependency; the
+  frontend's only runtime dependency is `react`/`react-dom` (Phase 7, ARCHITECTURE §18).
 
 ## Guardrails
 
-- Do not add runtime dependencies. Dev dependencies only.
+- Do not add backend runtime dependencies — dev dependencies only there. The frontend's
+  only runtime dependencies are `react`/`react-dom`, adopted deliberately in Phase 7
+  (rationale: ARCHITECTURE §18). No other runtime dependency, either side, without an
+  explicit, reasoned guardrail change like that one.
 - Do not edit the untouched baseline behavior without a test that pins the change.
 - If a gate is wrong, change the gate deliberately (with reasoning in the commit), never
   bypass it with `--no-verify` or inline disables.
