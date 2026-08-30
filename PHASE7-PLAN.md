@@ -662,11 +662,64 @@ auto-scroll/auto-grow at the drag edges — is covered by the jsdom geometry tes
 of a separate manual session, since the geometry math itself is now unit-tested branch by
 branch, not just exercised by hand.)
 
-### B3 — Infinite scroll / week growth (`prependWeek`, scroll/wheel listeners, month-jump)
-- **Must-haves (`legacy.js:150–214, 547–600`):** `MAXW=12` week-window cap, beyond which the window **shifts** right instead of growing (keeps the DOM small); `extendPending` debounce guards re-entrancy; a 350ms "just scrolled programmatically" grace window prevents the jump-triggering-a-jump feedback loop the comments call out explicitly; a `wheel` listener compensates for the left edge not firing `scroll` events at `scrollLeft:0`; month/year selects sync from the **leftmost visible column** on scroll (rAF-throttled `updateJumpFromScroll`), and picking a month resets, re-renders, and jumps to the 1st.
-- **Functionality:** identical scroll/growth behavior — this is fundamentally imperative DOM/scroll-position code; a small custom hook (`useGridScroll`) wrapping a real ref is the honest React shape here, not a "pure" component.
-- **Usability:** preserve the anti-jump-back fix verbatim — it was a deliberately hard-won UX fix per the legacy comments.
-- **Tests:** jsdom doesn't lay out real pixel widths, so assert on *triggers* (store state: `extraWeeks++`/`startMonday` shift) under mocked `scrollLeft`/`scrollWidth`/`clientWidth`, not exact pixels.
+### B3 — Infinite scroll / week growth (`prependWeek`, scroll/wheel listeners, month-jump) — **DONE**
+Executed as planned. Confirmed the "small custom hook" framing wasn't quite right once actually
+writing it: `web/js/ui/grid-scroll.ts` is a plain gated TypeScript module, same shape as B2 —
+there's no React component anywhere near this code (nothing here renders JSX), so there's
+nothing for a hook to attach to. It manages `#gridWrap`'s real scroll position directly, exactly
+as legacy did.
+
+**Pure geometry pulled out and unit-tested, DOM measurement kept separate:** `canStillGrowWindow`,
+`isNearRightEdge`/`isNearLeftEdge`, `isScrollingLeft` (the wheel-direction check),
+`needsOverflowGrowth`, `computeWeekPixelWidth`, and `pickVisibleDateColumn` (the
+`updateJumpFromScroll` picking loop) are all plain functions of their inputs — the DOM-reading
+call sites (`getBoundingClientRect`, `scrollWidth`/`clientWidth`) stay thin wrappers around them.
+This is the same shape `buildGridRows` (B1) and `hasBackJumpButton` (B1) already established:
+extract the decision, keep the measurement one layer out.
+
+**Scope, precisely:** everything the heading names, plus `ensureOverflow` (the "keep the grid
+wider than the viewport" growth loop, already bridged from B1's Grid.tsx but still legacy-
+implemented until now), `centerCol`/`centerToday`/`gotoDate` (the "scroll to this date"
+primitives `jumpToSlot` and the month-jump both depend on), and `resetView` — all tightly
+coupled to the same `#gridWrap`/`lastProgScroll` state this slice already owns. `dpw`/
+`visibleDates` (legacy's now-zero-caller duplicates of B1's `daysPerWeek`/`visibleWeeks`) were
+deleted as dead code while in the area, not ported.
+
+**One legacy touch beyond deleting the ported functions' bodies:** `centerCol` is re-exported
+under its old bare name (the established alias pattern) — `jumpToSlot`'s `gotoDateCenter`
+wrapper (still legacy) calls it directly. `resetView` and `gotoDate` keep their original names
+verbatim (already full words) since three other still-legacy jump-to-result flows (assistant,
+stats, my-bookings) call them by those exact names.
+
+**The anti-jump-back fix, preserved verbatim as asked:** the 350ms `lastProgrammaticScrollAt`
+grace window is unit-tested directly (`centerColumn()` sets it; a scroll fired immediately after
+is a no-op) rather than just inspected — this was the fix the legacy comments call out as
+deliberately hard-won, so it gets its own explicit test rather than incidental coverage.
+
+**Real test-design bugs caught while writing this, not product bugs:** (1) the debounce flag and
+the anti-jump-back timestamp are module-private state that persisted across `it()` blocks —
+fixed by running the whole suite under one fake-timer clock, flushing pending debounce timers at
+the start of every test, and replacing `performance.now()` with a fully test-controlled clock
+(real tests can run faster than the 350ms window they're testing, which silently poisoned
+unrelated later tests before this fix). (2) Two month-jump test expectations were simply wrong —
+jumping to January 1999 (or to "this year" when the year field is unparseable) lands the result
+in the *previous* year whenever January 1st doesn't fall on a Monday itself, since
+`mondayOfDate` walks backward to the nearest one; fixed by computing the expected value through
+the same transformation instead of assuming month/year pass through unchanged. (3) A
+scroll-near-the-left-edge test forgot to set `scrollWidth`/`clientWidth`, so jsdom's default-zero
+values made the (checked first) right-edge condition trivially true, masking the left-edge
+branch entirely.
+
+- **Tests:** `grid-scroll.test.ts` (42) — every pure geometry function individually, plus
+  `prependWeek`'s re-entrancy guard, the scroll handler's three outcomes (grow / shift-at-the-cap
+  / prepend) and its two suppression guards (recent-programmatic-scroll, absolute ceiling), the
+  wheel-listener's left-edge catch, `ensureOverflow`'s two branches plus its hidden-grid guard,
+  `syncJumpControls`, the month/year `change` handler (including the January-crosses-a-year-
+  boundary case above), and the Heute/◀/▶ buttons. `web/js/ui/**` coverage 99.61%/94.54%.
+- **Browser-verified (E5), live:** scrolling to the far right grows a visible KW column;
+  scrolling near the left edge prepends a week; Heute/◀/▶ all move the grid; a clean single
+  month-jump action lands on the exact date the unit tests predict (verified by hand against
+  the real ISO-week math, not just "it changed"). No console errors.
 
 ### B4 — Booking form, detail modal, undo toast
 - **Must-haves (`legacy.js:1211–1354`):** form is **sticky** (not dismissible by outside-click/Esc) while open; name defaults to `S.user`; date range books **every calendar day including weekends** in range, not just workdays (easy to get backwards); validation: name required, `from<=to`, and `dates.length*mids.length<=500`; on conflict, the form **reopens prefilled** (name/note preserved) with a capped list (first 15) of conflicts plus a "book only free" force button; on success the modal closes **before** the async write resolves (optimistic), followed by a 9s undo toast. Detail modal: contiguous same-name weekday-run detection vs. group (`gid`) detection are two different "delete more" affordances with different confirm copy; a "Statistik" shortcut opens Stats pre-filtered to that person.

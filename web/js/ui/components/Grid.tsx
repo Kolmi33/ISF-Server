@@ -26,6 +26,7 @@ import {
   todayAsIsoDateString,
 } from '../../core/dates.ts';
 import { buildGridRows, visibleWeeks, type GridRow } from '../grid.ts';
+import { daysPerWeek } from '../grid-scroll.ts';
 import { Icon } from './Icon.tsx';
 import { GridBodyRow } from './GridBody.tsx';
 
@@ -33,16 +34,6 @@ const CATEGORIES: Array<{ id: 'maschine' | 'messtechnik'; label: string; icon: s
   { id: 'maschine', label: 'Maschinen', icon: 'factory' },
   { id: 'messtechnik', label: 'Messtechnik', icon: 'gauge' },
 ];
-
-const DAYS_PER_WEEK_WITH_WEEKENDS = 7;
-const DAYS_PER_WEEK_WITHOUT_WEEKENDS = 5;
-
-/** Days shown per week: 7 (Mon–Sun) when the "Wochenenden anzeigen" setting is on, else 5. */
-function daysPerWeek(): number {
-  return localStorage.getItem('mb_weekends') === 'on'
-    ? DAYS_PER_WEEK_WITH_WEEKENDS
-    : DAYS_PER_WEEK_WITHOUT_WEEKENDS;
-}
 
 function CategoryToggleButtons() {
   return (

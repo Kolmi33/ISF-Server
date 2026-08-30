@@ -135,71 +135,9 @@ document.getElementById('userChip').ondblclick = ()=>{
 document.getElementById('userChip').title = 'Klick: Namen ändern · Doppelklick: aktive Nutzer';
 
 /* ================= Toolbar events ================= */
-function resetView(){ S.extraWeeks=0; document.getElementById('gridWrap').scrollLeft=0; }
-/* Zeitpunkt des letzten programmatischen Scrollens: kurz danach ignoriert der
-   Scroll-Handler die Fenster-Erweiterung, damit unser eigenes Setzen von
-   scrollLeft nicht sofort ein Re-Render + Positions-Reset auslöst
-   (das war die Ursache für das „Zurückspringen" nach einem Sprung). */
-let lastProgScroll=0;
-function centerCol(dISO){
-  const cell=document.querySelector(`td.cell[data-date="${dISO}"]`);
-  const wrap=document.getElementById('gridWrap');
-  if(!cell||!wrap) return;
-  wrap.scrollLeft = Math.max(0, cell.offsetLeft - wrap.clientWidth/2 + cell.offsetWidth/2); // instant, mittig
-  lastProgScroll = performance.now();
-}
-function centerToday(){
-  requestAnimationFrame(()=>centerCol(todayStr()));
-}
-document.getElementById('btnToday').onclick = ()=>{ S.startMonday=mondayOf(new Date()); resetView(); notify(); prependWeek(); centerToday(); };
-document.getElementById('btnPrev').onclick  = ()=>{ S.startMonday=addDays(S.startMonday,-7); notify(); };
-document.getElementById('btnNext').onclick  = ()=>{ S.startMonday=addDays(S.startMonday, 7); notify(); };
-function jumpToMonth(){
-  // Jahr zweistellig (26 = 2026); vierstellige Eingaben werden auch akzeptiert
-  let yy=parseInt(document.getElementById('jumpYear').value);
-  if(isNaN(yy)) yy=new Date().getFullYear();
-  const y = yy>=1000 ? yy : 2000+yy;
-  const mo=parseInt(document.getElementById('jumpMonth').value)||0;
-  S.startMonday=mondayOf(new Date(Date.UTC(y,mo,1)));
-  const first=ymd(S.startMonday);
-  resetView(); notify(); prependWeek(); gotoDate(first);
-}
-document.getElementById('jumpMonth').onchange = jumpToMonth;
-document.getElementById('jumpYear').onchange  = jumpToMonth;
-function syncJumpControls(){
-  const ref=addDays(S.startMonday,3); // Wochenmitte, damit z. B. Mo 29.06. als „Juli" gilt
-  document.getElementById('jumpMonth').value = String(ref.getUTCMonth());
-  document.getElementById('jumpYear').value  = String(ref.getUTCFullYear()%100);
-}
-/* Monat/Jahr oben an die aktuell SICHTBARE (linke) Spalte anpassen – läuft beim
-   horizontalen Scrollen mit. Setzt nur die Werte (löst kein onchange/Springen aus). */
-function updateJumpFromScroll(){
-  const wrap=document.getElementById('gridWrap');
-  const ths=document.querySelectorAll('#grid thead th[data-date]');
-  if(!wrap || !ths.length) return;
-  const machw=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--machw'))||230;
-  const leftEdge=wrap.getBoundingClientRect().left + machw + 2;   // direkt rechts neben der Maschinenspalte
-  let pick=null;
-  for(const th of ths){ if(th.getBoundingClientRect().right > leftEdge){ pick=th.dataset.date; break; } }
-  if(!pick) pick=ths[ths.length-1].dataset.date;
-  const d=parseYmd(pick);
-  const mo=document.getElementById('jumpMonth'), yr=document.getElementById('jumpYear');
-  if(mo) mo.value=String(d.getUTCMonth());
-  if(yr) yr.value=String(d.getUTCFullYear()%100);
-}
-let jumpRaf=0;
-function scheduleJumpSync(){ if(jumpRaf) return; jumpRaf=requestAnimationFrame(()=>{ jumpRaf=0; updateJumpFromScroll(); }); }
-/* Zu einem Datum springen: Spalte an den ANFANG (direkt neben der Maschinenspalte) */
-function gotoDate(dISO){
-  requestAnimationFrame(()=>{
-    const cell=document.querySelector(`td.cell[data-date="${dISO}"]`);
-    const wrap=document.getElementById('gridWrap');
-    if(!cell || !wrap) return;
-    const machw=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--machw'))||230;
-    wrap.scrollLeft = Math.max(0, cell.offsetLeft - machw - 10); // instant statt smooth (kein Zurückspringen)
-    lastProgScroll = performance.now();
-  });
-}
+/* resetView, centerCol/centerToday, the Heute/◀/▶ buttons, jumpToMonth + its jumpMonth/
+   jumpYear bindings, syncJumpControls, updateJumpFromScroll/scheduleJumpSync, gotoDate →
+   ui/grid-scroll.ts (window bridge). Phase 7 slice B3. */
 document.getElementById('btnAssist').onclick = openAssistant;
 document.getElementById('btnMine').onclick   = openMyBookings;
 document.getElementById('btnAll').onclick    = openAllBookings;
@@ -413,64 +351,8 @@ document.addEventListener('click', ()=>document.getElementById('groupDrop').clas
 
 
 /* =================================================================
-   ENDLOSES HORIZONTALES SCROLLEN
-   Rechts: nahe am rechten Rand wird eine Woche angehängt (extraWeeks++),
-   Scrollposition bleibt erhalten. Links: nahe am linken Rand wird eine
-   Woche VORANGESTELLT (startMonday -7, extraWeeks++) und scrollLeft um die
-   neue Breite kompensiert – die Ansicht steht optisch still. Am absoluten
-   Anschlag (scrollLeft=0) feuert kein Scroll-Event mehr, darum fängt ein
-   wheel-Listener das Weiter-Scrollen ab. Nach Sprüngen stellt prependWeek()
-   sofort eine Puffer-Woche voran, damit der Balken nie am Anschlag klebt.
-   extendPending entprellt; Obergrenze 150 Zusatzwochen.
+   ENDLOSES HORIZONTALES SCROLLEN → ui/grid-scroll.ts (window bridge). Phase 7 slice B3.
    ================================================================= */
-let extendPending=false;
-const MAXW=12; // Wochenfenster-Obergrenze: hält den DOM klein und JEDEN Render schnell
-function weekWidth(){
-  const c=document.querySelector('td.cell');
-  return c ? (c.offsetWidth+1)*dpw()+9 : 500;
-}
-function prependWeek(){
-  // Woche links anfügen; oberhalb des Fensters wird stattdessen GESCHOBEN
-  // (rechte Woche fällt weg) – Scrollposition bleibt optisch stabil
-  if(extendPending) return;
-  extendPending=true;
-  const el=document.getElementById('gridWrap');
-  const keep=el.scrollLeft, before=el.scrollWidth;
-  S.startMonday=addDays(S.startMonday,-7);
-  if(S.extraWeeks<MAXW || Sel.dragging) S.extraWeeks++; // beim Ziehen: wachsen statt schieben (Anker behalten)
-  notify();
-  const grew=el.scrollWidth-before;
-  el.scrollLeft = keep + (grew>0 ? grew : weekWidth());
-  setTimeout(()=>{ extendPending=false; }, 80);
-}
-document.getElementById('gridWrap').addEventListener('scroll', ev=>{
-  const el=ev.target;
-  scheduleJumpSync();   // Monat/Jahr oben an die aktuell sichtbare Spalte anpassen
-  if(extendPending || S.extraWeeks>=150) return;
-  if(performance.now()-lastProgScroll < 350) return; // kurz nach programmatischem Scrollen NICHT erweitern
-  if(el.scrollLeft + el.clientWidth > el.scrollWidth - 250){
-    extendPending=true;
-    const keep=el.scrollLeft;
-    if(S.extraWeeks<MAXW || Sel.dragging){         // wachsen
-      S.extraWeeks++;
-      notify();
-      el.scrollLeft=keep;
-    } else {                                        // Fenster nach rechts schieben
-      S.startMonday=addDays(S.startMonday,7);
-      notify();
-      el.scrollLeft=Math.max(0, keep-weekWidth());
-    }
-    setTimeout(()=>{ extendPending=false; }, 100);
-  } else if(el.scrollLeft < 150){
-    prependWeek();
-  }
-});
-/* Am linken Anschlag löst Scrollen kein scroll-Event mehr aus – Mausrad abfangen */
-document.getElementById('gridWrap').addEventListener('wheel', ev=>{
-  const el=ev.currentTarget;
-  const goingLeft = ev.deltaX < 0 || (ev.shiftKey && ev.deltaY < 0);
-  if(goingLeft && el.scrollLeft <= 0) prependWeek();
-}, {passive:true});
 
 /* --- Spaltenbreite der Maschinenspalte per Ziehen --- */
 (function(){
@@ -564,28 +446,13 @@ function toggleFav(mid){
   notify();
 }
 
-function dpw(){ return localStorage.getItem('mb_weekends')==='on' ? 7 : 5; } // Tage je Woche im Raster
-function visibleDates(){
-  const out=[]; const n=dpw(); // Woche = 5 (Mo–Fr) oder 7 (Mo–So) ISO-Daten
-  for(let w=0;w<S.weeks+S.extraWeeks;w++){
-    const wk=[]; for(let i=0;i<n;i++) wk.push(ymd(addDays(S.startMonday,w*7+i)));
-    out.push(wk);
-  }
-  return out;
-}
+/* dpw, visibleDates → superseded by ui/grid.ts's visibleWeeks + ui/grid-scroll.ts's
+   daysPerWeek (Phase 7 slice B1/B3); dead code once render() (their only caller) was deleted. */
 
 /* render() → ui/components/Grid.tsx + ui/components/GridBody.tsx (window bridge). The React
    grid mounts once onto #grid in app.ts; its own `render()` export replaces this function and
    is called by the same store subscription that used to call this one. Phase 7 slice B1. */
-/* Grid immer breiter als der Viewport halten, damit man in jeder Wochenansicht
-   nach rechts scrollen kann (löst dann das automatische Anhängen weiterer Wochen aus) */
-function ensureOverflow(){
-  const el=document.getElementById('gridWrap');
-  if(el.style.display==='none') return;
-  if(S.extraWeeks<100 && el.scrollWidth <= el.clientWidth + 60){
-    S.extraWeeks++; render();   // interner Overflow-/Wachstums-Loop → direkt (nicht über Store)
-  }
-}
+/* ensureOverflow → ui/grid-scroll.ts (window bridge). Phase 7 slice B3. */
 
 /* =================================================================
    ZELLEN-INTERAKTION (Excel-Verhalten)

@@ -22,6 +22,7 @@ import * as sse from './net/sse.ts';
 import * as grid from './ui/grid.ts';
 import * as selection from './ui/selection.ts';
 import * as gridInteraction from './ui/grid-interaction.ts';
+import * as gridScroll from './ui/grid-scroll.ts';
 import * as navigation from './ui/navigation.ts';
 import * as viewMyBookings from './ui/views/my-bookings.ts';
 import * as viewStats from './ui/views/stats.ts';
@@ -37,6 +38,7 @@ import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
 import type { Machine } from '../../shared/types.ts';
+import type { Cell } from './ui/selection.ts';
 
 declare global {
   interface Window {
@@ -58,6 +60,8 @@ declare global {
     refreshNow: (silent: boolean) => Promise<void>;
     applyDebug: () => void;
     dbgOn: () => boolean;
+    /** Bridged from ui/grid-scroll.ts (Phase 7 slice B3); called by legacy's own boot sequence
+     *  and by the "Ändern…"-adjacent Settings row (React, B9). */
     centerToday: () => void;
     /** Still legacy — the grid's category ein-/ausklappen. Called by both the React Grid
      *  (B1, its toggle buttons) and ui/grid-interaction.ts (B2, its group-row click/dblclick). */
@@ -67,7 +71,11 @@ declare global {
     /** Bridged from ui/grid-interaction.ts (Phase 7 slice B2); called by the React Grid's
      *  post-render effect and by legacy's still-unported `jumpToSlot`. */
     paintSel: () => void;
+    /** Bridged from ui/grid-scroll.ts (Phase 7 slice B3); called by the React Grid's
+     *  post-render effect to keep the month/year jump controls in sync. */
     syncJumpControls: () => void;
+    /** Bridged from ui/grid-scroll.ts (Phase 7 slice B3); called by the React Grid's
+     *  post-render effect to keep the grid wider than the viewport. */
     ensureOverflow: () => void;
     /** Still legacy (Phase 7 slice B2 owns *reading* it) — mid → the last free day jumped to;
      *  exposed here so the React Grid can read it for the row header's "back" button. */
@@ -80,11 +88,21 @@ declare global {
     gotoPrevFree: (mid: string) => void;
     gotoNextFree: (mid: string) => void;
     openCellAction: (mid: string, date: string) => void;
-    /** Still legacy — favorite toggle (Phase 7 slice B6, machine/group management) and the
-     *  week-growth-to-the-left used by drag-auto-scroll and arrow-key nav at the grid's edges
-     *  (Phase 7 slice B3). */
+    /** Still legacy — favorite toggle (Phase 7 slice B6, machine/group management). */
     toggleFav: (mid: string) => void;
+    /** Bridged from ui/grid-scroll.ts (Phase 7 slice B3); called by ui/grid-interaction.ts's
+     *  (B2) drag-auto-scroll and arrow-key growth at the grid's edges. */
     prependWeek: () => void;
+    /** Bridged from ui/grid-interaction.ts (Phase 7 slice B2) under its legacy name `Sel` —
+     *  read/mutated directly by legacy's still-unported `jumpToSlot`, `prependWeek`'s scroll
+     *  handler (ui/grid-scroll.ts, B3) and `showCtx` (still legacy). */
+    Sel: {
+      anchor: Cell | null;
+      focus: Cell | null;
+      cells: Cell[];
+      dragging: boolean;
+      didDrag: boolean;
+    };
   }
 }
 
@@ -99,6 +117,7 @@ Object.assign(window, sse);
 Object.assign(window, grid);
 Object.assign(window, selection);
 Object.assign(window, gridInteraction);
+Object.assign(window, gridScroll);
 Object.assign(window, navigation);
 Object.assign(window, viewMyBookings);
 Object.assign(window, viewStats);
@@ -166,3 +185,8 @@ createRoot(document.getElementById('grid')!).render(createElement(gridComponent.
 // event delegation means it doesn't matter that the React grid mounted just above hasn't
 // necessarily painted its rows yet.
 gridInteraction.initGridInteraction();
+
+// Phase 7 slice B3 — infinite scroll / week growth and the month-jump controls
+// (`ui/grid-scroll.ts`). Wired once at boot, same as legacy's own top-level
+// `gridWrap.addEventListener(...)`/`.onchange=`/`.onclick=` assignments did.
+gridScroll.initGridScroll();
