@@ -1112,8 +1112,63 @@ switching to `.click()`.
 - **A test-tooling false positive, not a product bug:** a Playwright locator (`button:has-text("Abbrechen")`) initially reported a Cancel button present on first run when the screenshot showed none — it was matching the always-present-but-hidden confirm-dialog's `#cfNo` button elsewhere in the DOM (`.count()` doesn't filter by visibility), not the name-prompt. Confirmed by the screenshot itself, not fixed in product code.
 
 ### B10 — App shell; delete `legacy.js`; retire `window.S`
-- **Must-haves (`legacy.js:2209–2220, 69–90`):** boot tries `/api/state`; on failure, shows the start-screen error copy verbatim and hides the old file-picker buttons (`btnPickFile`/`btnReadOnly`/`fsaHint` — likely deletable outright by this point, confirm they're unused); on success, hides the start screen, shows toolbar+grid, fills the group filter, prompts for a name only when `!user && !readOnly`, applies the debug panel, prepends one buffer week, centers today, and starts live timers (SSE + focus-triggered silent refresh) **exactly once** even if re-invoked (the `liveTimersOn` guard).
-- **Functionality:** identical bootstrap sequence; `app.ts` shrinks to store hydration + `createRoot(...).render(<App/>)`; `window.S`/`window.render`/`window.notify` bridges are deleted along with the last legacy consumer.
-- **Tests:** mount `<App/>` with a mocked fetch returning valid/invalid `/api/state` and assert the right screen renders in each case; name-prompt appears exactly when `!user && !readOnly`; live timers start once even across remounts.
 
-**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10.
+**Scope correction (found while starting B10, 2026-08-31):** the paragraph below is the
+*original* B10 plan — written under the assumption that every other feature in `legacy.js`
+would already be ported by the time B10 ran. It wasn't: after B8, `legacy.js` still held ~55
+top-level functions (~885 lines) covering features that were never assigned a slice number.
+Doing only the original B10 would leave `legacy.js` very much alive, contradicting its own
+title. Expanded into sub-slices B10a–B10g below, closing the actual gap; each is one commit,
+same rigor as B1–B9 (pure logic + tests where there's real logic, `verify` green, real-browser
+check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then commit).
+
+**What's actually left, grouped by sub-slice:**
+- **B10a — Favorites + next-free-day jump:** `toggleFav`, `displayGroup`/`FAVGRP` (superseded by
+  `orderedMachines`'s `FAVORITES_GROUP_LABEL`, B1 — legacy's own `orderedMachines()` is now dead,
+  confirm and delete), `nextFreePtr`, `gotoDateCenter`, `bookable`, `nextFreeAfter`,
+  `prevFreeBefore`, `jumpToSlot`, `gotoNextFree`, `gotoPrevFree`. All called from
+  `ui/grid-interaction.ts` (B2) via the window bridge for the row header's favorite star and
+  prev/next-free buttons; the day-scan core (`nextFreeDay`/`prevFreeDay`) already lives in
+  `ui/navigation.ts` — this is mostly wiring.
+- **B10b — Context menu:** `showCtx`/`hideCtx`, the right-click cell menu — check its actual
+  markup/content before deciding React-component vs. plain module (matches the B2/B3/B8
+  judgment call either way).
+- **B10c — Confirm dialog:** `askConfirm`. `#confirm2` is static markup already in
+  `index.html` (like `#collBanner`) — a plain-module port targeting it directly is the safe,
+  low-risk choice; every existing caller (B4/B6/B7) already expects the exact
+  `(options) => Promise<boolean>` shape via `window.askConfirm`, so the port must preserve that
+  signature exactly.
+- **B10d — Active-users popup + retire the legacy modal chrome:** `openActiveUsers` is the
+  *only* remaining `openModal()` caller — port it to a small React modal
+  (`ActiveUsersModal.tsx`, reusing `openReactModal`). Once it's gone, `openModal`/`closeModal`/
+  `modalSticky`/`lastFocusEl` and the legacy bubble-phase overlay-click/Escape listeners are all
+  dead (superseded by `modal.tsx`'s capture-phase ones) and delete outright. `collapseModal` is
+  *already* dead (nothing calls it since the Assistant, B7, switched to
+  `collapseReactModal`) — delete it in this slice too. `expandModal` + the `#modalReopen` click
+  wiring are still live (the Assistant's collapse/reopen depends on it) — move both into
+  `ui/modal.tsx` alongside `collapseReactModal`, don't just delete.
+- **B10e — The "Filtern" (machine/group filter) dropdown:** `fillMachSel`, `updateMachBtn`,
+  `searchActive`, `matchesSearch`, `fillGroupSel`, `updateGroupBtn`, `saveFilters`,
+  `mfOpenCat`/`mfOpenGrp`/`mfShow`, `toggleCat`/`toggleAllGroupsInCat`/`catTap`/`catTapCancel`,
+  `groupList`/`groupCat`/`catLabel`/`catIco`/`CATS` (finally deletable here — `CATEGORIES` in
+  `core/machines.ts`, B5, already covers the same data). The biggest remaining slice — a
+  toolbar dropdown with its own collapsible category/group checklist tree, comparable in shape
+  to the Assistant's checklist (B7) but with group-level (not just machine-level) checkboxes
+  plus the category show/hide toggle already live in `Grid.tsx` (B1).
+- **B10f — Core write pipeline + shared helpers:** `mutate`/`persist`/`refreshNow` (the
+  optimistic-apply → log → repaint → background-persist pipeline every mutation in this app
+  already goes through via `window.mutate` — the single highest-risk piece to touch, per
+  CLAUDE.md's "one authoritative server write path; never trust the client") plus the small
+  broadly-used helpers: `esc`, `dbg`, `dbgOn`, `machById`, `applyDebug`, `applyTheme`,
+  `handleError`, `stampRef`, `sleep`, `nameColor`, `ic`. Do this once nothing upstream of it
+  changes mid-port — i.e. after B10a–B10e, when its remaining callers are known and stable.
+- **B10g — Boot sequence (the original B10 scope):** `start`/`startUI`/`init`. Only once
+  B10a–B10f land does `legacy.js` actually go to zero and get deleted here, with `app.ts`
+  absorbing the boot orchestration and the `window.S`/`window.render`/`window.notify` bridges
+  retiring along with the last legacy consumer.
+- **Tests:** each sub-slice gets the same unit-test rigor as B1–B9 for whatever pure logic it
+  introduces; B10g mounts `<App/>` with a mocked fetch returning valid/invalid `/api/state` and
+  asserts the right screen renders in each case, name-prompt appears exactly when
+  `!user && !readOnly`, and live timers start once even across remounts.
+
+**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a → B10b → B10c → B10d → B10e → B10f → B10g.
