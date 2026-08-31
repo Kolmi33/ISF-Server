@@ -27,13 +27,9 @@ import {
 } from '../../core/dates.ts';
 import { buildGridRows, visibleWeeks, type GridRow } from '../grid.ts';
 import { daysPerWeek } from '../grid-scroll.ts';
+import { CATEGORIES } from '../../core/machines.ts';
 import { Icon } from './Icon.tsx';
 import { GridBodyRow } from './GridBody.tsx';
-
-const CATEGORIES: Array<{ id: 'maschine' | 'messtechnik'; label: string; icon: string }> = [
-  { id: 'maschine', label: 'Maschinen', icon: 'factory' },
-  { id: 'messtechnik', label: 'Messtechnik', icon: 'gauge' },
-];
 
 function CategoryToggleButtons() {
   return (

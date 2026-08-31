@@ -5,9 +5,9 @@
 // bookings and the (already-validated) from/to range are injected (E4). Faithful port of the stats
 // `compute()` closure in legacy — the DOM read of the range and the `f>o` validation stay in legacy.
 
-import type { Machine, Bookings } from '../../../../shared/types.ts';
+import type { Machine, Bookings, MachineCategory } from '../../../../shared/types.ts';
 import { getWeekdaysInRange, getAllDaysInRange } from '../../core/dates.ts';
-import { maintenanceSlots, isBlockedOnDate } from '../../core/machines.ts';
+import { maintenanceSlots, isBlockedOnDate, categoryOf } from '../../core/machines.ts';
 
 /** One person's day count on a single machine (the per-machine drilldown row). */
 export interface StatsPersonDays {
@@ -125,4 +125,162 @@ export function computeStats(
   const { machRows, persons } = aggregateBookings(machines, bookings, days);
   const maint = aggregateMaint(machines, from, to, calDays);
   return { days, machRows, persons, maint };
+}
+
+// ---- The "Ressourcen" mode's category/group folding ----------------------------------
+
+/** One row of the Ressourcen-mode list: a category header, a group header, or one machine's
+ *  utilisation row. Mirrors `ui/grid.ts`'s `GridRow` — the same "emit a flat list of header/
+ *  data rows, let the renderer just map over it" shape, for the same reason: the fold state
+ *  machine below is the trickiest part of this view to port faithfully, so it gets its own
+ *  pure function and its own tests instead of being re-derived inline in JSX. */
+export type ResourceRow =
+  | { kind: 'category'; category: MachineCategory; collapsed: boolean; averagePercent: number }
+  | { kind: 'group'; group: string; collapsed: boolean; averagePercent: number }
+  | { kind: 'machine'; row: StatsMachineRow };
+
+export interface BuildResourceRowsOptions {
+  /** Case-insensitive substring filter on the machine name (the "filtern…" box). */
+  filterQuery: string;
+  /** Categories the show/hide segmented buttons currently have on. */
+  visibleCategories: ReadonlySet<string>;
+  /** Folded category/group keys, as `c:<category>` or `g:<group>`. */
+  closedKeys: ReadonlySet<string>;
+}
+
+function average(values: readonly number[]): number {
+  return values.length
+    ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
+    : 0;
+}
+
+interface ResourceRowBuckets {
+  categoriesInOrder: MachineCategory[];
+  groupsByCategory: Map<MachineCategory, string[]>;
+  rowsByGroupInCategory: Map<string, StatsMachineRow[]>;
+}
+
+/**
+ * Bucket the matching rows by category, then by group, preserving first-seen order. Legacy
+ * buckets by the bare group NAME across categories — a real (if obscure) bug there: a group
+ * name shared by a "Maschinen" resource and a "Messtechnik" one would silently merge their rows
+ * into whichever category's bucket happened to be created first, and the other category would
+ * render an empty group list. Fixed here (E2, flagged) by bucketing on category+group together;
+ * the fold state in `buildResourceRows` still keys on the bare group name, unchanged from legacy.
+ */
+function bucketResourceRows(
+  machRows: readonly StatsMachineRow[],
+  filterQuery: string,
+  visibleCategories: ReadonlySet<string>,
+): ResourceRowBuckets {
+  const lowercaseQuery = filterQuery.trim().toLowerCase();
+  const categoriesInOrder: MachineCategory[] = [];
+  const groupsByCategory = new Map<MachineCategory, string[]>();
+  const rowsByGroupInCategory = new Map<string, StatsMachineRow[]>();
+  for (const row of machRows) {
+    if (lowercaseQuery && !row.m.name.toLowerCase().includes(lowercaseQuery)) continue;
+    const category = categoryOf(row.m);
+    if (!visibleCategories.has(category)) continue;
+    if (!groupsByCategory.has(category)) {
+      groupsByCategory.set(category, []);
+      categoriesInOrder.push(category);
+    }
+    const group = row.m.group;
+    const bucketKey = `${category}::${group}`;
+    if (!rowsByGroupInCategory.has(bucketKey)) {
+      rowsByGroupInCategory.set(bucketKey, []);
+      groupsByCategory.get(category)!.push(group);
+    }
+    rowsByGroupInCategory.get(bucketKey)!.push(row);
+  }
+  return { categoriesInOrder, groupsByCategory, rowsByGroupInCategory };
+}
+
+/**
+ * The Ressourcen-mode list, grouped by category then by group, each level foldable and each
+ * carrying its own average utilisation. A category header only appears when more than one
+ * category actually has matching rows (a single-category result skips straight to its groups);
+ * a category's average covers every row in it regardless of which of its groups are folded, but
+ * folding the category itself hides its groups and their rows entirely. Faithful port of the
+ * `mode==='m'` (non-drilldown) branch of legacy `renderStats`.
+ */
+export function buildResourceRows(
+  machRows: readonly StatsMachineRow[],
+  options: BuildResourceRowsOptions,
+): ResourceRow[] {
+  const { filterQuery, visibleCategories, closedKeys } = options;
+  const { categoriesInOrder, groupsByCategory, rowsByGroupInCategory } = bucketResourceRows(
+    machRows,
+    filterQuery,
+    visibleCategories,
+  );
+
+  const showCategoryHeaders = categoriesInOrder.length > 1;
+  const rows: ResourceRow[] = [];
+  for (const category of categoriesInOrder) {
+    const groupsInCategory = groupsByCategory.get(category)!;
+    const allRowsInCategory = groupsInCategory.flatMap((group) =>
+      rowsByGroupInCategory.get(`${category}::${group}`)!,
+    );
+    const categoryClosed = closedKeys.has(`c:${category}`);
+    if (showCategoryHeaders) {
+      rows.push({
+        kind: 'category',
+        category,
+        collapsed: categoryClosed,
+        averagePercent: average(allRowsInCategory.map((row) => row.pct)),
+      });
+    }
+    if (categoryClosed) continue; // hides every group (and row) under this category
+
+    for (const group of groupsInCategory) {
+      const rowsInGroup = rowsByGroupInCategory
+        .get(`${category}::${group}`)!
+        .slice()
+        .sort((a, b) => b.pct - a.pct || a.m.name.localeCompare(b.m.name, 'de'));
+      const groupClosed = closedKeys.has(`g:${group}`);
+      rows.push({
+        kind: 'group',
+        group,
+        collapsed: groupClosed,
+        averagePercent: average(rowsInGroup.map((row) => row.pct)),
+      });
+      if (groupClosed) continue; // the group header stays; only its machine rows hide
+
+      for (const row of rowsInGroup) rows.push({ kind: 'machine', row });
+    }
+  }
+  return rows;
+}
+
+// ---- The "Wartung" and "Personen" overview modes' filter + sort ---------------------
+
+/**
+ * The Wartung-mode list: maintenance rows matching `filterQuery` (machine name, case-
+ * insensitive substring), most blocked-days first, then most instances, then German name
+ * order. Faithful port of the `mode==='w'` branch of legacy `renderStats`.
+ */
+export function buildMaintRows(
+  maintRows: readonly StatsMaintRow[],
+  filterQuery: string,
+): StatsMaintRow[] {
+  const lowercaseQuery = filterQuery.trim().toLowerCase();
+  return maintRows
+    .filter((row) => !lowercaseQuery || row.m.name.toLowerCase().includes(lowercaseQuery))
+    .sort((a, b) => b.days - a.days || b.inst - a.inst || a.m.name.localeCompare(b.m.name, 'de'));
+}
+
+/**
+ * The Personen-mode overview list: people matching `filterQuery` (name, case-insensitive
+ * substring), most booked days first, then German name order. Faithful port of the `else`
+ * (Personen overview) branch of legacy `renderStats`.
+ */
+export function buildPersonRows(
+  persons: ReadonlyMap<string, StatsPerson>,
+  filterQuery: string,
+): StatsPerson[] {
+  const lowercaseQuery = filterQuery.trim().toLowerCase();
+  return [...persons.values()]
+    .filter((person) => !lowercaseQuery || person.name.toLowerCase().includes(lowercaseQuery))
+    .sort((a, b) => b.days - a.days || a.name.localeCompare(b.name, 'de'));
 }

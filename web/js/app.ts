@@ -39,6 +39,7 @@ import * as toastModule from './ui/toast.ts';
 import * as bookingFormModal from './ui/components/BookingForm.tsx';
 import * as bookingDetailModal from './ui/components/BookingDetailModal.tsx';
 import * as myBookingsModal from './ui/components/MyBookingsModal.tsx';
+import * as statsModal from './ui/components/StatsModal.tsx';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
@@ -129,8 +130,8 @@ declare global {
       no?: string;
       danger?: boolean;
     }) => Promise<boolean>;
-    /** Still legacy — opens Stats (Phase 7 slice B5) pre-filtered to one person; called from
-     *  the booking detail modal's (B4) "Statistik" shortcut. */
+    /** Bridged from ui/components/StatsModal.tsx (Phase 7 slice B5); called from the booking
+     *  detail modal's (B4) "Statistik" shortcut to open pre-filtered to one person. */
     openStats: (personFilter?: string) => void;
     /** Bridged from ui/cell-patch.ts (Phase 7 slice B4); called by the still-legacy `mutate`'s
      *  optimistic-apply path to patch only the cells a write actually touched. */
@@ -182,6 +183,7 @@ Object.assign(window, toastModule);
 Object.assign(window, bookingFormModal);
 Object.assign(window, bookingDetailModal);
 Object.assign(window, myBookingsModal);
+Object.assign(window, statsModal);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);

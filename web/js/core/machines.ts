@@ -20,6 +20,14 @@ export function categoryOf(machine: Machine | null | undefined): MachineCategory
   return machine && machine.cat === 'messtechnik' ? 'messtechnik' : 'maschine';
 }
 
+/** The two categories, in display order, with their German label and sprite icon. Faithful
+ *  port of legacy's `CATS`/`catLabel`/`catIco`. Shared by the grid's category toggle buttons
+ *  (B1) and the Statistik category filter (B5). */
+export const CATEGORIES: ReadonlyArray<{ id: MachineCategory; label: string; icon: string }> = [
+  { id: 'maschine', label: 'Maschinen', icon: 'factory' },
+  { id: 'messtechnik', label: 'Messtechnik', icon: 'gauge' },
+];
+
 /**
  * The maintenance slots of a machine. Prefers the structured `maint` array; otherwise
  * synthesizes one slot from the legacy single-status fields (unless status is 'ok').

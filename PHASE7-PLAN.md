@@ -792,7 +792,40 @@ into, not something specific to the booking form, and no plan slice claims it by
   browser-side UTC calendar comparison instead of the app's own `todayAsIsoDateString()` —
   `computeMyRuns` correctly filters such a booking out as already in the past, which briefly
   looked like a missing-entry bug in the modal before the test script itself was fixed.
-- **Stats** (`1773–1931`): 3 modes (Ressourcen/Personen/Wartung) via segmented control; category show/hide buttons apply only in Ressourcen mode; drilldown (machine→who booked it, person→their machines) with a back control; independent fold state per category/group; default range = Jan 1 of current year → today; range changes auto-recompute (validated `from<=to`) with no separate "compute" button.
+- **Stats** — **DONE.** 3 modes (Ressourcen/Personen/Wartung) via segmented control; category
+  show/hide buttons apply only in Ressourcen mode; drilldown (machine→who booked it,
+  person→their machines) with a back control; independent fold state per category/group;
+  default range = Jan 1 of current year → today; range changes auto-recompute (validated
+  `from<=to`, invalid range toasts and keeps the last valid result on screen, exactly legacy)
+  with no separate "compute" button. `openStats(presetPerson?)` jumps straight into the
+  Personen-mode drilldown for a given person (used by the booking-detail modal's "Statistik"
+  shortcut). A stale drilldown selection (its machine/person has no data after a range change)
+  falls back to the overview, same as legacy's own reset-and-redraw.
+  **Real bug found and fixed (E2, flagged):** legacy's Ressourcen-mode bucketing keys its
+  internal row map on the bare group NAME across categories — a group name shared by a
+  "Maschinen" resource and a "Messtechnik" one silently merges their rows into whichever
+  category's bucket was created first, leaving the other category's group empty. Two tests
+  reproduced this exact failure against a faithful first port before the fix. Fixed by bucketing
+  on `category::group` internally; the *fold* state (`stClosed`'s `g:<group>` keys) is left
+  keyed on the bare group name, unchanged from legacy — narrower than the row-conflation fix,
+  on purpose.
+  Pure logic in `ui/views/stats.ts`: `computeStats` (unchanged, pre-existing) plus three new
+  row-descriptor builders mirroring B1's `buildGridRows` pattern — `buildResourceRows` (the
+  category/group fold state machine, its own `bucketResourceRows` helper to stay under the
+  complexity budget), `buildMaintRows`, `buildPersonRows` (filter + sort for the other two
+  overview modes). Components: `StatsModal.tsx` (orchestrator + 3 state hooks —
+  `useStatsRange`/`useStatsSelection`/`useCategoryAndFoldState` — split out purely to stay
+  under the function-length budget), `StatsControls.tsx` (range/mode/filter rows),
+  `StatsOverviews.tsx` (the 3 overview-mode renderers), `StatsDrilldown.tsx` (the 2 drilldowns,
+  shared `StatBar`). The category id/label/icon table (`CATEGORIES`) moved to
+  `core/machines.ts`, shared with the grid's own category toggle buttons (B1) instead of
+  staying duplicated. 29 new/changed unit tests (17 in `stats.test.ts`, 12 in
+  `StatsModal.test.tsx`); full suite 488 passed, coverage 99.46%/94.66% (well above the
+  90/85 floor). Browser-verified (E5): booked a real cell, opened Statistik, confirmed 2
+  category headers + sorted machine rows with bars/percentages, drilled into a machine (back
+  button appears and returns cleanly), switched to Personen and Wartung modes, and confirmed
+  the invalid-range toast fires while the prior valid result stays on screen — no console
+  errors.
 - **All-bookings** (`1622–1686`): person/machine substring filters, a group `<select>` grouped by category via `<optgroup>`, a date-overlap window, 5 sort keys (unknown key falls back to `termin`) persisted to `localStorage('mb_absort')`, 300-row cap labeled "(gekürzt)"; "goto" narrows the machine filter to just that row's machine before jumping (so it's guaranteed visible).
 - **Admin** (`1936–1983`): sort mode (manual/name/group) persisted to `localStorage('mb_admsort')`; ↑/↓ reorder buttons show **only** in manual mode; reorder silently no-ops across a group boundary (the reducer aborts — UI should handle that gracefully, not throw); edit/add routes to the machine form (B6); a button opens the log view.
 - **Functionality:** each view's pure kernel (`ui/views/*.ts`) is already 100%-tested and unchanged — these slices are pure wiring.
