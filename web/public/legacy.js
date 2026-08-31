@@ -30,7 +30,7 @@
 /* maintText, statusRangeText, daysMaskText → ui/machine-text.ts (window bridge). Präsentationstext
    für Wartungs-/Verfügbarkeitsstatus; statusRangeText injiziert „heute" per Default. */
 // Verfügbare Wochentage: m.days = 7-Zeichen-Maske Mo..So ('1'=verfügbar). Fehlt das Feld → alle Tage verfügbar.
-const WD_SHORT=['Mo','Di','Mi','Do','Fr','Sa','So'];  // hier für das Verwalten-Formular (Checkboxen)
+/* WD_SHORT → ui/machine-text.ts's WEEKDAY_SHORT_LABELS (window bridge). Phase 7 slice B6. */
 /* catOf, maintSlots, slotCovers, maintAt, isBlockedM, anyMaint, dayAvailable,
    cellBookable → core/machines.ts (provided as window globals by app.ts). */
 function stampRef(){
@@ -936,98 +936,7 @@ document.getElementById('btnAdmin').onclick  = openAdmin;
 
 /* ================= Admin: machines, status, log ================= */
 /* openAdmin → ui/components/AdminModal.tsx (window bridge). Phase 7 slice B5. */
-function openMachineForm(mid){
-  const m = mid? machById(mid) : {name:'',group:groupList()[0]||'',info:'',status:'ok',statusNote:'',statusFrom:'',statusUntil:''};
-  openModal(`
-    <h2>${mid?'Ressource bearbeiten':'Neue Ressource'}</h2>
-    <div class="formrow"><label>Name</label><input type="text" id="mfName" value="${esc(m.name)}"></div>
-    <div class="formrow"><label>Kategorie</label>
-      <select id="mfCat">${CATS.map(([c,l])=>`<option value="${c}" ${catOf(m)===c?'selected':''}>${l}</option>`).join('')}</select>
-    </div>
-    <div class="formrow"><label>Bereich</label>
-      <select id="mfGroup">${CATS.map(([c,l])=>{
-        const gs=groupList().filter(g=>groupCat(g)===c);
-        return gs.length?`<optgroup label="${l}">${gs.map(g=>`<option ${g===m.group?'selected':''}>${esc(g)}</option>`).join('')}</optgroup>`:'';
-      }).join('')}</select>
-      <input type="text" id="mfNewGroup" placeholder="…oder neuen Bereich eingeben" style="flex:1">
-    </div>
-    <div class="formrow"><label>Info</label><input type="text" id="mfInfo" value="${esc(m.info||'')}" placeholder="z. B. Ansprechpartner, Hinweise"></div>
-    <div class="formrow"><label>Redundanzgruppe</label>
-      <input type="text" id="mfRedu" value="${esc(m.redu||'')}" placeholder="z. B. „Rauheitsmessgerät" – gleichwertige Geräte, gleicher Name" style="flex:1" list="mfReduList">
-      <datalist id="mfReduList">${[...new Set(S.data.machines.map(x=>x.redu).filter(Boolean))].sort().map(r=>`<option value="${esc(r)}">`).join('')}</datalist></div>
-    <div class="formrow"><label>Verfügbare Tage</label>
-      <div id="mfDays" style="display:flex;flex-wrap:wrap;gap:10px;flex:1">
-        ${WD_SHORT.map((w,i)=>`<label style="display:inline-flex;align-items:center;gap:4px;font-weight:400;min-width:auto"><input type="checkbox" class="mfDay" data-wd="${i}" ${(!m.days||m.days.length!==7||m.days.charAt(i)!=='0')?'checked':''}> ${w}</label>`).join('')}
-      </div></div>
-    <div class="mfsection">
-      <h3 style="margin:10px 0 4px;font-size:15px">Wartung / Ausfallzeiten</h3>
-      <div id="mfMaint"></div>
-      <div class="formrow"><button class="btn small" id="mfAddMaint">＋ Wartung/Defekt hinzufügen</button></div>
-    </div>
-    <div class="modal-actions">
-      ${mid?'<button class="btn danger" id="mfDel">Löschen</button><span class="spacer"></span>':''}
-      <button class="btn" id="mfBack">Zurück</button>
-      <button class="btn primary" id="mfSave">Speichern</button>
-    </div>`);
-  document.getElementById('mfBack').onclick=openAdmin;
-  // Wartungs-/Ausfall-Slots: Laufzeit-Liste, aus vorhandenen Slots (inkl. Alt-Status) initialisiert
-  let maintList = maintSlots(m).map(s=>({type:(s.type==='defekt'?'defekt':'wartung'), from:s.from||'', until:s.until||'', note:s.note||''}));
-  const renderMaint=()=>{
-    const box=document.getElementById('mfMaint');
-    box.innerHTML = maintList.length ? maintList.map((s,i)=>`
-      <div class="maintrow" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:6px">
-        <select data-mt="${i}">
-          <option value="wartung" ${s.type!=='defekt'?'selected':''}>in Wartung</option>
-          <option value="defekt" ${s.type==='defekt'?'selected':''}>defekt</option>
-        </select>
-        <label style="min-width:auto">von</label><input type="date" data-mf="${i}" value="${esc(s.from)}">
-        <label style="min-width:auto">bis</label><input type="date" data-mu="${i}" value="${esc(s.until)}">
-        <input type="text" data-mn="${i}" value="${esc(s.note)}" placeholder="Grund/Notiz" style="flex:1;min-width:120px">
-        <button class="btn small danger" data-mrm="${i}" title="Slot löschen" aria-label="Slot löschen">✕</button>
-      </div>`).join('') : '<p class="hint" style="margin:2px 0 6px">Keine Wartungs-/Ausfallzeiten. Mit „＋" hinzufügen.</p>';
-    box.querySelectorAll('[data-mt]').forEach(el=>el.onchange=()=>maintList[+el.dataset.mt].type=el.value);
-    box.querySelectorAll('[data-mf]').forEach(el=>el.onchange=()=>maintList[+el.dataset.mf].from=el.value);
-    box.querySelectorAll('[data-mu]').forEach(el=>el.onchange=()=>maintList[+el.dataset.mu].until=el.value);
-    box.querySelectorAll('[data-mn]').forEach(el=>el.oninput=()=>maintList[+el.dataset.mn].note=el.value);
-    box.querySelectorAll('[data-mrm]').forEach(el=>el.onclick=()=>{ maintList.splice(+el.dataset.mrm,1); renderMaint(); });
-  };
-  renderMaint();
-  document.getElementById('mfAddMaint').onclick=()=>{ maintList.push({type:'wartung',from:'',until:'',note:''}); renderMaint(); };
-  document.getElementById('mfSave').onclick=async ()=>{
-    const name=document.getElementById('mfName').value.trim();
-    const group=(document.getElementById('mfNewGroup').value.trim()||document.getElementById('mfGroup').value).trim();
-    const cat=document.getElementById('mfCat').value;
-    const info=document.getElementById('mfInfo').value.trim();
-    const redu=document.getElementById('mfRedu').value.trim();
-    const daysArr=[...document.querySelectorAll('#mfDays .mfDay')].sort((a,b)=>a.dataset.wd-b.dataset.wd);
-    const daysMaskRaw=daysArr.map(c=>c.checked?'1':'0').join('');
-    const daysMask=(daysMaskRaw==='1111111')?null:daysMaskRaw;
-    // Wartungs-Slots normalisieren + validieren
-    const maint = maintList.map(s=>({type:(s.type==='defekt'?'defekt':'wartung'), from:(s.from||'').trim(), until:(s.until||'').trim(), ...( (s.note||'').trim() ? {note:(s.note||'').trim()} : {} )}));
-    for(const s of maint){ if(s.from && s.until && s.from>s.until){ toast('Wartungs-Zeitraum ungültig (von liegt nach bis).'); return; } }
-    if(!name||!group){ toast('Name und Bereich sind Pflicht.'); return; }
-    if(daysMask && !daysMask.includes('1')){ toast('Mindestens einen verfügbaren Wochentag wählen.'); return; }
-    // Anwenden/Anlegen (Slug-ID, Bereichs-Einsortierung, Feld-Übernahme) → core/booking.ts (saveMachine).
-    const res=await mutate(
-      fresh=>saveMachine(fresh, mid||null, {name, group, cat, info, redu, daysMask, maint}),
-      mid?`Maschine bearbeitet: ${name}`:`Maschine angelegt: ${name}`);
-    if(res&&res.abort) return;
-    fillGroupSel(); openAdmin(); toast('Gespeichert ✓');
-  };
-  const del=document.getElementById('mfDel');
-  if(del) del.onclick=async ()=>{
-    if(!await askConfirm({
-      title:'Maschine löschen?',
-      body:`<b>${esc(m.name)}</b> (${esc(m.group)}) wird entfernt — <b>inklusive aller zugehörigen Buchungen</b>. Das lässt sich nicht rückgängig machen.`,
-      yes:'Maschine löschen'
-    })) return;
-    const res=await mutate(
-      fresh=>deleteMachine(fresh, mid), // → core/booking.ts (Maschine + Buchungen entfernen)
-      `Maschine gelöscht: ${m.name}`);
-    if(res&&res.abort) return;
-    fillGroupSel(); openAdmin(); toast('Maschine gelöscht.');
-  };
-}
+/* openMachineForm → ui/components/MachineFormModal.tsx (window bridge). Phase 7 slice B6. */
 /* openLog() → ui/components/LogModal.tsx (window bridge). Phase 7 slice B9. */
 
 /* =================================================================

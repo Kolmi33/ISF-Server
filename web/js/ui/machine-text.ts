@@ -8,7 +8,9 @@ import type { Machine, MaintSlot } from '../../../shared/types.ts';
 import { formatDateLong, todayAsIsoDateString } from '../core/dates.ts';
 import { maintenanceSlots, slotCovers, maintenanceSlotAt } from '../core/machines.ts';
 
-const WD_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+/** Mo..So, matching the index order of a `Machine.days` mask. Shared by `daysMaskText` and the
+ *  machine form's weekday checkboxes. */
+export const WEEKDAY_SHORT_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
 /** One maintenance/defect slot as German text, e.g. `Wartung: <from> – <until> (note)`. */
 export function maintText(s: MaintSlot | null | undefined): string {
@@ -47,6 +49,6 @@ export function maintenanceKind(m: Machine, today: string = todayAsIsoDateString
  */
 export function daysMaskText(m: Machine): string {
   if (!m.days || m.days.length !== 7 || m.days === '1111111') return 'jeden Tag';
-  const on = WD_SHORT.filter((_, i) => m.days!.charAt(i) === '1');
+  const on = WEEKDAY_SHORT_LABELS.filter((_, i) => m.days!.charAt(i) === '1');
   return on.length ? on.join(', ') : 'keine Tage';
 }

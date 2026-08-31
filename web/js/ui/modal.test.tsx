@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act } from '@testing-library/react';
 import { openReactModal, closeReactModal } from './modal.tsx';
 
@@ -75,6 +75,17 @@ describe('openReactModal / closeReactModal', () => {
       document.getElementById('modal')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(true);
+    act(() => closeReactModal()); // cleanup
+  });
+
+  it('opening a second modal while one is open unmounts the first, without a React warning', () => {
+    const warnSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    act(() => openReactModal(<p>first</p>));
+    act(() => openReactModal(<p>second</p>));
+    expect(document.getElementById('modal')!.textContent).toBe('second');
+    expect(document.getElementById('overlay')!.classList.contains('open')).toBe(true);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
     act(() => closeReactModal()); // cleanup
   });
 

@@ -42,6 +42,7 @@ import * as myBookingsModal from './ui/components/MyBookingsModal.tsx';
 import * as statsModal from './ui/components/StatsModal.tsx';
 import * as allBookingsModal from './ui/components/AllBookingsModal.tsx';
 import * as adminModal from './ui/components/AdminModal.tsx';
+import * as machineFormModal from './ui/components/MachineFormModal.tsx';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
@@ -61,7 +62,7 @@ declare global {
     /** Bridged from ui/components/AdminModal.tsx (Phase 7 slice B5); called from the React
      *  LogModal's "Zurück" button. */
     openAdmin: () => void;
-    /** Still legacy (Phase 7 slice B6, machine form + group management) — routed to by the
+    /** Bridged from ui/components/MachineFormModal.tsx (Phase 7 slice B6); routed to by the
      *  Admin modal's (B5) "＋ Maschine hinzufügen" and each row's "Bearbeiten". */
     openMachineForm: (mid: string | null) => void;
     /** Still legacy — DOM/presence-chip side effects the React name-prompt/settings call. */
@@ -113,6 +114,10 @@ declare global {
      *  the same filter. Called by the My Bookings modal's (B5) "only my machines" shortcut. */
     saveFilters: () => void;
     updateMachBtn: () => void;
+    /** Still legacy — rebuilds the toolbar's group-filter checkbox list; called after the
+     *  machine form (B6) creates, edits, or deletes a machine (a save can add/rename/remove a
+     *  group). */
+    fillGroupSel: () => void;
     /** Still legacy — the optimistic write pipeline every mutation goes through: applies `fn`
      *  to the in-memory `S.data` synchronously, logs the action, repaints (patch or full), then
      *  persists to the server in the background. Returns `fn`'s own result (or `null` in
@@ -192,6 +197,7 @@ Object.assign(window, myBookingsModal);
 Object.assign(window, statsModal);
 Object.assign(window, allBookingsModal);
 Object.assign(window, adminModal);
+Object.assign(window, machineFormModal);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);

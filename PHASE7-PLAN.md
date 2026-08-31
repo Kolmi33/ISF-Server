@@ -879,10 +879,52 @@ into, not something specific to the booking form, and no plan slice claims it by
 - **Functionality:** each view's pure kernel (`ui/views/*.ts`) is already 100%-tested and unchanged — these slices are pure wiring.
 - **Tests:** per view, assert the right reducer/filter is called with the right args on each control, and that persisted localStorage keys are read/written under their exact legacy names.
 
-### B6 — Machine form + group management
-- **Must-haves (`legacy.js:1984–2075`):** category + group `<select>` grouped by category, plus a free-text "new group" input that overrides the select when non-empty; redundancy field backed by a `<datalist>` of existing values; 7 weekday checkboxes serialize to a mask where **all-on stores nothing** (`null`, not `'1111111'`); a dynamic maintenance-slot list (add/remove/edit rows: type, from, until, note) validated (`from<=until` per slot) before save; save routes through `saveMachine` (new: slug from German transliteration + de-duplication suffix + same-group insertion index; edit: aborts gracefully if the machine was concurrently deleted — a real race, not a bug); delete requires a confirm naming the cascade ("inklusive aller zugehörigen Buchungen... nicht rückgängig").
-- **Functionality/usability:** identical; the slug/mask edge cases are the highest-value test targets, not the form chrome.
-- **Tests:** slug generation for ä/ö/ü/ß names + uniqueness suffixing (`-2`, `-3`, …); mask round-trip (all-on → `undefined`/omitted); a bad maintenance range blocks save with the right toast; editing a since-deleted machine aborts without throwing.
+### B6 — Machine form + group management — **DONE**
+- **Must-haves:** category + group `<select>` grouped by category, plus a free-text "new group"
+  input that overrides the select when non-empty; redundancy field backed by a `<datalist>` of
+  existing values; 7 weekday checkboxes serialize to a mask where **all-on stores nothing**
+  (`null`, not `'1111111'`); a dynamic maintenance-slot list (add/remove/edit rows: type, from,
+  until, note) validated (`from<=until` per slot) before save; save routes through `saveMachine`
+  (slug from German transliteration + de-duplication suffix + same-group insertion index —
+  already ported, A5); delete requires a confirm naming the cascade ("inklusive aller
+  zugehörigen Buchungen... nicht rückgängig"), escaped via `escapeHtml` (the confirm dialog is
+  still legacy's own HTML-string one).
+  "Zurück" and a successful save/delete all route to `window.openAdmin()` rather than a direct
+  import — same reasoning as `LogModal.tsx`'s existing call to it: avoids a circular import,
+  since Admin's own "＋"/"Bearbeiten" call `window.openMachineForm` right back.
+  Pure logic split into its own module, `ui/machine-form.ts` (state shape, defaults,
+  `validateMachineForm` — mirroring how `ui/views/stats.ts` holds the Stats family's pure
+  logic), fully unit-tested there (19 tests) independent of the component tree. New
+  `groupsByCategory`-adjacent `GroupOptions.tsx` extracted as a **shared** component — the
+  "Bereich" `<optgroup>` markup was identical between this form and All-Bookings (B5's own
+  `AllBookingsModal.tsx`), so it moved out to `ui/components/GroupOptions.tsx` instead of
+  staying duplicated. `WD_SHORT` moved to `ui/machine-text.ts` as exported
+  `WEEKDAY_SHORT_LABELS`, deleted from `legacy.js` (its only remaining use).
+  **Real bug found and fixed, caught only by browser verification, not by unit tests:** Admin
+  routing straight to the machine form (`window.openMachineForm`) and back
+  (`window.openAdmin()`) — two React modals opening one another directly, matching legacy's own
+  chained `openModal()` calls — triggered React's "createRoot() on a container that has already
+  been passed to createRoot()" warning on every transition, because `openReactModal` only ever
+  overwrote its `currentRoot` reference instead of unmounting the outgoing root first. Unit
+  tests never render two modals in the same JSDOM document, so they never exercised this path.
+  Fixed centrally in `ui/modal.tsx` (`currentRoot?.unmount()` before the new `createRoot` call)
+  — this benefits every modal-to-modal transition project-wide, not just B6's — with a new
+  regression test in `modal.test.tsx` asserting no console error on a chained open.
+  Components: `MachineFormModal.tsx` (+ `saveMachineForm`/`deleteMachineForm` module-level async
+  functions, mirroring B4's `submitBooking` pattern), `MachineFormFields.tsx`,
+  `MaintenanceSlotEditor.tsx` — split purely to stay under the file-length/function-length
+  budgets.
+- **Tests:** 19 in `machine-form.test.ts` (mask round-trip incl. all-on → `null`; a bad
+  maintenance range blocks save with the right toast; free-text group overriding a selected
+  one; unrecognized maintenance type normalized to "wartung"), 10 in
+  `MachineFormModal.test.tsx` (create/edit/delete/back through the real reducers via a
+  faithful mutate stub, a declined delete confirm not mutating), 3 in `machines.test.ts`
+  (`groupsByCategory`, from B5, unchanged), 1 new in `modal.test.tsx`. Full suite 541 passed,
+  coverage 99.42%/94.28%. Browser-verified (E5): created a machine with a maintenance slot
+  (badge appeared in Admin), confirmed the empty-name/empty-group and all-off-mask validation
+  toasts block save, edited it back open and confirmed the fields round-tripped, deleted it via
+  the legacy confirm dialog, and confirmed it's gone — no console errors (after the modal.tsx
+  fix; the bug above was caught in this exact pass, on the first run).
 
 ### B7 — Assistant UI (device tree, drag-drop, results)
 - **Must-haves (`legacy.js:1424–1619`):** device checklist reuses the same collapsible fav/category/group tree as the "Filtern" dropdown, but toggles only add/remove a device (`asToggleId`) and immediately reflect into the work area; dragging a device onto another device creates a new "need 1 of 2" group with a color from a fixed hue cycle (`AS_HUES`, 8 colors); dropping onto a group's kids area joins it; dropping onto empty canvas returns a node to root; the need stepper is clamped `[1, childCount]`; a redundancy hint ("alle gleichwertigen Geräte hier?") shows when a group has more members than its need; before running, if `anyRedund` is true, a confirm dialog asks whether every equivalent device was added; results are day-runs meeting the minimum-consecutive-days input, each with an editable "days to book" number (clamped to the run's length, with a transient tooltip on clamp), a suggested-devices line (only shown when the tree contains ≥1 group), a "pin" button that **collapses** (not closes) the modal and filters+centers the grid on that run, and "Buchen…" opens the booking form pre-picked.
@@ -983,4 +1025,4 @@ switching to `.click()`.
 - **Functionality:** identical bootstrap sequence; `app.ts` shrinks to store hydration + `createRoot(...).render(<App/>)`; `window.S`/`window.render`/`window.notify` bridges are deleted along with the last legacy consumer.
 - **Tests:** mount `<App/>` with a mocked fetch returning valid/invalid `/api/state` and assert the right screen renders in each case; name-prompt appears exactly when `!user && !readOnly`; live timers start once even across remounts.
 
-**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 → B7 → B8 → B10.
+**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 → B8 → B10.

@@ -11,7 +11,7 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../core/dates.ts';
-import { groupsByCategory, CATEGORIES, type CategoryGroups } from '../../core/machines.ts';
+import { groupsByCategory, type CategoryGroups } from '../../core/machines.ts';
 import { orderedMachines } from '../grid.ts';
 import {
   computeAllRuns,
@@ -23,6 +23,7 @@ import { gotoDate, prependWeek, resetView } from '../grid-scroll.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { toast } from '../toast.ts';
 import { Icon } from './Icon.tsx';
+import { GroupOptions } from './GroupOptions.tsx';
 
 const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'termin', label: 'Termin der Buchung' },
@@ -47,23 +48,6 @@ function goto(run: AllRun): void {
   prependWeek();
   gotoDate(run.dates[0]!);
   toast(`Plan gefiltert auf „${run.m.name}".`, undefined, 4000);
-}
-
-function GroupOptions({ groupOptions }: { groupOptions: readonly CategoryGroups[] }) {
-  return (
-    <>
-      {groupOptions.map(({ category, groups }) => (
-        <optgroup
-          key={category}
-          label={CATEGORIES.find((c) => c.id === category)?.label ?? category}
-        >
-          {groups.map((group) => (
-            <option key={group}>{group}</option>
-          ))}
-        </optgroup>
-      ))}
-    </>
-  );
 }
 
 interface AllBookingsFiltersProps {

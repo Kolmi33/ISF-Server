@@ -24,11 +24,17 @@ export interface OpenReactModalOptions {
   sticky?: boolean;
 }
 
-/** Open a React-rendered modal, mirroring legacy `openModal`'s DOM chrome (focus, overlay). */
+/** Open a React-rendered modal, mirroring legacy `openModal`'s DOM chrome (focus, overlay). One
+ *  React modal opening another directly — e.g. Admin routing straight to the machine form,
+ *  matching legacy's own chained `openModal()` calls — must unmount the outgoing root first:
+ *  calling `createRoot` again on the same node without unmounting leaves the old root's effects
+ *  dangling and React logs "createRoot() on a container that has already been passed to
+ *  createRoot()". */
 export function openReactModal(node: ReactNode, options: OpenReactModalOptions = {}): void {
   isCurrentModalSticky = !!options.sticky;
   lastFocusedElement = document.activeElement as HTMLElement | null;
   document.getElementById('modalReopen')?.classList.remove('show');
+  currentRoot?.unmount();
   const modalElement = document.getElementById('modal')!;
   currentRoot = createRoot(modalElement);
   currentRoot.render(node);
