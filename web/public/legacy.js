@@ -33,37 +33,13 @@
 /* WD_SHORT → ui/machine-text.ts's WEEKDAY_SHORT_LABELS (window bridge). Phase 7 slice B6. */
 /* catOf, maintSlots, slotCovers, maintAt, isBlockedM, anyMaint, dayAvailable,
    cellBookable → core/machines.ts (provided as window globals by app.ts). */
-function stampRef(){
-  const el=document.getElementById('lastRef');
-  if(el) el.textContent=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
-}
-function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+/* stampRef, mutate, persist, refreshNow → ui/mutate.ts (window bridge). sleep, ic → dead code
+   (no remaining callers anywhere, confirmed by search) — deleted outright, no port. legacy's
+   own `saving` flag was write-only dead state too (nothing anywhere ever read it, despite its
+   comment's claim) — not ported (see ui/mutate.ts's header comment for the full reasoning).
+   Phase 7 slice B10f. */
 /* validateData → net/api.ts (window bridge). Struktur-/Integritätsprüfung eines
    State-Payloads; unverändert (faithful port). */
-
-let saving=false; // blockiert den stillen Auto-Refresh, solange ein Schreibvorgang läuft
-/* OPTIMISTISCHES SPEICHERN (v5.5):
-   1) fn wird SOFORT auf den Anzeige-Stand S.data angewendet → Zellen ändern
-      sich im Moment des Klicks (keine Datei-I/O im kritischen Pfad).
-   2) Danach persistiert persist() im Hintergrund autoritativ: frisch lesen,
-      unser Delta gegen fremde Änderungen mergen (fremde Buchung gewinnt nie
-      überschrieben zu werden), schreiben. Bei Fehler/Kollision wird der
-      tatsächliche Dateistand übernommen und die Ansicht angeglichen. */
-async function mutate(fn, logAction){
-  if(S.readOnly){ toast('Nur-Lese-Modus – Buchen nicht möglich.'); return null; }
-  const result = fn(S.data);              // optimistisch auf Anzeige-Stand anwenden
-  if(result && result.abort) return result; // Konflikt/Abbruch: S.data unverändert
-  const logEntry={ts:new Date().toISOString(), user:S.user||'?', action:logAction};
-  S.data.log = S.data.log || [];
-  S.data.log.unshift(logEntry);
-  if(S.data.log.length>500) S.data.log.length=500;
-  // SOFORT zeichnen (nur betroffene Zellen, sonst voll)
-  if(result && result.undo && result.undo.length && result.undo.length<=500) patchCells(result.undo);
-  else notify();
-  saving=true;                            // ab jetzt keinen stillen Refresh dazwischenfunken lassen
-  persist(fn, logEntry, result);          // Datei-Arbeit im Hintergrund
-  return result;
-}
 
 
 async function start(){
@@ -120,26 +96,8 @@ document.getElementById('btnAll').onclick    = openAllBookings;
 document.getElementById('btnSettings').onclick = openSettings;
 
 /* ================= Debug-Modus (Admin) ================= */
-function dbgOn(){ return localStorage.getItem('mb_debug')==='on'; }
-// Zentrale Fehlerbehandlung (#9): unterscheidet Abbruch, loggt einheitlich statt stiller catch{}.
-function handleError(ctx, err){ if(err && err.name==='AbortError') return; console.error('['+ctx+']', err); try{ dbg('err', ctx+': '+((err&&err.message)||err)); }catch(_){} }
-// Schneller Maschinen-Lookup (#5): O(1)-Map, wird automatisch neu gebaut, wenn sich das machines-Array ersetzt.
-function machById(id){ if(!S._mbi || S._mbiRef!==(S.data&&S.data.machines)){ S._mbiRef=S.data&&S.data.machines; S._mbi=new Map((S._mbiRef||[]).map(m=>[m.id,m])); } return S._mbi.get(id); }
-function dbg(kind, msg){
-  if(!dbgOn()) return;
-  const list=document.getElementById('dbgList'); if(!list) return;
-  const row=document.createElement('div');
-  row.className='dbgrow'+(kind==='err'?' err':kind==='write'?' write':kind==='remote'?' remote':kind==='latency'?' latency':'');
-  row.innerHTML=`<span class="t">${new Date().toLocaleTimeString('de-DE')}</span>[${esc(kind)}] ${esc(msg)}`;
-  list.prepend(row);
-  while(list.children.length>200) list.lastChild.remove();
-}
-function applyDebug(){
-  document.getElementById('dbgPanel').classList.toggle('open', dbgOn());
-  if(dbgOn()) dbg('info','Debug-Modus aktiv — Nutzer: '+(S.user||'?'));
-}
-document.getElementById('dbgClear').onclick=()=>{ document.getElementById('dbgList').innerHTML=''; };
-document.getElementById('dbgClose').onclick=()=>{ localStorage.setItem('mb_debug','off'); applyDebug(); };
+/* dbgOn, handleError, machById, dbg, applyDebug, and the #dbgClear/#dbgClose wiring →
+   ui/debug-panel.ts (machById → ui/machine-lookup.ts) (window bridge). Phase 7 slice B10f. */
 
 /* =================================================================
    GEMEINSAME UI-BAUSTEINE (v5.0)
@@ -152,7 +110,8 @@ document.getElementById('dbgClose').onclick=()=>{ localStorage.setItem('mb_debug
      Nur-Lese-Modus keine Duplikate).
    saveFilters(): persistiert Maschinen-/Bereichs-/Personenfilter.
    ================================================================= */
-function ic(name){ return '<svg class="ic" aria-hidden="true"><use href="#i-'+name+'"/></svg>'; }
+/* ic → dead code (no remaining callers anywhere) — deleted outright in Phase 7 slice B10f,
+   no port; see ui/components/Icon.tsx for its React-era equivalent. */
 /* askConfirm → ui/confirm.ts (window bridge). Phase 7 slice B10c. */
 /* showCollision, the #collOk dismiss wiring → ui/collision-banner.ts (window bridge).
    liveTimersOn → net/live-connection.ts's own module state. Phase 7 slice B8. */
@@ -165,11 +124,9 @@ function ic(name){ return '<svg class="ic" aria-hidden="true"><use href="#i-'+na
 document.getElementById('btnHelp').onclick=openHelp;
 
 /* ================= Einstellungen (pro Gerät) ================= */
-function applyTheme(){
-  const pref=localStorage.getItem('mb_theme')||'auto';
-  const dark = pref==='dark' || (pref==='auto' && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-}
+/* applyTheme → ui/theme.ts (window bridge). The boot-time init below (the initial call, the
+   matchMedia listener, and the mb_compact class application) stays here for now — absorbed
+   into app.ts's boot orchestration in Phase 7 slice B10g. Phase 7 slice B10f. */
 applyTheme();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{ applyTheme(); if(S.data) notify(); });
 if(localStorage.getItem('mb_compact')==='on') document.body.classList.add('compact');
@@ -348,49 +305,10 @@ function maintKind(m){ const s=maintAt(m,todayStr()); return s?s.type:null; }
    itself deleted in Phase 7 slice B10e) is gone — see core/machines.ts's CATEGORIES. */
 /* API, apiGet, apiPost, normalizeState → net/api.ts (window bridge). The HTTP data
    client (same-origin, fetch) is unchanged; SSE below still uses the bridged `API`. */
-async function readFile(){ return normalizeState(await apiGet('/api/state')); }
-/* writeFile()/S.handle/S.lastRaw/lastMtime removed in Phase 5.2 — dead FS-Access-API
-   code from the old file-backed variant. Server mode persists via apiPost('/api/mutate')
-   in persist() below; it never called writeFile (§14 D4). */
-
-async function persist(fn, logEntry, result){
-  saving = true;
-  try{
-    let out;
-    if(result && Array.isArray(result.undo)){
-      // Zell-Delta (Buchen/Löschen): prev + neuer Wert je Zelle → Compare-and-Set am Server
-      const cells = result.undo.map(e=>({ mid:e.mid, day:e.date, prev:e.prev||null, val:(S.data.bookings[e.mid]||{})[e.date] || null }));
-      out = await apiPost('/api/mutate', { cells, log:logEntry.action, user:S.user||'?' });
-    } else {
-      // strukturelle Änderung (Verwalten): komplette Maschinen-/Gruppenliste
-      out = await apiPost('/api/mutate', { machines:S.data.machines, groups:S.data.groups, log:logEntry.action, user:S.user||'?' });
-    }
-    if(!out || out.error) throw new Error(out && out.error || 'Serverfehler');
-    if(typeof out.rev==='number') S.data.revision = out.rev;
-    if(out.conflicts && out.conflicts.length){
-      showCollision();
-      dbg('err','Teilkonflikt: '+out.conflicts.length+' Termin(e) waren bereits belegt');
-      await refreshNow(true);   // autoritativen Stand holen und Ansicht angleichen
-    } else {
-      dbg('write', `${logEntry.action} ✓ (Rev ${out.rev})`);
-    }
-  }catch(e){
-    dbg('err','Speichern fehlgeschlagen: '+e.message);
-    toast('⚠️ Speichern fehlgeschlagen ('+e.message+') – hole aktuellen Stand…', null, 6000);
-    try{ await refreshNow(true); }catch(_){}
-  }finally{ saving=false; }
-};
-
-async function refreshNow(silent){
-  try{
-    const d = await readFile();
-    S.data = d; notify(); stampRef();   // 4.1c: repaint via store (subscribed render)
-    if(!silent) toast('Aktualisiert ✓');
-  }catch(e){
-    const el=document.getElementById('lastRef'); if(el) el.textContent='⚠ offline';
-    if(!silent) toast('Aktualisieren fehlgeschlagen: '+e.message, null, 6000);
-  }
-};
+/* readFile → net/api.ts (window bridge). writeFile()/S.handle/S.lastRaw/lastMtime removed in
+   Phase 5.2 — dead FS-Access-API code from the old file-backed variant. Server mode persists
+   via apiPost('/api/mutate') in ui/mutate.ts's persist(); it never called writeFile (§14 D4).
+   persist, refreshNow → ui/mutate.ts (window bridge). Phase 7 slice B10f. */
 
 /* setupFileObserver()/startRefreshTimer() removed in Phase 5.2 — empty FS-era stubs
    (no polling in server mode; the server pushes via SSE). Their call sites were dropped

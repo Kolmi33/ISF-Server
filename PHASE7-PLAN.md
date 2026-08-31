@@ -1270,14 +1270,40 @@ check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then co
   search found the machine with headers gone; outside-click closed it. The group dropdown
   (exercised via direct DOM clicks, per the above) opened, listed all groups, and selecting one
   updated its button to "1 Bereich ▾". Zero console errors throughout.
-- **B10f — Core write pipeline + shared helpers:** `mutate`/`persist`/`refreshNow` (the
-  optimistic-apply → log → repaint → background-persist pipeline every mutation in this app
-  already goes through via `window.mutate` — the single highest-risk piece to touch, per
-  CLAUDE.md's "one authoritative server write path; never trust the client") plus the small
-  broadly-used helpers: `esc`, `dbg`, `dbgOn`, `machById`, `applyDebug`, `applyTheme`,
-  `handleError`, `stampRef`, `sleep`, `ic` (`nameColor` turned out already dead — deleted in
-  B10e, see above). Do this once nothing upstream of it changes mid-port — i.e. after
-  B10a–B10e, when its remaining callers are known and stable.
+- **B10f — Core write pipeline + shared helpers — DONE.** `mutate`/`persist`/`refreshNow`/
+  `stampRef` → new `ui/mutate.ts` — the single authoritative write path (CLAUDE.md), the
+  highest-risk piece in this whole backlog. `dbg`/`dbgOn`/`applyDebug`/`handleError` → new
+  `ui/debug-panel.ts` (+ `initDebugPanel()` wiring `#dbgClear`/`#dbgClose`, called once at
+  boot, same pattern as B8's `initCollisionBanner`). `machById` → new `ui/machine-lookup.ts`.
+  `applyTheme` → new `ui/theme.ts` (the boot-time init — the initial call, the `matchMedia`
+  listener, `mb_compact`'s class application — stays in legacy.js for now, absorbed into
+  `app.ts`'s boot orchestration in B10g). `readFile` → `net/api.ts` (a thin `normalizeState(
+  apiGet('/api/state'))` wrapper, built entirely from already-gated primitives).
+  All six kept window-bridged rather than converted to direct imports — each has many call
+  sites scattered across already-gated components, the same call as `askConfirm`/`mutate`
+  themselves.
+  **Two more dead-code findings, confirmed by full-codebase search and deleted outright, no
+  port**: `sleep` and `ic` — both had zero remaining callers anywhere (not even within
+  legacy.js itself), evidently orphaned by earlier slices without being swept up.
+  **A third, subtler one — legacy's `saving` flag — deliberately NOT ported**: `mutate`/
+  `persist` set it true/false, but a full-codebase search found nothing anywhere that ever
+  *read* it, despite the flag's own comment claiming it "pauses auto-refresh while saving." A
+  write with no observable read has no behavior to conserve, so it's dropped rather than
+  carried forward as inert state. legacy's own `persist(fn, logEntry, result)` also took an
+  `fn` parameter its body never once referenced — dropped too (E2, matching `net/sse.ts`'s
+  `remoteMessage` dropping its own unused `ts` field, B8).
+  `esc` stays in legacy for now — B10g's concern, since its one remaining caller is the boot
+  sequence's own error message.
+  102 new tests across `mutate.test.ts` (19, including the full persist success/conflict/
+  error/network-failure matrix), `debug-panel.test.ts` (13), `machine-lookup.test.ts` (5),
+  `theme.test.ts` (5), and `net/api.test.ts`'s new `readFile` cases (2). Full suite 758
+  passed, coverage 98.91%/93.38%. Browser-verified (E5) end to end, including the test that
+  actually matters for a write path: booked a cell, waited for the background `persist()`,
+  then **fully reloaded the page** — the booking survived, proving the write reached the real
+  server and wasn't just an optimistic-UI illusion. Also verified: the manual refresh button,
+  and the full debug-panel lifecycle (turn on → activation line → a real booking produces a
+  "✓ (Rev N)" write-log line → "Leeren" clears it → "✕" turns the flag off and closes the
+  panel). Zero console errors throughout.
 - **B10g — Boot sequence (the original B10 scope):** `start`/`startUI`/`init`. Only once
   B10a–B10f land does `legacy.js` actually go to zero and get deleted here, with `app.ts`
   absorbing the boot orchestration and the `window.S`/`window.render`/`window.notify` bridges
@@ -1287,4 +1313,4 @@ check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then co
   asserts the right screen renders in each case, name-prompt appears exactly when
   `!user && !readOnly`, and live timers start once even across remounts.
 
-**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a ✅ → B10b ✅ → B10c ✅ → B10d ✅ → B10e ✅ → B10f → B10g.
+**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a ✅ → B10b ✅ → B10c ✅ → B10d ✅ → B10e ✅ → B10f ✅ → B10g.

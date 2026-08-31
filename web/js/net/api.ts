@@ -64,3 +64,9 @@ export function normalizeState(rawState: unknown): ServerData {
   record.log = (record.log as unknown[]) || [];
   return validateData(record);
 }
+
+/** Fetch and normalize the full server state. Faithful port of legacy `readFile` (Phase 7
+ *  slice B10f). */
+export async function readFile(): Promise<ServerData> {
+  return normalizeState(await apiGet('/api/state'));
+}

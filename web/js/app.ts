@@ -54,12 +54,16 @@ import type { AskConfirmOptions } from './ui/confirm.ts';
 import * as activeUsersModal from './ui/components/ActiveUsersModal.tsx';
 import * as machineFilterDropdown from './ui/components/MachineFilterDropdown.tsx';
 import * as groupFilterDropdown from './ui/components/GroupFilterDropdown.tsx';
+import * as machineLookup from './ui/machine-lookup.ts';
+import * as theme from './ui/theme.ts';
+import * as debugPanel from './ui/debug-panel.ts';
+import * as mutateModule from './ui/mutate.ts';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
 import type { BookingData, Machine, ServerData } from '../../shared/types.ts';
 import type { Cell } from './ui/selection.ts';
-import type { CellUndo, Conflict } from './core/booking.ts';
+import type { MutateResult } from './ui/mutate.ts';
 
 declare global {
   interface Window {
@@ -79,25 +83,39 @@ declare global {
     /** Bridged from ui/user-chip.ts (Phase 7 slice B8); the React name-prompt/settings call
      *  this after changing `S.user` so the toolbar chip's label updates. */
     updateUserChip: () => void;
+    /** Bridged from ui/debug-panel.ts (Phase 7 slice B10f); logs one event to the debug
+     *  panel (a no-op unless the device-local debug flag is on). */
     dbg: (kind: string, msg: string) => void;
     /** Bridged from net/live-connection.ts (Phase 7 slice B8); the React name-prompt/settings
      *  call this to reconnect SSE under a new name. */
     presenceTick: () => Promise<void>;
+    /** Bridged from ui/theme.ts (Phase 7 slice B10f); the boot-time init (still legacy, B10g)
+     *  and the Settings modal's (B9) theme row call this. */
     applyTheme: () => void;
     /** Bridged from net/live-connection.ts (Phase 7 slice B8); called by legacy's own boot
      *  sequence (`startLiveTimers`) and by the Settings modal's (B9) presence-share toggle. */
     connectSSE: () => void;
+    /** Bridged from ui/mutate.ts (Phase 7 slice B10f); re-fetches and reconciles the view to
+     *  the server's authoritative state. Called by the refresh button, `mutate`'s own
+     *  error/conflict paths, net/live-connection.ts's (B8) focus timer, and the Settings
+     *  modal's (B9) "Neu verbinden". */
     refreshNow: (silent: boolean) => Promise<void>;
+    /** Bridged from ui/debug-panel.ts (Phase 7 slice B10f); syncs `#dbgPanel`'s visibility
+     *  with the debug flag. Called by the Settings modal's (B9) debug toggle. */
     applyDebug: () => void;
+    /** Bridged from ui/debug-panel.ts (Phase 7 slice B10f); the Settings modal (B9) reads
+     *  this to show the debug toggle's current state. */
     dbgOn: () => boolean;
-    /** Still legacy — timestamps `#lastRef` with the last successful sync time. Called by
-     *  net/live-connection.ts's (B8) `hello`/`update` SSE handlers. */
+    /** Bridged from ui/mutate.ts (Phase 7 slice B10f); timestamps `#lastRef` with the last
+     *  successful sync time. Called by net/live-connection.ts's (B8) `hello`/`update` SSE
+     *  handlers. */
     stampRef: () => void;
-    /** Still legacy — logs to console + the debug panel, swallowing `AbortError`. Called by
-     *  net/live-connection.ts's (B8) SSE error paths. */
+    /** Bridged from ui/debug-panel.ts (Phase 7 slice B10f); logs to console + the debug
+     *  panel, swallowing `AbortError`. Called by net/live-connection.ts's (B8) SSE error
+     *  paths. */
     handleError: (ctx: string, err: unknown) => void;
-    /** Still legacy — fetches and normalizes the full server state. Called by
-     *  net/live-connection.ts's (B8) `structural` SSE handler. */
+    /** Bridged from net/api.ts (Phase 7 slice B10f); fetches and normalizes the full server
+     *  state. Called by net/live-connection.ts's (B8) `structural` SSE handler. */
     readFile: () => Promise<ServerData>;
     /** Bridged from ui/grid-scroll.ts (Phase 7 slice B3); called by legacy's own boot sequence
      *  and by the "Ändern…"-adjacent Settings row (React, B9). */
@@ -131,8 +149,9 @@ declare global {
     /** Bridged from ui/favorite-jump.ts (Phase 7 slice B10a); called by
      *  ui/grid-interaction.ts's (B2) row-header favorite star. */
     toggleFav: (mid: string) => void;
-    /** Still legacy — machine lookup by id (an internally-memoized Map, rebuilt whenever
-     *  `S.data.machines` is replaced by a new array reference). */
+    /** Bridged from ui/machine-lookup.ts (Phase 7 slice B10f); O(1) machine lookup by id (an
+     *  internally-memoized Map, rebuilt whenever `S.data.machines` is replaced by a new array
+     *  reference). */
     machById: (mid: string) => Machine | undefined;
     /** Bridged from ui/components/MachineFilterDropdown.tsx (Phase 7 slice B10e); persists
      *  the machine/group filter selections. Called by the My Bookings modal's (B5) "only my
@@ -147,31 +166,25 @@ declare global {
      *  creates, edits, or deletes a machine (a save can add/rename/remove a group), and by
      *  net/live-connection.ts's (B8) "structural" SSE handler. */
     fillGroupSel: () => void;
-    /** Still legacy — the optimistic write pipeline every mutation goes through: applies `fn`
-     *  to the in-memory `S.data` synchronously, logs the action, repaints (patch or full), then
-     *  persists to the server in the background. Returns `fn`'s own result (or `null` in
-     *  read-only mode). */
+    /** Bridged from ui/mutate.ts (Phase 7 slice B10f) — the single authoritative write path
+     *  (CLAUDE.md): applies `fn` to the in-memory `S.data` synchronously, logs the action,
+     *  repaints (patch or full), then persists to the server in the background. Returns
+     *  `fn`'s own result (or `null` in read-only mode). */
     mutate: (
       fn: (fresh: BookingData) => unknown,
       logAction: string,
-    ) => Promise<{
-      abort?: boolean;
-      conflicts?: Conflict[];
-      count?: number;
-      n?: number;
-      undo?: CellUndo[];
-    } | null>;
+    ) => Promise<MutateResult | null>;
     /** Bridged from ui/confirm.ts (Phase 7 slice B10c); called by every "delete more"/
      *  destructive-action confirmation across the app (B4/B6/B7/B10b). */
     askConfirm: (options: AskConfirmOptions) => Promise<boolean>;
     /** Bridged from ui/components/StatsModal.tsx (Phase 7 slice B5); called from the booking
      *  detail modal's (B4) "Statistik" shortcut to open pre-filtered to one person. */
     openStats: (personFilter?: string) => void;
-    /** Bridged from ui/cell-patch.ts (Phase 7 slice B4); called by the still-legacy `mutate`'s
+    /** Bridged from ui/cell-patch.ts (Phase 7 slice B4); called by ui/mutate.ts's (B10f)
      *  optimistic-apply path to patch only the cells a write actually touched. */
     patchCells: (entries: readonly { mid: string; date: string }[]) => void;
-    /** Bridged from ui/components/BookingForm.tsx (Phase 7 slice B4); called by legacy's
-     *  still-unported context menu ("Buchen…") and the assistant. */
+    /** Bridged from ui/components/BookingForm.tsx (Phase 7 slice B4); called directly by
+     *  ui/components/ContextMenu.tsx (B10b) and the assistant (B7). */
     openBookingForm: (machineIds: readonly string[], from: string, to: string) => void;
     /** Bridged from ui/grid-scroll.ts (Phase 7 slice B3); called by ui/grid-interaction.ts's
      *  (B2) drag-auto-scroll and arrow-key growth at the grid's edges. */
@@ -231,6 +244,10 @@ Object.assign(window, confirm);
 Object.assign(window, activeUsersModal);
 Object.assign(window, machineFilterDropdown);
 Object.assign(window, groupFilterDropdown);
+Object.assign(window, machineLookup);
+Object.assign(window, theme);
+Object.assign(window, debugPanel);
+Object.assign(window, mutateModule);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);
@@ -304,3 +321,4 @@ gridScroll.initGridScroll();
 // Wired once at boot, same as legacy's own top-level `document.getElementById('collOk')
 // .onclick=...` assignment did.
 collisionBanner.initCollisionBanner();
+debugPanel.initDebugPanel();

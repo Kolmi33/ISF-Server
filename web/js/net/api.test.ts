@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { FetchLike } from './api.ts';
-import { API, apiGet, apiPost, validateData, normalizeState } from './api.ts';
+import { API, apiGet, apiPost, validateData, normalizeState, readFile } from './api.ts';
 
 // A fake fetch: records its call and returns a Response-like with the given ok/json.
 function fakeFetch(ok: boolean, json: unknown): { fn: FetchLike; calls: [string, RequestInit?][] } {
@@ -86,5 +86,30 @@ describe('normalizeState', () => {
   });
   it('validates the shape after normalizing', () => {
     expect(() => normalizeState({ bookings: {} })).toThrow('machines fehlt/ungültig');
+  });
+});
+
+describe('readFile', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('fetches /api/state and returns the normalized result', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ machines: [], bookings: {}, rev: 3 }),
+      }),
+    );
+    const data = await readFile();
+    expect(data.revision).toBe(3);
+    expect(fetch).toHaveBeenCalledWith(API + '/api/state');
+  });
+
+  it('propagates a non-ok response as an error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve(null) }),
+    );
+    await expect(readFile()).rejects.toThrow('Server 500');
   });
 });
