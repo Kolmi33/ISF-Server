@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { AppState } from '../../../shared/types.ts';
-import { setPresence, updateUserChip, setPres } from './user-chip.ts';
+import { setPresence, updateUserChip } from './user-chip.ts';
 
 beforeEach(() => {
   document.body.innerHTML = '<button id="userChip"></button>';
@@ -54,9 +54,5 @@ describe('setPresence', () => {
     setPresence('2', 'Gerade aktiv: anna, bob');
     updateUserChip(); // rebuilds #userChip from scratch — must not drop the label set above
     expect(document.getElementById('presBadge')!.textContent).toBe('2');
-  });
-
-  it('is bridged under its legacy name for the still-unported applyPresence', () => {
-    expect(setPres).toBe(setPresence);
   });
 });

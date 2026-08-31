@@ -109,6 +109,38 @@ describe('openReactModal / closeReactModal', () => {
     act(() => closeReactModal()); // cleanup
   });
 
+  it('clicking #modalReopen re-shows the overlay and hides the tab, still mounted', () => {
+    act(() => openReactModal(<p>hello</p>));
+    act(() => collapseReactModal());
+    act(() => {
+      document
+        .getElementById('modalReopen')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(document.getElementById('overlay')!.classList.contains('open')).toBe(true);
+    expect(document.getElementById('modalReopen')!.classList.contains('show')).toBe(false);
+    expect(document.getElementById('modal')!.textContent).toBe('hello');
+    act(() => closeReactModal()); // cleanup
+  });
+
+  it('regression: Escape closes the modal again after a collapse/re-expand round trip', () => {
+    // Before this fix, re-expanding via #modalReopen left the internal "collapsed" flag
+    // stuck true, so this Escape would only clear the (already-hidden) reopen tab — a no-op —
+    // instead of actually closing the now-visible modal.
+    act(() => openReactModal(<p>hello</p>));
+    act(() => collapseReactModal());
+    act(() => {
+      document
+        .getElementById('modalReopen')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
+    expect(document.getElementById('modal')!.textContent).toBe(''); // actually unmounted
+  });
+
   it('opening a new modal while collapsed unmounts the collapsed one', () => {
     const warnSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     act(() => openReactModal(<p>first</p>));

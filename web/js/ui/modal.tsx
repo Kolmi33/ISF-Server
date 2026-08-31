@@ -1,16 +1,13 @@
-// The React-modal bridge (Phase 7). legacy.js's `openModal(html)`/`closeModal()` own a
-// single shared `#modal`/`#overlay` pair, replacing `#modal`'s innerHTML per open. A React
-// root can't safely share that node with code that mutates it directly — React loses track
-// of externally-changed DOM and warns/misbehaves on the next render. So each React-rendered
-// modal creates a fresh root on open and unmounts it on close, exactly bracketing its own
-// lifetime; the node is only ever owned by one system at a time.
+// The React-modal system: every modal shares a single `#modal`/`#overlay` pair, replacing
+// `#modal`'s content per open. Each React-rendered modal creates a fresh root on open and
+// unmounts it on close, exactly bracketing its own lifetime.
 //
-// legacy.js's own `modalSticky`/`lastFocusEl` closure variables aren't exported, so they
-// can't be shared — this module keeps its own, entirely independent copies, and its
-// capture-phase listeners below take full ownership of Escape/outside-click dismissal
-// whenever a React modal is the one currently open, so the two systems never fight over the
-// same keypress. Retire this whole file in Phase 7 slice B10, when legacy.js (and its modal
-// chrome) is deleted and every modal is React-owned.
+// Originally built alongside legacy.js's own `openModal(html)`/`closeModal()` (which used the
+// same shared node via `innerHTML` — a React root can't safely share a node with code that
+// mutates it directly, so the two systems needed independent open/close ownership). Every
+// modal is React-owned as of Phase 7 slice B10d, when legacy's `openModal`/`closeModal`/
+// `modalSticky`/`lastFocusEl`/`expandModal` were retired (`openActiveUsers` was their only
+// remaining caller) and `expandModal`'s `#modalReopen` click wiring moved here.
 
 import { createRoot, type Root } from 'react-dom/client';
 import type { ReactNode } from 'react';
@@ -64,32 +61,42 @@ export function closeReactModal(): void {
 }
 
 /** Collapse the current modal WITHOUT unmounting it: hide the overlay and show the floating
- *  reopen tab, exactly like legacy's own `collapseModal()`/`expandModal()` pair — content and
- *  state stay alive underneath. Re-expanding is handled entirely by legacy's own `#modalReopen`
- *  click listener (`expandModal()`, unchanged): it only re-shows the overlay, which is all
- *  that's needed since the React tree was never torn down. Used by the Assistant's "pin" button
- *  so a run's selection survives a peek at the grid. */
+ *  reopen tab — content and state stay alive underneath. Re-expanding is `expandReactModal`
+ *  below, wired to `#modalReopen`'s click. Used by the Assistant's "pin" button so a run's
+ *  selection survives a peek at the grid. */
 export function collapseReactModal(): void {
   isCollapsed = true;
   document.getElementById('overlay')!.classList.remove('open');
   document.getElementById('modalReopen')?.classList.add('show');
 }
 
-/** What Escape/backdrop-dismissal does while collapsed: legacy's own `closeModal()` doesn't
- *  unmount anything (it can't — its modals are plain HTML), it just clears the shared chrome.
- *  A React modal's collapsed root must survive the same dismissal for parity — only the
- *  floating reopen tab goes away. */
+/** Re-show a collapsed modal's overlay (the React tree was never torn down, so there's
+ *  nothing to remount) and refocus it. Faithful port of legacy `expandModal`, plus a fix: the
+ *  original bare port left `isCollapsed` stuck `true` after re-expanding via the tab, so a
+ *  subsequent Escape/outside-click would only dismiss the (already-hidden) tab instead of
+ *  actually closing the now-visible modal — found while moving this in for B10d, not by a
+ *  failing test. Wired to `#modalReopen`'s click below. */
+function expandReactModal(): void {
+  isCollapsed = false;
+  document.getElementById('modalReopen')?.classList.remove('show');
+  document.getElementById('overlay')!.classList.add('open');
+  document.getElementById('modal')!.focus();
+}
+
+/** What Escape/backdrop-dismissal does while collapsed: only the floating reopen tab goes
+ *  away — the collapsed root must survive, same as clicking "Schließen" never applies while
+ *  collapsed either (there's no close button visible). */
 function dismissCollapsedTab(): void {
   isCollapsed = false;
   document.getElementById('modalReopen')?.classList.remove('show');
 }
 
-// Whenever a React modal is open, these run BEFORE legacy.js's own bubble-phase Escape/
-// outside-click listeners (registered once, at legacy.js parse time) and take over
-// dismissal entirely — stopping propagation so legacy's handlers never see the event, and
-// calling closeReactModal (which legacy's closeModal doesn't know how to do) when the
-// modal isn't sticky. When no React modal is open, both no-op immediately, so legacy's own
-// modals keep working exactly as before.
+// Delegated on `document` (not bound to specific elements) so these keep working even if
+// `#modalReopen`/`#overlay`/`#modal` are ever replaced.
+document.addEventListener('click', (event) => {
+  if ((event.target as HTMLElement).closest('#modalReopen')) expandReactModal();
+});
+
 document.addEventListener(
   'keydown',
   (event) => {
@@ -102,9 +109,6 @@ document.addEventListener(
   { capture: true },
 );
 
-// Delegated on `document` (not bound to the `#overlay` element directly) so it keeps
-// working even if that element is ever replaced — the same reason the keydown listener
-// above is document-level rather than bound to a specific node.
 document.addEventListener(
   'click',
   (event) => {

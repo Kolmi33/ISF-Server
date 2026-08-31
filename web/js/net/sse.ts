@@ -1,9 +1,10 @@
 // Pure logic for the live Server-Sent-Events connection (Phase 3.3).
 //
-// The EventSource lifecycle and all DOM/toast side effects stay in the legacy
-// `connectSSE`/`applyPresence` adapter (too coupled to move cleanly — E3); this module
-// holds the pieces that are pure functions of their input, so they are unit-tested to
-// 100% (E4/E7). Faithful ports of the handlers' inner logic — behavior unchanged (E1).
+// The EventSource lifecycle and all DOM/toast side effects live in `ui/live-connection.ts`'s
+// `connectSSE`/`applyPresence` adapter (too coupled to move cleanly into this module — E3);
+// this module holds the pieces that are pure functions of their input, so they are
+// unit-tested to 100% (E4/E7). Faithful ports of the handlers' inner logic — behavior
+// unchanged (E1).
 //
 // The store's `notify` path (SSE → store.set → notify) is deferred to Phase 4, when
 // `render` actually subscribes (D2/Q2b); wiring it in 3.3 would be a no-op needing an
@@ -59,7 +60,7 @@ export function applyUpdate(event: SseUpdate, bookings: Bookings): UpdateResult 
 /**
  * Turn a raw presence user list into the display fields (count badge + tooltip label).
  * Faithful port of `applyPresence`'s formatting; the `presenceData` timestamp map and the
- * `setPres` DOM write stay in the legacy adapter.
+ * `setPresence` DOM write live in `ui/live-connection.ts` (Phase 7 slice B10d).
  */
 export function presenceInfo(users: readonly (string | null | undefined)[] | undefined): {
   list: string[];

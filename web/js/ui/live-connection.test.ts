@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AppState } from '../../../shared/types.ts';
-import { connectSSE, presenceTick, startLiveTimers } from './live-connection.ts';
+import {
+  activeUserRows,
+  connectSSE,
+  presenceData,
+  presenceTick,
+  startLiveTimers,
+} from './live-connection.ts';
 
 class MockEventSource {
   static instances: MockEventSource[] = [];
@@ -45,8 +51,8 @@ beforeEach(() => {
   } as unknown as AppState;
   window.stampRef = vi.fn();
   window.dbg = vi.fn();
-  window.applyPresence = vi.fn();
   window.handleError = vi.fn();
+  for (const key of Object.keys(presenceData)) delete presenceData[key];
   window.readFile = vi.fn().mockResolvedValue({ machines: [], bookings: {} });
   window.fillGroupSel = vi.fn();
   window.notify = vi.fn();
@@ -80,10 +86,19 @@ describe('connectSSE', () => {
     expect(window.dbg).toHaveBeenCalledWith('info', expect.any(String));
   });
 
-  it('"presence" forwards the parsed user list to the (still-legacy) applyPresence', () => {
+  it('"presence" updates presenceData and the toolbar badge from the parsed user list', () => {
+    document.body.innerHTML += '<span id="presBadge"></span>';
     connectSSE();
     latestEventSource().emit('presence', { users: ['anna', 'bob'] });
-    expect(window.applyPresence).toHaveBeenCalledWith(['anna', 'bob']);
+    expect(Object.keys(presenceData).sort()).toEqual(['anna', 'bob']);
+    expect(document.getElementById('presBadge')!.textContent).toBe('2');
+  });
+
+  it('"presence" replaces presenceData wholesale — a name missing from a later event drops off', () => {
+    connectSSE();
+    latestEventSource().emit('presence', { users: ['anna'] });
+    latestEventSource().emit('presence', { users: ['bob'] });
+    expect(Object.keys(presenceData)).toEqual(['bob']);
   });
 
   it('"presence" with unparsable data reports the error instead of throwing', () => {
@@ -167,5 +182,25 @@ describe('startLiveTimers', () => {
     )?.[1] as () => void;
     focusHandler();
     expect(window.refreshNow).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('activeUserRows', () => {
+  it('computes seconds-ago and sorts most-recently-seen first', () => {
+    presenceData.anna = 1000;
+    presenceData.bob = 5000;
+    expect(activeUserRows(6000)).toEqual([
+      { name: 'bob', ago: 1 },
+      { name: 'anna', ago: 5 },
+    ]);
+  });
+
+  it('drops anyone not seen within the last 180s', () => {
+    presenceData.anna = 0;
+    expect(activeUserRows(181_000)).toEqual([]);
+  });
+
+  it('is empty when nobody has ever been seen', () => {
+    expect(activeUserRows(0)).toEqual([]);
   });
 });

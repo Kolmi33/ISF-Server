@@ -1191,15 +1191,41 @@ check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then co
   (B10b): the dialog shows the right title/escaped body/button label/dangerfill styling,
   "Abbrechen" closes it leaving the booking intact, "Ja" (the confirm button, labeled with the
   actual count) closes it and deletes with an undo toast — zero console errors.
-- **B10d — Active-users popup + retire the legacy modal chrome:** `openActiveUsers` is the
-  *only* remaining `openModal()` caller — port it to a small React modal
-  (`ActiveUsersModal.tsx`, reusing `openReactModal`). Once it's gone, `openModal`/`closeModal`/
-  `modalSticky`/`lastFocusEl` and the legacy bubble-phase overlay-click/Escape listeners are all
-  dead (superseded by `modal.tsx`'s capture-phase ones) and delete outright. `collapseModal` is
-  *already* dead (nothing calls it since the Assistant, B7, switched to
-  `collapseReactModal`) — delete it in this slice too. `expandModal` + the `#modalReopen` click
-  wiring are still live (the Assistant's collapse/reopen depends on it) — move both into
-  `ui/modal.tsx` alongside `collapseReactModal`, don't just delete.
+- **B10d — Active-users popup + retire the legacy modal chrome — DONE.** `openActiveUsers`
+  was the *only* remaining `openModal()` caller — ported to a small React modal
+  (`ActiveUsersModal.tsx`), reusing `openReactModal`/`closeReactModal`. Once gone,
+  `openModal`/`closeModal`/`modalSticky`/`lastFocusEl` and the legacy bubble-phase
+  overlay-click/Escape listeners were all dead (superseded by `modal.tsx`'s capture-phase
+  ones) and deleted outright. The already-dead `collapseModal` (nothing called it since the
+  Assistant, B7, switched to `collapseReactModal`) was deleted too. `expandModal` + the
+  `#modalReopen` click wiring moved into `ui/modal.tsx` as `expandReactModal`, delegated on
+  `document` (not bound to the element directly, matching this file's other listeners) rather
+  than legacy's direct bind — legacy's version broke under a test harness that replaces
+  `document.body.innerHTML` wholesale (the listener stays attached to a discarded node); the
+  real app never does that, but delegation is strictly more robust and free.
+  Folded `applyPresence` into this slice too (`ui/live-connection.ts`), even though the
+  original B10 text didn't call it out separately: B8 kept it in legacy specifically because
+  the still-unported `openActiveUsers` read its `presenceData` map — once the popup is gated,
+  that reason is gone. `presenceData` now lives in `live-connection.ts` (mutated in place, not
+  reassigned, so importers keep a live reference) with a new pure `activeUserRows(now)` (E4)
+  for the row-building, imported directly by `ActiveUsersModal.tsx`. `user-chip.ts`'s `setPres`
+  bridge alias (only ever called by `applyPresence`) is now dead and deleted along with its
+  test case; `applyPresence` calls `setPresence` (the real name) directly.
+  **A real bug found and fixed while moving `expandModal` in**: the bare port left the
+  `isCollapsed` module flag stuck `true` after re-expanding a collapsed modal via the
+  `#modalReopen` tab (legacy's `expandModal` had no way to know about it, being unaware of
+  `modal.tsx`'s internal state) — so a subsequent Escape/outside-click on the now-visible
+  modal would only clear the (already-hidden) reopen tab instead of actually closing it.
+  `expandReactModal` now resets the flag. Caught while writing this slice, not by a failing
+  test; pinned by a new regression test doing a real collapse → click-to-reopen → Escape round
+  trip and asserting the modal actually unmounts.
+  9 new tests (`ActiveUsersModal.test.tsx`) + 5 in `live-connection.test.ts`
+  (`presenceData`/`activeUserRows`, replacing the old `window.applyPresence` mock-based ones)
+  + 2 in `modal.test.tsx` (the reopen-tab click, and the Escape regression). Full suite 673
+  passed, coverage 98.94%/93.46%. Browser-verified (E5) with two real tabs under different
+  names: double-clicking the user chip shows both, self correctly marked "(du)", the other
+  tab's real presence data arriving over its own SSE connection — "Schließen" and Escape both
+  close it, reopening works a second time. Zero console errors in either tab.
 - **B10e — The "Filtern" (machine/group filter) dropdown:** `fillMachSel`, `updateMachBtn`,
   `searchActive`, `matchesSearch`, `fillGroupSel`, `updateGroupBtn`, `saveFilters`,
   `mfOpenCat`/`mfOpenGrp`/`mfShow`, `toggleCat`/`toggleAllGroupsInCat`/`catTap`/`catTapCancel`,
@@ -1224,4 +1250,4 @@ check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then co
   asserts the right screen renders in each case, name-prompt appears exactly when
   `!user && !readOnly`, and live timers start once even across remounts.
 
-**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a ✅ → B10b ✅ → B10c ✅ → B10d → B10e → B10f → B10g.
+**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a ✅ → B10b ✅ → B10c ✅ → B10d ✅ → B10e → B10f → B10g.

@@ -51,6 +51,7 @@ import * as assistantModal from './ui/components/AssistantModal.tsx';
 import * as contextMenu from './ui/components/ContextMenu.tsx';
 import * as confirm from './ui/confirm.ts';
 import type { AskConfirmOptions } from './ui/confirm.ts';
+import * as activeUsersModal from './ui/components/ActiveUsersModal.tsx';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
@@ -96,11 +97,6 @@ declare global {
     /** Still legacy — fetches and normalizes the full server state. Called by
      *  net/live-connection.ts's (B8) `structural` SSE handler. */
     readFile: () => Promise<ServerData>;
-    /** Still legacy — formats the presence list and the `presenceData` timestamp map the
-     *  (still-legacy) active-users popup reads; calls the bridged `ui/user-chip.ts` (B8)
-     *  `setPres` under its old name. Called by net/live-connection.ts's (B8) `presence` SSE
-     *  handler. */
-    applyPresence: (users: readonly (string | null | undefined)[] | undefined) => void;
     /** Bridged from ui/grid-scroll.ts (Phase 7 slice B3); called by legacy's own boot sequence
      *  and by the "Ändern…"-adjacent Settings row (React, B9). */
     centerToday: () => void;
@@ -230,6 +226,7 @@ Object.assign(window, machineFormModal);
 Object.assign(window, assistantModal);
 Object.assign(window, contextMenu);
 Object.assign(window, confirm);
+Object.assign(window, activeUsersModal);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);

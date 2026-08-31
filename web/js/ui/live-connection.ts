@@ -1,16 +1,53 @@
 // The live server connection (Phase 7 slice B8): the EventSource lifecycle (presence, cell
 // updates, structural reloads) and the remote-change toast queue. Faithful port of legacy
 // `connectSSE`/`presenceTick`/`startLiveTimers`/`queueRemote`/`runRemoteQ`. The pure
-// event-payload logic (`applyUpdate`/`isForeign`/`remoteMessage`) already lives in `net/sse.ts`
-// — this module is the DOM/EventSource adapter, kept a plain module rather than a React
-// component (there's no rendered UI of its own to componentize; see `ui/user-chip.ts`'s header
-// comment for the same judgment call on the presence badge). Lives under `ui/`, not `net/`,
-// because it touches the DOM/toast (`net/` must not depend on `ui/`).
+// event-payload logic (`applyUpdate`/`isForeign`/`remoteMessage`/`presenceInfo`) already lives
+// in `net/sse.ts` — this module is the DOM/EventSource adapter, kept a plain module rather
+// than a React component (there's no rendered UI of its own to componentize; see
+// `ui/user-chip.ts`'s header comment for the same judgment call on the presence badge). Lives
+// under `ui/`, not `net/`, because it touches the DOM/toast (`net/` must not depend on `ui/`).
+//
+// `applyPresence` (Phase 7 slice B10d) moved here too, once ported: it owns `presenceData`,
+// which used to stay in legacy only because the still-unported active-users popup read it —
+// now that the popup is `ui/components/ActiveUsersModal.tsx`, that reason is gone.
 
-import { applyUpdate, isForeign, remoteMessage } from '../net/sse.ts';
+import { applyUpdate, isForeign, presenceInfo, remoteMessage } from '../net/sse.ts';
 import { API } from '../net/api.ts';
 import { patchCells } from './cell-patch.ts';
 import { toast } from './toast.ts';
+import { setPresence } from './user-chip.ts';
+
+/** The last known presence timestamp per name, `{name: ms-since-epoch}` — read by
+ *  `ui/components/ActiveUsersModal.tsx`'s `activeUserRows`. Mutated in place (not reassigned)
+ *  so importers always see the live object. Faithful port of legacy's module-level
+ *  `presenceData`. */
+export const presenceData: Record<string, number> = {};
+
+/** Refresh `presenceData` and the toolbar badge from a `presence` SSE event's user list.
+ *  Faithful port of legacy `applyPresence`. */
+function applyPresence(users: readonly (string | null | undefined)[] | undefined): void {
+  const info = presenceInfo(users);
+  const now = Date.now();
+  for (const key of Object.keys(presenceData)) delete presenceData[key];
+  for (const user of info.list) presenceData[user] = now;
+  setPresence(info.count, info.label);
+}
+
+export interface ActiveUserRow {
+  name: string;
+  /** Seconds since this name was last seen. */
+  ago: number;
+}
+
+/** Everyone in `presenceData` seen within the last 180s, sorted most-recently-seen first.
+ *  Faithful port of legacy `openActiveUsers`'s row-building. `now` is injected (E4) so this
+ *  stays a pure function of its input. */
+export function activeUserRows(now: number): ActiveUserRow[] {
+  return Object.entries(presenceData)
+    .map(([name, ts]) => ({ name, ago: Math.round((now - ts) / 1000) }))
+    .filter((row) => row.ago < 180)
+    .sort((a, b) => a.ago - b.ago);
+}
 
 let remoteQueue: string[] = [];
 let remoteQueueRunning = false;
@@ -65,7 +102,7 @@ export function connectSSE(): void {
   });
   eventSource.addEventListener('presence', (event) => {
     try {
-      window.applyPresence(JSON.parse(event.data).users);
+      applyPresence(JSON.parse(event.data).users);
     } catch (error) {
       window.handleError('sse/presence', error);
     }

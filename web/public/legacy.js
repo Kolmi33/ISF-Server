@@ -90,26 +90,12 @@ function startUI(){
 }
 document.getElementById('btnRefresh').onclick = ()=>refreshNow(false);
 
-let presenceData={}; // letzter bekannter Anwesenheitsstand {Name: Zeitstempel} – für die Namensliste
-/* Doppelklick auf den Namens-Chip: Liste der gerade aktiven Nutzer */
-async function openActiveUsers(){
-  try{ await presenceTick(); }catch(e){ handleError('presenceTick', e); }  // frischen Stand holen (eigener Heartbeat + fremde lesen)
-  const now=Date.now();
-  const rows=Object.entries(presenceData||{})
-    .map(([name,ts])=>({name, ago:Math.round((now-ts)/1000)}))
-    .filter(r=>r.ago<180)
-    .sort((a,b)=>a.ago-b.ago);
-  openModal(`
-    <h2>${ic('user')} Gerade aktiv${rows.length?' ('+rows.length+')':''}</h2>
-    ${rows.length ? '<div class="resultlist" style="max-height:320px">'+rows.map(r=>`
-      <div class="mybk"><div><b>${esc(r.name)}</b>${r.name.toLowerCase()===(S.user||'').toLowerCase()?' <span class="hint" style="margin:0">(du)</span>':''}</div>
-        <span class="hint" style="margin:0">${r.ago<12?'gerade eben':'vor '+r.ago+' s'}</span></div>`).join('')+'</div>'
-      : '<p class="hint">Zurzeit ist niemand aktiv.</p>'}
-    <div class="modal-actions"><button class="btn primary" onclick="closeModal()">Schließen</button></div>`);
-}
+/* presenceData, openActiveUsers → ui/live-connection.ts (presenceData/activeUserRows) +
+   ui/components/ActiveUsersModal.tsx (openActiveUsers) (window bridge). Doppelklick auf den
+   Namens-Chip. Phase 7 slice B10d. */
 
 /* ================= User name ================= */
-/* setPres, updateUserChip → ui/user-chip.ts (window bridge). Phase 7 slice B8. */
+/* setPresence, updateUserChip → ui/user-chip.ts (window bridge). Phase 7 slice B8. */
 /* askUserName() → ui/components/AskUserNameModal.tsx (window bridge). Phase 7 slice B9. */
 /* Einfachklick = Namen ändern (kurz verzögert, damit ein Doppelklick nicht
    erst das Namensfenster öffnet); Doppelklick = aktive Nutzer anzeigen. */
@@ -448,45 +434,18 @@ function catTapCancel(){ clearTimeout(catTapTimer); }
 
 /* =================================================================
    MODAL / TOAST / UNDO
-   openModal(html): tauscht den Inhalt des einen Overlay-Dialogs aus –
-   alle Fenster (Buchen, Listen, Statistik, Verwalten …) nutzen ihn.
+   The modal chrome itself is React-owned (ui/modal.tsx) as of Phase 7 slice B10d — see below.
    toast(msg, undoFn?, ms?): Hinweis unten; mit undoFn erscheint 9 s ein
    „Rückgängig"-Knopf, ms überschreibt die Anzeigedauer (Fehler: länger).
    offerUndo(msg, entries, label): entries=[{mid,date,prev}] beschreibt den
    VORHER-Zustand jeder Zelle; Rückgängig stellt ihn über mutate() wieder
    her (prev=null → Zelle wieder leeren).
    ================================================================= */
-let lastFocusEl=null;
-let modalSticky=false;  // „sticky": nicht per Klick daneben / Esc schließbar (nur über Buttons)
-function openModal(html, opts){
-  modalSticky = !!(opts && opts.sticky);
-  lastFocusEl=document.activeElement;
-  document.getElementById('modalReopen').classList.remove('show'); // neuer Dialog → evtl. eingeklappten verwerfen
-  const mo=document.getElementById('modal');
-  mo.innerHTML=html;
-  document.getElementById('overlay').classList.add('open');
-  mo.focus(); // Screenreader/Tastatur landen im Dialog
-}
-function closeModal(){
-  modalSticky=false;
-  document.getElementById('overlay').classList.remove('open');
-  document.getElementById('modalReopen').classList.remove('show');
-  if(lastFocusEl && lastFocusEl.focus){ try{ lastFocusEl.focus(); }catch(e){} } // Fokus zurückgeben
-}
-// Dialog einklappen (Inhalt/Status bleibt erhalten) → schwebender Tab links zum Wiederaufklappen
-function collapseModal(){
-  document.getElementById('overlay').classList.remove('open');
-  document.getElementById('modalReopen').classList.add('show');
-}
-function expandModal(){
-  document.getElementById('modalReopen').classList.remove('show');
-  document.getElementById('overlay').classList.add('open');
-  document.getElementById('modal').focus();
-}
-document.getElementById('modalReopen').addEventListener('click',expandModal);
-// Klick auf den Hintergrund bzw. Esc schließt nur, wenn der Dialog NICHT sticky ist.
-document.getElementById('overlay').addEventListener('click',ev=>{ if(ev.target.id==='overlay' && !modalSticky) closeModal(); });
-document.addEventListener('keydown',ev=>{ if(ev.key==='Escape' && !modalSticky) closeModal(); });
+/* openModal, closeModal, modalSticky, lastFocusEl, expandModal + the #modalReopen click/
+   overlay-click/Escape wiring → ui/modal.tsx (openReactModal/closeReactModal/
+   collapseReactModal/expandReactModal — collapseModal was already dead, superseded by
+   collapseReactModal in Phase 7 slice B7). openActiveUsers (below) was their only remaining
+   caller. Phase 7 slice B10d. */
 /* toast → ui/toast.ts (window bridge). Phase 7 slice B4. */
 /* fmtDM, remoteMsg → net/sse.ts's formatDayMonth/remoteMessage (window bridge).
    queueRemote, runRemoteQ → net/live-connection.ts (window bridge). Phase 7 slice B8. */
@@ -598,16 +557,8 @@ async function refreshNow(silent){
    Live weekend upkeep is unaffected — sweepWeekends still runs on every booking write. */
 
 /* --- Live-Verbindung (Server-Sent Events): Push statt Polling ---
-   connectSSE, startLiveTimers, presenceTick → net/live-connection.ts (window bridge).
-   Phase 7 slice B8. applyPresence stays here: it owns presenceData, the timestamp map
-   the still-unported openActiveUsers() popup reads; it calls the bridged ui/user-chip.ts
-   setPres under its old name. */
-function applyPresence(users){
-  const info = presenceInfo(users);         // → net/sse.ts (reine Formatierung)
-  const now=Date.now(); presenceData={};
-  for(const u of info.list) presenceData[u]=now;
-  setPres(info.count, info.label);
-}
+   connectSSE, startLiveTimers, presenceTick, applyPresence → ui/live-connection.ts (window
+   bridge). Phase 7 slice B8/B10d. */
 
 async function init(){
   document.getElementById('startScreen').style.display='none';
