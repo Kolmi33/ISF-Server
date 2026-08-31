@@ -167,27 +167,7 @@ document.getElementById('dbgClose').onclick=()=>{ localStorage.setItem('mb_debug
    saveFilters(): persistiert Maschinen-/Bereichs-/Personenfilter.
    ================================================================= */
 function ic(name){ return '<svg class="ic" aria-hidden="true"><use href="#i-'+name+'"/></svg>'; }
-function askConfirm(opts){
-  return new Promise(res=>{
-    document.getElementById('cfTitle').textContent = opts.title || 'Wirklich löschen?';
-    document.getElementById('cfBody').innerHTML = opts.body || '';
-    const yBtn=document.getElementById('cfYes');
-    yBtn.textContent = opts.yes || 'Löschen';
-    yBtn.className = opts.danger===false ? 'btn primary' : 'btn dangerfill';  // neutrale Abfrage vs. Löschen
-    document.getElementById('cfNo').textContent = opts.no || 'Abbrechen';
-    const box=document.getElementById('confirm2');
-    box.classList.add('open');
-    document.getElementById('cfNo').focus();
-    const done=v=>{
-      box.classList.remove('open');
-      document.getElementById('cfYes').onclick=null;
-      document.getElementById('cfNo').onclick=null;
-      res(v);
-    };
-    document.getElementById('cfYes').onclick=()=>done(true);
-    document.getElementById('cfNo').onclick=()=>done(false);
-  });
-}
+/* askConfirm → ui/confirm.ts (window bridge). Phase 7 slice B10c. */
 /* showCollision, the #collOk dismiss wiring → ui/collision-banner.ts (window bridge).
    liveTimersOn → net/live-connection.ts's own module state. Phase 7 slice B8. */
 function saveFilters(){

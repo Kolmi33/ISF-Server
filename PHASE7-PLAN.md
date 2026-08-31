@@ -1169,11 +1169,28 @@ check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then co
   pre-picked for the range; booked a cell, re-selected a range covering it → delete button now
   read "1 Buchung(en) löschen", clicking it raised the real confirm dialog, confirming deleted
   the booking and toasted with an undo offer — zero console errors throughout.
-- **B10c — Confirm dialog:** `askConfirm`. `#confirm2` is static markup already in
-  `index.html` (like `#collBanner`) — a plain-module port targeting it directly is the safe,
-  low-risk choice; every existing caller (B4/B6/B7) already expects the exact
-  `(options) => Promise<boolean>` shape via `window.askConfirm`, so the port must preserve that
-  signature exactly.
+- **B10c — Confirm dialog — DONE.** `askConfirm` → new `ui/confirm.ts`, a plain module
+  targeting the static `#confirm2` markup already in `index.html` (like `#collBanner`, B8) —
+  no React needed, it's `textContent`/`innerHTML`/class toggles on fixed elements. Preserves
+  the exact `(options) => Promise<boolean>` shape every existing caller (B4/B6/B7/B10b) already
+  depends on via `window.askConfirm`, so no call site changed.
+  **A real bug found and fixed in already-committed B10b code, before it shipped further**:
+  `ContextMenu.tsx`'s delete-confirm `body` interpolated `info.names`/the formatted dates
+  directly into the HTML string `askConfirm` sets via `innerHTML=`, with no escaping — unlike
+  every other `askConfirm` caller in the codebase (all of which call `escapeHtml`, `ui/
+  escape-html.ts`, B4) and unlike legacy's own `showCtx`, which wrapped the same interpolation
+  in `esc(...)`. A booking with an HTML-special-character name (e.g. containing `<b>`) would
+  have rendered raw markup in the confirm dialog. Fixed by adding the same `escapeHtml` calls
+  B4's callers use; a new `ContextMenu.test.tsx` case pins it (a `<b>x</b>` booker name reaches
+  the dialog only as `&lt;b&gt;x&lt;/b&gt;`). Caught while wiring B10c's `ui/confirm.ts` and
+  auditing every `askConfirm` call site for consistency, not by a failing test — worth noting
+  since it shows the value of that kind of pass. `escape-html.ts`'s header comment (which
+  described `askConfirm` as "still legacy") updated to point at `ui/confirm.ts`.
+  6 new tests (`confirm.test.ts`) + 1 regression test in `ContextMenu.test.tsx`. Full suite 661
+  passed, coverage 98.93%/93.44%. Browser-verified (E5) via the context-menu delete flow
+  (B10b): the dialog shows the right title/escaped body/button label/dangerfill styling,
+  "Abbrechen" closes it leaving the booking intact, "Ja" (the confirm button, labeled with the
+  actual count) closes it and deletes with an undo toast — zero console errors.
 - **B10d — Active-users popup + retire the legacy modal chrome:** `openActiveUsers` is the
   *only* remaining `openModal()` caller — port it to a small React modal
   (`ActiveUsersModal.tsx`, reusing `openReactModal`). Once it's gone, `openModal`/`closeModal`/
@@ -1207,4 +1224,4 @@ check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then co
   asserts the right screen renders in each case, name-prompt appears exactly when
   `!user && !readOnly`, and live timers start once even across remounts.
 
-**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a ✅ → B10b ✅ → B10c → B10d → B10e → B10f → B10g.
+**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a ✅ → B10b ✅ → B10c ✅ → B10d → B10e → B10f → B10g.

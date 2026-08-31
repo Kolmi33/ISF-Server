@@ -1,8 +1,8 @@
 // The grid's right-click / after-drag context menu (Phase 7 slice B10b). Faithful port of
 // legacy `showCtx`/`hideCtx` + the document-level outside-click dismissal. Mounted once at
-// boot onto the static `<div id="ctxMenu">` (same pattern as `Grid.tsx` onto `#grid`); the
-// still-legacy `ui/grid-interaction.ts` (B2) calls it via the `window.showCtx`/`window.hideCtx`
-// bridge, unchanged.
+// boot onto the static `<div id="ctxMenu">` (same pattern as `Grid.tsx` onto `#grid`);
+// `ui/grid-interaction.ts` (B2, already gated) calls it via the `window.showCtx`/
+// `window.hideCtx` bridge, unchanged.
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { formatDateLong } from '../../core/dates.ts';
 import { getBooking } from '../grid.ts';
@@ -10,6 +10,7 @@ import { selection, clearSelection } from '../grid-interaction.ts';
 import { openBookingForm } from './BookingForm.tsx';
 import { offerUndo } from '../toast.ts';
 import { deleteSelectedCells } from '../../core/booking.ts';
+import { escapeHtml } from '../escape-html.ts';
 import type { Cell } from '../selection.ts';
 
 interface MenuInfo {
@@ -50,9 +51,9 @@ async function handleDelete(info: MenuInfo): Promise<void> {
   hideCtx();
   const confirmed = await window.askConfirm({
     title: 'Markierte Buchungen löschen?',
-    body: `<b>${info.bookedCells.length}</b> Buchung(en) im Bereich ${formatDateLong(info.from)}${
-      info.from !== info.to ? ' – ' + formatDateLong(info.to) : ''
-    }.<br>Betroffen: <b>${info.names.join(', ')}</b>`,
+    body: `<b>${info.bookedCells.length}</b> Buchung(en) im Bereich ${escapeHtml(formatDateLong(info.from))}${
+      info.from !== info.to ? ' – ' + escapeHtml(formatDateLong(info.to)) : ''
+    }.<br>Betroffen: <b>${escapeHtml(info.names.join(', '))}</b>`,
     yes: `${info.bookedCells.length} Buchung(en) löschen`,
   });
   if (!confirmed) return;

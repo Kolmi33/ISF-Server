@@ -116,6 +116,22 @@ describe('ContextMenu', () => {
     expect(document.getElementById('toast')!.textContent).toMatch(/2 Buchung\(en\) gelöscht\./);
   });
 
+  it("escapes a booker name before it reaches the confirm dialog's HTML body", async () => {
+    window.S.data!.bookings = { m1: { '2021-01-04': booking({ name: '<b>x</b>' }) } };
+    act(() => showCtx(100, 100));
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('betroffen: <b>x</b>'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(window.askConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ body: expect.stringContaining('&lt;b&gt;x&lt;/b&gt;') }),
+    );
+    expect(window.askConfirm).not.toHaveBeenCalledWith(
+      expect.objectContaining({ body: expect.stringContaining('<b>x</b>') }),
+    );
+  });
+
   it('does not delete when the confirm dialog is declined', async () => {
     window.askConfirm = vi.fn().mockResolvedValue(false);
     window.S.data!.bookings = { m1: { '2021-01-04': booking({ name: 'anna' }) } };

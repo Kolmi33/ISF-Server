@@ -49,6 +49,8 @@ import * as adminModal from './ui/components/AdminModal.tsx';
 import * as machineFormModal from './ui/components/MachineFormModal.tsx';
 import * as assistantModal from './ui/components/AssistantModal.tsx';
 import * as contextMenu from './ui/components/ContextMenu.tsx';
+import * as confirm from './ui/confirm.ts';
+import type { AskConfirmOptions } from './ui/confirm.ts';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
@@ -161,15 +163,9 @@ declare global {
       n?: number;
       undo?: CellUndo[];
     } | null>;
-    /** Still legacy — the Ja/Nein confirm dialog (`#confirm2`), used by the booking detail
-     *  modal's (B4) two "delete more" confirmations. */
-    askConfirm: (options: {
-      title?: string;
-      body?: string;
-      yes?: string;
-      no?: string;
-      danger?: boolean;
-    }) => Promise<boolean>;
+    /** Bridged from ui/confirm.ts (Phase 7 slice B10c); called by every "delete more"/
+     *  destructive-action confirmation across the app (B4/B6/B7/B10b). */
+    askConfirm: (options: AskConfirmOptions) => Promise<boolean>;
     /** Bridged from ui/components/StatsModal.tsx (Phase 7 slice B5); called from the booking
      *  detail modal's (B4) "Statistik" shortcut to open pre-filtered to one person. */
     openStats: (personFilter?: string) => void;
@@ -233,6 +229,7 @@ Object.assign(window, adminModal);
 Object.assign(window, machineFormModal);
 Object.assign(window, assistantModal);
 Object.assign(window, contextMenu);
+Object.assign(window, confirm);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);
