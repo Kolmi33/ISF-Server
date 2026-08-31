@@ -1123,13 +1123,21 @@ same rigor as B1–B9 (pure logic + tests where there's real logic, `verify` gre
 check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then commit).
 
 **What's actually left, grouped by sub-slice:**
-- **B10a — Favorites + next-free-day jump:** `toggleFav`, `displayGroup`/`FAVGRP` (superseded by
-  `orderedMachines`'s `FAVORITES_GROUP_LABEL`, B1 — legacy's own `orderedMachines()` is now dead,
-  confirm and delete), `nextFreePtr`, `gotoDateCenter`, `bookable`, `nextFreeAfter`,
-  `prevFreeBefore`, `jumpToSlot`, `gotoNextFree`, `gotoPrevFree`. All called from
-  `ui/grid-interaction.ts` (B2) via the window bridge for the row header's favorite star and
-  prev/next-free buttons; the day-scan core (`nextFreeDay`/`prevFreeDay`) already lives in
-  `ui/navigation.ts` — this is mostly wiring.
+- **B10a — Favorites + next-free-day jump — DONE.** `toggleFav`, `nextFreePtr`,
+  `gotoDateCenter`, `bookable`, `nextFreeAfter`, `prevFreeBefore`, `jumpToSlot`, `gotoNextFree`,
+  `gotoPrevFree` → new `ui/favorite-jump.ts`, still called from `ui/grid-interaction.ts` (B2)
+  via the window bridge for the row header's favorite star and prev/next-free buttons; the
+  day-scan core (`nextFreeDay`/`prevFreeDay`) already lived in `ui/navigation.ts` — this was
+  mostly wiring. `displayGroup`/`FAVGRP`/legacy's own `orderedMachines()` were confirmed dead
+  (superseded by `ui/grid.ts`'s versions, B1) and deleted outright, no port needed.
+  `ui/grid-interaction.ts`'s selection state (`Sel`) is now also exported under its real name
+  (`selection`, alongside `paintSelection`) so this new module can import it directly instead of
+  going through the window bridge — the `Sel`/`paintSel` aliases stay for `ui/grid-scroll.ts`'s
+  existing `window.Sel` read and for legacy's still-unported `showCtx` (B10b).
+  13 new tests (`favorite-jump.test.ts`). Full suite 645 passed, coverage 98.91%/93.39%.
+  Browser-verified (E5): starred a machine (moved into "★ Favoriten", persisted, un-starred
+  cleanly), jumped forward via ⏭ (correct toast, cell selected, ⏮ appeared), jumped forward
+  again (moved further), then ⏮ back to the exact same date — no console errors.
 - **B10b — Context menu:** `showCtx`/`hideCtx`, the right-click cell menu — check its actual
   markup/content before deciding React-component vs. plain module (matches the B2/B3/B8
   judgment call either way).
@@ -1171,4 +1179,4 @@ check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then co
   asserts the right screen renders in each case, name-prompt appears exactly when
   `!user && !readOnly`, and live timers start once even across remounts.
 
-**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a → B10b → B10c → B10d → B10e → B10f → B10g.
+**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a ✅ → B10b → B10c → B10d → B10e → B10f → B10g.

@@ -28,11 +28,11 @@ interface SelectionState {
   didDrag: boolean;
 }
 
-// `jumpToSlot`/`prependWeek`/`showCtx` (next-free jump, week growth, the context menu — all
-// still legacy) read and directly mutate this object by its old bare name by every one of
-// their call sites, exactly as they did before this slice — see the "Legacy bridge aliases"
-// block at the end of this file. It has to be the SAME object those functions see, not a copy.
-const selection: SelectionState = {
+// `ui/grid-scroll.ts` (B3) reads this via `window.Sel` (written before this export existed);
+// legacy's still-unported `showCtx` (the context menu, B10b) reads/mutates it directly by its
+// old bare name `Sel` — see the "Legacy bridge aliases" block at the end of this file. Both
+// need the SAME object this module also mutates, not a copy.
+export const selection: SelectionState = {
   anchor: null,
   focus: null,
   cells: [],
@@ -383,11 +383,11 @@ export function initGridInteraction(): void {
 }
 
 // ---- Legacy bridge aliases -------------------------------------------------------
-// `legacy.js`'s still-unported next-free-jump (`jumpToSlot`) and week-growth (`prependWeek`)
-// code reads/writes this state by its old bare names — `Sel`, `paintSel`, `clearSel` — as
-// dozens of call sites, and is deliberately NOT edited by this pass (retired whole in Phase 7
-// slice B10). `Sel` must be the exact object this module also mutates (see its declaration
-// above), not a copy. Delete this whole block in that slice.
+// `legacy.js`'s still-unported context menu (`showCtx`, Phase 7 slice B10b) reads/writes this
+// state by its old bare names — `Sel`, `paintSel`, `clearSel` — at dozens of call sites, and is
+// deliberately NOT edited by this pass (retired whole in Phase 7 slice B10g). `Sel` must be the
+// exact object this module also mutates (see its declaration above), not a copy. Delete this
+// whole block once B10b ports `showCtx`.
 export const Sel = selection;
 export const paintSel = paintSelection;
 export const clearSel = clearSelection;

@@ -421,19 +421,9 @@ function catTap(c){ clearTimeout(catTapTimer); catTapTimer=setTimeout(()=>toggle
 function catTapCancel(){ clearTimeout(catTapTimer); }
 
 /* --- Favoriten: immer oben, überall --- */
-const FAVGRP='★ Favoriten';
-function displayGroup(m){ return S.favs.has(m.id) ? FAVGRP : m.group; }
-function orderedMachines(){
-  const rank=m=>catOf(m)==='messtechnik'?1:0;    // Maschinen vor Messtechnik (sort ist stabil)
-  const favs=S.data.machines.filter(m=>S.favs.has(m.id));
-  const rest=S.data.machines.filter(m=>!S.favs.has(m.id)).slice().sort((a,b)=>rank(a)-rank(b));
-  return favs.concat(rest);
-}
-function toggleFav(mid){
-  S.favs.has(mid) ? S.favs.delete(mid) : S.favs.add(mid);
-  localStorage.setItem('mb_favs', JSON.stringify([...S.favs]));
-  notify();
-}
+/* displayGroup, FAVGRP, orderedMachines() → dead code (see ui/grid.ts's displayGroup/
+   orderedMachines, Phase 7 slice B1 — their only remaining callers). toggleFav →
+   ui/favorite-jump.ts (window bridge). Phase 7 slice B10a. */
 
 /* dpw, visibleDates → superseded by ui/grid.ts's visibleWeeks + ui/grid-scroll.ts's
    daysPerWeek (Phase 7 slice B1/B3); dead code once render() (their only caller) was deleted. */
@@ -460,61 +450,8 @@ function toggleFav(mid){
    cellEl, refreshCell, refreshDot, patchCells → ui/cell-patch.ts (window bridge).
    Phase 7 slice B4. */
 
-/* Zum nächsten freien Werktag einer Maschine springen.
-   Mehrfach drückbar: jeder Klick springt RELATIV vom zuletzt gefundenen Slot weiter.
-   Ist ab dem Slot nichts mehr gebucht/gesperrt (dauerhaft frei), wird der Knopf ausgegraut. */
-const nextFreePtr=window.nextFreePtr={};  // mid -> zuletzt angesprungener freier Tag (ISO)
-                              // window-exponiert: Grid.tsx liest ihn für den "Zurück"-Button (B1)
-function gotoDateCenter(dISO){
-  requestAnimationFrame(()=>centerCol(dISO)); // instant, mittig – kein Zurückspringen mehr
-}
-// Freie-Werktag-Scan → ui/navigation.ts (nextFreeDay/prevFreeDay). Die Impurität — ob ein Tag für
-// DIESE Maschine buchbar ist — wird als Prädikat injiziert (E4); Wochenend-Sprung + Horizont stecken
-// in der reinen Funktion. Wrapper-Namen bleiben, damit die Aufrufer (gotoNextFree, hasBack) gleich sind.
-const bookable = m => iso => !getBooking(m.id,iso) && !isBlockedM(m,iso) && dayAvailable(m,iso);
-/* Nächster freier Werktag ab (exklusive) fromIso; null wenn keiner in ~2 Jahren */
-function nextFreeAfter(m, fromIso){ return nextFreeDay(fromIso, todayStr(), bookable(m)); }
-/* Vorheriger freier Werktag vor fromIso, aber nicht vor heute; null wenn keiner */
-function prevFreeBefore(m, fromIso){ return prevFreeDay(fromIso, todayStr(), bookable(m)); }
-/* Gemeinsamer Sprung: rendern, markieren, zentrieren */
-function jumpToSlot(m, iso, isBack){
-  const mid=m.id;
-  // Fenster MIT Puffer auf beiden Seiten aufbauen: 2 Wochen vor dem Ziel, 4 danach.
-  // So hat der Slot echten Scroll-Spielraum links UND rechts, und beim Scrollen
-  // muss nicht sofort eine Woche an-/vorangestellt werden (das war das Ruckeln).
-  S.startMonday=addDays(mondayOf(parseYmd(iso)),-14);
-  S.extraWeeks=4;
-  document.getElementById('gridWrap').scrollLeft=0;
-  notify();
-  Sel.anchor={mid, date:iso}; Sel.focus={mid, date:iso}; paintSel(); // Zelle markieren
-  gotoDateCenter(iso); // Slot mittig auf dem Bildschirm
-  // Hinweis, falls ab hier nichts mehr gebucht/gesperrt ist
-  const mb=S.data.bookings[mid]||{};
-  const lastBooked=Object.keys(mb).filter(x=>x>=todayStr()).sort().pop()||'';
-  const _ms=maintSlots(m); const lastBlock = _ms.length ? (_ms.some(s=>!s.until)?'9999-12-31':_ms.map(s=>s.until).sort().pop()) : '';
-  const hint = iso > (lastBooked>lastBlock?lastBooked:lastBlock) ? ' (ab hier dauerhaft frei)' : '';
-  toast(`${m.name}: ${isBack?'zurück zu':'freier Termin'} ${fmtLong(iso)}${hint}`);
-}
-function gotoNextFree(mid){
-  const m=machById(mid); if(!m) return;
-  // Wechsel auf eine andere Maschine: Zähler der übrigen Maschinen zurücksetzen
-  // (deren ⏮-Knopf verschwindet damit beim nächsten Rendern)
-  for(const k of Object.keys(nextFreePtr)) if(k!==mid) delete nextFreePtr[k];
-  const found=nextFreeAfter(m, nextFreePtr[mid]||null);
-  if(!found){ toast(`${m.name}: kein freier Termin in den nächsten 2 Jahren gefunden.`); return; }
-  nextFreePtr[mid]=found;
-  jumpToSlot(m, found, false);
-}
-/* Freie Zelle für freie Zelle zurück – als letzter Schritt: Sprung auf den heutigen Tag */
-function gotoPrevFree(mid){
-  const m=machById(mid); if(!m) return;
-  if(!nextFreePtr[mid]) return;
-  const prev=prevFreeBefore(m, nextFreePtr[mid]);
-  if(prev){ nextFreePtr[mid]=prev; jumpToSlot(m, prev, true); return; }
-  const t=todayStr();
-  if(nextFreePtr[mid]!==t){ nextFreePtr[mid]=t; jumpToSlot(m, t, true); } // letzter Klick: heute
-  else toast(`${m.name}: bereits am heutigen Tag.`);
-}
+/* nextFreePtr, gotoDateCenter, bookable, nextFreeAfter, prevFreeBefore, jumpToSlot,
+   gotoNextFree, gotoPrevFree → ui/favorite-jump.ts (window bridge). Phase 7 slice B10a. */
 
 /* openCellAction → ui/components/BookingDetailModal.tsx (window bridge). Phase 7 slice B4. */
 

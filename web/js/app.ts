@@ -24,6 +24,7 @@ import * as selection from './ui/selection.ts';
 import * as gridInteraction from './ui/grid-interaction.ts';
 import * as gridScroll from './ui/grid-scroll.ts';
 import * as navigation from './ui/navigation.ts';
+import * as favoriteJump from './ui/favorite-jump.ts';
 import * as viewMyBookings from './ui/views/my-bookings.ts';
 import * as viewStats from './ui/views/stats.ts';
 import * as viewAllBookings from './ui/views/all-bookings.ts';
@@ -106,7 +107,8 @@ declare global {
     catTapCancel: () => void;
     toggleAllGroupsInCat: (category: string) => void;
     /** Bridged from ui/grid-interaction.ts (Phase 7 slice B2); called by the React Grid's
-     *  post-render effect and by legacy's still-unported `jumpToSlot`. */
+     *  post-render effect. (ui/favorite-jump.ts's `jumpToSlot`, B10a, imports `paintSelection`
+     *  directly — both are gated.) */
     paintSel: () => void;
     /** Bridged from ui/grid-scroll.ts (Phase 7 slice B3); called by the React Grid's
      *  post-render effect to keep the month/year jump controls in sync. */
@@ -114,21 +116,24 @@ declare global {
     /** Bridged from ui/grid-scroll.ts (Phase 7 slice B3); called by the React Grid's
      *  post-render effect to keep the grid wider than the viewport. */
     ensureOverflow: () => void;
-    /** Still legacy (Phase 7 slice B2 owns *reading* it) — mid → the last free day jumped to;
-     *  exposed here so the React Grid can read it for the row header's "back" button. */
+    /** Bridged from ui/favorite-jump.ts (Phase 7 slice B10a) — mid → the last free day jumped
+     *  to; the React Grid (B1) reads it for the row header's "back" button. */
     nextFreePtr: Record<string, string>;
+    /** Bridged from ui/favorite-jump.ts (Phase 7 slice B10a). */
     prevFreeBefore: (machine: Machine, fromIso: string) => string | null;
-    /** Still legacy — the context menu and next-free jump (Phase 7 slice B5's context menu;
-     *  the next-free jump has no slice of its own yet). ui/grid-interaction.ts (B2) only
+    /** Still legacy — the context menu (Phase 7 slice B10b). ui/grid-interaction.ts (B2) only
      *  calls these. */
     hideCtx: () => void;
     showCtx: (x: number, y: number) => void;
+    /** Bridged from ui/favorite-jump.ts (Phase 7 slice B10a); called by
+     *  ui/grid-interaction.ts's (B2) row-header ⏮/⏭ buttons. */
     gotoPrevFree: (mid: string) => void;
     gotoNextFree: (mid: string) => void;
     /** Bridged from ui/components/BookingDetailModal.tsx (Phase 7 slice B4); called by
      *  ui/grid-interaction.ts's (B2) click/dblclick/Enter routing. */
     openCellAction: (mid: string, date: string) => void;
-    /** Still legacy — favorite toggle (Phase 7 slice B6, machine/group management). */
+    /** Bridged from ui/favorite-jump.ts (Phase 7 slice B10a); called by
+     *  ui/grid-interaction.ts's (B2) row-header favorite star. */
     toggleFav: (mid: string) => void;
     /** Still legacy — machine lookup by id (an internally-memoized Map, rebuilt whenever
      *  `S.data.machines` is replaced by a new array reference). */
@@ -202,6 +207,7 @@ Object.assign(window, selection);
 Object.assign(window, gridInteraction);
 Object.assign(window, gridScroll);
 Object.assign(window, navigation);
+Object.assign(window, favoriteJump);
 Object.assign(window, viewMyBookings);
 Object.assign(window, viewStats);
 Object.assign(window, viewAllBookings);
