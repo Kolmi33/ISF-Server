@@ -41,6 +41,7 @@ import * as bookingDetailModal from './ui/components/BookingDetailModal.tsx';
 import * as myBookingsModal from './ui/components/MyBookingsModal.tsx';
 import * as statsModal from './ui/components/StatsModal.tsx';
 import * as allBookingsModal from './ui/components/AllBookingsModal.tsx';
+import * as adminModal from './ui/components/AdminModal.tsx';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
@@ -57,8 +58,12 @@ declare global {
     render: () => void;
     /** Trigger a store notify (→ the subscribed render). Bridged for the legacy layer (4.1c). */
     notify: () => void;
-    /** Still legacy (Phase 7 slice B5) — called from the React LogModal's "Zurück" button. */
+    /** Bridged from ui/components/AdminModal.tsx (Phase 7 slice B5); called from the React
+     *  LogModal's "Zurück" button. */
     openAdmin: () => void;
+    /** Still legacy (Phase 7 slice B6, machine form + group management) — routed to by the
+     *  Admin modal's (B5) "＋ Maschine hinzufügen" and each row's "Bearbeiten". */
+    openMachineForm: (mid: string | null) => void;
     /** Still legacy — DOM/presence-chip side effects the React name-prompt/settings call. */
     updateUserChip: () => void;
     dbg: (kind: string, msg: string) => void;
@@ -186,6 +191,7 @@ Object.assign(window, bookingDetailModal);
 Object.assign(window, myBookingsModal);
 Object.assign(window, statsModal);
 Object.assign(window, allBookingsModal);
+Object.assign(window, adminModal);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);

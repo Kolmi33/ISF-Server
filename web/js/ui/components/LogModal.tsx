@@ -1,9 +1,8 @@
 // The change-log modal (Phase 7 slice B9). Faithful JSX port of legacy `openLog()` — a
 // snapshot of `S.data.log` at open time (not a live subscription; the original didn't
-// update while the modal was open either). "Zurück" still calls the not-yet-migrated
-// `openAdmin()` global — the same cross-direction bridging every extraction in this project
-// has used, just in the other direction (React calling a still-legacy function instead of
-// legacy calling a bridged one).
+// update while the modal was open either). "Zurück" calls `window.openAdmin()` — bridged
+// from `AdminModal.tsx` since Phase 7 slice B5, kept as a window call rather than a direct
+// import to avoid a circular import between the two modals.
 
 import type { LogEntry } from '../../../../shared/types.ts';
 import { Icon } from './Icon.tsx';

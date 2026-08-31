@@ -771,7 +771,7 @@ into, not something specific to the booking form, and no plan slice claims it by
   "Diesen Tag löschen" closes the modal, frees the cell, and offers undo; clicking undo restores
   the booking. No console errors through the whole cycle.
 
-### B5 — Four modals: my-bookings, stats, all-bookings, admin
+### B5 — Four modals: my-bookings, stats, all-bookings, admin — **DONE**
 - **My-bookings** — **DONE.** Run structure is **frozen at open** (`computeMyRuns` runs once,
   via a `useState` initializer that never re-runs on re-render — verified directly: re-rendering
   the mounted component with new bookings data does NOT pick up a new run, exactly the intended
@@ -847,7 +847,35 @@ into, not something specific to the booking form, and no plan slice claims it by
   and their category labels, changed sort and confirmed `localStorage['mb_absort']` persists
   across a close/reopen, and confirmed "goto" sets the machine filter, closes the modal, jumps
   the grid to the right week, and toasts the exact expected message — no console errors.
-- **Admin** (`1936–1983`): sort mode (manual/name/group) persisted to `localStorage('mb_admsort')`; ↑/↓ reorder buttons show **only** in manual mode; reorder silently no-ops across a group boundary (the reducer aborts — UI should handle that gracefully, not throw); edit/add routes to the machine form (B6); a button opens the log view.
+- **Admin** — **DONE.** Sort mode (manual/name/group) persisted to `localStorage('mb_admsort')`;
+  ↑/↓ reorder buttons show **only** in manual mode; reorder silently no-ops across a group
+  boundary (the reducer aborts — the UI handles that gracefully, not by throwing); "＋ Maschine
+  hinzufügen" and each row's "Bearbeiten" route to `window.openMachineForm` — still legacy,
+  Phase 7 slice B6's own target, called unchanged; "Änderungsprotokoll" calls the already-gated
+  `LogModal`'s `openLog` directly (no window round-trip, both sides gated). New pure
+  `maintenanceKind` (`ui/machine-text.ts`, next to `statusRangeText`/`daysMaskText`) replaces
+  legacy `maintKind` for this one call site (kept in `legacy.js` too, under its old name, for
+  two not-yet-ported call sites).
+  **Real bug found and fixed, caught only by browser verification (E5), not by unit tests:**
+  the first draft's reorder handler mirrored the *shape* of other mutate call sites
+  (`if (result && !result.abort) forceRerender(...)`) but `moveMachine` returns `void` — not a
+  truthy value — on success, only `{abort: true}` on failure. That check re-rendered on
+  *failure* and silently no-op'd on every *success*: `window.S.data.machines` reordered
+  correctly under the hood, but the on-screen list never updated to show it. A real headless-
+  browser click-and-compare (data vs. DOM) caught this; the original unit test's mock resolved
+  to `{}` (truthy) on the "success" path, which happened to dodge the exact bug it should have
+  caught. Fixed to match legacy `moveById`'s own logic exactly (`if(res&&res.abort) return;
+  renderList();` — unconditional re-render except on abort), and the test rewritten with a
+  faithful mutate stub that actually applies the reducer to `window.S.data`, so the row order
+  itself is asserted rather than just "did it call mutate".
+  Component: `AdminModal.tsx` (+ `AdminControls`, `AdminRow`, `StatusBadge` split out within the
+  same file). 13 new/changed unit tests (10 in `AdminModal.test.tsx`, 3 in
+  `machine-text.test.ts`); full suite 511 passed, coverage 99.4%/94.33%. Browser-verified (E5)
+  against real seeded data (245 machines): search focuses on open, filters and empties
+  correctly, sort persists across close/reopen and hides the arrows outside manual mode, a
+  manual reorder now visibly swaps two rows (the bug above, confirmed fixed and the swap
+  reverted afterward), and "Bearbeiten" opens the still-legacy machine-edit form pre-filled —
+  no console errors.
 - **Functionality:** each view's pure kernel (`ui/views/*.ts`) is already 100%-tested and unchanged — these slices are pure wiring.
 - **Tests:** per view, assert the right reducer/filter is called with the right args on each control, and that persisted localStorage keys are read/written under their exact legacy names.
 
@@ -955,4 +983,4 @@ switching to `.click()`.
 - **Functionality:** identical bootstrap sequence; `app.ts` shrinks to store hydration + `createRoot(...).render(<App/>)`; `window.S`/`window.render`/`window.notify` bridges are deleted along with the last legacy consumer.
 - **Tests:** mount `<App/>` with a mocked fetch returning valid/invalid `/api/state` and assert the right screen renders in each case; name-prompt appears exactly when `!user && !readOnly`; live timers start once even across remounts.
 
-**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1+B2 together (see sequencing note, next up) → B3 → B4 → B5 (4 commits) → B6 → B7 → B8 → B10.
+**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 → B7 → B8 → B10.

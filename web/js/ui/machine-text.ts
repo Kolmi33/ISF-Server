@@ -6,7 +6,7 @@
 
 import type { Machine, MaintSlot } from '../../../shared/types.ts';
 import { formatDateLong, todayAsIsoDateString } from '../core/dates.ts';
-import { maintenanceSlots, slotCovers } from '../core/machines.ts';
+import { maintenanceSlots, slotCovers, maintenanceSlotAt } from '../core/machines.ts';
 
 const WD_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
@@ -29,6 +29,16 @@ export function statusRangeText(m: Machine, today: string = todayAsIsoDateString
     ss.find((s) => slotCovers(s, today)) ||
     ss.slice().sort((a, b) => ((a.from || '0') < (b.from || '0') ? -1 : 1))[0];
   return maintText(active) + (ss.length > 1 ? ` · +${ss.length - 1} weitere` : '');
+}
+
+/**
+ * The type (`'wartung'`/`'defekt'`/…) of the maintenance slot covering `today`, or null if none
+ * is active right now. Used for the admin list's status-badge colour/label. Faithful port of
+ * legacy `maintKind` — kept there too, under its old name, for two not-yet-ported call sites
+ * (the grid row header and the machine-filter dropdown).
+ */
+export function maintenanceKind(m: Machine, today: string = todayAsIsoDateString()): string | null {
+  return maintenanceSlotAt(m, today)?.type ?? null;
 }
 
 /**

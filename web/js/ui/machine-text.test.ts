@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Machine } from '../../../shared/types.ts';
 import { formatDateLong } from '../core/dates.ts';
-import { maintText, statusRangeText, daysMaskText } from './machine-text.ts';
+import { maintText, statusRangeText, daysMaskText, maintenanceKind } from './machine-text.ts';
 
 describe('maintText', () => {
   it('is empty for no slot', () => {
@@ -71,6 +71,30 @@ describe('statusRangeText', () => {
     expect(statusRangeText(m, '2021-06-01')).toBe(
       `defekt: sofort – ${formatDateLong('2021-01-05')} · +1 weitere`,
     );
+  });
+});
+
+describe('maintenanceKind', () => {
+  it('is null when no slot covers the given date', () => {
+    const m: Machine = {
+      id: 'm',
+      name: 'M',
+      group: 'g',
+      maint: [{ type: 'wartung', from: '2021-03-01' }],
+    };
+    expect(maintenanceKind(m, '2021-01-01')).toBeNull();
+  });
+  it("returns the covering slot's type", () => {
+    const m: Machine = {
+      id: 'm',
+      name: 'M',
+      group: 'g',
+      maint: [{ type: 'defekt', from: '2021-01-01', until: '2021-01-31' }],
+    };
+    expect(maintenanceKind(m, '2021-01-15')).toBe('defekt');
+  });
+  it('defaults `today` to now', () => {
+    expect(maintenanceKind({ id: 'm', name: 'M', group: 'g' })).toBeNull();
   });
 });
 

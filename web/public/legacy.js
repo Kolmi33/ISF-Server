@@ -935,54 +935,7 @@ document.getElementById('btnStats').onclick  = ()=>openStats();
 document.getElementById('btnAdmin').onclick  = openAdmin;
 
 /* ================= Admin: machines, status, log ================= */
-function openAdmin(){
-  let adSort = localStorage.getItem('mb_admsort') || 'manual';
-  openModal(`
-    <h2>${ic('wrench')} Verwalten</h2>
-    <div class="formrow">
-      <button class="btn primary" id="adAdd">＋ Maschine hinzufügen</button>
-      <button class="btn" id="adLog">${ic('doc')} Änderungsprotokoll</button>
-    </div>
-    <div class="formrow">
-      <input type="text" id="adSearch" placeholder="Maschine suchen…" style="flex:1">
-      <label style="min-width:auto">Sortieren</label>
-      <select id="adSort">
-        <option value="manual" ${adSort==='manual'?'selected':''}>Standard (manuell)</option>
-        <option value="name" ${adSort==='name'?'selected':''}>Alphabetisch (A–Z)</option>
-        <option value="group" ${adSort==='group'?'selected':''}>Nach Bereich</option>
-      </select>
-    </div>
-    <div class="mlist" style="max-height:380px" id="adList"></div>
-    <div class="modal-actions"><button class="btn" onclick="closeModal()">Schließen</button></div>`);
-  const renderList=()=>{
-    const manual = adSort==='manual';
-    // Sortierung (manuell/Name/Bereich) + Suche → ui/views/admin.ts (filterAdminMachines).
-    const rows=filterAdminMachines(S.data.machines, adSort, document.getElementById('adSearch').value||'');
-    document.getElementById('adList').innerHTML = rows.length ? rows.map(m=>`
-      <div class="admrow">
-        <span class="nm" title="${esc(m.name)}">${esc(m.name)} <span class="hint" style="margin:0">(${esc(m.group)})</span>
-          ${anyMaint(m)?`<span class="tag ${esc(maintKind(m)||'wartung')}" title="${esc(statusRangeText(m))}">${maintKind(m)==='defekt'?'defekt':'Wartung'}${maintSlots(m).length>1?' ×'+maintSlots(m).length:''}</span>`:''}${(m.days&&m.days!=='1111111')?`<span class="hint" style="margin:0" title="verfügbare Wochentage">· ${esc(daysMaskText(m))}</span>`:''}</span>
-        ${manual?`<button class="btn small" data-up="${esc(m.id)}" title="nach oben">↑</button>
-        <button class="btn small" data-down="${esc(m.id)}" title="nach unten">↓</button>`:''}
-        <button class="btn small" data-edit="${esc(m.id)}">Bearbeiten</button>
-      </div>`).join('') : '<p class="hint">Keine Maschine gefunden.</p>';
-    document.querySelectorAll('#adList [data-edit]').forEach(b=>b.onclick=()=>openMachineForm(b.dataset.edit));
-    document.querySelectorAll('#adList [data-up]').forEach(b=>b.onclick=()=>moveById(b.dataset.up,-1));
-    document.querySelectorAll('#adList [data-down]').forEach(b=>b.onclick=()=>moveById(b.dataset.down,1));
-  };
-  const moveById=async (id,dir)=>{
-    // Nachbar-Tausch innerhalb des Bereichs → core/booking.ts (moveMachine).
-    const res=await mutate(fresh=>moveMachine(fresh, id, dir),'Reihenfolge geändert');
-    if(res&&res.abort) return;
-    renderList();
-  };
-  document.getElementById('adAdd').onclick=()=>openMachineForm(null);
-  document.getElementById('adLog').onclick=openLog;
-  document.getElementById('adSearch').oninput=renderList;
-  document.getElementById('adSort').onchange=ev=>{ adSort=ev.target.value; localStorage.setItem('mb_admsort',adSort); renderList(); };
-  document.getElementById('adSearch').focus();
-  renderList();
-}
+/* openAdmin → ui/components/AdminModal.tsx (window bridge). Phase 7 slice B5. */
 function openMachineForm(mid){
   const m = mid? machById(mid) : {name:'',group:groupList()[0]||'',info:'',status:'ok',statusNote:'',statusFrom:'',statusUntil:''};
   openModal(`
