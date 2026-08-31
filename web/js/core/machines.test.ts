@@ -9,6 +9,7 @@ import {
   hasAnyMaintenanceSlot,
   dayAvailable,
   cellBookable,
+  groupsByCategory,
 } from './machines.ts';
 
 // Minimal machine factory — only the fields under test; overrides fill the rest.
@@ -114,5 +115,29 @@ describe('cellBookable', () => {
   });
   it('is true when free and available', () => {
     expect(cellBookable(machine(), '2021-01-06')).toBe(true);
+  });
+});
+
+describe('groupsByCategory', () => {
+  it('buckets distinct group names by category, in first-seen order', () => {
+    const result = groupsByCategory([
+      machine({ id: 'm1', group: 'Halle 1' }),
+      machine({ id: 'm2', group: 'Halle 2' }),
+      machine({ id: 'm3', group: 'Halle 1' }), // repeat — not duplicated
+      machine({ id: 'm4', group: 'Labor', cat: 'messtechnik' }),
+    ]);
+    expect(result).toEqual([
+      { category: 'maschine', groups: ['Halle 1', 'Halle 2'] },
+      { category: 'messtechnik', groups: ['Labor'] },
+    ]);
+  });
+
+  it('omits a category with no groups entirely, rather than an empty entry', () => {
+    const result = groupsByCategory([machine({ id: 'm1', group: 'Halle 1' })]);
+    expect(result).toEqual([{ category: 'maschine', groups: ['Halle 1'] }]);
+  });
+
+  it('is empty when there are no machines', () => {
+    expect(groupsByCategory([])).toEqual([]);
   });
 });

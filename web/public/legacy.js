@@ -921,70 +921,7 @@ async function runAssistant(){
 
 
 /* ================= Alle Buchungen: Tabelle mit Filtern ================= */
-// computeAllRuns → ui/views/all-bookings.ts (bridged). Alle zukünftigen Buchungen als Personen-Serien.
-function openAllBookings(){
-  const t=todayStr();
-  openModal(`
-    <h2>${ic('table')} Alle Buchungen (ab heute)</h2>
-    <div class="abfilters">
-      <div class="fld"><label>Person</label><input type="text" id="abPerson" placeholder="Kolmanovskyi"></div>
-      <div class="fld"><label>Maschine</label><input type="text" id="abMach" placeholder="Berger"></div>
-      <div class="fld"><label>Bereich</label>
-        <select id="abGroup"><option value="">Alle</option>${CATS.map(([c,l])=>{
-          const gs=groupList().filter(g=>groupCat(g)===c);
-          return gs.length?`<optgroup label="${l}">${gs.map(g=>`<option>${esc(g)}</option>`).join('')}</optgroup>`:'';
-        }).join('')}</select></div>
-      <div class="fld"><label>Sortieren</label>
-        <select id="abSort">
-          <option value="termin">Termin der Buchung</option>
-          <option value="erstellt">Zuletzt gebucht</option>
-          <option value="bereich">Bereich</option>
-          <option value="maschine">Maschine</option>
-          <option value="person">Person</option>
-        </select></div>
-      <div class="fld"><label>Von</label><input type="date" id="abFrom" value="${t}"></div>
-      <div class="fld"><label>Bis</label><input type="date" id="abTo" value=""></div>
-    </div>
-    <div class="hint" id="abCount" style="margin:0 0 6px"></div>
-    <div class="resultlist" style="max-height:420px" id="abList"></div>
-    <div class="modal-actions"><button class="btn" onclick="closeModal()">Schließen</button></div>`);
-  const runsAll=computeAllRuns(orderedMachines(), S.data.bookings, todayStr());
-  document.getElementById('abSort').value = localStorage.getItem('mb_absort') || 'termin';
-  // Filter/Sortierung/Kappung → ui/views/all-bookings.ts (filterAllRuns); Trim/Lowercase intern.
-  const renderList=()=>{
-    const rows=filterAllRuns(runsAll, {
-      person: document.getElementById('abPerson').value,
-      mach:   document.getElementById('abMach').value,
-      group:  document.getElementById('abGroup').value,
-      from:   document.getElementById('abFrom').value,
-      to:     document.getElementById('abTo').value,
-      sort:   document.getElementById('abSort').value,
-    });
-    document.getElementById('abCount').textContent=rows.length+' Einträge'+(rows.length===300?' (gekürzt)':'');
-    document.getElementById('abList').innerHTML = rows.map((r,i)=>`
-      <div class="mybk"><div style="min-width:0">
-        <div class="abmach"><b>${esc(r.m.name)}</b> <span class="hint" style="margin:0">· ${esc(r.m.group)}</span></div>
-        <div class="abdate">${r.dates.length>1?`${fmtLong(r.dates[0])} – ${fmtLong(r.dates[r.dates.length-1])}`:fmtLong(r.dates[0])} <span class="tag">${r.dates.length} Tag${r.dates.length>1?'e':''}</span></div>
-        <div class="hint" style="margin:0">${ic('user')} ${esc(r.name)}${r.ts?` <span style="opacity:.8">· gebucht am ${esc(new Date(r.ts).toLocaleString('de-DE'))}</span>`:''}</div>
-      </div>
-      <button class="btn small" data-goto="${i}" title="Im Plan anzeigen" aria-label="Im Plan anzeigen">${ic('pin')}</button></div>`).join('')
-      || '<p class="hint">Keine Buchungen für diese Filter gefunden.</p>';
-    document.querySelectorAll('#abList [data-goto]').forEach(el=>el.onclick=()=>{
-      const r=rows[+el.dataset.goto];
-      closeModal();
-      // Filter auf die Zielmaschine setzen, damit ihre Zeile garantiert sichtbar
-      // ist (auch wenn ihre Kategorie/ihr Bereich eingeklappt ist).
-      S.machSel=new Set([r.m.id]); saveFilters(); updateMachBtn();
-      S.startMonday=mondayOf(parseYmd(r.dates[0])); resetView(); notify(); prependWeek(); gotoDate(r.dates[0]);
-      toast(`Plan gefiltert auf „${r.m.name}".`, null, 4000);
-    });
-  };
-  ['abPerson','abMach','abGroup','abFrom','abTo'].forEach(id=>{
-    const el=document.getElementById(id); el.oninput=renderList; el.onchange=renderList;
-  });
-  document.getElementById('abSort').onchange=()=>{ localStorage.setItem('mb_absort',document.getElementById('abSort').value); renderList(); };
-  renderList();
-}
+/* openAllBookings → ui/components/AllBookingsModal.tsx (window bridge). Phase 7 slice B5. */
 
 /* ================= My bookings (mit Serien-Erkennung) =================
    Die Serien-Struktur wird beim Öffnen EINGEFROREN: Löscht man einzelne Tage,

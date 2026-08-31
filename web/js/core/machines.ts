@@ -28,6 +28,31 @@ export const CATEGORIES: ReadonlyArray<{ id: MachineCategory; label: string; ico
   { id: 'messtechnik', label: 'Messtechnik', icon: 'gauge' },
 ];
 
+/** One category's distinct group names (first-seen order), for the "Bereich" filter's
+ *  `<optgroup>` structure. A category with no groups is omitted entirely (legacy renders an
+ *  empty `<optgroup>`, which shows nothing — omitting it is the same net result). Faithful
+ *  port of the `CATS.map(...)`/`groupList()`/`groupCat()` expression in legacy
+ *  `openAllBookings`. */
+export interface CategoryGroups {
+  category: MachineCategory;
+  groups: string[];
+}
+
+export function groupsByCategory(machines: readonly Machine[]): CategoryGroups[] {
+  const result: CategoryGroups[] = [];
+  for (const { id: category } of CATEGORIES) {
+    const seen = new Set<string>();
+    const groups: string[] = [];
+    for (const machine of machines) {
+      if (categoryOf(machine) !== category || seen.has(machine.group)) continue;
+      seen.add(machine.group);
+      groups.push(machine.group);
+    }
+    if (groups.length) result.push({ category, groups });
+  }
+  return result;
+}
+
 /**
  * The maintenance slots of a machine. Prefers the structured `maint` array; otherwise
  * synthesizes one slot from the legacy single-status fields (unless status is 'ok').

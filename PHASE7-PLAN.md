@@ -826,7 +826,27 @@ into, not something specific to the booking form, and no plan slice claims it by
   button appears and returns cleanly), switched to Personen and Wartung modes, and confirmed
   the invalid-range toast fires while the prior valid result stays on screen — no console
   errors.
-- **All-bookings** (`1622–1686`): person/machine substring filters, a group `<select>` grouped by category via `<optgroup>`, a date-overlap window, 5 sort keys (unknown key falls back to `termin`) persisted to `localStorage('mb_absort')`, 300-row cap labeled "(gekürzt)"; "goto" narrows the machine filter to just that row's machine before jumping (so it's guaranteed visible).
+- **All-bookings** — **DONE.** Person/machine substring filters, a group `<select>` grouped by
+  category via `<optgroup>`, a date-overlap window, 5 sort keys (unknown key falls back to
+  `termin`) persisted to `localStorage('mb_absort')`, 300-row cap labeled "(gekürzt)"; "goto"
+  narrows the machine filter to just that row's machine before jumping (so it's guaranteed
+  visible even if its category/group is folded) — a deliberately different strategy from My
+  Bookings' `gotoRun` (which expands the category/group instead), matching legacy exactly:
+  this modal has no per-user machine set to fall back on. Read-only (list + goto, no delete),
+  so — unlike My Bookings — the run structure needs no live re-filtering against later
+  mutations: `computeAllRuns` runs once at open (`useState` initializer) and stays fixed for
+  the modal's lifetime, exactly legacy's own `const runsAll=...` computed once outside
+  `renderList`. New pure helper `groupsByCategory` (`core/machines.ts`, next to `CATEGORIES`)
+  builds the "Bereich" `<optgroup>` structure from the machine list, replacing legacy's
+  `groupList()`/`groupCat()` combination for this one call site (both stay in `legacy.js`,
+  still used by the filter and machine-form modals). Component: `AllBookingsModal.tsx`
+  (+ `AllBookingsFilters`, `AllBookingsRow` split out within the same file). 10 new/changed
+  unit tests (7 in `AllBookingsModal.test.tsx`, 3 in `machines.test.ts`); full suite 498
+  passed, coverage 99.46%/94.52%. Browser-verified (E5): opened the modal against real seeded
+  data (67 entries), filtered to an empty result and back, confirmed the "Bereich" optgroups
+  and their category labels, changed sort and confirmed `localStorage['mb_absort']` persists
+  across a close/reopen, and confirmed "goto" sets the machine filter, closes the modal, jumps
+  the grid to the right week, and toasts the exact expected message — no console errors.
 - **Admin** (`1936–1983`): sort mode (manual/name/group) persisted to `localStorage('mb_admsort')`; ↑/↓ reorder buttons show **only** in manual mode; reorder silently no-ops across a group boundary (the reducer aborts — UI should handle that gracefully, not throw); edit/add routes to the machine form (B6); a button opens the log view.
 - **Functionality:** each view's pure kernel (`ui/views/*.ts`) is already 100%-tested and unchanged — these slices are pure wiring.
 - **Tests:** per view, assert the right reducer/filter is called with the right args on each control, and that persisted localStorage keys are read/written under their exact legacy names.
