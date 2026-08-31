@@ -109,17 +109,7 @@ async function openActiveUsers(){
 }
 
 /* ================= User name ================= */
-let presCache={txt:'–', title:'Gerade aktive Nutzer'};
-function setPres(txt, title){
-  presCache={txt, title};
-  const el=document.getElementById('presBadge');
-  if(el){ el.textContent=txt; el.title=title; }
-}
-function updateUserChip(){
-  // kleine, tiefgestellte Online-Zahl VOR dem Nutzer-Icon im Namens-Chip
-  document.getElementById('userChip').innerHTML =
-    '<span id="presBadge" title="'+esc(presCache.title)+'">'+esc(presCache.txt)+'</span>'+ic('user')+' '+esc(S.user||'Name?');
-}
+/* setPres, updateUserChip → ui/user-chip.ts (window bridge). Phase 7 slice B8. */
 /* askUserName() → ui/components/AskUserNameModal.tsx (window bridge). Phase 7 slice B9. */
 /* Einfachklick = Namen ändern (kurz verzögert, damit ein Doppelklick nicht
    erst das Namensfenster öffnet); Doppelklick = aktive Nutzer anzeigen. */
@@ -198,9 +188,8 @@ function askConfirm(opts){
     document.getElementById('cfNo').onclick=()=>done(false);
   });
 }
-function showCollision(){ document.getElementById('collBanner').classList.add('show'); }
-document.getElementById('collOk').onclick=()=>document.getElementById('collBanner').classList.remove('show');
-let liveTimersOn=false;
+/* showCollision, the #collOk dismiss wiring → ui/collision-banner.ts (window bridge).
+   liveTimersOn → net/live-connection.ts's own module state. Phase 7 slice B8. */
 function saveFilters(){
   localStorage.setItem('mb_machsel', JSON.stringify([...S.machSel]));
   localStorage.setItem('mb_groupssel', JSON.stringify([...S.groupsSel]));
@@ -619,36 +608,8 @@ document.getElementById('modalReopen').addEventListener('click',expandModal);
 document.getElementById('overlay').addEventListener('click',ev=>{ if(ev.target.id==='overlay' && !modalSticky) closeModal(); });
 document.addEventListener('keydown',ev=>{ if(ev.key==='Escape' && !modalSticky) closeModal(); });
 /* toast → ui/toast.ts (window bridge). Phase 7 slice B4. */
-/* --- Benachrichtigungen über Änderungen der Kollegen (jede einzeln) ---
-   Beim Abgleich neu hinzugekommene fremde Protokolleinträge werden nacheinander
-   unten eingeblendet. Eine kleine Warteschlange zeigt sie einzeln (je ~2,6 s)
-   und pausiert, solange gerade ein „Rückgängig"-Hinweis aktiv ist. */
-function fmtDM(iso){ return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.slice(8,10)+'.'+iso.slice(5,7)+'.' : iso; }
-function remoteMsg(l){
-  const a=String(l.action||'');
-  let mm;
-  if((mm=a.match(/^Buchung:\s*(.+?),\s*(\d+)\s*Maschine.*?,\s*(\S+)\s*bis\s*(\S+)/)))
-    return `${mm[1]} hat ${mm[2]} Maschine${mm[2]==='1'?'':'n'} gebucht (${fmtDM(mm[3])}–${fmtDM(mm[4])})`;
-  if((mm=a.match(/^Gelöscht:\s*(.+?)\s*auf\s*(.+?),\s*(\d+)/)))
-    return `${l.user} hat ${mm[3]} Tag(e) von „${mm[1]}" auf ${mm[2]} gelöscht`;
-  if(a.startsWith('Bereich gelöscht')) return `${l.user} hat einen Buchungsbereich gelöscht`;
-  if(a.startsWith('Maschine')) return `${l.user}: ${a}`;
-  return `${l.user}: ${a}`;
-}
-let remoteQ=[], remoteRunning=false;
-function queueRemote(msg){
-  remoteQ.push(msg);
-  if(remoteQ.length>8) remoteQ=remoteQ.slice(-8); // Meldungsflut begrenzen
-  if(!remoteRunning) runRemoteQ();
-}
-function runRemoteQ(){
-  if(!remoteQ.length){ remoteRunning=false; return; }
-  const t=document.getElementById('toast');
-  if(t.classList.contains('action') && t.classList.contains('show')){ setTimeout(runRemoteQ, 1500); return; } // Undo läuft -> warten
-  remoteRunning=true;
-  toast(remoteQ.shift(), null, 2600);
-  setTimeout(runRemoteQ, 2800);
-}
+/* fmtDM, remoteMsg → net/sse.ts's formatDayMonth/remoteMessage (window bridge).
+   queueRemote, runRemoteQ → net/live-connection.ts (window bridge). Phase 7 slice B8. */
 
 /* offerUndo → ui/toast.ts (window bridge). openBookingForm, submitBooking, genGid →
    ui/components/BookingForm.tsx (window bridge). openBookingDetail →
@@ -757,49 +718,16 @@ async function refreshNow(silent){
    Live weekend upkeep is unaffected — sweepWeekends still runs on every booking write. */
 
 /* --- Live-Verbindung (Server-Sent Events): Push statt Polling ---
-   Die reine Ereignis-Logik (applyUpdate, presenceInfo, isForeign) liegt in
-   net/sse.ts (window-Bridge); hier bleibt nur der DOM-/EventSource-Adapter.
-   4.1c: render() ist am Store abonniert; der Struktur-Handler löst den
-   Neuaufbau über notify() (Store) statt direkt render() aus (§14/§15). */
-let es=null;
+   connectSSE, startLiveTimers, presenceTick → net/live-connection.ts (window bridge).
+   Phase 7 slice B8. applyPresence stays here: it owns presenceData, the timestamp map
+   the still-unported openActiveUsers() popup reads; it calls the bridged ui/user-chip.ts
+   setPres under its old name. */
 function applyPresence(users){
   const info = presenceInfo(users);         // → net/sse.ts (reine Formatierung)
   const now=Date.now(); presenceData={};
   for(const u of info.list) presenceData[u]=now;
   setPres(info.count, info.label);
 }
-function connectSSE(){
-  try{ if(es) es.close(); }catch(_){}
-  // „Anwesenheit teilen" aus → ohne Namen verbinden (man erscheint dann nicht in der Liste)
-  const share = localStorage.getItem('mb_presence')!=='off';
-  const uname = share ? (S.user||'') : '';
-  es = new EventSource(API+'/api/stream'+(uname?('?user='+encodeURIComponent(uname)):''));
-  es.addEventListener('hello', ()=>{ stampRef(); dbg('info','Live-Verbindung steht'); });
-  es.addEventListener('presence', ev=>{ try{ applyPresence(JSON.parse(ev.data).users); }catch(e){ handleError('sse/presence', e); } });
-  es.addEventListener('update', ev=>{
-    let d; try{ d=JSON.parse(ev.data); }catch(_){ return; }
-    const { rev, patch } = applyUpdate(d, S.data.bookings);   // → net/sse.ts (buchungen mutieren + patch)
-    if(rev!==null) S.data.revision=rev;
-    if(patch.length) patchCells(patch);
-    stampRef();
-    if(isForeign(d.by, S.user||'?') && d.log){   // Meldung nur für FREMDE Änderungen
-      dbg('remote', d.by+': '+d.log);
-      queueRemote(remoteMsg({ user:d.by, action:d.log, ts:new Date().toISOString() }));
-    }
-  });
-  es.addEventListener('structural', async ev=>{             // Maschinenliste geändert → neu laden
-    try{ S.data = await readFile(); fillGroupSel(); notify(); }catch(e){ handleError('sse/structural', e); }   // 4.1c: repaint via store
-    let by=''; try{ by=JSON.parse(ev.data).by; }catch(_){}
-    if(isForeign(by, S.user||'?')) toast(by+' hat die Maschinenliste geändert.');
-  });
-  es.onerror = ()=>{ const el=document.getElementById('lastRef'); if(el) el.textContent='⚠ offline'; };
-}
-function startLiveTimers(){
-  if(liveTimersOn) return; liveTimersOn=true;
-  window.addEventListener('focus', ()=>refreshNow(true));
-  connectSSE();
-};
-async function presenceTick(){ connectSSE(); };   // Namenswechsel → mit neuem Namen neu verbinden
 
 async function init(){
   document.getElementById('startScreen').style.display='none';

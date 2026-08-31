@@ -81,3 +81,41 @@ export function presenceInfo(users: readonly (string | null | undefined)[] | und
 export function isForeign(by: string | undefined, me: string): boolean {
   return !!by && String(by).toLowerCase() !== me.toLowerCase();
 }
+
+/** One day, abbreviated `DD.MM.` — falls back to the raw string when it isn't a plain ISO
+ *  date (`YYYY-MM-DD`). Faithful port of legacy `fmtDM`. */
+export function formatDayMonth(isoDate: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(isoDate)
+    ? `${isoDate.slice(8, 10)}.${isoDate.slice(5, 7)}.`
+    : isoDate;
+}
+
+/** A colleague's log entry, as carried by an `update` SSE event. */
+export interface RemoteLogEntry {
+  user: string;
+  action: string;
+}
+
+/**
+ * A German one-line summary of a colleague's log action, for the remote-change toast queue.
+ * Recognizes booking/delete/area-delete/machine actions by pattern; anything else falls back
+ * to `"<user>: <action>"`. Faithful port of legacy `remoteMsg`.
+ */
+export function remoteMessage(entry: RemoteLogEntry): string {
+  const { user, action } = entry;
+  const bookingMatch = action.match(
+    /^Buchung:\s*(.+?),\s*(\d+)\s*Maschine.*?,\s*(\S+)\s*bis\s*(\S+)/,
+  );
+  if (bookingMatch) {
+    const [, person, count, from, to] = bookingMatch;
+    return `${person} hat ${count} Maschine${count === '1' ? '' : 'n'} gebucht (${formatDayMonth(from!)}–${formatDayMonth(to!)})`;
+  }
+  const deleteMatch = action.match(/^Gelöscht:\s*(.+?)\s*auf\s*(.+?),\s*(\d+)/);
+  if (deleteMatch) {
+    const [, name, machine, days] = deleteMatch;
+    return `${user} hat ${days} Tag(e) von „${name}" auf ${machine} gelöscht`;
+  }
+  if (action.startsWith('Bereich gelöscht')) return `${user} hat einen Buchungsbereich gelöscht`;
+  if (action.startsWith('Maschine')) return `${user}: ${action}`;
+  return `${user}: ${action}`;
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Bookings } from '../../../shared/types.ts';
-import { applyUpdate, presenceInfo, isForeign } from './sse.ts';
+import { applyUpdate, presenceInfo, isForeign, formatDayMonth, remoteMessage } from './sse.ts';
 
 describe('applyUpdate', () => {
   it('sets cells for truthy vals and reports the patch', () => {
@@ -69,5 +69,53 @@ describe('isForeign', () => {
     expect(isForeign('ANNA', 'anna')).toBe(false); // same person, different case
     expect(isForeign('', 'anna')).toBe(false); // no author
     expect(isForeign(undefined, 'anna')).toBe(false);
+  });
+});
+
+describe('formatDayMonth', () => {
+  it('abbreviates a plain ISO date to DD.MM.', () => {
+    expect(formatDayMonth('2021-03-04')).toBe('04.03.');
+  });
+  it('falls back to the raw string for anything else', () => {
+    expect(formatDayMonth('2021-03-04T10:00')).toBe('2021-03-04T10:00');
+    expect(formatDayMonth('n/a')).toBe('n/a');
+  });
+});
+
+describe('remoteMessage', () => {
+  it('formats a booking action, with correct singular/plural machine count', () => {
+    expect(
+      remoteMessage({ user: 'bob', action: 'Buchung: Bob, 1 Maschine, 2021-01-04 bis 2021-01-04' }),
+    ).toBe('Bob hat 1 Maschine gebucht (04.01.–04.01.)');
+    expect(
+      remoteMessage({
+        user: 'bob',
+        action: 'Buchung: Bob, 3 Maschinen, 2021-01-04 bis 2021-01-06',
+      }),
+    ).toBe('Bob hat 3 Maschinen gebucht (04.01.–06.01.)');
+  });
+
+  it('formats a delete action', () => {
+    expect(remoteMessage({ user: 'bob', action: 'Gelöscht: Bob auf Fräse, 2 Tag(e)' })).toBe(
+      'bob hat 2 Tag(e) von „Bob" auf Fräse gelöscht',
+    );
+  });
+
+  it('formats an area-delete action, ignoring its details', () => {
+    expect(remoteMessage({ user: 'bob', action: 'Bereich gelöscht: Halle 1' })).toBe(
+      'bob hat einen Buchungsbereich gelöscht',
+    );
+  });
+
+  it('formats a machine action verbatim, prefixed with the user', () => {
+    expect(remoteMessage({ user: 'bob', action: 'Maschine angelegt: Fräse' })).toBe(
+      'bob: Maschine angelegt: Fräse',
+    );
+  });
+
+  it('falls back to "<user>: <action>" for anything unrecognized', () => {
+    expect(remoteMessage({ user: 'bob', action: 'Reihenfolge geändert' })).toBe(
+      'bob: Reihenfolge geändert',
+    );
   });
 });

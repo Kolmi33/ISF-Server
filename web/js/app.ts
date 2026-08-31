@@ -36,6 +36,9 @@ import * as settingsModal from './ui/components/SettingsModal.tsx';
 import * as gridComponent from './ui/components/Grid.tsx';
 import * as cellPatch from './ui/cell-patch.ts';
 import * as toastModule from './ui/toast.ts';
+import * as userChip from './ui/user-chip.ts';
+import * as collisionBanner from './ui/collision-banner.ts';
+import * as liveConnection from './ui/live-connection.ts';
 import * as bookingFormModal from './ui/components/BookingForm.tsx';
 import * as bookingDetailModal from './ui/components/BookingDetailModal.tsx';
 import * as myBookingsModal from './ui/components/MyBookingsModal.tsx';
@@ -47,7 +50,7 @@ import * as assistantModal from './ui/components/AssistantModal.tsx';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
-import type { BookingData, Machine } from '../../shared/types.ts';
+import type { BookingData, Machine, ServerData } from '../../shared/types.ts';
 import type { Cell } from './ui/selection.ts';
 import type { CellUndo, Conflict } from './core/booking.ts';
 
@@ -66,15 +69,34 @@ declare global {
     /** Bridged from ui/components/MachineFormModal.tsx (Phase 7 slice B6); routed to by the
      *  Admin modal's (B5) "＋ Maschine hinzufügen" and each row's "Bearbeiten". */
     openMachineForm: (mid: string | null) => void;
-    /** Still legacy — DOM/presence-chip side effects the React name-prompt/settings call. */
+    /** Bridged from ui/user-chip.ts (Phase 7 slice B8); the React name-prompt/settings call
+     *  this after changing `S.user` so the toolbar chip's label updates. */
     updateUserChip: () => void;
     dbg: (kind: string, msg: string) => void;
+    /** Bridged from net/live-connection.ts (Phase 7 slice B8); the React name-prompt/settings
+     *  call this to reconnect SSE under a new name. */
     presenceTick: () => Promise<void>;
     applyTheme: () => void;
+    /** Bridged from net/live-connection.ts (Phase 7 slice B8); called by legacy's own boot
+     *  sequence (`startLiveTimers`) and by the Settings modal's (B9) presence-share toggle. */
     connectSSE: () => void;
     refreshNow: (silent: boolean) => Promise<void>;
     applyDebug: () => void;
     dbgOn: () => boolean;
+    /** Still legacy — timestamps `#lastRef` with the last successful sync time. Called by
+     *  net/live-connection.ts's (B8) `hello`/`update` SSE handlers. */
+    stampRef: () => void;
+    /** Still legacy — logs to console + the debug panel, swallowing `AbortError`. Called by
+     *  net/live-connection.ts's (B8) SSE error paths. */
+    handleError: (ctx: string, err: unknown) => void;
+    /** Still legacy — fetches and normalizes the full server state. Called by
+     *  net/live-connection.ts's (B8) `structural` SSE handler. */
+    readFile: () => Promise<ServerData>;
+    /** Still legacy — formats the presence list and the `presenceData` timestamp map the
+     *  (still-legacy) active-users popup reads; calls the bridged `ui/user-chip.ts` (B8)
+     *  `setPres` under its old name. Called by net/live-connection.ts's (B8) `presence` SSE
+     *  handler. */
+    applyPresence: (users: readonly (string | null | undefined)[] | undefined) => void;
     /** Bridged from ui/grid-scroll.ts (Phase 7 slice B3); called by legacy's own boot sequence
      *  and by the "Ändern…"-adjacent Settings row (React, B9). */
     centerToday: () => void;
@@ -192,6 +214,9 @@ Object.assign(window, settingsModal);
 Object.assign(window, gridComponent);
 Object.assign(window, cellPatch);
 Object.assign(window, toastModule);
+Object.assign(window, userChip);
+Object.assign(window, collisionBanner);
+Object.assign(window, liveConnection);
 Object.assign(window, bookingFormModal);
 Object.assign(window, bookingDetailModal);
 Object.assign(window, myBookingsModal);
@@ -261,3 +286,8 @@ gridInteraction.initGridInteraction();
 // (`ui/grid-scroll.ts`). Wired once at boot, same as legacy's own top-level
 // `gridWrap.addEventListener(...)`/`.onchange=`/`.onclick=` assignments did.
 gridScroll.initGridScroll();
+
+// Phase 7 slice B8 — the write-collision banner's dismiss button (`ui/collision-banner.ts`).
+// Wired once at boot, same as legacy's own top-level `document.getElementById('collOk')
+// .onclick=...` assignment did.
+collisionBanner.initCollisionBanner();

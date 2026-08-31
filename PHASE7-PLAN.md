@@ -989,10 +989,44 @@ into, not something specific to the booking form, and no plan slice claims it by
   (grid filtered, floating tab shown), re-expanding via that tab restores the exact same
   results, and "Buchen…" opens the booking form on top — no console errors throughout.
 
-### B8 — Presence badge, collision banner, SSE hook
-- **Must-haves (`legacy.js:2169–2207` + `setPres`/`showCollision`/`queueRemote`):** presence badge shows a count + a hover title listing active names in **server-received order** (not alphabetized — `presenceInfo` only filters, doesn't sort); reconnect on name change; the `mb_presence` "share" toggle, when off, connects **without** a `user` query param so this browser doesn't appear in others' lists; `hello` stamps the "last updated" time; `update` events patch cells + revision and queue a toast **only for foreign changes** (case-insensitive `isForeign`); `structural` events trigger a full state reload; `onerror` flips a visible "⚠ offline" indicator with no custom retry logic (EventSource retries natively); the collision banner is **persistent** (manual-dismiss only), shown when the server reports partial write conflicts.
-- **Functionality:** `net/sse.ts`'s pure functions (`applyUpdate`/`presenceInfo`/`isForeign`) are unchanged and already 100%-tested — this slice is the `useEffect`-based `EventSource` lifecycle + the badge/banner components.
-- **Tests:** mock `EventSource`; assert a foreign `update` queues a toast while an own-name update doesn't; a `structural` event reloads state; `onerror` flips the offline indicator; toggling the presence share setting changes the connection URL.
+### B8 — Presence badge, collision banner, SSE hook — **DONE**
+- **Must-haves:** presence badge shows a count + a hover title listing active names in
+  **server-received order** (not alphabetized — `presenceInfo` only filters, doesn't sort);
+  reconnect on name change; the `mb_presence` "share" toggle, when off, connects **without** a
+  `user` query param so this browser doesn't appear in others' lists; `hello` stamps the "last
+  updated" time; `update` events patch cells + revision and queue a toast **only for foreign
+  changes** (case-insensitive `isForeign`); `structural` events trigger a full state reload;
+  `onerror` flips a visible "⚠ offline" indicator with no custom retry logic (EventSource
+  retries natively); the collision banner is **persistent** (manual-dismiss only), shown when
+  the server reports partial write conflicts.
+  **Design note (not a plan change, a scope clarification made while implementing):** none of
+  this turned out to need a React component. `#userChip`'s presence badge and `#collBanner` are
+  small, already-static/simple DOM (`#collBanner` is fully static markup in `index.html`;
+  `#userChip` is one button rebuilt by a small, infrequent `innerHTML` write) — the same
+  judgment call B2/B3 made for `grid-interaction.ts`/`grid-scroll.ts`. So this slice is three
+  plain gated modules, not components: `ui/user-chip.ts` (`setPresence`/`updateUserChip`),
+  `ui/collision-banner.ts` (`showCollisionBanner`/dismiss wiring), `ui/live-connection.ts` (the
+  `EventSource` lifecycle + the remote-change toast queue — lives under `ui/`, not `net/`,
+  because it touches the DOM/toast and `net/` must not depend on `ui/`, enforced by an ESLint
+  rule that caught this on the first lint pass).
+  `applyPresence` (and the `presenceData` timestamp map the still-unported active-users popup
+  reads) deliberately stays in `legacy.js` — narrower scope than the plan's own naming
+  suggested, kept there because it's coupled to that not-yet-ported popup; it calls the bridged
+  `ui/user-chip.ts` `setPresence` under its legacy name (`setPres`, kept as a bridge alias).
+  Two new pure functions added to `net/sse.ts` (`formatDayMonth`, `remoteMessage` — faithful
+  ports of `fmtDM`/`remoteMsg`, now direct-imported rather than window-bridged since both call
+  sides are gated).
+- **Tests:** 25 new (`live-connection.test.ts` mocking `EventSource` — a foreign `update`
+  queues a toast while an own-name one doesn't, a `structural` event reloads state, `onerror`
+  flips the offline indicator, toggling the presence-share setting changes the connection URL;
+  `user-chip.test.ts`; `collision-banner.test.ts`) + 6 in `sse.test.ts` for the two new pure
+  functions. Full suite 632 passed, coverage 99%/93.31%.
+  Browser-verified (E5) with **two real browser tabs against the live dev server** (not
+  mocked): tab 1 (Anna) showed presence badge "1", title "Gerade aktiv: Anna"; opening tab 2 as
+  Bob updated tab 1's badge to "2" live; Bob booking a cell showed up in tab 1 instantly without
+  a reload (the `update` SSE patch), with the exact expected remote-change toast — "Bob hat 1
+  Maschine gebucht (31.08.–31.08.)" — matching `remoteMessage`'s format precisely. No console
+  errors.
 
 ### B9 — Settings, help, log, name-prompt — **DONE**
 
@@ -1082,4 +1116,4 @@ switching to `.click()`.
 - **Functionality:** identical bootstrap sequence; `app.ts` shrinks to store hydration + `createRoot(...).render(<App/>)`; `window.S`/`window.render`/`window.notify` bridges are deleted along with the last legacy consumer.
 - **Tests:** mount `<App/>` with a mocked fetch returning valid/invalid `/api/state` and assert the right screen renders in each case; name-prompt appears exactly when `!user && !readOnly`; live timers start once even across remounts.
 
-**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 → B10.
+**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10.
