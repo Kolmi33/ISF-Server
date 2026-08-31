@@ -4,7 +4,15 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-08-29 — **Phase 6 COMPLETE (code)** — backend → gated TS under `server/` + weekend auto-bridging (maintain hook + backfill CLI). Whole roadmap (0–6) implemented & gated. Remaining: authorization-gated deploy + one-time backfill (production writes; not run)._
+_Last updated: 2026-08-31 — **Phase 7 COMPLETE** — the frontend's React migration (Backlog B,
+tracked slice-by-slice in `PHASE7-PLAN.md`) has landed in full: `web/public/legacy.js` (the
+non-module monolith this file's "Current state"/"Done log" below describe extracting FROM,
+Phase 1.2 onward) is deleted outright, and the frontend is 100% gated TypeScript + React. The
+"view-layer decision: no framework" note under "Next step" below is superseded by that — see
+`PHASE7-PLAN.md`/`ARCHITECTURE.md §18` for the React adoption rationale. Phase 6's own
+remaining items (below) are unaffected and still open._
+
+_Previously: 2026-08-29 — **Phase 6 COMPLETE (code)** — backend → gated TS under `server/` + weekend auto-bridging (maintain hook + backfill CLI). Whole roadmap (0–6) implemented & gated. Remaining: authorization-gated deploy + one-time backfill (production writes; not run)._
 
 ---
 

@@ -4,7 +4,6 @@ import type { AppState } from '../../../shared/types.ts';
 import { mondayOfDate } from '../core/dates.ts';
 import {
   canStillGrowWindow,
-  centerCol,
   centerColumn,
   centerToday,
   computeWeekPixelWidth,
@@ -139,7 +138,6 @@ function stubWindowGlobals(): void {
     extraWeeks: 0,
     data: { machines: [], bookings: {} },
   } as unknown as AppState;
-  window.Sel = { anchor: null, focus: null, cells: [], dragging: false, didDrag: false };
   window.notify = vi.fn();
   window.render = vi.fn();
 }
@@ -327,10 +325,6 @@ describe('centerColumn / centerToday / gotoDate', () => {
       return 0;
     });
     expect(() => gotoDate('2021-01-04')).not.toThrow();
-  });
-
-  it('the legacy alias centerCol is the same function as centerColumn', () => {
-    expect(centerCol).toBe(centerColumn);
   });
 });
 

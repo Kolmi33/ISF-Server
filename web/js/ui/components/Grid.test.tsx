@@ -10,7 +10,6 @@ const TODAY = '2021-01-04';
 function stubWindowGlobals(): void {
   window.nextFreePtr = {};
   window.prevFreeBefore = vi.fn().mockReturnValue(null);
-  window.paintSel = vi.fn();
   window.syncJumpControls = vi.fn();
   window.ensureOverflow = vi.fn();
   window.notify = vi.fn();
@@ -208,9 +207,8 @@ describe('Grid', () => {
     expect(window.S.visM).toContain('m-blocked');
   });
 
-  it('calls the post-render legacy side effects (paintSel, syncJumpControls, ensureOverflow)', () => {
-    renderGridIntoTable();
-    expect(window.paintSel).toHaveBeenCalled();
+  it('calls the post-render side effects: real paintSelection (no throw) + the still-bridged syncJumpControls/ensureOverflow', () => {
+    expect(() => renderGridIntoTable()).not.toThrow();
     expect(window.syncJumpControls).toHaveBeenCalled();
     expect(window.ensureOverflow).toHaveBeenCalled();
   });

@@ -1304,13 +1304,78 @@ check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then co
   and the full debug-panel lifecycle (turn on → activation line → a real booking produces a
   "✓ (Rev N)" write-log line → "Leeren" clears it → "✕" turns the flag off and closes the
   panel). Zero console errors throughout.
-- **B10g — Boot sequence (the original B10 scope):** `start`/`startUI`/`init`. Only once
-  B10a–B10f land does `legacy.js` actually go to zero and get deleted here, with `app.ts`
-  absorbing the boot orchestration and the `window.S`/`window.render`/`window.notify` bridges
-  retiring along with the last legacy consumer.
-- **Tests:** each sub-slice gets the same unit-test rigor as B1–B9 for whatever pure logic it
-  introduces; B10g mounts `<App/>` with a mocked fetch returning valid/invalid `/api/state` and
-  asserts the right screen renders in each case, name-prompt appears exactly when
-  `!user && !readOnly`, and live timers start once even across remounts.
+- **B10g — Boot sequence — DONE. `legacy.js` DELETED. Backlog B is COMPLETE.**
+  `init`/`startUI` + every remaining top-level boot-time DOM wiring (the toolbar's
+  `btnAssist`/`btnMine`/`btnAll`/`btnSettings`/`btnHelp`/`btnStats`/`btnAdmin`/`btnRefresh`
+  buttons, the `userChip` click/dblclick debounce, `applyTheme`'s boot call + the
+  `matchMedia` "change" listener + the `mb_compact` class, and the column-resize drag) moved
+  into `app.ts`, which is now the real boot/orchestration entry it was always going to become
+  (see its own header comment). The column-resize IIFE became its own small module,
+  `ui/column-resize.ts` (`initColumnResize()`), matching the `initCollisionBanner`/
+  `initDebugPanel` pattern. The six toolbar buttons that take no arguments
+  (`openAssistant`/`openMyBookings`/`openAllBookings`/`openSettings`/`openHelp`/`openAdmin`)
+  are wired via direct import now that app.ts is doing the wiring itself, not a window
+  bridge — `openStats`/`refreshNow` still need a wrapping arrow (both take a real parameter a
+  raw click-handler assignment would otherwise feed the click event into).
+  `esc` finally has no callers left — its last one (`init`'s connection-failed message) now
+  uses the already-gated `escapeHtml` (`ui/escape-html.ts`, B4) + `errorMessage`
+  (`ui/debug-panel.ts`, B10f) instead of a new port. `blockText` and legacy's own `maintKind`
+  and `start` (a dead near-duplicate of `init` with a slightly less complete error path) were
+  all confirmed to have zero remaining callers anywhere and deleted outright, no port —
+  `machine-text.ts`'s `maintenanceKind` had already fully superseded `maintKind` in an earlier
+  slice, but its own doc comment had gone stale claiming two call sites that no longer existed
+  (fixed).
+  **`legacy.js` itself is now deleted**, along with `index.html`'s `<script src="/legacy.js">`
+  tag, and the now-meaningless legacy-quarantine exclusions in `eslint.config.js` and
+  `.prettierignore` (`web/public/**`/`web/public/`, plus two other already-nonexistent-path
+  entries — `public/**`/`public/`/`src/` — found and removed in the same pass).
+  **A cascade of now-genuinely-dead legacy-bridge aliases, found once `legacy.js`'s deletion
+  removed their real callers**: `core/machines.ts`'s `catOf`/`maintSlots`/`maintAt`/
+  `isBlockedM`/`anyMaint` (caught by `knip`, which — instructively — did NOT catch the next
+  four; manual grep-verified caller counts are the authority here, not `knip` alone),
+  `core/dates.ts`'s `ymd`/`parseYmd`/`mondayOf`/`fmtLong`/`todayStr`/`weekdayRange`/
+  `allDaysRange`, `core/assistant.ts`'s `anyRedund`/`pickFor`, `ui/collision-banner.ts`'s
+  `showCollision`, and `ui/grid-scroll.ts`'s `centerCol` — all deleted, along with the
+  "alias `X` equals real name `Y`" unit tests that existed only to pin them. Two of
+  `ui/grid-interaction.ts`'s aliases (`Sel`, `paintSel`) were surviving for a DIFFERENT
+  reason — `ui/grid-scroll.ts` and `ui/components/Grid.tsx` (B1/B3) still read them via
+  `window.Sel.dragging`/`window.paintSel()` rather than importing directly — so those two
+  call sites were converted to direct imports too, finally retiring the whole alias block
+  (`clearSel` had already lost its only caller in B10b).
+  **A deliberate scope note on testing** (E2, since the original plan text assumed a
+  different shape): the plan's own testing paragraph proposed mounting `<App/>` — but this
+  architecture's `app.ts` is a plain bootstrap script with top-level side effects (mounting
+  React roots, wiring listeners), not a component; there is no `<App/>` to mount in isolation,
+  and a jsdom harness heavy enough to fake one would just be re-mocking the whole page. Every
+  extracted piece of boot logic already has its own thorough unit tests in its own module
+  (`ui/mutate.ts`, `ui/debug-panel.ts`, `ui/theme.ts`, `ui/column-resize.ts`, …); the
+  orchestration itself — which functions fire in which order, whether the right buttons wire
+  to the right handlers — is exactly what real-browser verification is suited to catch and
+  jsdom mocking is not, consistent with how every other slice's `initXxx()` wiring in this
+  backlog was verified.
+  10 new tests (`column-resize.test.ts`) + the `Sel`/`paintSel`/`centerCol`/`showCollision`
+  alias-pinning tests removed from `grid-interaction.test.ts`/`grid-scroll.test.ts`/
+  `collision-banner.test.ts`; `Grid.test.tsx`'s post-render-effects test updated to assert
+  the real `paintSelection` doesn't throw rather than mocking it. Full suite 764 passed,
+  coverage 98.92%/93.41%, knip clean.
+  Browser-verified (E5) exhaustively, since this is the slice every other slice's boot-time
+  wiring now depends on: a **fresh browser context** (no localStorage) shows the toolbar +
+  grid + the first-run "Wie heißt du?" name prompt together correctly on first paint; every
+  toolbar button opens its modal; the user chip's single-click (name change, debounced) vs.
+  double-click (active users) distinction still works; the manual refresh button; a real
+  column-resize drag (changes `--machw` live, clamped, persists to `mb_machw`); a real
+  booking write end-to-end through the now-app.ts-owned `init`→`readFile` pipeline; and, in a
+  **second, separate browser context with `/api/state` forced to fail**, the connection-error
+  screen appears with the correctly escaped server error message
+  ("Verbindung zum Server fehlgeschlagen: Failed to fetch…") — the exact path `init`'s catch
+  block exists for. Zero console errors in either context.
 
-**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a ✅ → B10b ✅ → B10c ✅ → B10d ✅ → B10e ✅ → B10f ✅ → B10g.
+**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a ✅ → B10b ✅ → B10c ✅ → B10d ✅ → B10e ✅ → B10f ✅ → B10g ✅.
+
+## Backlog B — COMPLETE
+
+Every slice above has landed. `legacy.js` — the original non-module monolith `public/index.html`
+was extracted into in Phase 1.2 — is deleted. The frontend is 100% gated TypeScript/React,
+one authoritative write path (`ui/mutate.ts`), the store owns runtime state, and every DOM
+interaction the original app had is now a tested, gated module or component. `npm run verify`
+covers the whole tree with no exclusions.

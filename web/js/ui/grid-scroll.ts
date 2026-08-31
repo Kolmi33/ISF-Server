@@ -14,6 +14,7 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../core/dates.ts';
+import { selection } from './grid-interaction.ts';
 
 const DAYS_PER_WEEK_WITH_WEEKENDS = 7;
 const DAYS_PER_WEEK_WITHOUT_WEEKENDS = 5;
@@ -136,7 +137,7 @@ export function prependWeek(): void {
   const scrollLeftBefore = wrap.scrollLeft;
   const scrollWidthBefore = wrap.scrollWidth;
   window.S.startMonday = addDays(window.S.startMonday, -7);
-  if (canStillGrowWindow(window.S.extraWeeks, window.Sel.dragging)) window.S.extraWeeks++;
+  if (canStillGrowWindow(window.S.extraWeeks, selection.dragging)) window.S.extraWeeks++;
   window.notify();
   const grew = wrap.scrollWidth - scrollWidthBefore;
   wrap.scrollLeft = scrollLeftBefore + (grew > 0 ? grew : measuredWeekWidth());
@@ -155,7 +156,7 @@ function handleGridWrapScroll(): void {
   if (isNearRightEdge(wrap.scrollLeft, wrap.clientWidth, wrap.scrollWidth)) {
     extendPending = true;
     const scrollLeftBefore = wrap.scrollLeft;
-    if (canStillGrowWindow(window.S.extraWeeks, window.Sel.dragging)) {
+    if (canStillGrowWindow(window.S.extraWeeks, selection.dragging)) {
       window.S.extraWeeks++;
       window.notify();
       wrap.scrollLeft = scrollLeftBefore;
@@ -333,9 +334,3 @@ export function initGridScroll(): void {
     window.notify();
   });
 }
-
-// ---- Legacy bridge aliases -------------------------------------------------------
-// `legacy.js`'s still-unported `jumpToSlot` (the next-free jump, B2/B4) calls this by its old
-// bare name as `gotoDateCenter`'s only line, and is deliberately NOT edited by this pass
-// (retired whole in Phase 7 slice B10). Delete this block in that slice.
-export const centerCol = centerColumn;

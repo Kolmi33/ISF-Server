@@ -190,9 +190,6 @@
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
 
-<!-- Module entry runs first (module + defer both execute after parsing, in document
-     order), so its window bridges exist before the legacy monolith's init() runs. -->
 <script type="module" src="/js/app.ts"></script>
-<script defer src="/legacy.js"></script>
 </body>
 </html>

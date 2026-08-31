@@ -1,7 +1,10 @@
 # CLAUDE.md — operating manual for this repo
 
 Maschinenplan booking tool. Zero-dependency Node + `node:sqlite` backend, TypeScript
-frontend (Vite). Being reworked top-down, module by module, **conserving every behavior**.
+frontend (React, Vite) — fully gated end to end as of Phase 7 (the frontend's legacy
+monolith, `web/public/legacy.js`, was retired module by module and finally deleted whole;
+see `PHASE7-PLAN.md` for the slice-by-slice history). Further changes still follow the same
+per-module loop below, **conserving every behavior**.
 
 **Resuming, or after any context clear: read `PROGRESS.md` first** — it holds the current
 phase, the backlog, and step-by-step how to continue. Then this file (how we operate) and
@@ -43,13 +46,13 @@ Local workflow uses `reset`; if a shared remote is ever added, prefer `git rever
 
 ## How we work: the per-module loop
 
-Unit of work = one module extraction. Each is ONE commit:
+Unit of work = one module (new feature, or a change to an existing one). Each is ONE commit:
 
-1. Read the target functions in the monolith (`public/index.html`, later `web/js/app.ts`).
-2. Write the test for the new module's intended behavior (red). The existing code's
-   behavior is the spec.
+1. Understand the target behavior — for a change, the current code IS the spec; conserve it
+   unless the change deliberately alters it.
+2. Write the test for the intended behavior (red).
 3. Implement the module until green.
-4. Rewire the app to import it; delete the old copies.
+4. Wire it in (rewire callers, delete superseded code).
 5. `npm run verify` green + quick browser smoke of the touched behavior.
 6. Commit (Conventional-style subject; end with the Co-Authored-By trailer).
 
@@ -67,17 +70,16 @@ Also HALT immediately when: the same item fails `verify` twice (escalate, don't 
 run's budget is hit. Keep scope to one module per iteration; rely on `verify`'s exit code (not
 re-reading the tree) to know you're done.
 
-## Enforcement & the legacy quarantine
+## Enforcement
 
 `verify` is enforced by a git `pre-commit` hook (`.githooks/pre-commit`, runs the dockerized
 gate). Enable once per clone: `git config core.hooksPath .githooks`. Never bypass with
 `--no-verify`.
 
-The un-extracted monolith lives in **`web/public/legacy.js`** — a **classic** (non-module) script,
-loaded via `<script src="/legacy.js">`, so its ~130 functions stay global and the 125 inline
-`onclick=` handlers keep working with zero changes. It is **gate-excluded** (ESLint/Prettier/tsc),
-a shrinking quarantine that must reach zero by Phase 5. All NEW modules face the full gate. Each
-extraction moves code OUT of `legacy.js` into a gated ES module.
+There is no gate-excluded legacy quarantine anymore — `web/public/legacy.js` (the original
+non-module monolith, its ~130 functions kept global for the 125 inline `onclick=` handlers)
+was extracted module by module through Phase 7 and deleted whole once nothing referenced it.
+Every file under `web/`, `server/`, and `shared/` now faces the full gate (ESLint/Prettier/tsc).
 
 ## Principles
 

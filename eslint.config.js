@@ -5,15 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 // Flat config. The rules encode ARCHITECTURE.md §5 + §10 as machine checks.
 export default tseslint.config(
   {
-    ignores: [
-      'node_modules/**',
-      'dist/**',
-      'coverage/**',
-      'data/**',
-      'backups/**',
-      'public/**', // the legacy monolith is being replaced, not linted
-      'web/public/**', // quarantined monolith (legacy.js); burns down to zero by Phase 5
-    ],
+    ignores: ['node_modules/**', 'dist/**', 'coverage/**', 'data/**', 'backups/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

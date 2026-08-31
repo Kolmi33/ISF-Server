@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
-import { showCollisionBanner, initCollisionBanner, showCollision } from './collision-banner.ts';
+import { showCollisionBanner, initCollisionBanner } from './collision-banner.ts';
 
 beforeEach(() => {
   document.body.innerHTML = '<div id="collBanner"></div><button id="collOk"></button>';
@@ -10,10 +10,6 @@ describe('showCollisionBanner', () => {
   it('shows the banner', () => {
     showCollisionBanner();
     expect(document.getElementById('collBanner')!.classList.contains('show')).toBe(true);
-  });
-
-  it('is bridged under its legacy name for the still-unported persist()', () => {
-    expect(showCollision).toBe(showCollisionBanner);
   });
 });
 

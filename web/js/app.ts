@@ -58,6 +58,9 @@ import * as machineLookup from './ui/machine-lookup.ts';
 import * as theme from './ui/theme.ts';
 import * as debugPanel from './ui/debug-panel.ts';
 import * as mutateModule from './ui/mutate.ts';
+import * as columnResize from './ui/column-resize.ts';
+import { errorMessage } from './ui/debug-panel.ts';
+import { escapeHtml } from './ui/escape-html.ts';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
@@ -322,3 +325,97 @@ gridScroll.initGridScroll();
 // .onclick=...` assignment did.
 collisionBanner.initCollisionBanner();
 debugPanel.initDebugPanel();
+columnResize.initColumnResize();
+
+// Phase 7 slice B10g — the app's own theme/compact-mode boot init (legacy's top-level
+// `applyTheme(); matchMedia(...).addEventListener(...); if(mb_compact==='on') ...`). Applied
+// before the first paint, same as legacy — no flash of the wrong theme.
+theme.applyTheme();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  theme.applyTheme();
+  if (window.S.data) window.notify();
+});
+if (localStorage.getItem('mb_compact') === 'on') document.body.classList.add('compact');
+
+/** Wire the toolbar's modal-opening buttons + the refresh button. Faithful port of legacy's
+ *  scattered top-level `document.getElementById(...).onclick = ...` boot-time bindings. */
+function wireToolbarButtons(): void {
+  document.getElementById('btnAssist')!.onclick = assistantModal.openAssistant;
+  document.getElementById('btnMine')!.onclick = myBookingsModal.openMyBookings;
+  document.getElementById('btnAll')!.onclick = allBookingsModal.openAllBookings;
+  document.getElementById('btnSettings')!.onclick = settingsModal.openSettings;
+  document.getElementById('btnHelp')!.onclick = helpModal.openHelp;
+  document.getElementById('btnStats')!.onclick = () => statsModal.openStats();
+  document.getElementById('btnAdmin')!.onclick = adminModal.openAdmin;
+  document.getElementById('btnRefresh')!.onclick = () => void mutateModule.refreshNow(false);
+}
+
+/** Wire the user-name chip: a debounced single click changes the name (so a double-click
+ *  doesn't also fire it), a double-click shows who's currently active. Faithful port of
+ *  legacy's top-level `userChip` bindings. */
+function wireUserChip(): void {
+  let userClickTimer: ReturnType<typeof setTimeout> | null = null;
+  const chip = document.getElementById('userChip')!;
+  chip.onclick = () => {
+    if (userClickTimer) clearTimeout(userClickTimer);
+    userClickTimer = setTimeout(() => askUserNameModal.askUserName(false), 240);
+  };
+  chip.ondblclick = () => {
+    if (userClickTimer) clearTimeout(userClickTimer);
+    void activeUsersModal.openActiveUsers();
+  };
+  chip.title = 'Klick: Namen ändern · Doppelklick: aktive Nutzer';
+}
+
+wireToolbarButtons();
+wireUserChip();
+
+/** Finish booting once the initial data load succeeds: reveal the toolbar/grid, prime the
+ *  toolbar buttons' labels, prompt for a name on a first run, start the live connection, and
+ *  log the boot line. Faithful port of legacy `startUI`. */
+function startUI(): void {
+  document.getElementById('startScreen')!.style.display = 'none';
+  document.getElementById('toolbar')!.style.display = ''; // CSS layout (Grid) takes over
+  document.getElementById('gridWrap')!.style.display = 'block';
+  groupFilterDropdown.fillGroupSel();
+  machineFilterDropdown.updateMachBtn(); // show the persisted filter in the toolbar
+  if (!window.S.user && !window.S.readOnly) askUserNameModal.askUserName(true);
+  userChip.updateUserChip();
+  window.notify();
+  gridScroll.prependWeek(); // one week of past scroll buffer to the left
+  gridScroll.centerToday();
+  mutateModule.stampRef();
+  debugPanel.applyDebug();
+  debugPanel.dbg(
+    'info',
+    'App gestartet — ' +
+      (window.S.data!.machines ? window.S.data!.machines.length : 0) +
+      ' Maschinen geladen' +
+      (window.S.readOnly ? ' (Nur-Lese-Modus)' : ''),
+  );
+  // Auto-refresh + presence (registered exactly once, even if read-only mode is later lifted).
+  if (!window.S.readOnly) liveConnection.startLiveTimers();
+}
+
+/**
+ * The real boot entry point: load the initial state, then either finish booting or show a
+ * connection-failed message. Faithful port of legacy `init`. (legacy's `start` — a dead
+ * near-duplicate with a slightly less complete error path — had zero callers anywhere and was
+ * not ported; `init()` was always the one actually wired up, at the bottom of this file.)
+ */
+async function init(): Promise<void> {
+  document.getElementById('startScreen')!.style.display = 'none';
+  try {
+    window.S.data = await api.readFile();
+  } catch (error) {
+    document.getElementById('startScreen')!.style.display = '';
+    document.getElementById('startMsg')!.innerHTML =
+      'Verbindung zum Server fehlgeschlagen: ' +
+      escapeHtml(errorMessage(error)) +
+      '<br>Läuft der Dienst? Bitte die Seite neu laden.';
+    return;
+  }
+  startUI();
+}
+
+void init();

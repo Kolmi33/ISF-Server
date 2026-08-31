@@ -356,10 +356,3 @@ export function addDeviceToTree(
   tree.children.push({ uid: newUid(), type: 'dev', id: deviceId });
   return true;
 }
-
-// ---- Legacy bridge aliases -------------------------------------------------------
-// `legacy.js`'s `runAssistant` calls these by their OLD names as bare globals; it is
-// deliberately NOT edited by this pass — it's deleted whole in Phase 7 slice B10. Delete
-// this block in that slice. No new code may import from here.
-export const anyRedund = hasAnyRedundancy;
-export const pickFor = chooseDevicesForTree;

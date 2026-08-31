@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest';
 import type { AppState } from '../../../shared/types.ts';
-import { initGridInteraction, paintSel, clearSel, Sel } from './grid-interaction.ts';
+import {
+  initGridInteraction,
+  paintSelection,
+  clearSelection,
+  selection,
+} from './grid-interaction.ts';
 
 /** Minimal grid markup: two machine rows × two dates, plus the group/category header rows
  *  and the `#gridWrap` scroll container the drag-auto-scroll code measures. Faithful to the
@@ -85,7 +90,7 @@ function keydown(key: string, options: KeyboardEventInit = {}): void {
 // The grid DOM and its event listeners are built exactly once, matching `initGridInteraction`'s
 // real one-time-at-boot contract (its `document`-level listeners would otherwise accumulate
 // across tests if a fresh `#grid` were rebuilt — and re-listened-to — per test). Each test only
-// resets the mutable bits: `Sel` state, `window.S`/mocks, scroll position, and localStorage.
+// resets the mutable bits: `selection` state, `window.S`/mocks, scroll position, and localStorage.
 beforeAll(() => {
   // jsdom doesn't implement these two DOM APIs at all — stub them once, globally, rather than
   // per-test. `scrollIntoView` is called unconditionally by keyboard nav; `elementFromPoint`
@@ -102,15 +107,15 @@ beforeEach(() => {
   document.getElementById('gridWrap')!.scrollLeft = 0;
   document.getElementById('gridWrap')!.scrollTop = 0;
   document.getElementById('overlay')!.classList.remove('open');
-  clearSel(); // also repaints, clearing any leftover .sel/.kfocus from the previous test
+  clearSelection(); // also repaints, clearing any leftover .sel/.kfocus from the previous test
   vi.clearAllMocks();
 });
 
-describe('paintSel / clearSel', () => {
+describe('paintSelection / clearSelection', () => {
   it('paints the anchor↔focus rectangle and gives the focus cell a roving tabindex', () => {
-    Sel.anchor = { mid: 'm1', date: '2021-01-04' };
-    Sel.focus = { mid: 'm2', date: '2021-01-05' };
-    paintSel();
+    selection.anchor = { mid: 'm1', date: '2021-01-04' };
+    selection.focus = { mid: 'm2', date: '2021-01-05' };
+    paintSelection();
     expect(cell('m1', '2021-01-04').className).toContain('sel');
     expect(cell('m1', '2021-01-05').className).toContain('sel');
     expect(cell('m2', '2021-01-04').className).toContain('sel');
@@ -120,22 +125,22 @@ describe('paintSel / clearSel', () => {
   });
 
   it('clears previous marks before repainting a smaller selection', () => {
-    Sel.anchor = { mid: 'm1', date: '2021-01-04' };
-    Sel.focus = { mid: 'm2', date: '2021-01-05' };
-    paintSel();
-    Sel.anchor = Sel.focus = { mid: 'm1', date: '2021-01-04' };
-    paintSel();
+    selection.anchor = { mid: 'm1', date: '2021-01-04' };
+    selection.focus = { mid: 'm2', date: '2021-01-05' };
+    paintSelection();
+    selection.anchor = selection.focus = { mid: 'm1', date: '2021-01-04' };
+    paintSelection();
     expect(cell('m2', '2021-01-05').className).not.toContain('sel');
     expect(cell('m2', '2021-01-05').getAttribute('aria-selected')).toBeNull();
   });
 
-  it('clearSel resets the selection and hides the context menu', () => {
-    Sel.anchor = { mid: 'm1', date: '2021-01-04' };
-    Sel.focus = { mid: 'm1', date: '2021-01-04' };
-    paintSel();
-    clearSel();
-    expect(Sel.anchor).toBeNull();
-    expect(Sel.cells).toEqual([]);
+  it('clearSelection resets the selection and hides the context menu', () => {
+    selection.anchor = { mid: 'm1', date: '2021-01-04' };
+    selection.focus = { mid: 'm1', date: '2021-01-04' };
+    paintSelection();
+    clearSelection();
+    expect(selection.anchor).toBeNull();
+    expect(selection.cells).toEqual([]);
     expect(cell('m1', '2021-01-04').className).not.toContain('sel');
     expect(window.hideCtx).toHaveBeenCalledOnce();
   });
@@ -144,45 +149,45 @@ describe('paintSel / clearSel', () => {
 describe('drag-to-select', () => {
   it('mousedown on a cell starts a new single-cell selection', () => {
     mousedownOn(cell('m1', '2021-01-04'));
-    expect(Sel.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
-    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
-    expect(Sel.dragging).toBe(true);
-    expect(Sel.didDrag).toBe(false);
+    expect(selection.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(selection.dragging).toBe(true);
+    expect(selection.didDrag).toBe(false);
     expect(cell('m1', '2021-01-04')).toHaveClass('sel');
   });
 
   it('ignores a non-primary mouse button', () => {
     mousedownOn(cell('m1', '2021-01-04'), { button: 2 });
-    expect(Sel.anchor).toBeNull();
+    expect(selection.anchor).toBeNull();
   });
 
   it('mouseover during a drag extends the focus to the hovered cell', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     mouseoverOn(cell('m2', '2021-01-05'));
-    expect(Sel.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
-    expect(Sel.didDrag).toBe(true);
-    expect(Sel.cells).toHaveLength(4); // the full m1..m2 × both-dates rectangle
+    expect(selection.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
+    expect(selection.didDrag).toBe(true);
+    expect(selection.cells).toHaveLength(4); // the full m1..m2 × both-dates rectangle
   });
 
   it('mouseover before any mousedown is a no-op (no focus to extend)', () => {
     mouseoverOn(cell('m2', '2021-01-05'));
-    expect(Sel.focus).toBeNull();
+    expect(selection.focus).toBeNull();
   });
 
   it('shift+mousedown with an existing anchor spans a rectangle instead of starting fresh', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     mouseupOn(document.body);
     mousedownOn(cell('m2', '2021-01-05'), { shiftKey: true });
-    expect(Sel.anchor).toEqual({ mid: 'm1', date: '2021-01-04' }); // unchanged
-    expect(Sel.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
-    expect(Sel.didDrag).toBe(true);
+    expect(selection.anchor).toEqual({ mid: 'm1', date: '2021-01-04' }); // unchanged
+    expect(selection.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
+    expect(selection.didDrag).toBe(true);
   });
 
   it('mouseup ends the drag and opens the context menu only for a real multi-cell drag', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     mouseoverOn(cell('m2', '2021-01-05'));
     mouseupOn(document.body, { clientX: 10, clientY: 20 });
-    expect(Sel.dragging).toBe(false);
+    expect(selection.dragging).toBe(false);
     expect(window.showCtx).toHaveBeenCalledWith(10, 20);
   });
 
@@ -237,7 +242,7 @@ describe('click handling', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     mouseoverOn(cell('m2', '2021-01-05'));
     clickOn(cell('m2', '2021-01-05'));
-    expect(Sel.didDrag).toBe(false);
+    expect(selection.didDrag).toBe(false);
     expect(window.openCellAction).not.toHaveBeenCalled();
   });
 
@@ -270,33 +275,33 @@ describe('double-click handling', () => {
 describe('keyboard navigation', () => {
   it('the first arrow press (nothing focused yet) focuses the first visible cell without moving', () => {
     keydown('ArrowRight');
-    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
-    expect(Sel.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(selection.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
   });
 
   it('ArrowRight/ArrowDown move focus by one column/row and reset the anchor to match', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('ArrowRight');
-    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-05' });
-    expect(Sel.anchor).toEqual(Sel.focus);
+    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-05' });
+    expect(selection.anchor).toEqual(selection.focus);
     keydown('ArrowDown');
-    expect(Sel.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
+    expect(selection.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
   });
 
   it('Shift+Arrow extends the selection without moving the anchor', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('ArrowRight', { shiftKey: true });
-    expect(Sel.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
-    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-05' });
-    expect(Sel.cells).toHaveLength(2);
+    expect(selection.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-05' });
+    expect(selection.cells).toHaveLength(2);
   });
 
   it('clamps at the top/left edge instead of moving past it', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('ArrowLeft');
-    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-04' }); // clamped, unchanged
+    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-04' }); // clamped, unchanged
     keydown('ArrowUp');
-    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
   });
 
   it('moving past the right edge grows the grid directly via extraWeeks + render()', () => {
@@ -319,7 +324,7 @@ describe('keyboard navigation', () => {
     window.S.visM = [];
     window.S.visD = [];
     keydown('ArrowRight');
-    expect(Sel.focus).toBeNull();
+    expect(selection.focus).toBeNull();
   });
 
   it("Enter on a single-cell selection opens that cell's booking action", () => {
@@ -346,27 +351,27 @@ describe('keyboard navigation', () => {
   it('Escape clears the selection', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('Escape');
-    expect(Sel.anchor).toBeNull();
+    expect(selection.anchor).toBeNull();
   });
 
   it('is suppressed while a modal is open', () => {
     document.getElementById('overlay')!.classList.add('open');
     keydown('ArrowRight');
-    expect(Sel.focus).toBeNull();
+    expect(selection.focus).toBeNull();
   });
 
   it('is suppressed while typing into a form field', () => {
     const input = document.createElement('input');
     document.body.appendChild(input); // must be attached for the keydown to bubble to document
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-    expect(Sel.focus).toBeNull();
+    expect(selection.focus).toBeNull();
     input.remove(); // the grid DOM built in beforeAll is shared across every test in this file
   });
 
   it('ignores keys that are not arrows/Enter/Escape', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('a');
-    expect(Sel.focus).toEqual({ mid: 'm1', date: '2021-01-04' }); // unchanged
+    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-04' }); // unchanged
   });
 });
 
@@ -402,7 +407,7 @@ describe('drag auto-scroll at the grid edges', () => {
     document.dispatchEvent(new MouseEvent('mousemove', { clientX: 490, clientY: 200 }));
     vi.advanceTimersByTime(60);
     expect(document.getElementById('gridWrap')!.scrollLeft).toBeGreaterThan(0);
-    expect(Sel.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
+    expect(selection.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
   });
 
   it('scrolls left, or grows a week when already at the start, near the left edge', () => {

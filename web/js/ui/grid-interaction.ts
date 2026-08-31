@@ -12,8 +12,9 @@
 //
 // Everything genuinely part of selection/navigation is ported here. Booking actions the
 // selection hands off to (opening the context menu, the single-cell booking action, the
-// next-free jump) stay behind the `window.*` bridge — they're still-legacy until whichever
-// later slice ports the booking form and context menu.
+// next-free jump) are each gated components/modules of their own, called via the `window.*`
+// bridge (unlike `selection`/`paintSelection`/`clearSelection` themselves, which
+// `ui/grid-scroll.ts` and `ui/components/Grid.tsx` import directly).
 
 import { computeSelCells, clampIndex, type Cell } from './selection.ts';
 import { categoryTap, categoryTapCancel, toggleAllGroupsInCategory } from './category-fold.ts';
@@ -29,10 +30,8 @@ interface SelectionState {
   didDrag: boolean;
 }
 
-// `ui/grid-scroll.ts` (B3) reads this via `window.Sel` (written before this export existed);
-// legacy's still-unported `showCtx` (the context menu, B10b) reads/mutates it directly by its
-// old bare name `Sel` — see the "Legacy bridge aliases" block at the end of this file. Both
-// need the SAME object this module also mutates, not a copy.
+// `ui/grid-scroll.ts` (B3) and `ui/components/Grid.tsx` (B1) import this directly (both
+// already gated) — they need the SAME object this module also mutates, not a copy.
 export const selection: SelectionState = {
   anchor: null,
   focus: null,
@@ -382,15 +381,3 @@ export function initGridInteraction(): void {
   gridElement.addEventListener('dblclick', handleGridDoubleClick);
   document.addEventListener('keydown', handleDocumentKeyDown);
 }
-
-// ---- Legacy bridge aliases -------------------------------------------------------
-// `showCtx` (Phase 7 slice B10b) no longer needs these — it's gated now and imports
-// `selection`/`clearSelection` directly. The aliases stay for other live consumers: `Sel` for
-// `ui/grid-scroll.ts`'s (B3) `window.Sel.dragging` read, `paintSel` for the React Grid's
-// (B1) post-render effect (`window.paintSel()`), both via the window bridge since neither
-// imports this module directly. `Sel` must be the exact object this module also mutates (see
-// its declaration above), not a copy. Re-check which of these are still needed as each
-// remaining consumer migrates off the window bridge; retired whole once none are.
-export const Sel = selection;
-export const paintSel = paintSelection;
-export const clearSel = clearSelection;

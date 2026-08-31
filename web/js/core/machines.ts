@@ -1,16 +1,13 @@
-// Pure machine logic extracted from the monolith (legacy.js): resource category and
+// Pure machine logic extracted from the original monolith: resource category and
 // the maintenance / weekday-availability predicates that decide whether a cell is
 // bookable. No DOM, no global state — data → data. (Machine lookup by id and the
 // German status-text formatters stay out: the former reads app state, the latter are
 // presentation and move with the views.)
 //
-// Naming note: `categoryOf`, `maintenanceSlots`, `maintenanceSlotAt`, `isBlockedOnDate`
-// and `hasAnyMaintenanceSlot` are each called by their OLD abbreviated name (`catOf`,
-// `maintSlots`, `maintAt`, `isBlockedM`, `anyMaint`) dozens of times across `legacy.js`,
-// via the window bridge. Those old names survive only as the aliases at the bottom of
-// this file; `legacy.js` itself is not edited (E3/E8 — deleted whole in Phase 7 slice
-// B10). `dayAvailable`, `slotCovers` and `cellBookable` were already full words, so they
-// keep their names.
+// `categoryOf`/`maintenanceSlots`/`maintenanceSlotAt`/`isBlockedOnDate`/
+// `hasAnyMaintenanceSlot` were each called by an old abbreviated name (`catOf`/
+// `maintSlots`/`maintAt`/`isBlockedM`/`anyMaint`) dozens of times across `legacy.js`, via
+// window-bridge aliases — retired along with `legacy.js` itself in Phase 7 slice B10g.
 
 import type { Machine, MaintSlot, MachineCategory } from '../../../shared/types.ts';
 import { parseIsoDateString } from './dates.ts';
@@ -111,14 +108,3 @@ export function dayAvailable(machine: Machine, isoDate: string): boolean {
 export function cellBookable(machine: Machine, isoDate: string): boolean {
   return !isBlockedOnDate(machine, isoDate) && dayAvailable(machine, isoDate);
 }
-
-// ---- Legacy bridge aliases -------------------------------------------------------
-// `legacy.js` calls these by their OLD abbreviated names as bare globals (see app.ts's
-// `Object.assign(window, machines)`) and is deliberately NOT edited by this pass — it
-// is retired whole in Phase 7 slice B10. Delete this entire block in that slice. No new
-// code may import from here.
-export const catOf = categoryOf;
-export const maintSlots = maintenanceSlots;
-export const maintAt = maintenanceSlotAt;
-export const isBlockedM = isBlockedOnDate;
-export const anyMaint = hasAnyMaintenanceSlot;

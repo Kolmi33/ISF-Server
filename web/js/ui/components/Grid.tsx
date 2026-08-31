@@ -29,6 +29,7 @@ import { buildGridRows, visibleWeeks, type GridRow } from '../grid.ts';
 import { daysPerWeek } from '../grid-scroll.ts';
 import { CATEGORIES } from '../../core/machines.ts';
 import { categoryTap, categoryTapCancel, toggleAllGroupsInCategory } from '../category-fold.ts';
+import { paintSelection } from '../grid-interaction.ts';
 import { Icon } from './Icon.tsx';
 import { GridBodyRow } from './GridBody.tsx';
 
@@ -179,7 +180,7 @@ export function Grid() {
         `${theadRef.current.offsetHeight || 47}px`,
       );
     }
-    window.paintSel();
+    paintSelection();
     window.syncJumpControls();
     requestAnimationFrame(window.ensureOverflow);
   });
