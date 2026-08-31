@@ -383,11 +383,13 @@ export function initGridInteraction(): void {
 }
 
 // ---- Legacy bridge aliases -------------------------------------------------------
-// `legacy.js`'s still-unported context menu (`showCtx`, Phase 7 slice B10b) reads/writes this
-// state by its old bare names — `Sel`, `paintSel`, `clearSel` — at dozens of call sites, and is
-// deliberately NOT edited by this pass (retired whole in Phase 7 slice B10g). `Sel` must be the
-// exact object this module also mutates (see its declaration above), not a copy. Delete this
-// whole block once B10b ports `showCtx`.
+// `showCtx` (Phase 7 slice B10b) no longer needs these — it's gated now and imports
+// `selection`/`clearSelection` directly. The aliases stay for other live consumers: `Sel` for
+// `ui/grid-scroll.ts`'s (B3) `window.Sel.dragging` read, `paintSel` for the React Grid's
+// (B1) post-render effect (`window.paintSel()`), both via the window bridge since neither
+// imports this module directly. `Sel` must be the exact object this module also mutates (see
+// its declaration above), not a copy. Re-check which of these are still needed as each
+// remaining consumer migrates off the window bridge; retired whole once none are.
 export const Sel = selection;
 export const paintSel = paintSelection;
 export const clearSel = clearSelection;

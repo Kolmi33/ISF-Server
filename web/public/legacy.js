@@ -458,46 +458,9 @@ function catTapCancel(){ clearTimeout(catTapTimer); }
 /* gridEl, drag-select + auto-scroll, the grid's mousedown/mouseover/click/dblclick →
    ui/grid-interaction.ts (window bridge). Phase 7 slice B2. */
 
-/* Context menu on selection */
-function showCtx(x,y){
-  const menu=document.getElementById('ctxMenu');
-  const mids=[...new Set(Sel.cells.map(c=>c.mid))];
-  const dates=Sel.cells.map(c=>c.date).sort();
-  const from=dates[0], to=dates[dates.length-1];
-  const booked=Sel.cells.filter(c=>getBooking(c.mid,c.date));
-  const names=[...new Set(booked.map(c=>getBooking(c.mid,c.date).name))];
-  menu.innerHTML=`
-    <div style="padding:4px 10px;font-size:12px;color:var(--muted)">${mids.length} Maschine(n) · ${fmtLong(from)}${from!==to?' – '+fmtLong(to):''}</div>
-    <button id="cxBook">${ic('cal')} Buchen…</button>
-    ${booked.length?`<button id="cxDel" title="betroffen: ${esc(names.join(', '))}">${ic('trash')} ${booked.length} Buchung(en) löschen</button>`:''}
-    <button id="cxClose">Abbrechen</button>`;
-  menu.style.display='block';
-  const r=menu.getBoundingClientRect();
-  menu.style.left=Math.max(4, Math.min(x, innerWidth - r.width - 10))+'px';
-  menu.style.top =Math.max(4, Math.min(y, innerHeight - r.height - 10))+'px';
-  document.getElementById('cxBook').onclick=()=>{ hideCtx(); openBookingForm(mids, from, to); };
-  const d=document.getElementById('cxDel');
-  if(d) d.onclick=async ()=>{
-    hideCtx();
-    if(!await askConfirm({
-      title:'Markierte Buchungen löschen?',
-      body:`<b>${booked.length}</b> Buchung(en) im Bereich ${esc(fmtLong(from))}${from!==to?' – '+esc(fmtLong(to)):''}.<br>Betroffen: <b>${esc(names.join(', '))}</b>`,
-      yes:`${booked.length} Buchung(en) löschen`
-    })) return;
-    const cells=[...Sel.cells];
-    clearSel(); // Markierung sofort aufheben – snappy, Zellen patchen gleich nach
-    const res=await mutate(
-      fresh=>deleteSelectedCells(fresh, cells, mids), // → core/booking.ts (Zell-Liste + Sweep)
-      `Bereich gelöscht: ${mids.length} Maschine(n), ${from} bis ${to}`);
-    if(res && !res.abort){ offerUndo(`${res.n} Buchung(en) gelöscht.`, res.undo, 'Bereich löschen'); }
-  };
-  document.getElementById('cxClose').onclick=()=>{ hideCtx(); clearSel(); };
-}
-function hideCtx(){ document.getElementById('ctxMenu').style.display='none'; }
-document.addEventListener('mousedown', ev=>{
-  const m=document.getElementById('ctxMenu');
-  if(m.style.display!=='none' && !m.contains(ev.target)) hideCtx();
-});
+/* showCtx, hideCtx, and the outside-click dismissal → ui/components/ContextMenu.tsx (window
+   bridge). Mounted once at boot onto #ctxMenu, same pattern as Grid.tsx onto #grid. Phase 7
+   slice B10b. */
 
 /* The grid's own keydown listener (arrow nav, Enter, Escape) → ui/grid-interaction.ts
    (window bridge). Phase 7 slice B2. (The separate Escape-closes-modal listener below is

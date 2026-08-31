@@ -1138,9 +1138,37 @@ check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then co
   Browser-verified (E5): starred a machine (moved into "★ Favoriten", persisted, un-starred
   cleanly), jumped forward via ⏭ (correct toast, cell selected, ⏮ appeared), jumped forward
   again (moved further), then ⏮ back to the exact same date — no console errors.
-- **B10b — Context menu:** `showCtx`/`hideCtx`, the right-click cell menu — check its actual
-  markup/content before deciding React-component vs. plain module (matches the B2/B3/B8
-  judgment call either way).
+- **B10b — Context menu — DONE.** `showCtx`/`hideCtx` + the document-level outside-click
+  dismissal → new `ui/components/ContextMenu.tsx`, mounted once at boot onto `#ctxMenu` (same
+  pattern as `Grid.tsx` onto `#grid`), still called from `ui/grid-interaction.ts` (B2) via the
+  `window.showCtx`/`window.hideCtx` bridge, unchanged. Shape decision: React, not a plain
+  module — unlike B8's static-shape `#userChip`/`#collBanner`, `#ctxMenu`'s content is fully
+  dynamic (button set and text vary with selection size, date range, and whether anything's
+  booked), so it fit the B2/B3/B8 judgment call on the React side.
+  `#ctxMenu` itself IS the menu box (CSS already gives it `position:fixed; display:none`,
+  matching legacy) — the component only fills its children and toggles its own `display`/
+  position via a `useLayoutEffect` (measure-then-clamp against the viewport, same approach as
+  legacy's own `getBoundingClientRect()` call, done before paint so there's no visible jump);
+  it does NOT render a nested wrapper div (an early draft did, which silently broke visibility
+  since the parent `#ctxMenu` was still `display:none` under CSS — caught before committing,
+  not a shipped bug). "Buchen…" hides the menu and calls the already-gated `openBookingForm`
+  (B4) directly; the delete button (shown only when the selection has bookings) hides the menu,
+  confirms via `window.askConfirm` (B10c), deletes via the already-gated `deleteSelectedCells`
+  (`core/booking.ts`, A5) through `window.mutate` (B10f), and offers undo via the already-gated
+  `offerUndo` (`toast.ts`); "Abbrechen" hides the menu and calls the already-gated
+  `clearSelection` (B10a's export change) directly. Split into `useContextMenuInfo` (state +
+  effects) and `ContextMenuContent` (render) to stay under the 60-line function budget.
+  `ui/grid-interaction.ts`'s "Legacy bridge aliases" comment updated: `Sel`/`paintSel` stay
+  (still read via `window.Sel`/`window.paintSel` by `ui/grid-scroll.ts` and the React Grid),
+  they just no longer serve `showCtx`, which is gated now.
+  9 new tests (`ContextMenu.test.tsx`), including a real mutate-stub delete flow asserting the
+  booking actually leaves `S.data.bookings` and undo is offered. Full suite 654 passed,
+  coverage 98.93%/93.4%. Browser-verified (E5): drag-selected a multi-cell range → menu
+  appeared correctly positioned next to it with the right machine-count/date-range text and no
+  delete button; outside-click dismissed it; "Buchen…" hid the menu and opened the booking form
+  pre-picked for the range; booked a cell, re-selected a range covering it → delete button now
+  read "1 Buchung(en) löschen", clicking it raised the real confirm dialog, confirming deleted
+  the booking and toasted with an undo offer — zero console errors throughout.
 - **B10c — Confirm dialog:** `askConfirm`. `#confirm2` is static markup already in
   `index.html` (like `#collBanner`) — a plain-module port targeting it directly is the safe,
   low-risk choice; every existing caller (B4/B6/B7) already expects the exact
@@ -1179,4 +1207,4 @@ check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then co
   asserts the right screen renders in each case, name-prompt appears exactly when
   `!user && !readOnly`, and live timers start once even across remounts.
 
-**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a ✅ → B10b → B10c → B10d → B10e → B10f → B10g.
+**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a ✅ → B10b ✅ → B10c → B10d → B10e → B10f → B10g.

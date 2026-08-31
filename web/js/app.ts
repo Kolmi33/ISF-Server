@@ -48,6 +48,7 @@ import * as allBookingsModal from './ui/components/AllBookingsModal.tsx';
 import * as adminModal from './ui/components/AdminModal.tsx';
 import * as machineFormModal from './ui/components/MachineFormModal.tsx';
 import * as assistantModal from './ui/components/AssistantModal.tsx';
+import * as contextMenu from './ui/components/ContextMenu.tsx';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
@@ -121,8 +122,8 @@ declare global {
     nextFreePtr: Record<string, string>;
     /** Bridged from ui/favorite-jump.ts (Phase 7 slice B10a). */
     prevFreeBefore: (machine: Machine, fromIso: string) => string | null;
-    /** Still legacy — the context menu (Phase 7 slice B10b). ui/grid-interaction.ts (B2) only
-     *  calls these. */
+    /** Bridged from ui/components/ContextMenu.tsx (Phase 7 slice B10b); called by
+     *  ui/grid-interaction.ts's (B2) after-drag-select and Enter-key routing. */
     hideCtx: () => void;
     showCtx: (x: number, y: number) => void;
     /** Bridged from ui/favorite-jump.ts (Phase 7 slice B10a); called by
@@ -231,6 +232,7 @@ Object.assign(window, allBookingsModal);
 Object.assign(window, adminModal);
 Object.assign(window, machineFormModal);
 Object.assign(window, assistantModal);
+Object.assign(window, contextMenu);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);
@@ -281,6 +283,7 @@ window.notify = () => {
 // `render()` export becomes `window.render` (bridged above), so the store subscription just
 // above keeps driving it exactly as it drove legacy's `render()` before this slice.
 createRoot(document.getElementById('grid')!).render(createElement(gridComponent.Grid));
+createRoot(document.getElementById('ctxMenu')!).render(createElement(contextMenu.ContextMenu));
 
 // Phase 7 slice B2 — selection, drag-select and keyboard navigation (`ui/grid-interaction.ts`).
 // Wired once at boot, same as legacy's own top-level `gridEl.addEventListener(...)` calls did;
