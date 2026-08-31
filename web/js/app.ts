@@ -52,6 +52,8 @@ import * as contextMenu from './ui/components/ContextMenu.tsx';
 import * as confirm from './ui/confirm.ts';
 import type { AskConfirmOptions } from './ui/confirm.ts';
 import * as activeUsersModal from './ui/components/ActiveUsersModal.tsx';
+import * as machineFilterDropdown from './ui/components/MachineFilterDropdown.tsx';
+import * as groupFilterDropdown from './ui/components/GroupFilterDropdown.tsx';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
@@ -100,11 +102,6 @@ declare global {
     /** Bridged from ui/grid-scroll.ts (Phase 7 slice B3); called by legacy's own boot sequence
      *  and by the "Ändern…"-adjacent Settings row (React, B9). */
     centerToday: () => void;
-    /** Still legacy — the grid's category ein-/ausklappen. Called by both the React Grid
-     *  (B1, its toggle buttons) and ui/grid-interaction.ts (B2, its group-row click/dblclick). */
-    catTap: (category: string) => void;
-    catTapCancel: () => void;
-    toggleAllGroupsInCat: (category: string) => void;
     /** Bridged from ui/grid-interaction.ts (Phase 7 slice B2); called by the React Grid's
      *  post-render effect. (ui/favorite-jump.ts's `jumpToSlot`, B10a, imports `paintSelection`
      *  directly — both are gated.) */
@@ -137,13 +134,18 @@ declare global {
     /** Still legacy — machine lookup by id (an internally-memoized Map, rebuilt whenever
      *  `S.data.machines` is replaced by a new array reference). */
     machById: (mid: string) => Machine | undefined;
-    /** Still legacy — persists the machine/group filter selections; toolbar chip refresh for
-     *  the same filter. Called by the My Bookings modal's (B5) "only my machines" shortcut. */
+    /** Bridged from ui/components/MachineFilterDropdown.tsx (Phase 7 slice B10e); persists
+     *  the machine/group filter selections. Called by the My Bookings modal's (B5) "only my
+     *  machines" shortcut and the Assistant's (B7) "go to run" jump, besides the dropdowns
+     *  themselves. */
     saveFilters: () => void;
+    /** Bridged from ui/components/MachineFilterDropdown.tsx (Phase 7 slice B10e); refreshes
+     *  the toolbar button's label/highlight from `S.machSel`. Same callers as `saveFilters`. */
     updateMachBtn: () => void;
-    /** Still legacy — rebuilds the toolbar's group-filter checkbox list; called after the
-     *  machine form (B6) creates, edits, or deletes a machine (a save can add/rename/remove a
-     *  group). */
+    /** Bridged from ui/components/GroupFilterDropdown.tsx (Phase 7 slice B10e); forces the
+     *  dropdown to recompute its group list next render. Called after the machine form (B6)
+     *  creates, edits, or deletes a machine (a save can add/rename/remove a group), and by
+     *  net/live-connection.ts's (B8) "structural" SSE handler. */
     fillGroupSel: () => void;
     /** Still legacy — the optimistic write pipeline every mutation goes through: applies `fn`
      *  to the in-memory `S.data` synchronously, logs the action, repaints (patch or full), then
@@ -227,6 +229,8 @@ Object.assign(window, assistantModal);
 Object.assign(window, contextMenu);
 Object.assign(window, confirm);
 Object.assign(window, activeUsersModal);
+Object.assign(window, machineFilterDropdown);
+Object.assign(window, groupFilterDropdown);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);
@@ -278,6 +282,12 @@ window.notify = () => {
 // above keeps driving it exactly as it drove legacy's `render()` before this slice.
 createRoot(document.getElementById('grid')!).render(createElement(gridComponent.Grid));
 createRoot(document.getElementById('ctxMenu')!).render(createElement(contextMenu.ContextMenu));
+createRoot(document.getElementById('machDrop')!).render(
+  createElement(machineFilterDropdown.MachineFilterDropdown),
+);
+createRoot(document.getElementById('groupDrop')!).render(
+  createElement(groupFilterDropdown.GroupFilterDropdown),
+);
 
 // Phase 7 slice B2 — selection, drag-select and keyboard navigation (`ui/grid-interaction.ts`).
 // Wired once at boot, same as legacy's own top-level `gridEl.addEventListener(...)` calls did;

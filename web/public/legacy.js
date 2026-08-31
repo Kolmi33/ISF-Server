@@ -156,10 +156,11 @@ function ic(name){ return '<svg class="ic" aria-hidden="true"><use href="#i-'+na
 /* askConfirm → ui/confirm.ts (window bridge). Phase 7 slice B10c. */
 /* showCollision, the #collOk dismiss wiring → ui/collision-banner.ts (window bridge).
    liveTimersOn → net/live-connection.ts's own module state. Phase 7 slice B8. */
-function saveFilters(){
-  localStorage.setItem('mb_machsel', JSON.stringify([...S.machSel]));
-  localStorage.setItem('mb_groupssel', JSON.stringify([...S.groupsSel]));
-}
+/* saveFilters, fillMachSel, updateMachBtn, searchActive (dead — superseded by
+   ui/grid.ts's buildGridRows, B1), matchesSearch (dead, same), groupList, fillGroupSel,
+   updateGroupBtn, mfOpenCat/mfOpenGrp/mfShow, the machBtn/machDrop/groupBtn/groupDrop click
+   wiring → ui/components/MachineFilterDropdown.tsx + ui/components/GroupFilterDropdown.tsx +
+   ui/machine-filter.ts (window bridge). Phase 7 slice B10e. */
 /* openHelp() → ui/components/HelpModal.tsx (window bridge). Phase 7 slice B9. */
 document.getElementById('btnHelp').onclick=openHelp;
 
@@ -175,130 +176,6 @@ if(localStorage.getItem('mb_compact')==='on') document.body.classList.add('compa
 
 
 /* openSettings() → ui/components/SettingsModal.tsx (window bridge). Phase 7 slice B9. */
-
-/* --- Ressourcenfilter „Filtern": Dropdown mit Suchfeld, Klappbaum und
-   Checkboxen. Die Kategorie-Buttons (Maschinen/Messtechnik) filtern NUR die
-   Liste im Dropdown (welche Kategorie-Abschnitte angezeigt werden) – sie
-   verändern das RASTER NICHT. Die Häkchen isolieren einzelne Geräte im Raster
-   (S.machSel). Klappbaum-Zustand (mfOpenCat/mfOpenGrp) und Listen-Kategorie-
-   Filter (mfShow) leben pro Öffnen; beim Öffnen: Baum eingeklappt (nur
-   „★ Favoriten" offen), beide Kategorien im Listenfilter aktiv. --- */
-let mfOpenCat=null, mfOpenGrp=null, mfShow=null;
-function fillMachSel(reset){
-  const drop=document.getElementById('machDrop');
-  if(reset || !mfOpenCat){ mfOpenCat=new Set(['fav']); mfOpenGrp=new Set(); mfShow=new Set(['maschine','messtechnik']); }
-  const lbl=(m,cat,gk)=>`<label data-name="${esc((m.name+' '+m.group).toLowerCase())}" data-tcat="${cat}"${gk?` data-tgrp="${esc(gk)}"`:''}><input type="checkbox" class="mfCb" value="${esc(m.id)}" ${S.machSel.has(m.id)?'checked':''}> ${esc(m.name)}</label>`;
-  const head=(k,label,fav)=>`<div class="grp cathead click" data-tcat="${k}"><span class="tarr">▸</span> ${fav?'★ ':''}${esc(label)}</div>`;
-  let items='';
-  // Favoriten ganz oben (eigene Top-Sektion, ohne Bereichs-Unterteilung)
-  const favs=S.data.machines.filter(m=>S.favs.has(m.id));
-  if(favs.length){ items+=head('fav','Favoriten',true); for(const m of favs) items+=lbl(m,'fav',''); }
-  // Danach die beiden Kategorien mit ihren Bereichen
-  const rest=S.data.machines.filter(m=>!S.favs.has(m.id)).sort((a,b)=>(catOf(a)==='messtechnik'?1:0)-(catOf(b)==='messtechnik'?1:0));
-  let c=null, g=null;
-  for(const m of rest){
-    const mc=catOf(m);
-    if(mc!==c){ c=mc; g=null; items+=head(mc, catLabel(mc), false); }
-    const gk=mc+'::'+m.group;
-    if(m.group!==g){ g=m.group; items+=`<div class="grp grpsub click" data-tgrp="${esc(gk)}" data-tcat="${mc}"><span class="tarr">▸</span> ${esc(m.group)}</div>`; }
-    items+=lbl(m,mc,gk);
-  }
-  drop.innerHTML=`
-    <div class="seg fill" style="margin-bottom:4px" id="mfCatSeg" role="group" aria-label="Kategorie in der Liste zeigen">
-      ${CATS.map(([c,l])=>`<button data-c="${c}" class="${mfShow.has(c)?'on':''}" aria-pressed="${mfShow.has(c)}">${catIco(c)} ${l}</button>`).join('')}
-    </div>
-    <input type="text" id="machSearch" placeholder="Ressource suchen…" style="width:100%;margin-bottom:6px" autocomplete="off">
-    <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center;justify-content:space-between">
-      <span class="hint" style="margin:0" id="machCount"></span>
-      <button class="btn small clearbtn" id="machClear">${ic('trash')} Filter löschen</button>
-    </div>
-    <div class="mlist" style="max-height:300px" id="machList">${items}</div>`;
-  const cnt=()=>{ document.getElementById('machCount').textContent=S.machSel.size?S.machSel.size+' gewählt':'alle sichtbar'; };
-  // Sichtbarkeit im Baum: Suchtext klappt alles auf (zeigt Treffer), sonst
-  // richtet sie sich nach dem Klappzustand (mfOpenCat / mfOpenGrp).
-  // „★ Favoriten" (tcat='fav') sind immer sichtbar; die Kategorie-Buttons (mfShow)
-  // blenden nur die Maschinen-/Messtechnik-Abschnitte der Liste ein/aus.
-  const inShow=tcat=> tcat==='fav' || mfShow.has(tcat);
-  const applyView=()=>{
-    const q=drop.querySelector('#machSearch').value.toLowerCase();
-    const searching=!!q;
-    drop.querySelectorAll('#machList label').forEach(l=>{
-      let vis;
-      if(searching) vis=l.dataset.name.includes(q) && inShow(l.dataset.tcat);
-      else vis = inShow(l.dataset.tcat) && mfOpenCat.has(l.dataset.tcat) && (!l.dataset.tgrp || mfOpenGrp.has(l.dataset.tgrp));
-      l.style.display=vis?'':'none';
-    });
-    drop.querySelectorAll('#machList .grpsub').forEach(h=>{
-      h.style.display=(!searching && inShow(h.dataset.tcat) && mfOpenCat.has(h.dataset.tcat))?'':'none';
-      const a=h.querySelector('.tarr'); if(a) a.textContent=mfOpenGrp.has(h.dataset.tgrp)?'▾':'▸';
-    });
-    drop.querySelectorAll('#machList .cathead').forEach(h=>{
-      h.style.display=(!searching && inShow(h.dataset.tcat))?'':'none';
-      const a=h.querySelector('.tarr'); if(a) a.textContent=mfOpenCat.has(h.dataset.tcat)?'▾':'▸';
-    });
-  };
-  drop.querySelectorAll('#mfCatSeg button').forEach(b=>{
-    b.onclick=()=>{ const c=b.dataset.c; mfShow.has(c)?mfShow.delete(c):mfShow.add(c);  // NUR die Liste, kein render()
-      b.classList.toggle('on', mfShow.has(c)); b.setAttribute('aria-pressed', mfShow.has(c)); applyView(); };
-  });
-  drop.querySelectorAll('#machList .cathead').forEach(h=>{
-    h.onclick=()=>{ const k=h.dataset.tcat; mfOpenCat.has(k)?mfOpenCat.delete(k):mfOpenCat.add(k); applyView(); };
-  });
-  drop.querySelectorAll('#machList .grpsub').forEach(h=>{
-    h.onclick=()=>{ const k=h.dataset.tgrp; mfOpenGrp.has(k)?mfOpenGrp.delete(k):mfOpenGrp.add(k); applyView(); };
-  });
-  drop.querySelectorAll('.mfCb').forEach(cb=>{
-    cb.onchange=()=>{ cb.checked?S.machSel.add(cb.value):S.machSel.delete(cb.value); saveFilters(); cnt(); updateMachBtn(); notify(); };
-  });
-  drop.querySelector('#machClear').onclick=()=>{ S.machSel.clear(); saveFilters(); fillMachSel(); notify(); };
-  const se=drop.querySelector('#machSearch');
-  se.oninput=applyView;
-  se.focus();
-  applyView(); cnt(); updateMachBtn();
-}
-function updateMachBtn(){
-  const b=document.getElementById('machBtn');
-  b.innerHTML = ic('search')+' '+(S.machSel.size ? `${S.machSel.size} gewählt ▾` : 'Filtern ▾');
-  b.style.background = S.machSel.size ? 'var(--accent-light)' : '';
-}
-document.getElementById('machBtn').onclick = ev=>{
-  ev.stopPropagation();
-  const d=document.getElementById('machDrop');
-  const wasOpen=d.classList.contains('open');
-  d.classList.toggle('open');
-  if(!wasOpen) fillMachSel(true);   // beim Öffnen: Baum eingeklappt (nur Favoriten offen)
-};
-document.getElementById('machDrop').onclick = ev=>ev.stopPropagation();
-document.addEventListener('click', ()=>document.getElementById('machDrop').classList.remove('open'));
-function searchActive(){ return S.machSel.size>0; }
-function matchesSearch(m){ return S.machSel.size===0 || S.machSel.has(m.id); }
-
-/* --- Group filter as checklist dropdown --- */
-function groupList(){ return [...new Set(S.data.machines.map(m=>m.group))]; }
-function fillGroupSel(){
-  const drop=document.getElementById('groupDrop');
-  drop.innerHTML =
-    `<label><input type="checkbox" id="grpAll" ${S.groupsSel.size===0?'checked':''}> <b>Alle Bereiche</b></label><hr style="border:none;border-top:1px solid var(--border);margin:4px 0">` +
-    groupList().map(g=>`<label><input type="checkbox" class="grpCb" value="${esc(g)}" ${S.groupsSel.has(g)?'checked':''}> ${esc(g)}</label>`).join('');
-  drop.querySelector('#grpAll').onchange=()=>{ S.groupsSel.clear(); saveFilters(); fillGroupSel(); updateGroupBtn(); notify(); };
-  drop.querySelectorAll('.grpCb').forEach(cb=>{
-    cb.onchange=()=>{
-      cb.checked ? S.groupsSel.add(cb.value) : S.groupsSel.delete(cb.value);
-      if(S.groupsSel.size===groupList().length) S.groupsSel.clear(); // all selected = all
-      saveFilters(); fillGroupSel(); updateGroupBtn(); notify();
-    };
-  });
-  updateGroupBtn();
-}
-function updateGroupBtn(){
-  const b=document.getElementById('groupBtn');
-  b.textContent = S.groupsSel.size===0 ? 'Alle Bereiche ▾' : `${S.groupsSel.size} Bereich${S.groupsSel.size>1?'e':''} ▾`;
-}
-document.getElementById('groupBtn').onclick = ev=>{ ev.stopPropagation(); document.getElementById('groupDrop').classList.toggle('open'); };
-document.getElementById('groupDrop').onclick = ev=>ev.stopPropagation();
-document.addEventListener('click', ()=>document.getElementById('groupDrop').classList.remove('open'));
-
-
 
 /* Buchungsliste einer Person (Serien zusammengefasst), mit Sprung ins Raster */
 
@@ -340,51 +217,22 @@ document.addEventListener('click', ()=>document.getElementById('groupDrop').clas
    Spalten) gefüllt – das Koordinatensystem der Auswahl. Sichtbare Wochen =
    S.weeks + S.extraWeeks; ensureOverflow() hält das Raster stets breiter als
    das Fenster, damit horizontal immer gescrollt werden kann.
-   nameColor(): deterministische Personenfarbe aus dem Namens-Hash,
-   themeabhängig hell (Text dunkel) bzw. dunkel (Text hell).
    ================================================================= */
 function esc(s){ return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function nameColor(name){
-  let h=0; for(const ch of name) h=(h*31+ch.charCodeAt(0))>>>0;
-  return document.documentElement.dataset.theme==='dark'
-    ? `hsl(${h%360} 35% 30%)`
-    : `hsl(${h%360} 55% 88%)`;
-}
-function getBooking(mid,date){ const mb=S.data.bookings[mid]; return mb?mb[date]:undefined; }
+/* nameColor, getBooking → dead code (see ui/grid.ts's nameColor/getBooking, Phase 7 slice B1
+   — their only remaining callers; these legacy copies had none left). */
 
 /* --- Hauptkategorien: „Maschinen" (Hallen, Pool …) und „Messtechnik" ---
    Jede Ressource trägt optional m.cat='messtechnik'; fehlt das Feld, gilt sie
    als Maschine (alle Altbestände bleiben so ohne Migration gültig). Die
    Bereiche (m.group) sind Unterkategorien ihrer jeweiligen Hauptkategorie.
    S.cats steuert die Sichtbarkeit im Raster (Umschalt-Buttons im Spaltenkopf). */
-const CATS=[['maschine','Maschinen'],['messtechnik','Messtechnik']];
-/* catOf → core/machines.ts (window bridge). */
-function catLabel(c){ return c==='messtechnik' ? 'Messtechnik' : 'Maschinen'; }
-function catIco(c){ return ic(c==='messtechnik' ? 'gauge' : 'factory'); }  // einheitliches Icon je Kategorie
-function groupCat(g){ const m=S.data.machines.find(x=>x.group===g); return catOf(m); }
-function toggleCat(c){
-  // Einfachklick: Kategorie im Raster ein-/ausklappen. Kein Zwang, eine aktiv
-  // zu lassen – sind beide aus, zeigt das Raster nur noch die Favoriten.
-  S.cats.has(c) ? S.cats.delete(c) : S.cats.add(c);
-  localStorage.setItem('mb_cats', JSON.stringify([...S.cats]));
-  notify();
-}
-/* Doppelklick auf Kategorie-Button/-Kopf: ALLE Unterkategorien (Bereiche) dieser
-   Kategorie auf einmal auf- oder zuklappen (Toggle). Sind alle offen → alle zu,
-   sonst → alle auf (und die Kategorie selbst aufgeklappt). */
-function toggleAllGroupsInCat(c){
-  if(!S.cats.has(c)){ S.cats.add(c); localStorage.setItem('mb_cats', JSON.stringify([...S.cats])); }
-  const groups=[...new Set(S.data.machines.filter(m=>catOf(m)===c).map(m=>m.group))];
-  const allOpen=groups.every(g=>!S.collapsed.has(g));
-  groups.forEach(g=> allOpen ? S.collapsed.add(g) : S.collapsed.delete(g));
-  localStorage.setItem('mb_collapsed', JSON.stringify([...S.collapsed]));
-  notify();
-}
-/* Einfach-/Doppelklick trennen (sonst löst der Doppelklick erst den Einfach-
-   Toggle aus): kurzer Timer, den der Doppelklick abbricht. */
-let catTapTimer=null;
-function catTap(c){ clearTimeout(catTapTimer); catTapTimer=setTimeout(()=>toggleCat(c), 220); }
-function catTapCancel(){ clearTimeout(catTapTimer); }
+/* CATS, catLabel, catIco → core/machines.ts's CATEGORIES (window bridge, Phase 7 slice B5) —
+   this was their last remaining caller. catOf → core/machines.ts (window bridge). groupCat
+   was dead code (no remaining callers) and deleted outright, no port. toggleCat,
+   toggleAllGroupsInCat, catTap, catTapCancel → ui/category-fold.ts, imported directly by
+   ui/components/Grid.tsx (B1) and ui/grid-interaction.ts (B2) — both already gated, so no
+   window bridge needed. Phase 7 slice B10e. */
 
 /* --- Favoriten: immer oben, überall --- */
 /* displayGroup, FAVGRP, orderedMachines() → dead code (see ui/grid.ts's displayGroup/
@@ -496,7 +344,8 @@ document.getElementById('btnAdmin').onclick  = openAdmin;
 /* maintText → ui/machine-text.ts (window bridge). */
 function blockText(m,d){ return maintText(maintAt(m,d)); }
 function maintKind(m){ const s=maintAt(m,todayStr()); return s?s.type:null; }
-function catIco(c){ return ic(c==='messtechnik' ? 'gauge' : 'factory'); }
+/* This file's other catIco (a byte-identical duplicate, shadowing this one until it was
+   itself deleted in Phase 7 slice B10e) is gone — see core/machines.ts's CATEGORIES. */
 /* API, apiGet, apiPost, normalizeState → net/api.ts (window bridge). The HTTP data
    client (same-origin, fetch) is unchanged; SSE below still uses the bridged `API`. */
 async function readFile(){ return normalizeState(await apiGet('/api/state')); }

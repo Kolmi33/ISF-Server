@@ -28,6 +28,7 @@ import {
 import { buildGridRows, visibleWeeks, type GridRow } from '../grid.ts';
 import { daysPerWeek } from '../grid-scroll.ts';
 import { CATEGORIES } from '../../core/machines.ts';
+import { categoryTap, categoryTapCancel, toggleAllGroupsInCategory } from '../category-fold.ts';
 import { Icon } from './Icon.tsx';
 import { GridBodyRow } from './GridBody.tsx';
 
@@ -45,12 +46,12 @@ function CategoryToggleButtons() {
             aria-pressed={isOpen}
             onClick={(event) => {
               event.stopPropagation();
-              window.catTap(id);
+              categoryTap(id);
             }}
             onDoubleClick={(event) => {
               event.stopPropagation();
-              window.catTapCancel();
-              window.toggleAllGroupsInCat(id);
+              categoryTapCancel();
+              toggleAllGroupsInCategory(id);
             }}
           >
             <Icon name={icon} /> <span className="lbl">{label}</span>

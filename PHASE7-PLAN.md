@@ -1226,21 +1226,58 @@ check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then co
   names: double-clicking the user chip shows both, self correctly marked "(du)", the other
   tab's real presence data arriving over its own SSE connection — "Schließen" and Escape both
   close it, reopening works a second time. Zero console errors in either tab.
-- **B10e — The "Filtern" (machine/group filter) dropdown:** `fillMachSel`, `updateMachBtn`,
-  `searchActive`, `matchesSearch`, `fillGroupSel`, `updateGroupBtn`, `saveFilters`,
-  `mfOpenCat`/`mfOpenGrp`/`mfShow`, `toggleCat`/`toggleAllGroupsInCat`/`catTap`/`catTapCancel`,
-  `groupList`/`groupCat`/`catLabel`/`catIco`/`CATS` (finally deletable here — `CATEGORIES` in
-  `core/machines.ts`, B5, already covers the same data). The biggest remaining slice — a
-  toolbar dropdown with its own collapsible category/group checklist tree, comparable in shape
-  to the Assistant's checklist (B7) but with group-level (not just machine-level) checkboxes
-  plus the category show/hide toggle already live in `Grid.tsx` (B1).
+- **B10e — The "Filtern"/"Alle Bereiche" toolbar dropdowns — DONE.** `fillMachSel`,
+  `updateMachBtn`, `saveFilters`, `mfOpenCat`/`mfOpenGrp`/`mfShow` → new
+  `ui/machine-filter.ts` (pure row-building, mirroring `assistant-checklist.ts`'s B7 shape —
+  deliberately duplicated rather than shared, since the two evolve independently and this one
+  has an extra knob) + `ui/components/MachineFilterDropdown.tsx`. `groupList`, `fillGroupSel`,
+  `updateGroupBtn` → new `ui/components/GroupFilterDropdown.tsx`. `toggleCat`,
+  `toggleAllGroupsInCat`, `catTap`, `catTapCancel` → new `ui/category-fold.ts`, imported
+  directly by `Grid.tsx` (B1) and `grid-interaction.ts` (B2) — both already gated, no window
+  bridge needed. `CATS`/`catLabel`/`catIco` were dead the moment `fillMachSel` moved
+  (`CATEGORIES` in `core/machines.ts`, B5, already covered the same data — this was their
+  last caller); `groupCat` had zero remaining callers anywhere and was dead already;
+  `searchActive`/`matchesSearch` were also already dead, superseded by `ui/grid.ts`'s
+  `buildGridRows` (B1). Also found and deleted, while reading through this section: legacy's
+  own `nameColor`/`getBooking` (dead — `ui/grid.ts`'s versions, B1, had fully superseded them)
+  and a byte-identical duplicate `catIco` definition elsewhere in the file (JS allows
+  redeclaring a top-level function; the second silently shadowed the first — harmless since
+  both were identical, but worth a comment). None of these five were part of B10e's own
+  scope — cleanup found along the way, same as B10a's `displayGroup`/`FAVGRP`.
+  Shared open/close mechanics (toggle-button click, outside-click-closes, the panel's own
+  `.open` class) factored into a new hook, `ui/toolbar-dropdown.ts`, used by both dropdowns.
+  **A deliberate deviation, flagged (E2)**: legacy's two dropdowns could both end up open at
+  once — each button's `ev.stopPropagation()` meant clicking one button's toggle never reached
+  the OTHER dropdown's own outside-click listener. Almost certainly an unintended quirk of two
+  independently-added, identically-shaped features (not a design choice), and worse UX either
+  way — this port instead closes any other open toolbar dropdown whenever one opens.
+  **A genuinely surprising discovery, unrelated to this port**: `#groupWrap` (the group-filter
+  button's wrapper) has been `style="display:none"` with nothing anywhere ever un-hiding it
+  since the very first commit of this migration (confirmed via `git log -S groupWrap`) — the
+  "Alle Bereiche" dropdown has **never been reachable by a real user**, in the original
+  monolith or at any point since. Conserved exactly as found (E1) — not my call to "fix" a
+  pre-existing dead UI element — so `GroupFilterDropdown.tsx` is real, correct, thoroughly
+  unit-tested code that a real user currently cannot reach; browser verification below used
+  `page.evaluate(...)`-driven clicks to exercise it despite that.
+  40 new tests (`machine-filter.test.ts` 11, `category-fold.test.ts` 7,
+  `MachineFilterDropdown.test.tsx` 13, `GroupFilterDropdown.test.tsx` 9) + `grid-interaction.
+  test.ts`/`Grid.test.tsx` updated to exercise the real (now directly-imported) category-fold
+  functions instead of window-bridge mocks. Full suite 714 passed, coverage 98.92%/93.44%.
+  Browser-verified (E5): opening "Filtern", drilling into a category → group → checking a
+  machine isolated the grid from 245 rows to 1, clearing restored all 245; the category-shown
+  toggle hid "Messtechnik" from the dropdown's own list while leaving the grid's 245 rows
+  completely unaffected (proving the `mfShow`/grid separation legacy's comment describes);
+  search found the machine with headers gone; outside-click closed it. The group dropdown
+  (exercised via direct DOM clicks, per the above) opened, listed all groups, and selecting one
+  updated its button to "1 Bereich ▾". Zero console errors throughout.
 - **B10f — Core write pipeline + shared helpers:** `mutate`/`persist`/`refreshNow` (the
   optimistic-apply → log → repaint → background-persist pipeline every mutation in this app
   already goes through via `window.mutate` — the single highest-risk piece to touch, per
   CLAUDE.md's "one authoritative server write path; never trust the client") plus the small
   broadly-used helpers: `esc`, `dbg`, `dbgOn`, `machById`, `applyDebug`, `applyTheme`,
-  `handleError`, `stampRef`, `sleep`, `nameColor`, `ic`. Do this once nothing upstream of it
-  changes mid-port — i.e. after B10a–B10e, when its remaining callers are known and stable.
+  `handleError`, `stampRef`, `sleep`, `ic` (`nameColor` turned out already dead — deleted in
+  B10e, see above). Do this once nothing upstream of it changes mid-port — i.e. after
+  B10a–B10e, when its remaining callers are known and stable.
 - **B10g — Boot sequence (the original B10 scope):** `start`/`startUI`/`init`. Only once
   B10a–B10f land does `legacy.js` actually go to zero and get deleted here, with `app.ts`
   absorbing the boot orchestration and the `window.S`/`window.render`/`window.notify` bridges
@@ -1250,4 +1287,4 @@ check via the persistent Playwright container, `PHASE7-PLAN.md` updated, then co
   asserts the right screen renders in each case, name-prompt appears exactly when
   `!user && !readOnly`, and live timers start once even across remounts.
 
-**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a ✅ → B10b ✅ → B10c ✅ → B10d ✅ → B10e → B10f → B10g.
+**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 ✅ → B10a ✅ → B10b ✅ → B10c ✅ → B10d ✅ → B10e ✅ → B10f → B10g.

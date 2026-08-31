@@ -37,6 +37,8 @@ function stubWindowGlobals(): void {
     visM: ['m1', 'm2'],
     visD: ['2021-01-04', '2021-01-05'],
     collapsed: new Set(),
+    cats: new Set(['maschine', 'messtechnik']),
+    data: { machines: [], bookings: {} },
     extraWeeks: 0,
   } as unknown as AppState;
   window.hideCtx = vi.fn();
@@ -48,9 +50,6 @@ function stubWindowGlobals(): void {
   window.gotoPrevFree = vi.fn();
   window.gotoNextFree = vi.fn();
   window.openCellAction = vi.fn();
-  window.catTap = vi.fn();
-  window.catTapCancel = vi.fn();
-  window.toggleAllGroupsInCat = vi.fn();
 }
 
 function cell(mid: string, date: string): HTMLElement {
@@ -215,9 +214,13 @@ describe('click handling', () => {
     expect(window.gotoNextFree).toHaveBeenCalledWith('m2');
   });
 
-  it('clicking a category header row toggles that category', () => {
+  it('clicking a category header row toggles that category (debounced)', () => {
+    vi.useFakeTimers();
     clickOn(document.querySelector('tr[data-catgroup="maschine"] td')!);
-    expect(window.catTap).toHaveBeenCalledWith('maschine');
+    expect(window.S.cats.has('maschine')).toBe(true); // not yet — debounced
+    vi.advanceTimersByTime(220);
+    expect(window.S.cats.has('maschine')).toBe(false);
+    vi.useRealTimers();
   });
 
   it('clicking a group header row toggles and persists its collapsed state', () => {
@@ -246,10 +249,16 @@ describe('click handling', () => {
 });
 
 describe('double-click handling', () => {
-  it('double-clicking a category header toggles every group in that category', () => {
+  it('double-clicking a category header cancels the pending single-click toggle and expands every group in that category', () => {
+    vi.useFakeTimers();
+    window.S.collapsed = new Set(); // nothing collapsed → toggleAllGroupsInCategory collapses everything
+    window.S.data!.machines = [{ id: 'm1', name: 'M1', group: 'Halle 1' }];
+    clickOn(document.querySelector('tr[data-catgroup="maschine"] td')!); // would toggle "maschine" off in 220ms
     dblclickOn(document.querySelector('tr[data-catgroup="maschine"] td')!);
-    expect(window.catTapCancel).toHaveBeenCalledOnce();
-    expect(window.toggleAllGroupsInCat).toHaveBeenCalledWith('maschine');
+    vi.advanceTimersByTime(300);
+    expect(window.S.cats.has('maschine')).toBe(true); // the pending single-click toggle never fired
+    expect(window.S.collapsed.has('Halle 1')).toBe(true); // its one group got collapsed
+    vi.useRealTimers();
   });
 
   it('double-clicking a cell opens its booking action', () => {

@@ -10,12 +10,10 @@ const TODAY = '2021-01-04';
 function stubWindowGlobals(): void {
   window.nextFreePtr = {};
   window.prevFreeBefore = vi.fn().mockReturnValue(null);
-  window.catTap = vi.fn();
-  window.catTapCancel = vi.fn();
-  window.toggleAllGroupsInCat = vi.fn();
   window.paintSel = vi.fn();
   window.syncJumpControls = vi.fn();
   window.ensureOverflow = vi.fn();
+  window.notify = vi.fn();
 }
 
 /** A minimal but realistic `AppState`, covering the branches the grid's row/cell rendering
@@ -175,16 +173,32 @@ describe('Grid', () => {
     expect(container.querySelector('span.nextfree.back[data-nb="m-favorite"]')).not.toBeNull();
   });
 
-  it('toggling a category button calls the still-legacy catTap/catTapCancel bridge', () => {
+  it('a single click on a category button toggles it off after the debounce delay', () => {
+    vi.useFakeTimers();
     const { container } = renderGridIntoTable();
     const button = container.querySelector(
       'button.catbtn[data-cat="maschine"]',
     ) as HTMLButtonElement;
     button.click();
-    expect(window.catTap).toHaveBeenCalledWith('maschine');
+    expect(window.S.cats.has('maschine')).toBe(true); // not yet — debounced
+    vi.advanceTimersByTime(220);
+    expect(window.S.cats.has('maschine')).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('a double click cancels the pending single-click toggle and expands every group in the category', () => {
+    vi.useFakeTimers();
+    window.S.collapsed = new Set(['Halle 1']);
+    const { container } = renderGridIntoTable();
+    const button = container.querySelector(
+      'button.catbtn[data-cat="maschine"]',
+    ) as HTMLButtonElement;
+    button.click(); // would toggle "maschine" off in 220ms
     button.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-    expect(window.catTapCancel).toHaveBeenCalledOnce();
-    expect(window.toggleAllGroupsInCat).toHaveBeenCalledWith('maschine');
+    vi.advanceTimersByTime(300);
+    expect(window.S.cats.has('maschine')).toBe(true); // the pending single-click toggle never fired
+    expect(window.S.collapsed.has('Halle 1')).toBe(false); // its group got expanded
+    vi.useRealTimers();
   });
 
   it("mutates S.visM/S.visD to the machines and dates it actually rendered (legacy's contract)", () => {

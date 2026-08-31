@@ -16,6 +16,7 @@
 // later slice ports the booking form and context menu.
 
 import { computeSelCells, clampIndex, type Cell } from './selection.ts';
+import { categoryTap, categoryTapCancel, toggleAllGroupsInCategory } from './category-fold.ts';
 
 /** The current selection: an anchor/focus pair spanning a rectangle, the cells it covers, and
  *  whether a drag is in progress. Faithful port of legacy's module-level `Sel` object. */
@@ -258,7 +259,7 @@ function handleGridClick(event: MouseEvent): void {
   const groupRow = target.closest<HTMLElement>('tr.grouprow');
   if (groupRow) {
     if (groupRow.dataset.catgroup) {
-      window.catTap(groupRow.dataset.catgroup);
+      categoryTap(groupRow.dataset.catgroup);
     } else if (groupRow.dataset.group) {
       toggleGroupCollapse(groupRow.dataset.group);
     }
@@ -275,8 +276,8 @@ function handleGridDoubleClick(event: MouseEvent): void {
   const target = event.target as HTMLElement;
   const groupRow = target.closest<HTMLElement>('tr.grouprow');
   if (groupRow?.dataset.catgroup) {
-    window.catTapCancel();
-    window.toggleAllGroupsInCat(groupRow.dataset.catgroup);
+    categoryTapCancel();
+    toggleAllGroupsInCategory(groupRow.dataset.catgroup);
     return;
   }
   const cell = cellFromEvent(event);
