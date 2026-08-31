@@ -19,6 +19,14 @@ import {
   isSatisfiableAcrossWindow,
   chooseDevicesForNode,
   chooseDevicesForTree,
+  groupNodeOnto,
+  joinNode,
+  moveNodeToRoot,
+  dissolveGroup,
+  changeGroupNeed,
+  setGroupNeed,
+  removeNode,
+  addDeviceToTree,
 } from './assistant.ts';
 
 const dev = (uid: string, id: string): AssistNode => ({ uid, type: 'dev', id });
@@ -260,5 +268,174 @@ describe('isSatisfiableAcrossWindow / chooseDevicesForNode / chooseDevicesForTre
     // only B is free across BOTH days; A and C each free on just one → B wins
     const isFree = freeOn(['B@2021-01-11', 'B@2021-01-12', 'A@2021-01-11', 'C@2021-01-12']);
     expect(chooseDevicesForTree(root, sel, isFree)).toEqual(['B']);
+  });
+});
+
+describe('groupNodeOnto', () => {
+  const newUid = () => 'new';
+  const newColor = () => 999;
+
+  it('wraps the drag node and target in a new need-1-of-2 group with the next color', () => {
+    const tree = sample();
+    groupNodeOnto(tree, 'n1', 'n3', newUid, newColor); // n1 (root) onto n3 (inside n2)
+    const n2 = treeFind(tree, 'n2') as AssistGrp;
+    const newGroup = n2.children[0] as AssistGrp;
+    expect(newGroup).toMatchObject({ uid: 'new', type: 'grp', need: 1, color: 999 });
+    expect(newGroup.children).toEqual([dev('n3', 'B'), dev('n1', 'A')]);
+    expect(treeFind(tree, 'n1')).not.toBeNull(); // n1 now lives inside the new group
+    expect(tree.children.map((c) => c.uid)).toEqual(['n2']); // gone from root
+  });
+
+  it('is a no-op when dragging a node onto itself', () => {
+    const tree = sample();
+    groupNodeOnto(tree, 'n1', 'n1', newUid, newColor);
+    expect(tree).toEqual(sample());
+  });
+
+  it('is a no-op when dragging a group onto its own descendant', () => {
+    const tree = sample();
+    groupNodeOnto(tree, 'n2', 'n3', newUid, newColor);
+    expect(tree).toEqual(sample());
+  });
+
+  it('falls back to pushing the drag node to root when the target has no parent (not found)', () => {
+    const tree = sample();
+    groupNodeOnto(tree, 'n1', 'missing', newUid, newColor);
+    expect(tree.children.some((c) => c.uid === 'n1')).toBe(true);
+  });
+
+  it('no-ops when the drag node does not exist', () => {
+    const tree = sample();
+    groupNodeOnto(tree, 'missing', 'n3', newUid, newColor);
+    expect(tree).toEqual(sample());
+  });
+});
+
+describe('joinNode', () => {
+  it('moves the dragged node into the target group', () => {
+    const tree = sample();
+    joinNode(tree, 'n1', 'n2');
+    const n2 = treeFind(tree, 'n2') as AssistGrp;
+    expect(n2.children.map((c) => c.uid)).toEqual(['n3', 'n4', 'n1']);
+    expect(tree.children.map((c) => c.uid)).toEqual(['n2']);
+  });
+
+  it('is a no-op when the target is an ancestor of the drag node (or is itself)', () => {
+    const tree = sample();
+    joinNode(tree, 'n2', 'n2');
+    expect(tree).toEqual(sample());
+  });
+
+  it('is a no-op when the target does not exist or is not a group', () => {
+    const tree = sample();
+    joinNode(tree, 'n1', 'missing');
+    expect(tree).toEqual(sample());
+    joinNode(tree, 'n3', 'n1'); // n1 is a dev, not a group
+    expect(tree).toEqual(sample());
+  });
+
+  it('is a no-op when the drag node does not exist', () => {
+    const tree = sample();
+    joinNode(tree, 'missing', 'n2');
+    expect(tree).toEqual(sample());
+  });
+});
+
+describe('moveNodeToRoot', () => {
+  it('detaches the node and appends it to the root, cleaning up an emptied group', () => {
+    const tree = sample();
+    moveNodeToRoot(tree, 'n3'); // n2 drops to 1 child (n4) → dissolved by cleanup
+    expect(tree.children.map((c) => c.uid)).toEqual(['n1', 'n4', 'n3']);
+  });
+
+  it('is a no-op when the node does not exist', () => {
+    const tree = sample();
+    moveNodeToRoot(tree, 'missing');
+    expect(tree).toEqual(sample());
+  });
+});
+
+describe('dissolveGroup', () => {
+  it("promotes the group's children to its own position", () => {
+    const tree = sample();
+    dissolveGroup(tree, 'n2');
+    expect(tree.children.map((c) => c.uid)).toEqual(['n1', 'n3', 'n4']);
+  });
+
+  it('is a no-op for a dev uid, a missing uid, or a node with no parent', () => {
+    const tree = sample();
+    dissolveGroup(tree, 'n1'); // a dev, not a group
+    dissolveGroup(tree, 'missing');
+    expect(tree).toEqual(sample());
+  });
+});
+
+describe('changeGroupNeed', () => {
+  it('increments and clamps to the child count', () => {
+    const tree = sample();
+    changeGroupNeed(tree, 'n2', 1);
+    expect((treeFind(tree, 'n2') as AssistGrp).need).toBe(2);
+    changeGroupNeed(tree, 'n2', 1); // already at the 2-child max
+    expect((treeFind(tree, 'n2') as AssistGrp).need).toBe(2);
+  });
+
+  it('decrements and clamps to 1', () => {
+    const tree = sample();
+    changeGroupNeed(tree, 'n2', -1); // already at 1
+    expect((treeFind(tree, 'n2') as AssistGrp).need).toBe(1);
+  });
+
+  it('is a no-op for a missing uid or a dev uid', () => {
+    const tree = sample();
+    changeGroupNeed(tree, 'missing', 1);
+    changeGroupNeed(tree, 'n1', 1);
+    expect(tree).toEqual(sample());
+  });
+});
+
+describe('setGroupNeed', () => {
+  it('sets an absolute value, clamped to 1..childCount', () => {
+    const tree = sample();
+    setGroupNeed(tree, 'n2', 2);
+    expect((treeFind(tree, 'n2') as AssistGrp).need).toBe(2);
+    setGroupNeed(tree, 'n2', 99);
+    expect((treeFind(tree, 'n2') as AssistGrp).need).toBe(2); // clamped to childCount
+    setGroupNeed(tree, 'n2', 0);
+    expect((treeFind(tree, 'n2') as AssistGrp).need).toBe(1); // clamped to 1
+  });
+
+  it('is a no-op for a missing uid or a dev uid', () => {
+    const tree = sample();
+    setGroupNeed(tree, 'missing', 2);
+    setGroupNeed(tree, 'n1', 2);
+    expect(tree).toEqual(sample());
+  });
+});
+
+describe('removeNode', () => {
+  it('removes a device, cleaning up an emptied group', () => {
+    const tree = sample();
+    removeNode(tree, 'n3'); // n2 drops to 1 child (n4) → dissolved
+    expect(tree.children.map((c) => c.uid)).toEqual(['n1', 'n4']);
+  });
+
+  it('is a no-op when the uid does not exist', () => {
+    const tree = sample();
+    removeNode(tree, 'missing');
+    expect(tree).toEqual(sample());
+  });
+});
+
+describe('addDeviceToTree', () => {
+  it('adds a new device to the root and reports success', () => {
+    const tree: AssistContainer = { children: [] };
+    expect(addDeviceToTree(tree, 'X', () => 'uidX')).toBe(true);
+    expect(tree.children).toEqual([{ uid: 'uidX', type: 'dev', id: 'X' }]);
+  });
+
+  it('refuses a device already present anywhere in the tree (including nested)', () => {
+    const tree = sample(); // 'B' is nested inside grp n2
+    expect(addDeviceToTree(tree, 'B', () => 'uidB')).toBe(false);
+    expect(tree).toEqual(sample());
   });
 });

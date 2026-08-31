@@ -254,6 +254,109 @@ export function chooseDevicesForTree(
   ];
 }
 
+// ---- Drag-and-drop tree edits (Phase 7 slice B7) ---------------------------------------
+// Each mutates `tree` in place and calls `treeCleanup` itself, matching legacy's own
+// `asXxx` adapters — minus the DOM/render side effects, which the caller (the React
+// component) triggers itself after calling one of these.
+
+/** Drag a device onto another node: wraps both in a new 2-child "need 1 of 2" group, colored
+ *  from the next hue in the caller's cycle. No-op when dragging onto itself or an ancestor of
+ *  the target. Faithful port of legacy `asGroupOnto`. */
+export function groupNodeOnto(
+  tree: AssistContainer,
+  dragUid: string,
+  targetUid: string,
+  newUid: () => string,
+  newColor: () => number,
+): void {
+  if (dragUid === targetUid || treeIsAncestor(tree, dragUid, targetUid)) return;
+  const dragNode = treeDetach(tree, dragUid);
+  if (!dragNode) return;
+  const parent = treeFindParent(tree, targetUid);
+  if (!parent) {
+    tree.children.push(dragNode);
+    return;
+  }
+  const targetIndex = parent.children.findIndex((child) => child.uid === targetUid);
+  const targetNode = parent.children[targetIndex]!;
+  parent.children.splice(targetIndex, 1, {
+    uid: newUid(),
+    type: 'grp',
+    need: 1,
+    color: newColor(),
+    children: [targetNode, dragNode],
+  });
+  treeCleanup(tree);
+}
+
+/** Move a dragged node into an existing group. No-op if the group is an ancestor of the
+ *  dragged node, doesn't exist, or isn't a group. Faithful port of legacy `asJoin`. */
+export function joinNode(tree: AssistContainer, dragUid: string, groupUid: string): void {
+  if (treeIsAncestor(tree, dragUid, groupUid)) return;
+  const group = treeFind(tree, groupUid);
+  if (!group || group.type !== 'grp') return;
+  const node = treeDetach(tree, dragUid);
+  if (!node) return;
+  group.children.push(node);
+  treeCleanup(tree);
+}
+
+/** Move a dragged node back to the tree root (dropped on empty canvas). Faithful port of
+ *  legacy `asToRoot`. */
+export function moveNodeToRoot(tree: AssistContainer, dragUid: string): void {
+  const node = treeDetach(tree, dragUid);
+  if (!node) return;
+  tree.children.push(node);
+  treeCleanup(tree);
+}
+
+/** Dissolve a group, promoting its children up to its own position. Faithful port of legacy
+ *  `asDissolve`. */
+export function dissolveGroup(tree: AssistContainer, groupUid: string): void {
+  const group = treeFind(tree, groupUid);
+  const parent = treeFindParent(tree, groupUid);
+  if (!group || group.type !== 'grp' || !parent) return;
+  const index = parent.children.findIndex((child) => child.uid === groupUid);
+  parent.children.splice(index, 1, ...group.children);
+  treeCleanup(tree);
+}
+
+/** Change a group's `need` by `delta`, clamped to 1..childCount. Faithful port of legacy
+ *  `asChangeNeed`. */
+export function changeGroupNeed(tree: AssistContainer, groupUid: string, delta: number): void {
+  const group = treeFind(tree, groupUid);
+  if (!group || group.type !== 'grp') return;
+  group.need = Math.max(1, Math.min(group.children.length, group.need + delta));
+}
+
+/** Set a group's `need` to an absolute value, clamped to 1..childCount. Faithful port of the
+ *  `data-need` number input's onChange in legacy `renderWork` (the stepper buttons use
+ *  `changeGroupNeed`'s delta instead). */
+export function setGroupNeed(tree: AssistContainer, groupUid: string, value: number): void {
+  const group = treeFind(tree, groupUid);
+  if (!group || group.type !== 'grp') return;
+  group.need = Math.max(1, Math.min(group.children.length, value));
+}
+
+/** Remove a node (device or group) from the tree entirely. Faithful port of the tree-editing
+ *  half of legacy `asRemove` (the DOM checkbox side effect is the caller's job). */
+export function removeNode(tree: AssistContainer, uid: string): void {
+  treeDetach(tree, uid);
+  treeCleanup(tree);
+}
+
+/** Add a device to the tree root, unless it's already present anywhere in the tree. Returns
+ *  whether it was actually added. Faithful port of legacy `asAdd`. */
+export function addDeviceToTree(
+  tree: AssistContainer,
+  deviceId: string,
+  newUid: () => string,
+): boolean {
+  if (treeDevs(tree).includes(deviceId)) return false;
+  tree.children.push({ uid: newUid(), type: 'dev', id: deviceId });
+  return true;
+}
+
 // ---- Legacy bridge aliases -------------------------------------------------------
 // `legacy.js`'s `runAssistant` calls these by their OLD names as bare globals; it is
 // deliberately NOT edited by this pass — it's deleted whole in Phase 7 slice B10. Delete

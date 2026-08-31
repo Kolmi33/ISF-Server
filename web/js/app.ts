@@ -43,6 +43,7 @@ import * as statsModal from './ui/components/StatsModal.tsx';
 import * as allBookingsModal from './ui/components/AllBookingsModal.tsx';
 import * as adminModal from './ui/components/AdminModal.tsx';
 import * as machineFormModal from './ui/components/MachineFormModal.tsx';
+import * as assistantModal from './ui/components/AssistantModal.tsx';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
@@ -198,6 +199,7 @@ Object.assign(window, statsModal);
 Object.assign(window, allBookingsModal);
 Object.assign(window, adminModal);
 Object.assign(window, machineFormModal);
+Object.assign(window, assistantModal);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);

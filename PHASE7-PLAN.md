@@ -926,11 +926,68 @@ into, not something specific to the booking form, and no plan slice claims it by
   the legacy confirm dialog, and confirmed it's gone — no console errors (after the modal.tsx
   fix; the bug above was caught in this exact pass, on the first run).
 
-### B7 — Assistant UI (device tree, drag-drop, results)
-- **Must-haves (`legacy.js:1424–1619`):** device checklist reuses the same collapsible fav/category/group tree as the "Filtern" dropdown, but toggles only add/remove a device (`asToggleId`) and immediately reflect into the work area; dragging a device onto another device creates a new "need 1 of 2" group with a color from a fixed hue cycle (`AS_HUES`, 8 colors); dropping onto a group's kids area joins it; dropping onto empty canvas returns a node to root; the need stepper is clamped `[1, childCount]`; a redundancy hint ("alle gleichwertigen Geräte hier?") shows when a group has more members than its need; before running, if `anyRedund` is true, a confirm dialog asks whether every equivalent device was added; results are day-runs meeting the minimum-consecutive-days input, each with an editable "days to book" number (clamped to the run's length, with a transient tooltip on clamp), a suggested-devices line (only shown when the tree contains ≥1 group), a "pin" button that **collapses** (not closes) the modal and filters+centers the grid on that run, and "Buchen…" opens the booking form pre-picked.
-- **React note:** native `dragstart`/`dragover`/`drop` map directly onto `onDragStart`/`onDragOver`/`onDrop` — no new dependency needed, keeps the zero-extra-runtime-dep intent for anything beyond React itself.
-- **Functionality:** all tree mutation logic is already pure and 100%-tested in `core/assistant.ts` — this slice is DOM/DnD wiring only.
-- **Tests:** each DnD action (group-onto, join, to-root, dissolve, change-need, remove) calls the right core function and re-renders; the redundancy confirm gate appears only when `anyRedund` is true; results list caps at 30 and respects the min-days filter.
+### B7 — Assistant UI (device tree, drag-drop, results) — **DONE**
+- **Must-haves:** device checklist reuses the same collapsible fav/category/group tree
+  structure legacy's "Filtern" dropdown used, but toggles only add/remove a device and
+  immediately reflect into the work area; dragging a device onto another creates a new "need 1
+  of 2" group with a color from a fixed hue cycle (`AS_HUES`, 8 colors); dropping onto a
+  group's kids area joins it; dropping onto empty canvas returns a node to root; the need
+  stepper is clamped `[1, childCount]`; a redundancy hint ("alle gleichwertigen Geräte hier?")
+  shows when a group has more members than its need; before running, if there's real
+  redundancy, a confirm dialog asks whether every equivalent device was added; results are
+  day-runs meeting the minimum-consecutive-days input, each with an editable "days to book"
+  number (clamped to the run's length, with a transient tip on clamp), a suggested-devices
+  line (only when the tree contains ≥1 group), a "pin" button that **collapses** (not closes)
+  the modal and filters+centers the grid on that run, and "Buchen…" opens the booking form
+  pre-picked. The "Aktuellen Filter übernehmen" button legacy's `wireChecklistFilter` wires
+  conditionally turned out to be dead code — the Assistant's own modal template never rendered
+  that button — so it wasn't ported.
+  Native `dragstart`/`dragover`/`drop` mapped directly onto React's `onDragStart`/`onDragOver`/
+  `onDrop`, delegated on the work area exactly like legacy's own `wireWorkDnD` — no new
+  dependency, and the transient highlight classes (`.dragover`, `.dragover-root`, `.dragging`)
+  are toggled via direct DOM manipulation rather than React state (re-rendering the whole tree
+  on every `dragover`, which fires continuously, would be wasteful for a purely visual cue).
+  **New pure logic added to `core/assistant.ts`** (previously only the lower-level tree
+  primitives and the scheduling solver lived there): `groupNodeOnto`, `joinNode`,
+  `moveNodeToRoot`, `dissolveGroup`, `changeGroupNeed`, `setGroupNeed`, `removeNode`,
+  `addDeviceToTree` — faithful ports of legacy's `asXxx` adapters, now fully pure and tested
+  (20 new tests) instead of thin globals bound to `AS_TREE`. New `ui/assistant-checklist.ts`
+  (`buildChecklistRows`) and `ui/assistant-results.ts` (`buildAssistantResults`) hold the two
+  other pure kernels this slice needed, mirroring the row-descriptor pattern from B1/B5.
+  Shape decision (E2, flagged): the results panel's suggestion line and its "Buchen…"/pin
+  button device list are computed from a tree snapshot **frozen at search time**
+  (`structuredClone`), not legacy's live tree re-read at click time — legacy's own behavior is
+  already a bit inconsistent (the suggestion text never updates after search, but a button
+  click re-evaluates against whatever the tree looks like by then); freezing both together is
+  simpler and avoids submitting a booking for a device since removed from the tree.
+  **Real bug found and fixed** (the same class as B6's, again only caught by browser
+  verification): the Assistant is a React modal that can open the booking form directly on top
+  of itself and can be collapsed-then-reopened via the floating "Assistent" tab — both paths
+  exercise `openReactModal`/its collapse handling in ways no earlier slice did, and both came
+  back clean after B6's `modal.tsx` fix and the new `collapseReactModal` addition (below) — no
+  new bug here, but this is the slice that most thoroughly exercises that infrastructure.
+  New `collapseReactModal()` in `ui/modal.tsx`: hides the overlay and shows the floating reopen
+  tab **without unmounting** — legacy's own `collapseModal()`/`expandModal()` never destroy the
+  modal's DOM, so a React modal doing so on "collapse" would lose all state where legacy
+  wouldn't. Escape/backdrop-dismissal while collapsed only clears the reopen tab, matching
+  legacy's `closeModal()` (which also never unmounts); re-expanding is handled entirely by
+  legacy's existing `#modalReopen` click listener, unchanged.
+  Components: `AssistantModal.tsx` (+ `useAssistantTree` hook, `runAssistantSearch`,
+  `AssistantSearchForm`, `AssistantWorkSection`), `AssistantChecklist.tsx`,
+  `AssistantTree.tsx` (+ `useTreeDragAndDrop` hook), `AssistantResults.tsx` — split purely to
+  stay under the file-length/function-length budgets.
+- **Tests:** 20 new in `assistant.test.ts` (the new tree-edit functions), 10 in
+  `assistant-checklist.test.ts`/`assistant-results.test.ts` combined, 21 in
+  `AssistantModal.test.tsx` covering checkbox toggling, search filtering, validation, a real
+  jsdom-simulated drag-and-drop forming a group, the redundancy confirm gate, the need
+  stepper, dissolve, remove-from-group auto-dissolve, and the day-count clamp tip, plus 3 new
+  in `modal.test.tsx` for collapse/expand. Full suite 600 passed, coverage 99.19%/93.7%.
+  Browser-verified (E5) with **real mouse-driven drag-and-drop** (not just synthetic DnD
+  events): checked two machines, dragged one onto the other to form a group, confirmed the
+  redundancy hint and the confirm dialog's exact text, ran a search, confirmed one result with
+  a suggestion line, dissolved the group, then separately verified "pin" collapses the modal
+  (grid filtered, floating tab shown), re-expanding via that tab restores the exact same
+  results, and "Buchen…" opens the booking form on top — no console errors throughout.
 
 ### B8 — Presence badge, collision banner, SSE hook
 - **Must-haves (`legacy.js:2169–2207` + `setPres`/`showCollision`/`queueRemote`):** presence badge shows a count + a hover title listing active names in **server-received order** (not alphabetized — `presenceInfo` only filters, doesn't sort); reconnect on name change; the `mb_presence` "share" toggle, when off, connects **without** a `user` query param so this browser doesn't appear in others' lists; `hello` stamps the "last updated" time; `update` events patch cells + revision and queue a toast **only for foreign changes** (case-insensitive `isForeign`); `structural` events trigger a full state reload; `onerror` flips a visible "⚠ offline" indicator with no custom retry logic (EventSource retries natively); the collision banner is **persistent** (manual-dismiss only), shown when the server reports partial write conflicts.
@@ -1025,4 +1082,4 @@ switching to `.click()`.
 - **Functionality:** identical bootstrap sequence; `app.ts` shrinks to store hydration + `createRoot(...).render(<App/>)`; `window.S`/`window.render`/`window.notify` bridges are deleted along with the last legacy consumer.
 - **Tests:** mount `<App/>` with a mocked fetch returning valid/invalid `/api/state` and assert the right screen renders in each case; name-prompt appears exactly when `!user && !readOnly`; live timers start once even across remounts.
 
-**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 → B8 → B10.
+**Suggested order for Backlog B:** B0 ✅ → B9 ✅ → B1 ✅ → B2 ✅ → B3 ✅ → B4 ✅ → B5 ✅ (4 commits) → B6 ✅ → B7 ✅ → B8 → B10.

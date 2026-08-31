@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act } from '@testing-library/react';
-import { openReactModal, closeReactModal } from './modal.tsx';
+import { openReactModal, closeReactModal, collapseReactModal } from './modal.tsx';
 
 function setDom(): void {
   document.body.innerHTML = `
@@ -81,6 +81,38 @@ describe('openReactModal / closeReactModal', () => {
   it('opening a second modal while one is open unmounts the first, without a React warning', () => {
     const warnSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     act(() => openReactModal(<p>first</p>));
+    act(() => openReactModal(<p>second</p>));
+    expect(document.getElementById('modal')!.textContent).toBe('second');
+    expect(document.getElementById('overlay')!.classList.contains('open')).toBe(true);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+    act(() => closeReactModal()); // cleanup
+  });
+
+  it('collapsing hides the overlay and shows the reopen tab, without unmounting', () => {
+    act(() => openReactModal(<p>hello</p>));
+    act(() => collapseReactModal());
+    expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
+    expect(document.getElementById('modalReopen')!.classList.contains('show')).toBe(true);
+    expect(document.getElementById('modal')!.textContent).toBe('hello'); // still mounted
+    act(() => closeReactModal()); // cleanup
+  });
+
+  it('Escape while collapsed only clears the reopen tab — it does not unmount', () => {
+    act(() => openReactModal(<p>hello</p>));
+    act(() => collapseReactModal());
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(document.getElementById('modalReopen')!.classList.contains('show')).toBe(false);
+    expect(document.getElementById('modal')!.textContent).toBe('hello'); // still mounted
+    act(() => closeReactModal()); // cleanup
+  });
+
+  it('opening a new modal while collapsed unmounts the collapsed one', () => {
+    const warnSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    act(() => openReactModal(<p>first</p>));
+    act(() => collapseReactModal());
     act(() => openReactModal(<p>second</p>));
     expect(document.getElementById('modal')!.textContent).toBe('second');
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(true);
