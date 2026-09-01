@@ -1,46 +1,38 @@
-// Clean ES-module entry point for the reworked frontend.
+// The application's ES-module entry point: boot/orchestration.
 //
-// It runs BEFORE the legacy monolith (index.html loads this as `type="module"`,
-// which — together with legacy.js being `defer` — executes it first, in document
-// order, after parsing). Its job during the strangler-fig transition: re-export
-// each extracted module's public functions onto `window`, so the not-yet-extracted
-// code in legacy.js (which calls them as bare globals) keeps resolving unchanged.
+// index.html loads this as `type="module"`, so it runs once, after parsing, before
+// anything else. It hydrates the runtime state, mounts the app's React roots, wires the
+// few remaining imperative DOM handlers (toolbar buttons, user chip, boot sequence), and
+// loads the initial server state.
 //
-// As modules are carved out of legacy.js, they are imported here and bridged. When
-// legacy.js reaches zero (Phase 5), the bridge is deleted and this becomes the real
-// boot/orchestration entry.
+// A small `window`-bridge remains below (`declare global`/`Object.assign`), but it is no
+// longer the strangler-fig legacy-compat mechanism it started as — `web/public/legacy.js`
+// was deleted whole in Phase 7 slice B10g, and every module's real callers use a direct ES
+// import (verified per-export against actual call sites in ARCHITECTURE_AUDIT.md §5 — 26
+// of the previous 43 bridged modules turned out to have zero remaining `window.*` readers
+// and were removed here). What's left bridges two genuine, still-current needs: (1)
+// cross-talk between this app's several independently-mounted React roots (the Grid,
+// ContextMenu, and the two filter dropdowns each call `createRoot` separately below, with
+// no shared parent to pass callbacks through) and the modals they open, and (2) a handful
+// of utilities documented as having many scattered call sites across already-gated
+// components (`mutate`, `machById`, the debug-panel functions). Consolidating the React
+// roots into one tree (removing the remaining need entirely) is a larger, deliberate
+// architectural decision, not a mechanical cleanup — tracked, not done here.
 
 import type { AppState } from '../../shared/types.ts';
-import * as dates from './core/dates.ts';
 import { mondayOfDate } from './core/dates.ts';
-import * as machines from './core/machines.ts';
-import * as weekend from './core/weekend.ts';
-import * as booking from './core/booking.ts';
-import * as assistant from './core/assistant.ts';
 import * as api from './net/api.ts';
-import * as sse from './net/sse.ts';
-import * as grid from './ui/grid.ts';
-import * as selection from './ui/selection.ts';
 import * as gridInteraction from './ui/grid-interaction.ts';
 import * as gridScroll from './ui/grid-scroll.ts';
-import * as navigation from './ui/navigation.ts';
 import * as favoriteJump from './ui/favorite-jump.ts';
-import * as viewMyBookings from './ui/views/my-bookings.ts';
-import * as viewStats from './ui/views/stats.ts';
-import * as viewAllBookings from './ui/views/all-bookings.ts';
-import * as viewAdmin from './ui/views/admin.ts';
-import * as machineText from './ui/machine-text.ts';
 import * as helpModal from './ui/components/HelpModal.tsx';
-import * as logModal from './ui/components/LogModal.tsx';
 import * as askUserNameModal from './ui/components/AskUserNameModal.tsx';
 import * as settingsModal from './ui/components/SettingsModal.tsx';
 import * as gridComponent from './ui/components/Grid.tsx';
 import * as cellPatch from './ui/cell-patch.ts';
-import * as toastModule from './ui/toast.ts';
 import * as userChip from './ui/user-chip.ts';
 import * as collisionBanner from './ui/collision-banner.ts';
 import * as liveConnection from './ui/live-connection.ts';
-import * as bookingFormModal from './ui/components/BookingForm.tsx';
 import * as bookingDetailModal from './ui/components/BookingDetailModal.tsx';
 import * as myBookingsModal from './ui/components/MyBookingsModal.tsx';
 import * as statsModal from './ui/components/StatsModal.tsx';
@@ -65,7 +57,6 @@ import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { createStore } from './state.ts';
 import type { BookingData, Machine, ServerData } from '../../shared/types.ts';
-import type { Cell } from './ui/selection.ts';
 import type { MutateResult } from './ui/mutate.ts';
 
 declare global {
@@ -73,9 +64,10 @@ declare global {
     /** Legacy compat bridge for the runtime state (ARCHITECTURE §14). It IS `store.state`
      *  — the same object reference. Only shrinks as legacy sites migrate to `store`. */
     S: AppState;
-    /** The legacy full-grid renderer (defined by legacy.js); subscribed to the store in 4.1c. */
+    /** The Grid component's full re-render (`ui/components/Grid.tsx`'s own `render` export);
+     *  subscribed to the store below so a state change repaints it. */
     render: () => void;
-    /** Trigger a store notify (→ the subscribed render). Bridged for the legacy layer (4.1c). */
+    /** Trigger a store notify (→ the subscribed `render`). */
     notify: () => void;
     /** Bridged from ui/components/AdminModal.tsx (Phase 7 slice B5); called from the React
      *  LogModal's "Zurück" button. */
@@ -186,65 +178,28 @@ declare global {
     /** Bridged from ui/cell-patch.ts (Phase 7 slice B4); called by ui/mutate.ts's (B10f)
      *  optimistic-apply path to patch only the cells a write actually touched. */
     patchCells: (entries: readonly { mid: string; date: string }[]) => void;
-    /** Bridged from ui/components/BookingForm.tsx (Phase 7 slice B4); called directly by
-     *  ui/components/ContextMenu.tsx (B10b) and the assistant (B7). */
-    openBookingForm: (machineIds: readonly string[], from: string, to: string) => void;
     /** Bridged from ui/grid-scroll.ts (Phase 7 slice B3); called by ui/grid-interaction.ts's
      *  (B2) drag-auto-scroll and arrow-key growth at the grid's edges. */
     prependWeek: () => void;
-    /** Bridged from ui/grid-interaction.ts (Phase 7 slice B2) under its legacy name `Sel` —
-     *  read/mutated directly by legacy's still-unported `jumpToSlot`, `prependWeek`'s scroll
-     *  handler (ui/grid-scroll.ts, B3) and `showCtx` (still legacy). */
-    Sel: {
-      anchor: Cell | null;
-      focus: Cell | null;
-      cells: Cell[];
-      dragging: boolean;
-      didDrag: boolean;
-    };
   }
 }
 
-// Bridge extracted pure modules onto the global scope for the legacy layer.
-Object.assign(window, dates);
-Object.assign(window, machines);
-Object.assign(window, weekend);
-Object.assign(window, booking);
-Object.assign(window, assistant);
+// Bridge onto the global scope only the functions with a genuine remaining reason to be
+// reached via `window` rather than a direct import (see the file header): cross-React-root
+// calls, plus a few utilities with many scattered call sites.
 Object.assign(window, api);
-Object.assign(window, sse);
-Object.assign(window, grid);
-Object.assign(window, selection);
-Object.assign(window, gridInteraction);
 Object.assign(window, gridScroll);
-Object.assign(window, navigation);
 Object.assign(window, favoriteJump);
-Object.assign(window, viewMyBookings);
-Object.assign(window, viewStats);
-Object.assign(window, viewAllBookings);
-Object.assign(window, viewAdmin);
-Object.assign(window, machineText);
-Object.assign(window, helpModal);
-Object.assign(window, logModal);
-Object.assign(window, askUserNameModal);
-Object.assign(window, settingsModal);
 Object.assign(window, gridComponent);
 Object.assign(window, cellPatch);
-Object.assign(window, toastModule);
 Object.assign(window, userChip);
-Object.assign(window, collisionBanner);
 Object.assign(window, liveConnection);
-Object.assign(window, bookingFormModal);
 Object.assign(window, bookingDetailModal);
-Object.assign(window, myBookingsModal);
 Object.assign(window, statsModal);
-Object.assign(window, allBookingsModal);
 Object.assign(window, adminModal);
 Object.assign(window, machineFormModal);
-Object.assign(window, assistantModal);
 Object.assign(window, contextMenu);
 Object.assign(window, confirm);
-Object.assign(window, activeUsersModal);
 Object.assign(window, machineFilterDropdown);
 Object.assign(window, groupFilterDropdown);
 Object.assign(window, machineLookup);
@@ -254,8 +209,10 @@ Object.assign(window, mutateModule);
 
 // Build the initial runtime state from device-local prefs (localStorage) + this week's
 // Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);
-// the store owns the object, `window.S` bridges it for the legacy layer. Faithful to the
-// former `const S = {…}` at the top of legacy.js.
+// the store owns the object, and `window.S` bridges the same reference (most modules
+// still read/write state via `window.S.<field>` directly rather than through the store —
+// a known, separately-tracked issue, ARCHITECTURE_AUDIT.md §7/F9). Faithful to the
+// former `const S = {…}` at the top of the pre-Phase-2 monolith.
 function jsonSet(key: string, defaultJson: string): Set<string> {
   return new Set<string>(JSON.parse(localStorage.getItem(key) || defaultJson));
 }
@@ -283,11 +240,10 @@ function hydrateState(): AppState {
 const store = createStore(hydrateState());
 window.S = store.state;
 
-// Phase 4.1c — the store drives repaints. The legacy `render()` subscribes to the store, and the
-// data-load/SSE paths call the bridged `notify()` instead of `render()` directly, so those repaints
-// flow through the store (SSE/refresh → store change → notify → render). The guard preserves the
-// legacy invariant that the grid never renders before the first data load. Remaining direct
-// `render()` calls stay valid during the migration — they simply don't route through the store yet.
+// The store drives repaints: the Grid's `render()` subscribes here, and the data-load/SSE
+// paths call the bridged `notify()` instead of `render()` directly, so those repaints flow
+// through the store (SSE/refresh → store change → notify → render). The guard preserves the
+// original invariant that the grid never renders before the first data load.
 store.subscribe(() => {
   if (window.S.data) window.render();
 });

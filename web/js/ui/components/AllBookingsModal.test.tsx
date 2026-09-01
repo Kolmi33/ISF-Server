@@ -33,7 +33,6 @@ beforeEach(() => {
     startMonday: new Date(`${TODAY}T00:00:00Z`),
     extraWeeks: 0,
   } as unknown as AppState;
-  window.Sel = { anchor: null, focus: null, cells: [], dragging: false, didDrag: false };
   window.notify = vi.fn();
   window.saveFilters = vi.fn();
   window.updateMachBtn = vi.fn();

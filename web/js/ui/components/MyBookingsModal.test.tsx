@@ -23,7 +23,6 @@ beforeEach(() => {
     startMonday: new Date(`${TODAY}T00:00:00Z`),
     extraWeeks: 0,
   } as unknown as AppState;
-  window.Sel = { anchor: null, focus: null, cells: [], dragging: false, didDrag: false };
   window.mutate = vi.fn();
   window.askConfirm = vi.fn().mockResolvedValue(true);
   window.notify = vi.fn();
