@@ -142,9 +142,13 @@ _Previously: 2026-08-29 — **Phase 6 COMPLETE (code)** — backend → gated TS
 >      authorization. Safe/reversible: the daily VACUUM backup exists and the client sweep removes bridges if a
 >      series later breaks.
 >
-> **Carry forward (deferred, rationale in §16):** the trivial modal-markup fold and the `AS_TREE`-adapter /
-> `window.S` shrink (a real store migration), the **wknd-on-patch** known bug, and the open action-layer
-> question (thin `actions.ts` vs. the legacy `mutate` orchestrator). None block anything; pick up when useful.
+> **Carry forward, updated 2026-09-01 post-Phase-7:** the modal-markup fold and the `AS_TREE`-adapter
+> are both moot now (`ui/modal.tsx` and the Assistant's `useAssistantTree` hook superseded them in
+> Phase 7 B7/B10d); the action-layer question resolved itself the same way — `ui/mutate.ts` ported
+> legacy's own `mutate` as the orchestrator, faithfully, no new `actions.ts` layer. The
+> **wknd-on-patch** known bug is fixed (see Known Bugs). What's actually still open: the
+> `window.S` → pure `store` shrink (a real, larger store migration — most modules still read
+> `window.S.x` directly rather than through `store`; not urgent, no known bug from it).
 >
 > **View-layer decision (resolved, §15):** no framework — custom string render + the store
 > subscription (now live). Revisit only if the UI grows materially.
@@ -429,15 +433,21 @@ restore, and the sweep removes bridges automatically if a series later breaks.
 ## Known bugs
 
 ### Open (deferred — preserve for now, fix in a flagged step)
-- **`wknd` class lost on cell patch.** `render()` adds a `wknd` class to weekend cells; the targeted
-  patch path (`refreshCell`) does not — so on a booking update a weekend column loses its `wknd`
-  styling until the next full `render()`. Only visible when weekends are shown (`mb_weekends==='on'`,
-  `dpw()===7`; default is Mon–Fri, no weekend columns). Pre-existing; **preserved verbatim** in the
-  Phase-4.1a cell-model extraction (E1/E2 — an extraction must not silently change behavior). Fix =
-  pass `weekend` to `cellClass` from `refreshCell` too, in a flagged Phase-4/5 step. Grounded facts:
-  `render()` `web/public/legacy.js:~792`, `refreshCell()` `~868`; helper `cellClass` in `web/js/ui/grid.ts`.
+(none currently)
 
 ### Fixed
+- **`wknd` class lost on cell patch** — FIXED post-Phase-7 (2026-09-01), as its own small
+  flagged step (not part of the migration itself — the whole point of every Phase 7 slice was
+  faithful conservation, so this waited until the migration was done and the code was safe to
+  deliberately change). `render()`/`GridBody.tsx` added a `wknd` class to weekend cells; the
+  targeted patch path (`refreshCell`, now `ui/cell-patch.ts`) didn't — so a booking write/delete
+  on a weekend column silently lost its `wknd` styling until the next full render. Only visible
+  when weekends are shown (`mb_weekends==='on'`). Fix: `refreshCell` now computes
+  `isWeekend(parseIsoDateString(date))` itself and passes it to `cellClass` on every branch
+  (blocked/booked/unavail/free), matching what `GridBody.tsx` already does for the full render.
+  5 new regression tests (`cell-patch.test.ts`) covering every branch independently (the bug
+  could resurface in any one without the others). Browser-verified: booked, then deleted, a
+  weekend cell with weekends shown — `wknd` survived both patches.
 - **`migrating` / `migratingMess` undeclared implicit globals** — FIXED in Phase 2.3.
   Root cause: two obsolete one-time client-side Bestands-Migrationen (`migrateWeekends`,
   `migrateMesstechnik`) from the old File-System-Access variant referenced undeclared globals, so

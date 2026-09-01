@@ -3,10 +3,12 @@
 Kleiner, zustandsbehafteter Dienst: **Node (ohne externe Abhängigkeiten) + SQLite**, in **einem** Docker-Container. Hält die Buchungsdaten selbst und schiebt Änderungen per **Server-Sent Events** sofort an alle Browser (gemessen ~60 ms statt der 6–9 s der Datei-Variante).
 
 ## Bestandteile
-- `src/server.mjs` — HTTP-API + SSE-Push + Tages-Backup.
-- `src/db.mjs` — SQLite-Schema, Import aus `buchungen.json`.
-- `src/import.mjs` — einmaliges Seeding per Kommandozeile.
-- `public/index.html` — Demo-/Test-Oberfläche (die eigentliche Maschinenplan-UI wird als Nächstes auf diese API umgestellt).
+- `server/` — Backend-Quellcode (TypeScript, kompiliert nach `dist/server`): HTTP-API +
+  SSE-Push + Tages-Backup (`server.ts`), SQLite-Schema + Import aus `buchungen.json` (`db.ts`),
+  einmaliges Seeding per Kommandozeile (`import.ts`).
+- `web/` — Frontend-Quellcode (TypeScript/React, Vite); der Dockerfile-Build kompiliert daraus
+  die ausgelieferte Oberfläche (das eigentliche Maschinenplan-Raster, komplett auf diese API
+  umgestellt).
 - `Dockerfile`, `docker-compose.yml`, `.dockerignore`.
 - Daten liegen **außerhalb** des Images im Volume `data` → `/data/buchungen.db` (+ `/data/backups`).
 
@@ -25,7 +27,7 @@ Kleiner, zustandsbehafteter Dienst: **Node (ohne externe Abhängigkeiten) + SQLi
    docker cp buchungen.json maschinenplan:/data/buchungen.json
    docker compose restart               # erster Start importiert die Datei automatisch
    ```
-   (Alternativ ohne Docker: `DB_PATH=./data/buchungen.db node src/import.mjs buchungen.json`.)
+   (Alternativ ohne Docker, nach `npm run build:server`: `DB_PATH=./data/buchungen.db node dist/server/import.js buchungen.json`.)
 3. Läuft auf `127.0.0.1:3000`. **nginx** davor macht HTTPS und reicht durch:
    ```nginx
    location / { proxy_pass http://127.0.0.1:3000; }

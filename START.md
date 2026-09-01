@@ -7,20 +7,22 @@ Server selbst aus.
 ## Inhalt des Ordners
 ```
 maschinenplan-server/
-├── Dockerfile            – Bauplan fürs Image (non-root, gehärtet)
+├── Dockerfile            – Bauplan fürs Image (non-root, gehärtet; baut Frontend + Backend
+│                           aus dem Quellcode, siehe unten)
 ├── docker-compose.yml    – Start/Stop, Volume, Healthcheck, Auto-Neustart
 ├── .dockerignore
-├── package.json          – Projekt-Info (keine Dependencies)
+├── package.json          – Projekt-Info + Build-Skripte
 ├── buchungen.json        – Startdaten (245 Maschinen/Messtechnik + Buchungen)
-├── src/
-│   ├── server.mjs        – HTTP-API + SSE + Backup (der Dienst)
-│   ├── db.mjs            – SQLite-Schema + Import
-│   └── import.mjs        – einmaliges Seeding (CLI)
-├── public/
-│   └── index.html        – die App (eure Oberfläche, redet per fetch + SSE mit dem Server)
+├── server/               – Backend-Quellcode (TypeScript): HTTP-API + SSE + Backup,
+│                           SQLite-Schema/Import, einmaliges Seeding (CLI)
+├── web/                  – Frontend-Quellcode (TypeScript/React); der Dockerfile-Build
+│                           kompiliert daraus die ausgelieferte Oberfläche
+├── shared/                – Typen, die Frontend und Backend gemeinsam nutzen
 ├── START.md              – diese Anleitung
 └── RUNBOOK.md            – Betrieb, Update, Backup/Restore, Übergabe
 ```
+`docker compose up -d --build` (unten) baut aus `server/`+`web/` automatisch ein fertiges,
+eigenständiges Image — kein manueller Build-Schritt nötig, nur Docker.
 
 ## Voraussetzung
 **Docker Desktop** (Windows/Mac) bzw. **Docker Engine + Compose** (Linux-Server).

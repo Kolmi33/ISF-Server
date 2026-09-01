@@ -81,6 +81,56 @@ describe('refreshCell', () => {
     expect(cell().className).toContain('free');
     expect(cell().textContent).toBe('');
   });
+
+  // Regression: refreshCell used to omit the `wknd` class the full render sets, so a booking
+  // patch on a weekend column silently lost its weekend styling (PROGRESS.md Known Bugs, now
+  // fixed). Covers every branch — the bug could resurface in any one of them independently.
+  describe('the wknd class (weekend cells) — regression coverage', () => {
+    const SATURDAY = '2021-01-09';
+
+    beforeEach(() => {
+      document.body.innerHTML = `
+        <table><tbody><tr>
+          <td class="machcol"><span class="dot free"></span></td>
+          <td class="cell free" data-mid="m1" data-date="${TODAY}"></td>
+          <td class="cell free" data-mid="m1" data-date="${SATURDAY}"></td>
+        </tr></tbody></table>`;
+    });
+
+    function satCell(): HTMLElement {
+      return document.querySelector(`td.cell[data-mid="m1"][data-date="${SATURDAY}"]`)!;
+    }
+
+    it('keeps wknd on a free weekend cell', () => {
+      refreshCell('m1', SATURDAY);
+      expect(satCell().className).toContain('wknd');
+    });
+
+    it('keeps wknd on a booked weekend cell', () => {
+      window.S.data!.bookings = { m1: { [SATURDAY]: { name: 'anna' } } };
+      refreshCell('m1', SATURDAY);
+      expect(satCell().className).toContain('wknd');
+    });
+
+    it('keeps wknd on a blocked weekend cell', () => {
+      window.S.data!.machines = [
+        machine({ maint: [{ type: 'defekt', from: SATURDAY, until: SATURDAY }] }),
+      ];
+      refreshCell('m1', SATURDAY);
+      expect(satCell().className).toContain('wknd');
+    });
+
+    it('keeps wknd on an unavailable weekend cell', () => {
+      window.S.data!.machines = [machine({ days: '1111101' })]; // Mo..So mask, Saturday off
+      refreshCell('m1', SATURDAY);
+      expect(satCell().className).toContain('wknd');
+    });
+
+    it('does not add wknd to a weekday cell', () => {
+      refreshCell('m1', TODAY); // a Monday
+      expect(cell().className).not.toContain('wknd');
+    });
+  });
 });
 
 describe('refreshDot', () => {

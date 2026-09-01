@@ -11,7 +11,7 @@
 import { getBooking, isMine, nameColor, cellClass, classifyCell, classifyDot } from './grid.ts';
 import { maintText } from './machine-text.ts';
 import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from '../core/machines.ts';
-import { todayAsIsoDateString } from '../core/dates.ts';
+import { isWeekend, parseIsoDateString, todayAsIsoDateString } from '../core/dates.ts';
 import { paintSelection } from './grid-interaction.ts';
 
 function findCellElement(mid: string, date: string): HTMLElement | null {
@@ -23,9 +23,11 @@ function isDarkTheme(): boolean {
 }
 
 /** Update one cell's class/background/title/text after its booking state changed underneath
- *  it, without touching the rest of the grid. Faithful port of legacy `refreshCell` — the patch
- *  path deliberately does NOT set the `wknd` class the full render does (see ARCHITECTURE's
- *  known-bug note); `patchCells` repaints `.sel`/`.kfocus` right after, since the `className`
+ *  it, without touching the rest of the grid. Faithful port of legacy `refreshCell`, with one
+ *  fix (not a behavior conservation — a real, pre-existing bug, tracked in `PROGRESS.md`'s
+ *  Known Bugs and now closed): the patch path used to omit the `wknd` class the full render
+ *  sets, so a weekend cell lost its weekend styling on the next targeted patch until the next
+ *  full repaint. `patchCells` repaints `.sel`/`.kfocus` right after this, since the `className`
  *  assignments below wipe them. */
 export function refreshCell(mid: string, date: string): void {
   const el = findCellElement(mid, date);
@@ -33,10 +35,11 @@ export function refreshCell(mid: string, date: string): void {
   const machine = window.machById(mid);
   if (!machine) return;
   const isToday = date === todayAsIsoDateString();
+  const weekend = isWeekend(parseIsoDateString(date));
   const booking = getBooking(window.S.data!.bookings, mid, date);
   const state = classifyCell(isBlockedOnDate(machine, date), booking, dayAvailable(machine, date));
   if (state === 'blocked') {
-    el.className = cellClass('blocked', { today: isToday });
+    el.className = cellClass('blocked', { today: isToday, weekend });
     el.style.background = '';
     el.title = maintText(maintenanceSlotAt(machine, date));
     el.textContent = booking?.name ?? '';
@@ -44,17 +47,18 @@ export function refreshCell(mid: string, date: string): void {
     el.className = cellClass('booked', {
       mine: isMine(window.S.user, booking!.name),
       today: isToday,
+      weekend,
     });
     el.style.background = nameColor(booking!.name, isDarkTheme());
     el.title = booking!.name + (booking!.note ? ' — ' + booking!.note : '');
     el.textContent = booking!.name;
   } else if (state === 'unavail') {
-    el.className = cellClass('unavail', { today: isToday });
+    el.className = cellClass('unavail', { today: isToday, weekend });
     el.style.background = '';
     el.title = 'an diesem Wochentag nicht verfügbar';
     el.textContent = '';
   } else {
-    el.className = cellClass('free', { today: isToday });
+    el.className = cellClass('free', { today: isToday, weekend });
     el.style.background = '';
     el.title = '';
     el.textContent = '';

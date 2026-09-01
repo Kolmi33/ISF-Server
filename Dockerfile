@@ -9,7 +9,7 @@ RUN npm ci
 COPY vite.config.ts tsconfig.json tsconfig.server.json ./
 COPY web ./web
 COPY server ./server
-RUN npm run build        # -> /app/dist/public : index.html + hashed assets + legacy.js
+RUN npm run build        # -> /app/dist/public : index.html + hashed assets (Vite build)
 RUN npm run build:server # -> /app/dist/server : compiled backend (.js), zero runtime deps
 
 # ---- runtime stage: the zero-dependency Node server + built frontend ----
@@ -25,7 +25,8 @@ WORKDIR /app
 
 # Only what runs: the compiled backend, seed data, and the built frontend. The compiled
 # server lives at /app/server so its `../public` and `../buchungen.json` paths resolve
-# exactly as the original src/*.mjs did (no env/path changes needed).
+# the same way regardless of source layout changes upstream (no env/path changes needed
+# here when server/ or web/ get reorganized).
 COPY package.json ./
 COPY buchungen.json ./
 COPY --from=build /app/dist/server ./server

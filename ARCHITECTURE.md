@@ -442,12 +442,16 @@ Pure model builders are held to the 90/85 floor; DOM writes are browser-smoked (
 DOM (unlike core/), but keep the *pure* model logic in DOM-free functions so it stays unit-testable.
 
 ### Faithful-port constraints (E1/E2) — must preserve, do NOT "fix"
-- `render()` adds a `wknd` class to weekend cells; **`refreshCell()` does not** — so on a booking patch a
-  weekend column loses its `wknd` styling until the next full render. Weekends only show when
-  `mb_weekends==='on'` (`dpw()===7`). Preserve this asymmetry (pass `weekend` to the shared className
-  builder from `render` and `false`/omit from `refreshCell`). **Deferred fix** → backlog.
 - `refreshCell` rebuilds `className` from scratch (dropping `sel`/`kfocus`), then `patchCells` calls
-  `paintSel()` to restore them. Keep that ordering.
+  `paintSel()` (now `paintSelection()`, `ui/grid-interaction.ts`) to restore them. Keep that ordering.
+
+### Fixed post-migration (was a faithful-port constraint above, now resolved)
+- `render()` added a `wknd` class to weekend cells; `refreshCell()` didn't — so a booking patch on a
+  weekend column lost its `wknd` styling until the next full render. Conserved verbatim through the
+  whole Phase 7 extraction (E1) since fixing behavior mid-port isn't extraction; **fixed** once the
+  migration itself was done and the code was safe to actually change — `ui/cell-patch.ts`'s
+  `refreshCell` now computes `weekend` the same way `GridBody.tsx` does (`isWeekend(parseIsoDateString(date))`)
+  and passes it to `cellClass` on every branch. See `PROGRESS.md`'s Known Bugs (moved to Fixed).
 
 ### Open questions (resolve before 4.1c)
 - The action layer for the 36 call sites: a thin `actions.ts` (`setWeek`, `toggleCat`, `setFilter`…) that
