@@ -5,6 +5,7 @@
 // import to avoid a circular import between the two modals.
 
 import type { LogEntry } from '../../../../shared/types.ts';
+import { formatTimestamp } from '../../core/dates.ts';
 import { Icon } from './Icon.tsx';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 
@@ -36,7 +37,7 @@ export function LogModal({ entries }: LogModalProps) {
         {shown.length ? (
           shown.map((entry, index) => (
             <div className="logrow" key={index}>
-              <span className="ts">{new Date(entry.ts).toLocaleString('de-DE')}</span>
+              <span className="ts">{formatTimestamp(entry.ts)}</span>
               <b>{entry.user}</b>: {entry.action}
             </div>
           ))

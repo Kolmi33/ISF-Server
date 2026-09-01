@@ -7,6 +7,7 @@ import { useState } from 'react';
 import type { ChangeEvent } from 'react';
 import {
   formatDateLong,
+  formatTimestamp,
   mondayOfDate,
   parseIsoDateString,
   todayAsIsoDateString,
@@ -127,12 +128,7 @@ function AllBookingsRow({ run }: { run: AllRun }) {
         </div>
         <div className="hint" style={{ margin: 0 }}>
           <Icon name="user" /> {run.name}
-          {run.ts && (
-            <span style={{ opacity: 0.8 }}>
-              {' '}
-              · gebucht am {new Date(run.ts).toLocaleString('de-DE')}
-            </span>
-          )}
+          {run.ts && <span style={{ opacity: 0.8 }}> · gebucht am {formatTimestamp(run.ts)}</span>}
         </div>
       </div>
       <button

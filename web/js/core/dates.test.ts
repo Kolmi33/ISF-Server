@@ -6,6 +6,7 @@ import {
   mondayOfDate,
   isWeekend,
   formatDateShort,
+  formatTimestamp,
   formatDateLong,
   formatWeekdayName,
   getIsoWeekNumber,
@@ -114,6 +115,12 @@ describe('formatDateShort / formatDateLong', () => {
     const longLabel = formatDateLong('2021-01-04');
     expect(longLabel).toMatch(/04\.01\.2021/);
     expect(longLabel).toMatch(/Mo/);
+  });
+});
+
+describe('formatTimestamp', () => {
+  it('renders a de-DE date+time label (test env runs TZ=UTC, test/setup.ts)', () => {
+    expect(formatTimestamp('2021-01-04T14:30:00Z')).toMatch(/4\.1\.2021.*14:30/);
   });
 });
 

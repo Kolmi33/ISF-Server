@@ -5,7 +5,12 @@
 // exclusive per booking (a grouped booking never also gets the plain run-delete button).
 
 import type { Booking, Machine } from '../../../../shared/types.ts';
-import { formatDateLong, isWeekend, parseIsoDateString } from '../../core/dates.ts';
+import {
+  formatDateLong,
+  formatTimestamp,
+  isWeekend,
+  parseIsoDateString,
+} from '../../core/dates.ts';
 import { deleteCells, deleteGroup } from '../../core/booking.ts';
 import {
   findSameNameWorkdayRun,
@@ -138,7 +143,7 @@ function BookingFacts({ machine, date, booking }: BookingFactsProps) {
         <div className="formrow">
           <label>Eingetragen</label>
           <div className="hint" style={{ margin: 0 }}>
-            {new Date(booking.ts).toLocaleString('de-DE')}
+            {formatTimestamp(booking.ts)}
           </div>
         </div>
       )}

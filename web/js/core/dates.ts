@@ -54,6 +54,16 @@ export function formatDateShort(date: Date): string {
   return date.toLocaleDateString('de-DE', { timeZone: 'UTC', day: '2-digit', month: '2-digit' });
 }
 
+/** An ISO timestamp (e.g. a booking's `ts`) → a de-DE date+time label in the viewer's
+ *  local timezone, e.g. '4.1.2021, 14:30:00'. Unlike the calendar-day formatters here,
+ *  a timestamp is a real instant, not a plain calendar day — deliberately NOT UTC-pinned,
+ *  so it reads as the viewer's own wall-clock time. Consolidates an identical
+ *  `new Date(x).toLocaleString('de-DE')` expression that had been written out three times
+ *  independently across `ui/components/*` (ARCHITECTURE_AUDIT.md's file-by-file review). */
+export function formatTimestamp(isoTimestamp: string): string {
+  return new Date(isoTimestamp).toLocaleString('de-DE');
+}
+
 /** An ISO date string → a long de-DE label, e.g. 'Mo., 04.01.2021' (UTC). */
 export function formatDateLong(isoDateString: string): string {
   return parseIsoDateString(isoDateString).toLocaleDateString('de-DE', {
