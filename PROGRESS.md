@@ -4,15 +4,24 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-08-31 — **Phase 7 COMPLETE** — the frontend's React migration (Backlog B,
+_Last updated: 2026-09-02 — **Phase 6's two operational items are DONE.** The deploy
+(`docker compose up -d --build`, user-authorized) and the one-time weekend backfill
+(`node server/backfill.js`, 1,484 rows inserted, re-run confirmed idempotent at 0) both
+ran successfully; production is on the current gated codebase with the weekend maintain
+hook live. Every "awaits authorization"/"not run" note below about these two items is
+now historical. Also done since: the wknd-on-patch bug fix (see Known Bugs → Fixed), and
+a full architecture audit (`docs/ARCHITECTURE_AUDIT.md`) whose P0/P1 findings (F1–F7) are
+all implemented and verified — see that file's §10/§11 for the current status of what's
+left open by design (F8/F9/F10)._
+
+_Previously: 2026-08-31 — **Phase 7 COMPLETE** — the frontend's React migration (Backlog B,
 tracked slice-by-slice in `PHASE7-PLAN.md`) has landed in full: `web/public/legacy.js` (the
 non-module monolith this file's "Current state"/"Done log" below describe extracting FROM,
 Phase 1.2 onward) is deleted outright, and the frontend is 100% gated TypeScript + React. The
 "view-layer decision: no framework" note under "Next step" below is superseded by that — see
-`PHASE7-PLAN.md`/`ARCHITECTURE.md §18` for the React adoption rationale. Phase 6's own
-remaining items (below) are unaffected and still open._
+`PHASE7-PLAN.md`/`ARCHITECTURE.md §18` for the React adoption rationale._
 
-_Previously: 2026-08-29 — **Phase 6 COMPLETE (code)** — backend → gated TS under `server/` + weekend auto-bridging (maintain hook + backfill CLI). Whole roadmap (0–6) implemented & gated. Remaining: authorization-gated deploy + one-time backfill (production writes; not run)._
+_Previously: 2026-08-29 — **Phase 6 COMPLETE (code)** — backend → gated TS under `server/` + weekend auto-bridging (maintain hook + backfill CLI). Whole roadmap (0–6) implemented & gated._
 
 ---
 
@@ -128,27 +137,26 @@ _Previously: 2026-08-29 — **Phase 6 COMPLETE (code)** — backend → gated TS
     `personOnly`) hydrate faithfully across reload, console clean, server `rev` unchanged (23).
 
 ## Next step
-> **Phase 6 is code-complete** (6.1/6.2 backend → gated TS; 6.3 weekend auto-bridging). The whole roadmap
-> (Phases 0–6) is implemented in the repo, gated (255 tests, full `verify` green over web + server), and
-> validated on a throwaway image — **the running production container and its `data` volume were never
-> touched.** What remains is not more code but **two authorization-gated operational steps + carried-forward
-> polish**:
->   1. **Deploy the reworked stack** — `docker compose up -d --build` rebuilds the image (frontend Vite build +
->      backend `tsc`) and restarts the `maschinenplan` container on the new code. This is an outward-facing,
->      brief-downtime action on live users → **do only when the user authorizes it.** Enabling deploy also turns
->      on the weekend maintain hook (set `WEEKEND_BRIDGE=off` in compose to keep it dormant).
->   2. **Run the one-time weekend backfill** — `npm run backfill` (or `node server/backfill.js`) inside the
->      running container inserts the ~1.8k legacy Sat/Sun bridges. **Production data write** → only on explicit
->      authorization. Safe/reversible: the daily VACUUM backup exists and the client sweep removes bridges if a
->      series later breaks.
+> **Phase 6's operational items are done** (2026-09-01/02): `docker compose up -d --build` deployed
+> the reworked stack (user-authorized), and the one-time weekend backfill (`node server/backfill.js`)
+> inserted 1,484 rows, re-run confirmed idempotent (0 the second time). The weekend maintain hook is
+> live in production. Both steps below are kept here only as a historical record of what they were.
+>   1. ~~Deploy the reworked stack~~ — done.
+>   2. ~~Run the one-time weekend backfill~~ — done.
 >
-> **Carry forward, updated 2026-09-01 post-Phase-7:** the modal-markup fold and the `AS_TREE`-adapter
-> are both moot now (`ui/modal.tsx` and the Assistant's `useAssistantTree` hook superseded them in
-> Phase 7 B7/B10d); the action-layer question resolved itself the same way — `ui/mutate.ts` ported
-> legacy's own `mutate` as the orchestrator, faithfully, no new `actions.ts` layer. The
-> **wknd-on-patch** known bug is fixed (see Known Bugs). What's actually still open: the
-> `window.S` → pure `store` shrink (a real, larger store migration — most modules still read
-> `window.S.x` directly rather than through `store`; not urgent, no known bug from it).
+> **Carry forward, updated 2026-09-02 post-architecture-audit:** the modal-markup fold and the
+> `AS_TREE`-adapter are both moot now (`ui/modal.tsx` and the Assistant's `useAssistantTree` hook
+> superseded them in Phase 7 B7/B10d); the action-layer question resolved itself the same way —
+> `ui/mutate.ts` ported legacy's own `mutate` as the orchestrator, faithfully, no new `actions.ts`
+> layer. The **wknd-on-patch** known bug is fixed (see Known Bugs). A full architecture audit
+> (`docs/ARCHITECTURE_AUDIT.md`) landed 2026-09-02, and its P0/P1 findings (F1's server-side
+> blocking-rule bug fix, F2–F6's dedup/relocation refactors, F7's minimal type-contract test) are
+> all implemented and verified. What's actually still open, each needing its own deliberate
+> decision rather than a mechanical fix (audit §10/§11, F8/F9): the `window.S` → pure `store`
+> shrink (most modules still read `window.S.x` directly rather than through `store`; not urgent,
+> no known bug from it), and whether to consolidate the app's 4 independently-mounted React roots
+> (Grid/ContextMenu/the 2 filter dropdowns) so their remaining cross-root `window` bridge could
+> retire too.
 >
 > **View-layer decision (resolved, §15):** no framework — custom string render + the store
 > subscription (now live). Revisit only if the UI grows materially.
