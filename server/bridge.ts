@@ -7,6 +7,7 @@
 // and server-side. Used two ways: `maintainBridges` (inside the mutate transaction, going
 // forward) and `backfillBridges` (a one-time pass over the whole DB).
 import type { Db } from './db.js';
+import { parseIsoDateString, formatDateAsIsoString, addDays } from './dates.js';
 
 /** The minimal booking view the bridge computation needs: mid → day → { name }. */
 export type BookingMap = Record<string, Record<string, { name: string }>>;
@@ -17,13 +18,6 @@ export interface Bridge {
   day: string;
   name: string;
 }
-
-// UTC date helpers, deliberately separate from web/js/core/dates.ts (the server is
-// decoupled from the frontend) but named the same way for a reader moving between them.
-const parseIsoDateString = (isoDateString: string): Date => new Date(isoDateString + 'T00:00:00Z');
-const formatDateAsIsoString = (date: Date): string => date.toISOString().slice(0, 10);
-const addDays = (date: Date, numberOfDays: number): Date =>
-  new Date(date.getTime() + numberOfDays * 86400000);
 
 // JavaScript's Date#getUTCDay(): Sunday=0, Monday=1, ... Saturday=6.
 const FRIDAY_WEEKDAY_NUMBER = 5;

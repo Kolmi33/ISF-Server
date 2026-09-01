@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { openDb, getMeta, importFromJson } from './db.js';
 import { getState } from './model.js';
 import { applyMutate } from './mutate.js';
+import { formatDateAsIsoString } from './dates.js';
 import type { MutateBody } from './types.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
@@ -47,11 +48,6 @@ try {
     console.error('Import fehlgeschlagen:', (error as Error).message);
   }
 }
-
-// ---------- helpers ----------
-// Deliberately separate from web/js/core/dates.ts and server/bridge.ts's own copy (each
-// layer is decoupled) but named the same way for a reader moving between them.
-const formatDateAsIsoString = (date: Date): string => date.toISOString().slice(0, 10);
 
 // ---------- SSE clients ----------
 const clients = new Set<ServerResponse>();
