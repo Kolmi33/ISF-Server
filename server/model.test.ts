@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { openDb, setMeta, type Db } from './db.ts';
-import { isBlocked, machineOut, bookingOut, getState } from './model.ts';
+import {
+  isBlocked,
+  blockReason,
+  isDayAvailable,
+  machineOut,
+  bookingOut,
+  getState,
+} from './model.ts';
 import type { MachineRow } from './types.ts';
 
 // A fresh in-memory DB per test (node:sqlite ':memory:').
@@ -65,6 +72,67 @@ describe('isBlocked', () => {
     expect(isBlocked(r, '2021-06-01')).toBe(false); // before from
     expect(isBlocked(r, '2021-06-25')).toBe(false); // after until
     expect(isBlocked(r, '2021-06-15')).toBe(true); // inside
+  });
+
+  // Regression (ARCHITECTURE_AUDIT.md F1): this server-side check used to look only at the
+  // legacy status fields, so a machine blocked solely via the newer `maint` slots — the
+  // only form the current machine-edit UI ever writes — was silently accepted by a write.
+  it('is true for a machine blocked only via `maint`, with status left at ok', () => {
+    const r = ROW({
+      status: 'ok',
+      maint: JSON.stringify([{ type: 'defekt', from: '2021-06-10', until: '2021-06-20' }]),
+    });
+    expect(isBlocked(r, '2021-06-01')).toBe(false); // before the slot
+    expect(isBlocked(r, '2021-06-15')).toBe(true); // inside the slot
+    expect(isBlocked(r, '2021-06-25')).toBe(false); // after the slot
+  });
+
+  it('is false for an empty, non-array, or malformed `maint`, falling back to status', () => {
+    expect(isBlocked(ROW({ status: 'ok', maint: '[]' }), '2021-06-15')).toBe(false);
+    expect(isBlocked(ROW({ status: 'ok', maint: 'not json' }), '2021-06-15')).toBe(false);
+    expect(isBlocked(ROW({ status: 'ok', maint: '{"not":"an array"}' }), '2021-06-15')).toBe(false);
+    // malformed maint doesn't hide a real legacy-status block
+    expect(isBlocked(ROW({ status: 'defekt', maint: 'not json' }), '2021-06-15')).toBe(true);
+  });
+});
+
+describe('blockReason', () => {
+  it('returns null when not blocked', () => {
+    expect(blockReason(ROW({ status: 'ok' }), '2021-06-01')).toBeNull();
+  });
+
+  it('prefers a covering `maint` slot over the legacy status fields, using its own type', () => {
+    const r = ROW({
+      status: 'wartung', // present, but the maint slot should win
+      maint: JSON.stringify([{ type: 'defekt', from: '2021-06-01', until: '2021-06-30' }]),
+    });
+    expect(blockReason(r, '2021-06-15')).toBe('gesperrt (defekt)');
+  });
+
+  it('falls back to the legacy status label when no maint slot covers the day', () => {
+    expect(blockReason(ROW({ status: 'wartung' }), '2021-06-15')).toBe('gesperrt (wartung)');
+  });
+
+  it("labels a maint slot with no `type` as 'wartung'", () => {
+    const r = ROW({ maint: JSON.stringify([{ from: '2021-06-01', until: '2021-06-30' }]) });
+    expect(blockReason(r, '2021-06-15')).toBe('gesperrt (wartung)');
+  });
+});
+
+describe('isDayAvailable', () => {
+  it('is true when the machine has no days mask', () => {
+    expect(isDayAvailable(ROW({ days: null }), '2021-01-04')).toBe(true); // a Monday
+  });
+
+  it('is true when the mask is malformed (wrong length)', () => {
+    expect(isDayAvailable(ROW({ days: '111' }), '2021-01-04')).toBe(true);
+  });
+
+  it("reads the mask Mo..So, '0' unavailable", () => {
+    const closedMondays = ROW({ days: '0111111' });
+    expect(isDayAvailable(closedMondays, '2021-01-04')).toBe(false); // Monday
+    expect(isDayAvailable(closedMondays, '2021-01-05')).toBe(true); // Tuesday
+    expect(isDayAvailable(closedMondays, '2021-01-10')).toBe(true); // Sunday
   });
 });
 

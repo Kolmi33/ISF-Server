@@ -9,7 +9,7 @@
 import type { Db } from './db.js';
 import { bumpRev, setMeta } from './db.js';
 import { maintainBridges } from './bridge.js';
-import { bookingOut, isBlocked } from './model.js';
+import { bookingOut, blockReason, isDayAvailable } from './model.js';
 import type {
   BookingRow,
   CellDelta,
@@ -194,10 +194,15 @@ function writeCell(
   const existingBooking = statements.findExistingBooking.get(cell.mid, cell.day) as
     BookingRow | undefined;
   if (cell.val) {
-    // set / book — enforce our own block rule + never overwrite a foreign booking
+    // set / book — enforce our own block/availability rule + never overwrite a foreign booking
     const name = String(cell.val.name).trim();
-    if (isBlocked(machine, cell.day)) {
-      conflicts.push({ mid: cell.mid, day: cell.day, by: `gesperrt (${machine.status})` });
+    const reason = blockReason(machine, cell.day);
+    if (reason) {
+      conflicts.push({ mid: cell.mid, day: cell.day, by: reason });
+      return;
+    }
+    if (!isDayAvailable(machine, cell.day)) {
+      conflicts.push({ mid: cell.mid, day: cell.day, by: 'nicht verfügbar (Wochentag)' });
       return;
     }
     if (existingBooking && existingBooking.name !== name) {

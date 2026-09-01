@@ -4,14 +4,80 @@
 // machineOut/bookingOut/getState/isBlocked helpers from src/server.mjs.
 import type { Db } from './db.js';
 import { getMeta } from './db.js';
+import { parseIsoDateString } from './dates.js';
 import type { BookingOut, BookingRow, MachineOut, MachineRow, StateOut } from './types.js';
 
-/** True if machine `machine` is blocked (maintenance/defect) on ISO date `day`. */
-export function isBlocked(machine: MachineRow, day: string): boolean {
+/** A maintenance/defect slot, as stored in a machine row's `maint` JSON column. Only the
+ *  date bounds matter for blocking; `type` ('defekt'/'wartung') is carried through only
+ *  for the conflict message. */
+interface MaintenanceSlot {
+  type?: string;
+  from?: string;
+  until?: string;
+}
+
+/** Parse a machine row's `maint` JSON column into slots — `[]` when absent or malformed,
+ *  the same tolerant fallback `addOptionalFields` below already uses for the read path. */
+function parsedMaintenanceSlots(machine: MachineRow): MaintenanceSlot[] {
+  if (!machine.maint) return [];
+  try {
+    const parsed = JSON.parse(machine.maint) as unknown;
+    return Array.isArray(parsed) ? (parsed as MaintenanceSlot[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The maintenance slot covering `day` (bounds are inclusive; an empty bound is
+ *  open-ended), or null if none. Mirrors the client's `core/machines.ts`
+ *  `maintenanceSlotAt`, over the row's raw JSON rather than the wire's parsed array. */
+function maintenanceSlotAt(machine: MachineRow, day: string): MaintenanceSlot | null {
+  for (const slot of parsedMaintenanceSlots(machine)) {
+    if ((!slot.from || day >= slot.from) && (!slot.until || day <= slot.until)) return slot;
+  }
+  return null;
+}
+
+/**
+ * Why machine `machine` is blocked on ISO date `day` (a display-ready label), or null if
+ * it isn't. Prefers a structured `maint` slot over the legacy single-status fields,
+ * matching the client's own preference (`core/machines.ts`'s `maintenanceSlots`) —
+ * **this server-side check used to look at the legacy fields only**, so a machine blocked
+ * solely via the newer `maint` slots (the only form the machine-edit form has written
+ * since `core/booking.ts`'s `saveMachine` started clearing the legacy fields on every
+ * save) was silently accepted by a write here even though the client itself already
+ * refuses to show that cell as bookable (see ARCHITECTURE_AUDIT.md §9, finding F1).
+ */
+export function blockReason(machine: MachineRow, day: string): string | null {
+  const slot = maintenanceSlotAt(machine, day);
+  if (slot) return `gesperrt (${slot.type || 'wartung'})`;
   const hasActiveNonOkStatus = !!machine.status && machine.status !== 'ok';
   const isAfterStatusStart = !machine.statusFrom || day >= machine.statusFrom;
   const isBeforeStatusEnd = !machine.statusUntil || day <= machine.statusUntil;
-  return hasActiveNonOkStatus && isAfterStatusStart && isBeforeStatusEnd;
+  if (hasActiveNonOkStatus && isAfterStatusStart && isBeforeStatusEnd) {
+    return `gesperrt (${machine.status})`;
+  }
+  return null;
+}
+
+/** True if machine `machine` is blocked (maintenance/defect) on ISO date `day`. */
+export function isBlocked(machine: MachineRow, day: string): boolean {
+  return blockReason(machine, day) !== null;
+}
+
+/**
+ * True if the machine is available on the weekday of ISO date `day`, per its `days` mask
+ * (Mo..So, '1' = available). A missing or malformed mask means available every day.
+ * Faithful port of the client's `core/machines.ts` `dayAvailable` — like `blockReason`
+ * above, this had no server-side equivalent at all before F1 (a machine closed on a given
+ * weekday could still be booked for it via a direct write).
+ */
+export function isDayAvailable(machine: MachineRow, day: string): boolean {
+  if (!machine.days || machine.days.length !== 7) return true;
+  // getUTCDay() returns Sunday=0..Saturday=6; shift it so the mask's Monday-first
+  // character order (Mo..So) lines up with the right index.
+  const weekdayWithMondayFirst = (parseIsoDateString(day).getUTCDay() + 6) % 7;
+  return machine.days.charAt(weekdayWithMondayFirst) !== '0';
 }
 
 /** Add the optional wire fields to `wireShape` only when the row has them set. */

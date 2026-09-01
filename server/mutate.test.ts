@@ -7,12 +7,14 @@ function mem(): Db {
   return openDb(':memory:');
 }
 function addMachine(db: Db, id = 'm1', over: Record<string, string | null> = {}): void {
-  const m = { name: 'M', grp: 'A', status: 'ok', ...over };
-  db.prepare('INSERT INTO machines(id,name,grp,status,sort) VALUES(?,?,?,?,0)').run(
+  const m = { name: 'M', grp: 'A', status: 'ok', days: null, maint: null, ...over };
+  db.prepare('INSERT INTO machines(id,name,grp,status,days,maint,sort) VALUES(?,?,?,?,?,?,0)').run(
     id,
     m.name,
     m.grp,
     m.status,
+    m.days,
+    m.maint,
   );
 }
 function book(db: Db, mid: string, day: string, name: string): void {
@@ -157,6 +159,35 @@ describe('applyMutate — cells', () => {
       cells: [{ mid: 'm1', day: '2021-01-04', val: { name: 'Alice' } }],
     });
     expect(res.conflicts).toEqual([{ mid: 'm1', day: '2021-01-04', by: 'gesperrt (wartung)' }]);
+  });
+
+  // Regression (ARCHITECTURE_AUDIT.md F1): this write path used to check only the legacy
+  // `status` field, so a machine blocked solely via `maint` — the only form the current
+  // machine-edit UI ever writes — was silently bookable through a direct write, even
+  // though the client itself already refuses to show that cell as bookable.
+  it('reports a conflict for a day covered by a `maint` slot, with status left at ok', () => {
+    const db = mem();
+    addMachine(db, 'm1', {
+      status: 'ok',
+      maint: JSON.stringify([{ type: 'defekt', from: '2021-01-04', until: '2021-01-04' }]),
+    });
+    const res = applyMutate(db, {
+      cells: [{ mid: 'm1', day: '2021-01-04', val: { name: 'Alice' } }],
+    });
+    expect(res.conflicts).toEqual([{ mid: 'm1', day: '2021-01-04', by: 'gesperrt (defekt)' }]);
+    expect(bk(db, 'm1', '2021-01-04')).toBeUndefined();
+  });
+
+  it('reports a conflict for a day the machine is closed on, per its `days` mask', () => {
+    const db = mem();
+    addMachine(db, 'm1', { days: '0111111' }); // Monday off
+    const res = applyMutate(db, {
+      cells: [{ mid: 'm1', day: '2021-01-04', val: { name: 'Alice' } }], // a Monday
+    });
+    expect(res.conflicts).toEqual([
+      { mid: 'm1', day: '2021-01-04', by: 'nicht verfügbar (Wochentag)' },
+    ]);
+    expect(bk(db, 'm1', '2021-01-04')).toBeUndefined();
   });
 
   it('updates a cell the same owner already holds', () => {
