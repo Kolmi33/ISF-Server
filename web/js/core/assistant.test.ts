@@ -12,7 +12,6 @@ import {
   isNodeSatisfiable,
   isTreeSatisfiableOnDay,
   hasAnyRedundancy,
-  nextWeekday,
   freeDays,
   groupRuns,
   extendOpenRuns,
@@ -196,13 +195,6 @@ describe('hasAnyRedundancy', () => {
     const inner = mkGrp(1, ['B', 'C']); // 2 > need 1 → redundant
     const outer: AssistGrp = { uid: 'o', type: 'grp', need: 2, children: [dev('a', 'A'), inner] };
     expect(hasAnyRedundancy({ children: [outer] })).toBe(true); // outer not redundant, inner is
-  });
-});
-
-describe('nextWeekday', () => {
-  it('skips the weekend', () => {
-    expect(nextWeekday('2021-01-08')).toBe('2021-01-11'); // Fri → Mon
-    expect(nextWeekday('2021-01-11')).toBe('2021-01-12'); // Mon → Tue
   });
 });
 

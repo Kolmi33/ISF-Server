@@ -415,9 +415,12 @@ identically, in `core/assistant.ts`) was **not** consolidated in this pass — h
 `core/dates.ts` is a real, independent improvement but changes call sites in three files at
 once for a benefit unrelated to naming; recorded here as a follow-up, not done silently.
 **Independently corroborated** by an `/ultrareview` cloud pass after B0 landed (`bug_001`,
-severity nit, all verifiers agreed) — confirms the deferral call was reasonable, still open.
-Fold into whichever Backlog B slice next touches `core/assistant.ts`, `all-bookings.ts`, or
-`my-bookings.ts`, rather than a standalone commit.
+severity nit, all verifiers agreed) — confirms the deferral call was reasonable.
+**Resolved** post-Phase-7, as part of the architecture audit's F3 finding (a fourth copy had
+also grown in `core/booking-queries.ts` by then): `nextWeekday`/`previousWeekday` now live
+in `core/dates.ts` only; `core/assistant.ts`, `core/booking-queries.ts`,
+`ui/views/all-bookings.ts` and `ui/views/my-bookings.ts` all import from there. See
+`docs/ARCHITECTURE_AUDIT.md` §10/F3.
 
 - **Tests:** `admin.test.ts` (6), `all-bookings.test.ts` (12), `my-bookings.test.ts` (5),
   `stats.test.ts` (7) — all green unmodified.

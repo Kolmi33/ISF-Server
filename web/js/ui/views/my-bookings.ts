@@ -5,7 +5,7 @@
 // and today are injected (E4). Faithful port of legacy `computeMyRuns`.
 
 import type { Machine, Bookings } from '../../../../shared/types.ts';
-import { parseIsoDateString, addDays, isWeekend, formatDateAsIsoString } from '../../core/dates.ts';
+import { parseIsoDateString, isWeekend, nextWeekday } from '../../core/dates.ts';
 
 /** A run of consecutive workdays the user has booked on one machine (a bookable "series"). */
 export interface BookingRun {
@@ -26,13 +26,6 @@ export function computeMyRuns(
   today: string,
 ): BookingRun[] {
   const lowercaseUser = user.toLowerCase();
-  const nextWorkday = (isoDateString: string): string => {
-    let candidateDate = addDays(parseIsoDateString(isoDateString), 1);
-    while (isWeekend(candidateDate)) {
-      candidateDate = addDays(candidateDate, 1);
-    }
-    return formatDateAsIsoString(candidateDate);
-  };
   const runs: BookingRun[] = [];
   for (const machine of machines) {
     const machineBookings = bookings[machine.id] || {};
@@ -48,7 +41,7 @@ export function computeMyRuns(
     for (const date of myBookedWorkdays) {
       const continuesCurrentRun =
         currentRunDates.length &&
-        nextWorkday(currentRunDates[currentRunDates.length - 1]!) === date;
+        nextWeekday(currentRunDates[currentRunDates.length - 1]!) === date;
       if (continuesCurrentRun) {
         currentRunDates.push(date);
       } else {

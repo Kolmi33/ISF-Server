@@ -12,6 +12,8 @@ import {
   todayAsIsoDateString,
   getWeekdaysInRange,
   getAllDaysInRange,
+  nextWeekday,
+  previousWeekday,
 } from './dates.ts';
 
 // Anchor week: 2021-01-04 is a Monday (ISO week 1 of 2021); 2021-01-09 Sat, 2021-01-10 Sun.
@@ -144,5 +146,22 @@ describe('getWeekdaysInRange / getAllDaysInRange', () => {
   it('an inverted range (from > to) yields nothing', () => {
     expect(getWeekdaysInRange('2021-01-10', '2021-01-04')).toEqual([]);
     expect(getAllDaysInRange('2021-01-10', '2021-01-04')).toEqual([]);
+  });
+});
+
+// Moved here from core/assistant.test.ts when nextWeekday's four independent copies
+// (core/assistant.ts, core/booking-queries.ts, ui/views/all-bookings.ts,
+// ui/views/my-bookings.ts) were consolidated into this file (ARCHITECTURE_AUDIT.md F3).
+describe('nextWeekday / previousWeekday', () => {
+  it('nextWeekday skips the weekend', () => {
+    expect(nextWeekday('2021-01-08')).toBe('2021-01-11'); // Fri → Mon
+    expect(nextWeekday('2021-01-11')).toBe('2021-01-12'); // Mon → Tue
+  });
+  it('previousWeekday skips the weekend', () => {
+    expect(previousWeekday('2021-01-11')).toBe('2021-01-08'); // Mon → Fri
+    expect(previousWeekday('2021-01-12')).toBe('2021-01-11'); // Tue → Mon
+  });
+  it('the two are inverses across a weekend', () => {
+    expect(previousWeekday(nextWeekday('2021-01-08'))).toBe('2021-01-08');
   });
 });

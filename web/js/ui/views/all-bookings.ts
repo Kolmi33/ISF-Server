@@ -5,7 +5,7 @@
 // filter criteria are injected (E4). Faithful port of legacy `computeAllRuns` + the list `renderList`.
 
 import type { Machine, Bookings } from '../../../../shared/types.ts';
-import { parseIsoDateString, addDays, isWeekend, formatDateAsIsoString } from '../../core/dates.ts';
+import { parseIsoDateString, isWeekend, nextWeekday } from '../../core/dates.ts';
 
 /** A booking run: consecutive workdays booked by one person on one machine, with the earliest ts. */
 export interface AllRun {
@@ -25,13 +25,6 @@ export function computeAllRuns(
   bookings: Bookings,
   today: string,
 ): AllRun[] {
-  const nextWorkday = (isoDateString: string): string => {
-    let candidateDate = addDays(parseIsoDateString(isoDateString), 1);
-    while (isWeekend(candidateDate)) {
-      candidateDate = addDays(candidateDate, 1);
-    }
-    return formatDateAsIsoString(candidateDate);
-  };
   const runs: AllRun[] = [];
   for (const machine of machines) {
     const machineBookings = bookings[machine.id] || {};
@@ -51,7 +44,7 @@ export function computeAllRuns(
       const continuesCurrentRun =
         currentRunDates.length &&
         currentRunName === bookedByName &&
-        nextWorkday(currentRunDates[currentRunDates.length - 1]!) === date;
+        nextWeekday(currentRunDates[currentRunDates.length - 1]!) === date;
       if (continuesCurrentRun) {
         currentRunDates.push(date);
       } else {

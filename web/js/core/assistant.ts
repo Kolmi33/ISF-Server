@@ -16,7 +16,7 @@
 // (`runAssistant`) under their OLD names (`anyRedund`, `pickFor`) — those old names survive
 // only as the aliases at the bottom of this file, deleted whole in Phase 7 slice B10.
 
-import { parseIsoDateString, addDays, isWeekend, formatDateAsIsoString } from './dates.ts';
+import { nextWeekday } from './dates.ts';
 
 /** A device leaf in the Assistant tree. */
 export interface AssistDev {
@@ -155,15 +155,6 @@ export function hasAnyRedundancy(node: AssistContainer): boolean {
       child.type === 'grp' &&
       (child.children.length > effectiveNeed(child) || hasAnyRedundancy(child)),
   );
-}
-
-/** The next weekday (Mon–Fri) ISO date strictly after `isoDateString`, skipping weekends. */
-export function nextWeekday(isoDateString: string): string {
-  let candidateDate = addDays(parseIsoDateString(isoDateString), 1);
-  while (isWeekend(candidateDate)) {
-    candidateDate = addDays(candidateDate, 1);
-  }
-  return formatDateAsIsoString(candidateDate);
 }
 
 /** Of `days`, those on which the whole tree is satisfiable. */

@@ -1,19 +1,11 @@
-// Pure date helpers extracted from the monolith (legacy.js). No DOM, no globals —
-// data → data, so they are trivially testable (this is where our tests concentrate).
+// Pure date helpers. No DOM, no globals — data → data, so they are trivially testable
+// (this is where our tests concentrate).
 //
-// Convention (preserved from the original): the external currency is the ISO date
-// string 'YYYY-MM-DD'. Such strings sort correctly lexicographically and are used
-// directly as object keys in `bookings`. Date math runs in UTC so it never drifts
-// with the viewer's timezone; only `mondayOfDate`/`todayAsIsoDateString` read local
-// calendar components, exactly as the original did.
-//
-// Naming note: every function here is re-exported onto `window` in app.ts so the
-// not-yet-migrated `legacy.js` monolith can keep calling it — but `legacy.js` still
-// calls several of these by their OLD short name (`ymd`, `parseYmd`, `mondayOf`,
-// `fmtLong`, `todayStr`, `weekdayRange`, `allDaysRange`). Those old names survive ONLY
-// as the thin aliases at the bottom of this file; `legacy.js` itself is not edited
-// (E3/E8 — it's deleted whole in Phase 7 slice B10, not patched piecemeal). New
-// TypeScript code must always import the real, fully-named function.
+// Convention: the external currency is the ISO date string 'YYYY-MM-DD'. Such strings
+// sort correctly lexicographically and are used directly as object keys in `bookings`.
+// Date math runs in UTC so it never drifts with the viewer's timezone; only
+// `mondayOfDate`/`todayAsIsoDateString` read local calendar components, exactly as the
+// original did.
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -138,15 +130,24 @@ export function getAllDaysInRange(fromIsoDate: string, toIsoDate: string): strin
   return isoDatesInRange;
 }
 
-// ---- Legacy bridge aliases -------------------------------------------------------
-// `legacy.js` calls these by their OLD short names as bare globals (see app.ts's
-// `Object.assign(window, dates)`) and is deliberately NOT edited by this pass — it is
-// retired whole in Phase 7 slice B10. Delete this entire block in that slice, at
-// which point every caller will be gone. No new code may import from here.
-export const ymd = formatDateAsIsoString;
-export const parseYmd = parseIsoDateString;
-export const mondayOf = mondayOfDate;
-export const fmtLong = formatDateLong;
-export const todayStr = todayAsIsoDateString;
-export const weekdayRange = getWeekdaysInRange;
-export const allDaysRange = getAllDaysInRange;
+/** The next weekday (Mon–Fri) ISO date strictly after `isoDateString`, skipping weekends
+ *  entirely (Friday's next weekday is the following Monday). Previously reimplemented
+ *  independently in `core/assistant.ts`, `core/booking-queries.ts`, and two `ui/views/*`
+ *  files — consolidated here, its only real home (ARCHITECTURE_AUDIT.md F3). */
+export function nextWeekday(isoDateString: string): string {
+  let candidateDate = addDays(parseIsoDateString(isoDateString), 1);
+  while (isWeekend(candidateDate)) {
+    candidateDate = addDays(candidateDate, 1);
+  }
+  return formatDateAsIsoString(candidateDate);
+}
+
+/** The previous weekday (Mon–Fri) ISO date strictly before `isoDateString`, skipping
+ *  weekends entirely (Monday's previous weekday is the preceding Friday). */
+export function previousWeekday(isoDateString: string): string {
+  let candidateDate = addDays(parseIsoDateString(isoDateString), -1);
+  while (isWeekend(candidateDate)) {
+    candidateDate = addDays(candidateDate, -1);
+  }
+  return formatDateAsIsoString(candidateDate);
+}

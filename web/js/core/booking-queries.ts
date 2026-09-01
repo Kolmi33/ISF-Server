@@ -6,17 +6,7 @@
 // file's line budget — this is genuinely a different concern (reading, not mutating).
 
 import type { Bookings } from '../../../shared/types.ts';
-import { addDays, isWeekend, parseIsoDateString, formatDateAsIsoString } from './dates.ts';
-
-/** The next (or previous, for `direction: -1`) WORKDAY after `isoDate` — weekends are skipped
- *  entirely, never treated as part of a run. Faithful port of legacy `step`. */
-function adjacentWorkday(isoDate: string, direction: 1 | -1): string {
-  let date = parseIsoDateString(isoDate);
-  do {
-    date = addDays(date, direction);
-  } while (isWeekend(date));
-  return formatDateAsIsoString(date);
-}
+import { nextWeekday, previousWeekday } from './dates.ts';
 
 /**
  * The contiguous run of workdays, centered on `isoDate`, that machine `mid` has booked under
@@ -36,7 +26,7 @@ export function findSameNameWorkdayRun(
 
   let cursor = isoDate;
   while (true) {
-    const previousWorkday = adjacentWorkday(cursor, -1);
+    const previousWorkday = previousWeekday(cursor);
     if (machineBookings[previousWorkday]?.name !== name) break;
     cursor = previousWorkday;
     run.unshift(cursor);
@@ -44,7 +34,7 @@ export function findSameNameWorkdayRun(
 
   cursor = isoDate;
   while (true) {
-    const nextWorkday = adjacentWorkday(cursor, 1);
+    const nextWorkday = nextWeekday(cursor);
     if (machineBookings[nextWorkday]?.name !== name) break;
     cursor = nextWorkday;
     run.push(cursor);
