@@ -5,8 +5,20 @@
 // separate from core/booking.ts (which is the write-path reducers) purely to stay under that
 // file's line budget — this is genuinely a different concern (reading, not mutating).
 
-import type { Bookings } from '../../../shared/types.ts';
+import type { Booking, Bookings } from '../../../shared/types.ts';
 import { nextWeekday, previousWeekday } from './dates.ts';
+
+/** The booking on `machineId` for `isoDate`, or undefined if that cell is free. Moved here
+ *  from `ui/grid.ts` (a rendering module) — it's a plain data lookup with no DOM/rendering
+ *  involvement, used by several components that have nothing to do with grid rendering
+ *  (ARCHITECTURE_AUDIT.md F6). */
+export function getBooking(
+  bookings: Bookings,
+  machineId: string,
+  isoDate: string,
+): Booking | undefined {
+  return bookings[machineId]?.[isoDate];
+}
 
 /**
  * The contiguous run of workdays, centered on `isoDate`, that machine `mid` has booked under

@@ -41,7 +41,8 @@ import {
   treeDevs,
   type AssistContainer,
 } from '../../core/assistant.ts';
-import { orderedMachines, getBooking } from '../grid.ts';
+import { orderedMachines } from '../grid.ts';
+import { getBooking } from '../../core/booking-queries.ts';
 import { buildAssistantResults, type AssistantResultRow } from '../assistant-results.ts';
 import { toast } from '../toast.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';

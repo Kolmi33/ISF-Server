@@ -8,7 +8,8 @@
 // this reads and writes the exact DOM nodes the React Grid (B1) renders, deliberately bypassing
 // a React re-render for a handful of cells.
 
-import { getBooking, isMine, nameColor, cellClass, classifyCell, classifyDot } from './grid.ts';
+import { isMine, nameColor, cellClass, classifyCell, classifyDot } from './grid.ts';
+import { getBooking } from '../core/booking-queries.ts';
 import { maintText } from './machine-text.ts';
 import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from '../core/machines.ts';
 import { isWeekend, parseIsoDateString, todayAsIsoDateString } from '../core/dates.ts';

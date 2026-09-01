@@ -17,7 +17,7 @@ import {
   todayAsIsoDateString,
 } from '../core/dates.ts';
 import { dayAvailable, isBlockedOnDate, maintenanceSlots } from '../core/machines.ts';
-import { getBooking } from './grid.ts';
+import { getBooking } from '../core/booking-queries.ts';
 import { nextFreeDay, prevFreeDay, type FreeDay } from './navigation.ts';
 import { centerColumn } from './grid-scroll.ts';
 import { selection, paintSelection } from './grid-interaction.ts';

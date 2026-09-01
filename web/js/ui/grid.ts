@@ -6,7 +6,7 @@
 // stay in the legacy adapter for now (E3/E5); they legitimately differ per caller (the full
 // render carries aria/data attributes and richer titles that the patch path does not).
 
-import type { Booking, Bookings, Machine, MachineCategory } from '../../../shared/types.ts';
+import type { Booking, Machine, MachineCategory } from '../../../shared/types.ts';
 import { addDays, formatDateAsIsoString } from '../core/dates.ts';
 import { categoryOf, maintenanceSlotAt } from '../core/machines.ts';
 
@@ -99,15 +99,6 @@ export function orderedMachines(
     .slice()
     .sort((machineA, machineB) => isMesstechnik(machineA) - isMesstechnik(machineB));
   return favorites.concat(everyoneElse);
-}
-
-/** The booking on `machineId` for `isoDate`, or undefined if that cell is free. */
-export function getBooking(
-  bookings: Bookings,
-  machineId: string,
-  isoDate: string,
-): Booking | undefined {
-  return bookings[machineId]?.[isoDate];
 }
 
 /**

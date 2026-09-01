@@ -14,7 +14,8 @@ import {
 } from '../../core/dates.ts';
 import { categoryOf } from '../../core/machines.ts';
 import { deleteOwnCells } from '../../core/booking.ts';
-import { orderedMachines, getBooking, FAVORITES_GROUP_LABEL } from '../grid.ts';
+import { orderedMachines, FAVORITES_GROUP_LABEL } from '../grid.ts';
+import { getBooking } from '../../core/booking-queries.ts';
 import { computeMyRuns, type BookingRun } from '../views/my-bookings.ts';
 import { gotoDate, prependWeek, resetView } from '../grid-scroll.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';

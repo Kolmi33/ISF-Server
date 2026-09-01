@@ -1,6 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import type { Bookings } from '../../../shared/types.ts';
-import { findSameNameWorkdayRun, findBookingGroup } from './booking-queries.ts';
+import type { Booking, Bookings } from '../../../shared/types.ts';
+import { getBooking, findSameNameWorkdayRun, findBookingGroup } from './booking-queries.ts';
+
+// Moved here from ui/grid.test.ts when getBooking moved out of ui/grid.ts (a rendering
+// module) into this file, its actual home as a plain booking lookup (ARCHITECTURE_AUDIT.md F6).
+describe('getBooking', () => {
+  const bk: Booking = { name: 'anna' };
+
+  it('returns the booking when the cell is occupied', () => {
+    const bookings = { m1: { '2021-01-04': bk } };
+    expect(getBooking(bookings, 'm1', '2021-01-04')).toBe(bk);
+  });
+  it('is undefined for an unknown machine or an empty day', () => {
+    expect(getBooking({}, 'm1', '2021-01-04')).toBeUndefined();
+    expect(getBooking({ m1: {} }, 'm1', '2021-01-04')).toBeUndefined();
+  });
+});
 
 describe('findSameNameWorkdayRun', () => {
   it('is just the one date when neighbors are empty', () => {

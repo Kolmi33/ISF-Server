@@ -8,7 +8,6 @@ import {
   classifyDot,
   displayGroup,
   orderedMachines,
-  getBooking,
   visibleWeeks,
   nameColor,
   maintenanceKindToday,
@@ -107,17 +106,6 @@ describe('orderedMachines', () => {
     const messtechnik = machine({ id: 'mt', cat: 'messtechnik' });
     const maschine = machine({ id: 'ma' });
     expect(orderedMachines([messtechnik, maschine], new Set())).toEqual([maschine, messtechnik]);
-  });
-});
-
-describe('getBooking', () => {
-  it('returns the booking when the cell is occupied', () => {
-    const bookings = { m1: { '2021-01-04': bk } };
-    expect(getBooking(bookings, 'm1', '2021-01-04')).toBe(bk);
-  });
-  it('is undefined for an unknown machine or an empty day', () => {
-    expect(getBooking({}, 'm1', '2021-01-04')).toBeUndefined();
-    expect(getBooking({ m1: {} }, 'm1', '2021-01-04')).toBeUndefined();
   });
 });
 

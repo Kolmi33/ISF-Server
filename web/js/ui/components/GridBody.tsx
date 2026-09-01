@@ -11,12 +11,12 @@ import {
   isBlockedOnDate,
   maintenanceSlotAt,
 } from '../../core/machines.ts';
+import { getBooking } from '../../core/booking-queries.ts';
 import { daysMaskText, maintText, statusRangeText } from '../machine-text.ts';
 import {
   cellClass,
   classifyCell,
   classifyDot,
-  getBooking,
   isMine,
   maintenanceKindToday,
   nameColor,

@@ -5,7 +5,7 @@
 // `window.hideCtx` bridge, unchanged.
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { formatDateLong } from '../../core/dates.ts';
-import { getBooking } from '../grid.ts';
+import { getBooking } from '../../core/booking-queries.ts';
 import { selection, clearSelection } from '../grid-interaction.ts';
 import { openBookingForm } from './BookingForm.tsx';
 import { offerUndo } from '../toast.ts';
