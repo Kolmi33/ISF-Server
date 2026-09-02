@@ -20,7 +20,7 @@
 // architectural decision, not a mechanical cleanup — tracked, not done here.
 
 import type { AppState } from '../../shared/types.ts';
-import { mondayOfDate } from './core/dates.ts';
+import { mondayOfDate } from '../../shared/dates.ts';
 import * as api from './net/api.ts';
 import * as gridInteraction from './ui/grid-interaction.ts';
 import * as gridScroll from './ui/grid-scroll.ts';

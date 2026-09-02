@@ -16,7 +16,7 @@
 // (`runAssistant`) under their OLD names (`anyRedund`, `pickFor`) — those old names survive
 // only as the aliases at the bottom of this file, deleted whole in Phase 7 slice B10.
 
-import { nextWeekday } from './dates.ts';
+import { nextWeekday } from '../../../shared/dates.ts';
 
 /** A device leaf in the Assistant tree. */
 export interface AssistDev {

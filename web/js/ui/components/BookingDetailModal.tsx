@@ -10,7 +10,7 @@ import {
   formatTimestamp,
   isWeekend,
   parseIsoDateString,
-} from '../../core/dates.ts';
+} from '../../../../shared/dates.ts';
 import { deleteCells, deleteGroup } from '../../core/booking.ts';
 import {
   findSameNameWorkdayRun,

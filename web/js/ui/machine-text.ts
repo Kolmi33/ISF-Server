@@ -5,7 +5,7 @@
 // legacy call sites (`statusRangeText(m)`) are unchanged while tests stay deterministic (E4/E6).
 
 import type { Machine, MaintSlot } from '../../../shared/types.ts';
-import { formatDateLong, todayAsIsoDateString } from '../core/dates.ts';
+import { formatDateLong, todayAsIsoDateString } from '../../../shared/dates.ts';
 import { maintenanceSlots, slotCovers, maintenanceSlotAt } from '../core/machines.ts';
 
 /** Mo..So, matching the index order of a `Machine.days` mask. Shared by `daysMaskText` and the

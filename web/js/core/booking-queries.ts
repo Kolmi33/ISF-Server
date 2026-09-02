@@ -6,7 +6,7 @@
 // file's line budget — this is genuinely a different concern (reading, not mutating).
 
 import type { Booking, Bookings } from '../../../shared/types.ts';
-import { nextWeekday, previousWeekday } from './dates.ts';
+import { nextWeekday, previousWeekday } from '../../../shared/dates.ts';
 
 /** The booking on `machineId` for `isoDate`, or undefined if that cell is free. Moved here
  *  from `ui/grid.ts` (a rendering module) — it's a plain data lookup with no DOM/rendering

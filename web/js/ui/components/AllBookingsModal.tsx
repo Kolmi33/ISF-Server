@@ -11,7 +11,7 @@ import {
   mondayOfDate,
   parseIsoDateString,
   todayAsIsoDateString,
-} from '../../core/dates.ts';
+} from '../../../../shared/dates.ts';
 import { groupsByCategory, type CategoryGroups } from '../../core/machines.ts';
 import { orderedMachines } from '../grid.ts';
 import {

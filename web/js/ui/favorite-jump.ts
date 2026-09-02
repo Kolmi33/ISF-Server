@@ -15,7 +15,7 @@ import {
   mondayOfDate,
   parseIsoDateString,
   todayAsIsoDateString,
-} from '../core/dates.ts';
+} from '../../../shared/dates.ts';
 import { dayAvailable, isBlockedOnDate, maintenanceSlots } from '../core/machines.ts';
 import { getBooking } from '../core/booking-queries.ts';
 import { nextFreeDay, prevFreeDay, type FreeDay } from './navigation.ts';

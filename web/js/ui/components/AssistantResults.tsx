@@ -14,7 +14,7 @@
 import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
-import { formatDateLong, mondayOfDate, parseIsoDateString } from '../../core/dates.ts';
+import { formatDateLong, mondayOfDate, parseIsoDateString } from '../../../../shared/dates.ts';
 import { chooseDevicesForTree, type AssistContainer, type IsFree } from '../../core/assistant.ts';
 import type { AssistantResultRow } from '../assistant-results.ts';
 import { clearSelection } from '../grid-interaction.ts';

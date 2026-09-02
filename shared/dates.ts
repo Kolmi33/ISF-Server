@@ -1,5 +1,12 @@
-// Pure date helpers. No DOM, no globals — data → data, so they are trivially testable
-// (this is where our tests concentrate).
+// Pure date helpers, shared verbatim between the frontend and the backend. No DOM, no I/O
+// — data → data, so they are trivially testable (this is where the date-logic tests
+// concentrate). Originally frontend-only (web/js/core/dates.ts); the backend needed the
+// same three primitives (parseIsoDateString/formatDateAsIsoString/addDays) and, having no
+// shared *runtime* module to reach for, grew its own private copies instead
+// (server/bridge.ts, then server/server.ts) — moved here once that duplication was
+// noticed, since this file imports nothing and has no DOM/browser dependency, making it
+// the one genuinely easy case for real cross-boundary sharing (see
+// docs/ARCHITECTURE_AUDIT.md §9/F2 for the fuller history).
 //
 // Convention: the external currency is the ISO date string 'YYYY-MM-DD'. Such strings
 // sort correctly lexicographically and are used directly as object keys in `bookings`.
@@ -30,6 +37,18 @@ export function addDays(date: Date, numberOfDays: number): Date {
   return resultDate;
 }
 
+/**
+ * `date`'s weekday, re-indexed so Monday=0 .. Sunday=6 (native `Date#getUTCDay()` is
+ * Sunday=0..Saturday=6). Used wherever a Mo..So layout needs to know which column a date
+ * falls in: this file's own `mondayOfDate`/`getIsoWeekNumber`, and — since it used to be
+ * reimplemented identically on both sides of the frontend/backend boundary the moment the
+ * backend needed it too — machine weekday-availability masks (`core/machines.ts`'s
+ * `dayAvailable`, `server/model.ts`'s `isDayAvailable`).
+ */
+export function mondayFirstWeekdayIndex(date: Date): number {
+  return (date.getUTCDay() + 6) % 7;
+}
+
 /** The Monday (UTC midnight) of the ISO week containing `date`. Reads local Y/M/D, as the original. */
 export function mondayOfDate(date: Date): Date {
   // Read the LOCAL calendar day (not UTC) so "today" matches the viewer's wall clock,
@@ -37,10 +56,10 @@ export function mondayOfDate(date: Date): Date {
   const localCalendarDayAtUtcMidnight = new Date(
     Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
   );
-  // getUTCDay() returns Sunday=0..Saturday=6. Shift it so Monday=0..Sunday=6, matching
-  // how the grid always displays weeks starting on Monday.
-  const weekdayWithMondayFirst = (localCalendarDayAtUtcMidnight.getUTCDay() + 6) % 7;
-  return addDays(localCalendarDayAtUtcMidnight, -weekdayWithMondayFirst);
+  return addDays(
+    localCalendarDayAtUtcMidnight,
+    -mondayFirstWeekdayIndex(localCalendarDayAtUtcMidnight),
+  );
 }
 
 /** True if `date` falls on a Saturday or Sunday (UTC). */
@@ -84,14 +103,13 @@ export function formatWeekdayName(date: Date): string {
 export function getIsoWeekNumber(date: Date): number {
   // ISO 8601 identifies a week by the calendar year that contains its Thursday.
   // Step 1: find the Thursday that falls in the same ISO week as `date`.
-  const weekdayWithMondayFirst = (date.getUTCDay() + 6) % 7; // Monday=0 … Sunday=6
-  const daysUntilThursdayOfThisWeek = 3 - weekdayWithMondayFirst;
+  const daysUntilThursdayOfThisWeek = 3 - mondayFirstWeekdayIndex(date);
   const thursdayOfThisWeek = addDays(date, daysUntilThursdayOfThisWeek);
 
   // Step 2: January 4th always falls in week 1 of its year (part of the ISO 8601
   // definition), so it's a fixed, reliable point to count weeks from.
   const januaryFourthOfThatYear = new Date(Date.UTC(thursdayOfThisWeek.getUTCFullYear(), 0, 4));
-  const weekdayOfJanuaryFourth = (januaryFourthOfThatYear.getUTCDay() + 6) % 7;
+  const weekdayOfJanuaryFourth = mondayFirstWeekdayIndex(januaryFourthOfThatYear);
 
   // Step 3: count whole weeks between the two Thursdays.
   const daysBetweenTheTwoThursdays =
@@ -141,9 +159,7 @@ export function getAllDaysInRange(fromIsoDate: string, toIsoDate: string): strin
 }
 
 /** The next weekday (Mon–Fri) ISO date strictly after `isoDateString`, skipping weekends
- *  entirely (Friday's next weekday is the following Monday). Previously reimplemented
- *  independently in `core/assistant.ts`, `core/booking-queries.ts`, and two `ui/views/*`
- *  files — consolidated here, its only real home (ARCHITECTURE_AUDIT.md F3). */
+ *  entirely (Friday's next weekday is the following Monday). */
 export function nextWeekday(isoDateString: string): string {
   let candidateDate = addDays(parseIsoDateString(isoDateString), 1);
   while (isWeekend(candidateDate)) {

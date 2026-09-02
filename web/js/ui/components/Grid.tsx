@@ -24,7 +24,7 @@ import {
   isWeekend,
   parseIsoDateString,
   todayAsIsoDateString,
-} from '../../core/dates.ts';
+} from '../../../../shared/dates.ts';
 import { buildGridRows, visibleWeeks, type GridRow } from '../grid.ts';
 import { daysPerWeek } from '../grid-scroll.ts';
 import { CATEGORIES } from '../../core/machines.ts';

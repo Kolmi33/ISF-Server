@@ -11,7 +11,7 @@ import {
   mondayOfDate,
   parseIsoDateString,
   todayAsIsoDateString,
-} from '../../core/dates.ts';
+} from '../../../../shared/dates.ts';
 import { categoryOf } from '../../core/machines.ts';
 import { deleteOwnCells } from '../../core/booking.ts';
 import { orderedMachines, FAVORITES_GROUP_LABEL } from '../grid.ts';

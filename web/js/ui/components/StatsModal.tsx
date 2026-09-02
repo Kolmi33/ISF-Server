@@ -4,7 +4,7 @@
 // conceptually. Faithful port of legacy `openStats`/`renderStats`.
 
 import { useEffect, useState } from 'react';
-import { todayAsIsoDateString } from '../../core/dates.ts';
+import { todayAsIsoDateString } from '../../../../shared/dates.ts';
 import { orderedMachines } from '../grid.ts';
 import {
   computeStats,

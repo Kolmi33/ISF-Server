@@ -1,7 +1,13 @@
 {
   // Emit config for the backend only (the base tsconfig is noEmit, for the type-check gate).
-  // The Docker build runs `tsc -p tsconfig.server.json` to compile server/*.ts → dist/server/*.js,
-  // which Node runs directly (zero runtime deps; node:sqlite is loaded via createRequire in db.ts).
+  // The Docker build runs `tsc -p tsconfig.server.json` to compile server/*.ts + the pure
+  // modules it shares with the frontend (shared/*.ts, e.g. shared/dates.ts) →
+  // dist/server/{server,shared}/*.js, which Node runs directly (zero runtime deps;
+  // node:sqlite is loaded via createRequire in db.ts). rootDir is the repo root, not
+  // "server", because server/*.ts now imports shared/*.ts — tsc needs every file in the
+  // program under one common root to preserve that relative layout on emit; the Dockerfile's
+  // runtime stage copies dist/server/server and dist/server/shared to matching top-level
+  // folders so the compiled ../shared/dates.js references keep resolving.
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
@@ -9,9 +15,9 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "dist/server",
-    "rootDir": "server",
+    "rootDir": ".",
     "lib": ["ES2022"]
   },
-  "include": ["server"],
-  "exclude": ["server/**/*.test.ts"]
+  "include": ["server", "shared"],
+  "exclude": ["server/**/*.test.ts", "shared/**/*.test.ts"]
 }

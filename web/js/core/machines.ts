@@ -10,7 +10,7 @@
 // window-bridge aliases — retired along with `legacy.js` itself in Phase 7 slice B10g.
 
 import type { Machine, MaintSlot, MachineCategory } from '../../../shared/types.ts';
-import { parseIsoDateString } from './dates.ts';
+import { mondayFirstWeekdayIndex, parseIsoDateString } from '../../../shared/dates.ts';
 
 /** A machine's category: 'messtechnik' for measurement devices, else 'maschine'. */
 export function categoryOf(machine: Machine | null | undefined): MachineCategory {
@@ -98,10 +98,7 @@ export function hasAnyMaintenanceSlot(machine: Machine): boolean {
  */
 export function dayAvailable(machine: Machine, isoDate: string): boolean {
   if (!machine.days || machine.days.length !== 7) return true;
-  // getUTCDay() returns Sunday=0..Saturday=6; shift it so the mask's Monday-first
-  // character order (Mo..So) lines up with the right index.
-  const weekdayWithMondayFirst = (parseIsoDateString(isoDate).getUTCDay() + 6) % 7;
-  return machine.days.charAt(weekdayWithMondayFirst) !== '0';
+  return machine.days.charAt(mondayFirstWeekdayIndex(parseIsoDateString(isoDate))) !== '0';
 }
 
 /** True if a cell is bookable: not blocked AND available on that weekday. */

@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { openDb, getMeta, importFromJson } from './db.js';
 import { getState } from './model.js';
 import { applyMutate } from './mutate.js';
-import { formatDateAsIsoString } from './dates.js';
+import { formatDateAsIsoString } from '../shared/dates.js';
 import type { MutateBody } from './types.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));

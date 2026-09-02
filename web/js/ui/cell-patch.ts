@@ -12,7 +12,7 @@ import { isMine, nameColor, cellClass, classifyCell, classifyDot } from './grid.
 import { getBooking } from '../core/booking-queries.ts';
 import { maintText } from './machine-text.ts';
 import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from '../core/machines.ts';
-import { isWeekend, parseIsoDateString, todayAsIsoDateString } from '../core/dates.ts';
+import { isWeekend, parseIsoDateString, todayAsIsoDateString } from '../../../shared/dates.ts';
 import { paintSelection } from './grid-interaction.ts';
 
 function findCellElement(mid: string, date: string): HTMLElement | null {

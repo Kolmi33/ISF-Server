@@ -5,7 +5,7 @@
 // filter criteria are injected (E4). Faithful port of legacy `computeAllRuns` + the list `renderList`.
 
 import type { Machine, Bookings } from '../../../../shared/types.ts';
-import { parseIsoDateString, isWeekend, nextWeekday } from '../../core/dates.ts';
+import { parseIsoDateString, isWeekend, nextWeekday } from '../../../../shared/dates.ts';
 
 /** A booking run: consecutive workdays booked by one person on one machine, with the earliest ts. */
 export interface AllRun {

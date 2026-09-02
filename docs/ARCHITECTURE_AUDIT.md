@@ -500,11 +500,13 @@ structural improvement, and it is prioritized accordingly.
 ## 10. Prioritized, actionable refactoring plan
 
 **Status (2026-09-02): F1, F2, F3, F4, F5, F6, and F7 (minimal) are done**, each as its own
-verified commit (full gate green + a rebuilt-image browser smoke after F5). F8 and F9
-remain open by design — both need a separate, deliberate decision, not a mechanical fix.
-See the individual write-ups below for what actually shipped in each case; they're kept
-in the original (pre-implementation) tense as the record of what was proposed, with the
-outcome noted inline where it's worth flagging (e.g. F7 shipped only its minimal option).
+verified commit (full gate green + a rebuilt-image browser smoke after F5 and after F2's
+later extension). F8 and F9 remain open by design — both need a separate, deliberate
+decision, not a mechanical fix. See the individual write-ups below for what actually
+shipped in each case; they're kept in the original (pre-implementation) tense as the
+record of what was proposed, with the outcome noted inline where it's worth flagging
+(F2 went beyond its original minimal proposal to the full cross-boundary merge; F7
+shipped only its minimal option).
 
 Every item below was verified against real call sites in this pass (grep for every actual
 `window.<name>`/import/usage site, not filenames or assumptions), per the request. Each is
@@ -587,6 +589,30 @@ priority is about how much it matters; risk is about how carefully it needs to b
 8. **Tests:** no new tests needed — existing `bridge.test.ts`/`server` coverage already
    exercises these through `missingBridges`/the backup path; a pure import-source change
    with identical behavior doesn't need new assertions, just `verify` staying green.
+
+**Update (2026-09-02): went further than proposed — the full cross-boundary merge.**
+Prompted by a direct follow-up question ("why does the server have its own date functions
+at all when the frontend has core/dates.ts?"), and by a fresh, concrete example of the cost
+of not merging: implementing F1 required adding the same "Mo..So mask index from an ISO
+date" formula to `server/model.ts` that `core/machines.ts` already had, because the server
+still had no way to reach the frontend's copy. Since `core/dates.ts` imports nothing (the
+one file with none of the usual cross-boundary blockers), it was physically moved to
+`shared/dates.ts`; every frontend importer (21 files) repointed; `server/dates.ts` deleted
+entirely in favor of importing `../shared/dates.js`; the fresh mask-index duplication
+folded into one new shared export, `mondayFirstWeekdayIndex`. The real work was
+`tsconfig.server.json` (`rootDir` widened from `"server"` to the repo root, `include` grew
+to `["server", "shared"]`, since a file under `shared/` is now part of the backend's
+compiled program) and the `Dockerfile` (added `COPY shared ./shared` to the build stage —
+turns out it had never copied `shared/` at all, silently fine only because every existing
+`shared/types.ts` import was `import type`, erased before Vite ever needed the file on
+disk; and split the runtime stage's single `COPY dist/server ./server` into two, matching
+the now-nested `dist/server/{server,shared}` build output). Verified with the same
+rebuild-and-smoke approach as F5: `npm run build:server` emits the expected
+`dist/server/server/*.js` + `dist/server/shared/*.js` split with correctly resolving
+`../shared/dates.js` imports, a full `docker compose up -d --build` succeeds, `/api/health`
+and `/api/state` both round-trip correctly against the existing data (`rev` unchanged, 245
+machines). Risk was **MODERATE** (build-config + Dockerfile, not just source) rather than
+SAFE, for exactly the reason this was originally left as a P2 "needs its own decision."
 
 ### F3 — `nextWorkday`/`nextWeekday` implemented four times
 

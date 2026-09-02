@@ -6,7 +6,7 @@
 // `compute()` closure in legacy — the DOM read of the range and the `f>o` validation stay in legacy.
 
 import type { Machine, Bookings, MachineCategory } from '../../../../shared/types.ts';
-import { getWeekdaysInRange, getAllDaysInRange } from '../../core/dates.ts';
+import { getWeekdaysInRange, getAllDaysInRange } from '../../../../shared/dates.ts';
 import { maintenanceSlots, isBlockedOnDate, categoryOf } from '../../core/machines.ts';
 
 /** One person's day count on a single machine (the per-machine drilldown row). */

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Booking, Machine } from '../../../shared/types.ts';
-import { parseIsoDateString } from '../core/dates.ts';
+import { parseIsoDateString } from '../../../shared/dates.ts';
 import {
   classifyCell,
   isMine,

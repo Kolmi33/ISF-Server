@@ -6,7 +6,12 @@
 // `nextFreePtr` bookkeeping). Weekends are skipped here, faithful to legacy: the scan hops
 // Sat/Sun regardless of whether weekend columns are currently shown.
 
-import { parseIsoDateString, addDays, formatDateAsIsoString, isWeekend } from '../core/dates.ts';
+import {
+  parseIsoDateString,
+  addDays,
+  formatDateAsIsoString,
+  isWeekend,
+} from '../../../shared/dates.ts';
 
 /** Predicate: is this working day (ISO `YYYY-MM-DD`) bookable for the machine in question? */
 export type FreeDay = (iso: string) => boolean;

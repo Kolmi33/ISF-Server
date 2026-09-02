@@ -7,7 +7,7 @@
 // and server-side. Used two ways: `maintainBridges` (inside the mutate transaction, going
 // forward) and `backfillBridges` (a one-time pass over the whole DB).
 import type { Db } from './db.js';
-import { parseIsoDateString, formatDateAsIsoString, addDays } from './dates.js';
+import { parseIsoDateString, formatDateAsIsoString, addDays } from '../shared/dates.js';
 
 /** The minimal booking view the bridge computation needs: mid → day → { name }. */
 export type BookingMap = Record<string, Record<string, { name: string }>>;

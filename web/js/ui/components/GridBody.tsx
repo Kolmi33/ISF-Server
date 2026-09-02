@@ -4,7 +4,7 @@
 
 import { Fragment } from 'react';
 import type { Booking, Machine } from '../../../../shared/types.ts';
-import { isWeekend, parseIsoDateString } from '../../core/dates.ts';
+import { isWeekend, parseIsoDateString } from '../../../../shared/dates.ts';
 import {
   dayAvailable,
   hasAnyMaintenanceSlot,

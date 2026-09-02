@@ -7,7 +7,7 @@
 // original — the caller relies on that contract.
 
 import type { BookingData } from '../../../shared/types.ts';
-import { parseIsoDateString, formatDateAsIsoString, addDays } from './dates.ts';
+import { parseIsoDateString, formatDateAsIsoString, addDays } from '../../../shared/dates.ts';
 
 /** An orphaned weekend day that was removed, with the previous value for undo. */
 export interface WeekendUndo {

@@ -9,8 +9,9 @@ RUN npm ci
 COPY vite.config.ts tsconfig.json tsconfig.server.json ./
 COPY web ./web
 COPY server ./server
+COPY shared ./shared
 RUN npm run build        # -> /app/dist/public : index.html + hashed assets (Vite build)
-RUN npm run build:server # -> /app/dist/server : compiled backend (.js), zero runtime deps
+RUN npm run build:server # -> /app/dist/server/{server,shared} : compiled backend, zero runtime deps
 
 # ---- runtime stage: the zero-dependency Node server + built frontend ----
 FROM node:22-slim
@@ -23,13 +24,16 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-# Only what runs: the compiled backend, seed data, and the built frontend. The compiled
-# server lives at /app/server so its `../public` and `../buchungen.json` paths resolve
-# the same way regardless of source layout changes upstream (no env/path changes needed
-# here when server/ or web/ get reorganized).
+# Only what runs: the compiled backend, its shared pure modules, seed data, and the built
+# frontend. The compiled server lives at /app/server so its `../public` and
+# `../buchungen.json` paths resolve the same way regardless of source layout changes
+# upstream; /app/shared sits alongside it (same relative layout as the source tree) so the
+# compiled `../shared/dates.js` imports keep resolving (no env/path changes needed here
+# when server/, shared/, or web/ get reorganized further).
 COPY package.json ./
 COPY buchungen.json ./
-COPY --from=build /app/dist/server ./server
+COPY --from=build /app/dist/server/server ./server
+COPY --from=build /app/dist/server/shared ./shared
 COPY --from=build /app/dist/public ./public
 
 # /data is a mounted volume at runtime; make sure the unprivileged user owns it.

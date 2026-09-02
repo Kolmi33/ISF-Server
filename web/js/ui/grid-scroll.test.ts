@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import type { AppState } from '../../../shared/types.ts';
-import { mondayOfDate } from '../core/dates.ts';
+import { mondayOfDate } from '../../../shared/dates.ts';
 import {
   canStillGrowWindow,
   centerColumn,

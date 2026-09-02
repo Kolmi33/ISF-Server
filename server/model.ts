@@ -4,7 +4,7 @@
 // machineOut/bookingOut/getState/isBlocked helpers from src/server.mjs.
 import type { Db } from './db.js';
 import { getMeta } from './db.js';
-import { parseIsoDateString } from './dates.js';
+import { mondayFirstWeekdayIndex, parseIsoDateString } from '../shared/dates.js';
 import type { BookingOut, BookingRow, MachineOut, MachineRow, StateOut } from './types.js';
 
 /** A maintenance/defect slot, as stored in a machine row's `maint` JSON column. Only the
@@ -74,10 +74,7 @@ export function isBlocked(machine: MachineRow, day: string): boolean {
  */
 export function isDayAvailable(machine: MachineRow, day: string): boolean {
   if (!machine.days || machine.days.length !== 7) return true;
-  // getUTCDay() returns Sunday=0..Saturday=6; shift it so the mask's Monday-first
-  // character order (Mo..So) lines up with the right index.
-  const weekdayWithMondayFirst = (parseIsoDateString(day).getUTCDay() + 6) % 7;
-  return machine.days.charAt(weekdayWithMondayFirst) !== '0';
+  return machine.days.charAt(mondayFirstWeekdayIndex(parseIsoDateString(day))) !== '0';
 }
 
 /** Add the optional wire fields to `wireShape` only when the row has them set. */

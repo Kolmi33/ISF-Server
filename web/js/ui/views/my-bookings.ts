@@ -5,7 +5,7 @@
 // and today are injected (E4). Faithful port of legacy `computeMyRuns`.
 
 import type { Machine, Bookings } from '../../../../shared/types.ts';
-import { parseIsoDateString, isWeekend, nextWeekday } from '../../core/dates.ts';
+import { parseIsoDateString, isWeekend, nextWeekday } from '../../../../shared/dates.ts';
 
 /** A run of consecutive workdays the user has booked on one machine (a bookable "series"). */
 export interface BookingRun {

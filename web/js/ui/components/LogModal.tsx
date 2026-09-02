@@ -5,7 +5,7 @@
 // import to avoid a circular import between the two modals.
 
 import type { LogEntry } from '../../../../shared/types.ts';
-import { formatTimestamp } from '../../core/dates.ts';
+import { formatTimestamp } from '../../../../shared/dates.ts';
 import { Icon } from './Icon.tsx';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 

@@ -3,6 +3,7 @@ import {
   formatDateAsIsoString,
   parseIsoDateString,
   addDays,
+  mondayFirstWeekdayIndex,
   mondayOfDate,
   isWeekend,
   formatDateShort,
@@ -53,6 +54,15 @@ describe('addDays', () => {
     const baseDate = parseIsoDateString('2021-01-04');
     addDays(baseDate, 5);
     expect(formatDateAsIsoString(baseDate)).toBe('2021-01-04');
+  });
+});
+
+describe('mondayFirstWeekdayIndex', () => {
+  it('re-indexes Monday=0 .. Sunday=6', () => {
+    expect(mondayFirstWeekdayIndex(parseIsoDateString('2021-01-04'))).toBe(0); // Mon
+    expect(mondayFirstWeekdayIndex(parseIsoDateString('2021-01-08'))).toBe(4); // Fri
+    expect(mondayFirstWeekdayIndex(parseIsoDateString('2021-01-09'))).toBe(5); // Sat
+    expect(mondayFirstWeekdayIndex(parseIsoDateString('2021-01-10'))).toBe(6); // Sun
   });
 });
 
@@ -156,9 +166,6 @@ describe('getWeekdaysInRange / getAllDaysInRange', () => {
   });
 });
 
-// Moved here from core/assistant.test.ts when nextWeekday's four independent copies
-// (core/assistant.ts, core/booking-queries.ts, ui/views/all-bookings.ts,
-// ui/views/my-bookings.ts) were consolidated into this file (ARCHITECTURE_AUDIT.md F3).
 describe('nextWeekday / previousWeekday', () => {
   it('nextWeekday skips the weekend', () => {
     expect(nextWeekday('2021-01-08')).toBe('2021-01-11'); // Fri → Mon

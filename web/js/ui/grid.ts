@@ -7,7 +7,7 @@
 // render carries aria/data attributes and richer titles that the patch path does not).
 
 import type { Booking, Machine, MachineCategory } from '../../../shared/types.ts';
-import { addDays, formatDateAsIsoString } from '../core/dates.ts';
+import { addDays, formatDateAsIsoString } from '../../../shared/dates.ts';
 import { categoryOf, maintenanceSlotAt } from '../core/machines.ts';
 
 /** The four mutually exclusive states a grid cell can be in, in priority order. */

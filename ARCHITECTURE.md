@@ -48,7 +48,11 @@ The app keeps working at every step. Directories move in their phase, not all at
 ```
 maschinenplan-server/
 ├── shared/
-│   └── types.ts            # single source of truth: Machine, Booking, MaintSlot, SSE events, mutate payloads
+│   ├── types.ts            # single source of truth: Machine, Booking, MaintSlot, SSE events, mutate payloads
+│   └── dates.ts            # pure calendar helpers, real *runtime* code shared with the
+│                            # backend (not just types) — moved here from web/js/core/ once
+│                            # server/*.ts needed the same date math and had no shared
+│                            # module to reach for (docs/ARCHITECTURE_AUDIT.md §9/F2)
 ├── server/                 # backend TS (was src/*.mjs) — compiled in the Docker build
 │   ├── server.ts           # HTTP API + SSE + backup
 │   ├── db.ts               # SQLite schema + meta + import
@@ -60,7 +64,6 @@ maschinenplan-server/
 │       ├── app.ts          # entry: boot, wire events, orchestrate
 │       ├── state.ts        # the store (replaces global S) + subscribe/notify
 │       ├── core/           # PURE logic, no DOM — highest test value
-│       │   ├── dates.ts        # ymd, mondayOf, isoWeek, weekdayRange, …
 │       │   ├── machines.ts     # catOf, dayAvailable, maintAt, cellBookable, …
 │       │   ├── weekend.ts      # sweepWeekends, missingWeekendBridges
 │       │   └── assistant.ts    # device/group tree + N-of-M solver

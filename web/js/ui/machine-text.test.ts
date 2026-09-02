@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Machine } from '../../../shared/types.ts';
-import { formatDateLong } from '../core/dates.ts';
+import { formatDateLong } from '../../../shared/dates.ts';
 import { maintText, statusRangeText, daysMaskText, maintenanceKind } from './machine-text.ts';
 
 describe('maintText', () => {

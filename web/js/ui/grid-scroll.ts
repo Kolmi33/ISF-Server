@@ -13,7 +13,7 @@ import {
   mondayOfDate,
   parseIsoDateString,
   todayAsIsoDateString,
-} from '../core/dates.ts';
+} from '../../../shared/dates.ts';
 import { selection } from './grid-interaction.ts';
 
 const DAYS_PER_WEEK_WITH_WEEKENDS = 7;

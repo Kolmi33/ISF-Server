@@ -22,7 +22,7 @@ import {
   getWeekdaysInRange,
   parseIsoDateString,
   todayAsIsoDateString,
-} from '../../core/dates.ts';
+} from '../../../../shared/dates.ts';
 import { isBlockedOnDate, dayAvailable } from '../../core/machines.ts';
 import {
   addDeviceToTree,

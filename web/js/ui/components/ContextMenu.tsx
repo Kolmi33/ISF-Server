@@ -4,7 +4,7 @@
 // `ui/grid-interaction.ts` (B2, already gated) calls it via the `window.showCtx`/
 // `window.hideCtx` bridge, unchanged.
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { formatDateLong } from '../../core/dates.ts';
+import { formatDateLong } from '../../../../shared/dates.ts';
 import { getBooking } from '../../core/booking-queries.ts';
 import { selection, clearSelection } from '../grid-interaction.ts';
 import { openBookingForm } from './BookingForm.tsx';
