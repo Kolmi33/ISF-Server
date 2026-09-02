@@ -14,6 +14,9 @@ export interface MaintSlot {
   note?: string;
 }
 
+/** Explicit domain alias for MaintSlot */
+export type MaintenanceSlot = MaintSlot;
+
 /** A bookable resource — a machine or a measurement device ('messtechnik'). */
 export interface Machine {
   id: string;

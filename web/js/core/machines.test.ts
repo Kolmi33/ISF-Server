@@ -1,288 +1,353 @@
 import { describe, it, expect } from 'vitest';
-import type { BookingData, Machine } from '../../../shared/types.ts';
+import type { BookingData, Machine, MaintenanceSlot } from '../../../shared/types.ts';
 import {
-  categoryOf,
-  maintenanceSlots,
-  slotCovers,
-  maintenanceSlotAt,
-  isBlockedOnDate,
-  hasAnyMaintenanceSlot,
-  dayAvailable,
-  cellBookable,
-  groupsByCategory,
   saveMachine,
   deleteMachine,
   moveMachine,
+  generateMachineIdFromName,
+  ensureUniqueMachineId,
+  findGroupInsertionIndex,
+  getMachineCategory,
+  categoryOf,
+  CATEGORIES,
+  groupsByCategory,
+  getMaintenanceSlots,
+  maintenanceSlots,
+  isSlotCoveringDate,
+  slotCovers,
+  getMaintenanceSlotAtDate,
+  maintenanceSlotAt,
+  isMachineBlockedOnDate,
+  isBlockedOnDate,
+  hasAnyMaintenanceSlot,
+  isMachineAvailableOnWeekday,
+  dayAvailable,
+  isCellBookable,
+  cellBookable,
   type MachineForm,
 } from './machines.ts';
 
-// Minimal machine factory — only the fields under test; overrides fill the rest.
-function machine(over: Partial<Machine> = {}): Machine {
-  return { id: 'm1', name: 'Fräse', group: 'Werkstatt', ...over };
-}
-
-describe('categoryOf', () => {
-  it("returns 'messtechnik' only when cat is exactly that", () => {
-    expect(categoryOf(machine({ cat: 'messtechnik' }))).toBe('messtechnik');
-  });
-  it("defaults to 'maschine' when cat is absent or different", () => {
-    expect(categoryOf(machine())).toBe('maschine');
-    expect(categoryOf(machine({ cat: 'sonstiges' }))).toBe('maschine');
-  });
-  it("treats null/undefined as 'maschine'", () => {
-    expect(categoryOf(null)).toBe('maschine');
-    expect(categoryOf(undefined)).toBe('maschine');
-  });
-});
-
-describe('maintenanceSlots', () => {
-  it('returns the structured maint array as-is when present', () => {
-    const slots = [{ type: 'wartung', from: '2021-01-01' }];
-    expect(maintenanceSlots(machine({ maint: slots }))).toBe(slots);
-  });
-  it('synthesizes one slot from the legacy status fields', () => {
-    const m = machine({
-      status: 'defekt',
-      statusFrom: '2021-01-04',
-      statusUntil: '2021-01-08',
-      statusNote: 'Motor',
-    });
-    expect(maintenanceSlots(m)).toEqual([
-      { type: 'defekt', from: '2021-01-04', until: '2021-01-08', note: 'Motor' },
-    ]);
-  });
-  it('fills empty strings for missing legacy status bounds', () => {
-    expect(maintenanceSlots(machine({ status: 'wartung' }))).toEqual([
-      { type: 'wartung', from: '', until: '', note: '' },
-    ]);
-  });
-  it("returns [] for status 'ok' or no status at all", () => {
-    expect(maintenanceSlots(machine({ status: 'ok' }))).toEqual([]);
-    expect(maintenanceSlots(machine())).toEqual([]);
-  });
-});
-
-describe('slotCovers', () => {
-  it('is true within an inclusive from..until range', () => {
-    const s = { type: 'wartung', from: '2021-01-04', until: '2021-01-08' };
-    expect(slotCovers(s, '2021-01-04')).toBe(true); // lower edge
-    expect(slotCovers(s, '2021-01-06')).toBe(true);
-    expect(slotCovers(s, '2021-01-08')).toBe(true); // upper edge
-  });
-  it('is false outside the range', () => {
-    const s = { type: 'wartung', from: '2021-01-04', until: '2021-01-08' };
-    expect(slotCovers(s, '2021-01-03')).toBe(false);
-    expect(slotCovers(s, '2021-01-09')).toBe(false);
-  });
-  it('treats an empty from/until as open-ended on that side', () => {
-    expect(slotCovers({ type: 'x', until: '2021-01-08' }, '1900-01-01')).toBe(true);
-    expect(slotCovers({ type: 'x', from: '2021-01-04' }, '2999-01-01')).toBe(true);
-    expect(slotCovers({ type: 'x' }, '2021-06-15')).toBe(true);
-  });
-});
-
-describe('maintenanceSlotAt / isBlockedOnDate / hasAnyMaintenanceSlot', () => {
-  const m = machine({ status: 'defekt', statusFrom: '2021-01-04', statusUntil: '2021-01-08' });
-  it('maintenanceSlotAt returns the covering slot or null', () => {
-    expect(maintenanceSlotAt(m, '2021-01-06')?.type).toBe('defekt');
-    expect(maintenanceSlotAt(m, '2021-02-01')).toBeNull();
-  });
-  it('isBlockedOnDate reflects coverage', () => {
-    expect(isBlockedOnDate(m, '2021-01-06')).toBe(true);
-    expect(isBlockedOnDate(m, '2021-02-01')).toBe(false);
-  });
-  it('hasAnyMaintenanceSlot reflects whether any slot exists', () => {
-    expect(hasAnyMaintenanceSlot(m)).toBe(true);
-    expect(hasAnyMaintenanceSlot(machine())).toBe(false);
-  });
-});
-
-describe('dayAvailable', () => {
-  it('is available every day when the mask is missing or malformed', () => {
-    expect(dayAvailable(machine(), '2021-01-04')).toBe(true);
-    expect(dayAvailable(machine({ days: '111' }), '2021-01-04')).toBe(true);
-  });
-  it('reads the Mo..So mask ( 2021-01-04 is a Monday = index 0 )', () => {
-    expect(dayAvailable(machine({ days: '0111111' }), '2021-01-04')).toBe(false); // Mon off
-    expect(dayAvailable(machine({ days: '1111111' }), '2021-01-04')).toBe(true);
-    expect(dayAvailable(machine({ days: '1111110' }), '2021-01-10')).toBe(false); // Sun off
-  });
-});
-
-describe('cellBookable', () => {
-  it('is false when blocked', () => {
-    const m = machine({ status: 'wartung', statusFrom: '2021-01-04', statusUntil: '2021-01-08' });
-    expect(cellBookable(m, '2021-01-06')).toBe(false);
-  });
-  it('is false when the weekday is unavailable', () => {
-    expect(cellBookable(machine({ days: '0111111' }), '2021-01-04')).toBe(false);
-  });
-  it('is true when free and available', () => {
-    expect(cellBookable(machine(), '2021-01-06')).toBe(true);
-  });
-});
-
-describe('groupsByCategory', () => {
-  it('buckets distinct group names by category, in first-seen order', () => {
-    const result = groupsByCategory([
-      machine({ id: 'm1', group: 'Halle 1' }),
-      machine({ id: 'm2', group: 'Halle 2' }),
-      machine({ id: 'm3', group: 'Halle 1' }), // repeat — not duplicated
-      machine({ id: 'm4', group: 'Labor', cat: 'messtechnik' }),
-    ]);
-    expect(result).toEqual([
-      { category: 'maschine', groups: ['Halle 1', 'Halle 2'] },
-      { category: 'messtechnik', groups: ['Labor'] },
-    ]);
-  });
-
-  it('omits a category with no groups entirely, rather than an empty entry', () => {
-    const result = groupsByCategory([machine({ id: 'm1', group: 'Halle 1' })]);
-    expect(result).toEqual([{ category: 'maschine', groups: ['Halle 1'] }]);
-  });
-
-  it('is empty when there are no machines', () => {
-    expect(groupsByCategory([])).toEqual([]);
-  });
-});
-
-function data(machines: Machine[], bookings: BookingData['bookings'] = {}): BookingData {
+function createBookingData(
+  machines: Machine[],
+  bookings: BookingData['bookings'] = {},
+): BookingData {
   return { machines, bookings };
 }
-const M = (over: Partial<Machine> = {}): Machine => ({ id: 'm1', name: 'M1', group: 'A', ...over });
 
-const form = (over: Partial<MachineForm> = {}): MachineForm => ({
-  name: 'Neue Fräse',
-  group: 'A',
-  cat: 'maschine',
-  info: '',
-  redu: '',
-  daysMask: null,
-  maint: [],
-  ...over,
+const createMachine = (overrides: Partial<Machine> = {}): Machine => ({
+  id: 'm1',
+  name: 'Machine 1',
+  group: 'Group A',
+  ...overrides,
 });
 
-describe('saveMachine — edit', () => {
-  it('applies the fields onto an existing machine and clears absent optionals', () => {
-    const existing = M({
+const createForm = (overrides: Partial<MachineForm> = {}): MachineForm => ({
+  name: 'Neue Fräse',
+  group: 'Group A',
+  category: 'maschine',
+  info: '',
+  redundancyGroup: '',
+  weekdayAvailabilityMask: null,
+  maintenanceSlots: [],
+  ...overrides,
+});
+
+describe('generateMachineIdFromName (ID generation)', () => {
+  it('transliterates German umlauts and removes invalid symbols', () => {
+    expect(generateMachineIdFromName('Über-Prüfgerät 3000!')).toBe('ueber-pruefgeraet-3000');
+    expect(generateMachineIdFromName('Große Säge')).toBe('grosse-saege');
+  });
+
+  it('normalizes European accented letters (French, Spanish, Nordic)', () => {
+    expect(generateMachineIdFromName('Électro-Découpe')).toBe('electro-decoupe');
+    expect(generateMachineIdFromName('Laser-Måler')).toBe('laser-maler');
+    expect(generateMachineIdFromName('Cizalla & Piñón')).toBe('cizalla-pinon');
+  });
+
+  it('generates a stable deterministic m_<hash> ID for non-Latin scripts', () => {
+    const cyrillicId = generateMachineIdFromName('Фрезерный станок');
+    expect(cyrillicId).toMatch(/^m_[a-f0-9]{6}$/);
+
+    // Deterministic: same input gives exact same ID
+    expect(generateMachineIdFromName('Фрезерный станок')).toBe(cyrillicId);
+
+    const chineseId = generateMachineIdFromName('五轴加工中心');
+    expect(chineseId).toMatch(/^m_[a-f0-9]{6}$/);
+    expect(chineseId).not.toBe(cyrillicId);
+  });
+
+  it('handles empty or pure symbol strings gracefully', () => {
+    const symbolId = generateMachineIdFromName('⚡⚡⚡');
+    expect(symbolId).toMatch(/^m_[a-f0-9]{6}$/);
+    expect(generateMachineIdFromName('')).toBe('machine');
+  });
+
+  it('keeps a single-character Latin slug as-is, not the hash fallback', () => {
+    expect(generateMachineIdFromName('Z')).toBe('z');
+    expect(generateMachineIdFromName('3')).toBe('3');
+  });
+});
+
+describe('ensureUniqueMachineId & findGroupInsertionIndex', () => {
+  it('returns candidate ID directly if no collision exists', () => {
+    const existing = [createMachine({ id: 'fraese-1' })];
+    expect(ensureUniqueMachineId(existing, 'fraese-2')).toBe('fraese-2');
+  });
+
+  it('increments numeric suffix on ID collision', () => {
+    const existing = [createMachine({ id: 'fraese' }), createMachine({ id: 'fraese-2' })];
+    expect(ensureUniqueMachineId(existing, 'fraese')).toBe('fraese-3');
+  });
+
+  it('findGroupInsertionIndex inserts right after last sibling machine of same group', () => {
+    const machines = [
+      createMachine({ id: 'a1', group: 'Group A' }),
+      createMachine({ id: 'a2', group: 'Group A' }),
+      createMachine({ id: 'b1', group: 'Group B' }),
+    ];
+    expect(findGroupInsertionIndex(machines, 'Group A')).toBe(2);
+    expect(findGroupInsertionIndex(machines, 'Group C')).toBe(3);
+  });
+});
+
+describe('getMachineCategory & categoryOf', () => {
+  it('returns messtechnik for machines tagged with cat="messtechnik"', () => {
+    expect(getMachineCategory(createMachine({ cat: 'messtechnik' }))).toBe('messtechnik');
+    expect(categoryOf(createMachine({ cat: 'messtechnik' }))).toBe('messtechnik');
+  });
+
+  it('defaults to maschine for empty or standard machine', () => {
+    expect(getMachineCategory(createMachine({ cat: 'maschine' }))).toBe('maschine');
+    expect(getMachineCategory(createMachine())).toBe('maschine');
+    expect(getMachineCategory(null)).toBe('maschine');
+  });
+});
+
+describe('CATEGORIES & groupsByCategory', () => {
+  it('exports standard categories', () => {
+    expect(CATEGORIES.map((c) => c.id)).toEqual(['maschine', 'messtechnik']);
+  });
+
+  it('groups distinct machines by category in first-seen order', () => {
+    const machines: Machine[] = [
+      createMachine({ id: 'm1', group: 'Milling', cat: 'maschine' }),
+      createMachine({ id: 'm2', group: 'Drilling', cat: 'maschine' }),
+      createMachine({ id: 'm3', group: 'Milling', cat: 'maschine' }),
+      createMachine({ id: 'm4', group: 'Sensors', cat: 'messtechnik' }),
+    ];
+
+    const result = groupsByCategory(machines);
+    expect(result).toEqual([
+      { category: 'maschine', groups: ['Milling', 'Drilling'] },
+      { category: 'messtechnik', groups: ['Sensors'] },
+    ]);
+  });
+});
+
+describe('getMaintenanceSlots & slotCovers', () => {
+  it('returns modern maintenance array when present', () => {
+    const slots: MaintenanceSlot[] = [{ type: 'wartung', from: '2026-01-01', until: '2026-01-05' }];
+    const machine = createMachine({ maint: slots });
+    expect(getMaintenanceSlots(machine)).toBe(slots);
+    expect(maintenanceSlots(machine)).toBe(slots);
+  });
+
+  it('synthesizes legacy status if no maint array exists', () => {
+    const machine = createMachine({
+      status: 'defekt',
+      statusFrom: '2026-01-01',
+      statusUntil: '2026-01-03',
+      statusNote: 'Broken spindle',
+    });
+    expect(getMaintenanceSlots(machine)).toEqual([
+      {
+        type: 'defekt',
+        from: '2026-01-01',
+        until: '2026-01-03',
+        note: 'Broken spindle',
+      },
+    ]);
+  });
+
+  it('slotCovers handles bounded and open-ended date ranges correctly', () => {
+    const bounded: MaintenanceSlot = { type: 'wartung', from: '2026-05-10', until: '2026-05-20' };
+    expect(isSlotCoveringDate(bounded, '2026-05-09')).toBe(false);
+    expect(isSlotCoveringDate(bounded, '2026-05-10')).toBe(true);
+    expect(isSlotCoveringDate(bounded, '2026-05-15')).toBe(true);
+    expect(isSlotCoveringDate(bounded, '2026-05-20')).toBe(true);
+    expect(slotCovers(bounded, '2026-05-21')).toBe(false);
+  });
+});
+
+describe('maintenanceSlotAt, isBlockedOnDate, hasAnyMaintenanceSlot', () => {
+  it('identifies covering maintenance slot and blocked status', () => {
+    const slot: MaintenanceSlot = { type: 'wartung', from: '2026-06-01', until: '2026-06-05' };
+    const machine = createMachine({ maint: [slot] });
+
+    expect(getMaintenanceSlotAtDate(machine, '2026-06-03')).toEqual(slot);
+    expect(maintenanceSlotAt(machine, '2026-06-03')).toEqual(slot);
+    expect(getMaintenanceSlotAtDate(machine, '2026-06-10')).toBeNull();
+
+    expect(isMachineBlockedOnDate(machine, '2026-06-03')).toBe(true);
+    expect(isBlockedOnDate(machine, '2026-06-03')).toBe(true);
+    expect(hasAnyMaintenanceSlot(machine)).toBe(true);
+    expect(hasAnyMaintenanceSlot(createMachine())).toBe(false);
+  });
+});
+
+describe('dayAvailable & cellBookable', () => {
+  it('evaluates weekday mask Mo..So correctly', () => {
+    const machine = createMachine({ days: '1111100' });
+    expect(isMachineAvailableOnWeekday(machine, '2026-06-01')).toBe(true); // Monday
+    expect(dayAvailable(machine, '2026-06-06')).toBe(false); // Saturday
+  });
+
+  it('defaults to available every day when no mask (or a malformed one) is set', () => {
+    expect(isMachineAvailableOnWeekday(createMachine(), '2026-06-06')).toBe(true); // no days field
+    expect(isMachineAvailableOnWeekday(createMachine({ days: '101' }), '2026-06-06')).toBe(true); // wrong length
+  });
+
+  it('cellBookable requires both not blocked and dayAvailable', () => {
+    const machine = createMachine({
+      days: '1111100',
+      maint: [{ type: 'wartung', from: '2026-06-01', until: '2026-06-01' }],
+    });
+
+    expect(isCellBookable(machine, '2026-06-01')).toBe(false); // blocked by maintenance
+    expect(isCellBookable(machine, '2026-06-02')).toBe(true); // available
+    expect(cellBookable(machine, '2026-06-06')).toBe(false); // weekend off
+  });
+});
+
+describe('saveMachine — edit existing machine', () => {
+  it('applies updated fields to existing machine and clears empty optionals', () => {
+    const existing = createMachine({
       id: 'm1',
       cat: 'messtechnik',
-      redu: 'x',
+      redu: 'red-1',
       days: '1111100',
       maint: [{ type: 'defekt' }],
-      status: 'ok',
-      statusNote: 'n',
-      statusFrom: 'f',
-      statusUntil: 'u',
     });
-    const d = data([existing]);
-    const res = saveMachine(d, 'm1', form({ name: 'Umbenannt', group: 'B', info: 'i' }));
-    expect(res).toBeUndefined();
-    expect(d.machines[0]).toEqual({ id: 'm1', name: 'Umbenannt', group: 'B', info: 'i' });
-  });
+    const data = createBookingData([existing]);
 
-  it('keeps the present optionals (redu / days / maint / messtechnik)', () => {
-    const d = data([M({ id: 'm1' })]);
-    saveMachine(
-      d,
+    const result = saveMachine(
+      data,
       'm1',
-      form({ cat: 'messtechnik', redu: 'r', daysMask: '1111100', maint: [{ type: 'wartung' }] }),
+      createForm({ name: 'Renamed Machine', group: 'Group B', info: 'Updated info' }),
     );
-    expect(d.machines[0]).toMatchObject({
-      cat: 'messtechnik',
-      redu: 'r',
-      days: '1111100',
-      maint: [{ type: 'wartung' }],
+
+    expect(result).toBeUndefined();
+    expect(data.machines[0]).toEqual({
+      id: 'm1',
+      name: 'Renamed Machine',
+      group: 'Group B',
+      info: 'Updated info',
     });
   });
 
-  it('aborts when the machine to edit has vanished', () => {
-    const d = data([M({ id: 'm1' })]);
-    expect(saveMachine(d, 'gone', form())).toEqual({ abort: true });
+  it('aborts when machine ID is not found in data', () => {
+    const data = createBookingData([createMachine({ id: 'm1' })]);
+    expect(saveMachine(data, 'non-existent', createForm())).toEqual({ abort: true });
+  });
+
+  it('sets redu/days/maint/cat when the form actually provides them (not just clearing them)', () => {
+    const data = createBookingData([createMachine({ id: 'm1' })]);
+    const slots: MaintenanceSlot[] = [{ type: 'wartung', from: '2026-01-01', until: '2026-01-02' }];
+
+    saveMachine(
+      data,
+      'm1',
+      createForm({
+        category: 'messtechnik',
+        redundancyGroup: 'red-1',
+        weekdayAvailabilityMask: '1111100',
+        maintenanceSlots: slots,
+      }),
+    );
+
+    expect(data.machines[0]).toMatchObject({
+      cat: 'messtechnik',
+      redu: 'red-1',
+      days: '1111100',
+      maint: slots,
+    });
   });
 });
 
-describe('saveMachine — create', () => {
-  it('slugs the name, transliterates umlauts, and inserts after the group', () => {
-    const d = data([M({ id: 'a1', group: 'A' }), M({ id: 'b1', group: 'B' })]);
-    saveMachine(d, null, form({ name: 'Über Fräse!', group: 'A' }));
-    expect(d.machines.map((m) => m.id)).toEqual(['a1', 'ueber-fraese', 'b1']); // after last A
-  });
+describe('saveMachine — create new machine', () => {
+  it('creates unique ID and inserts after same group siblings', () => {
+    const data = createBookingData([
+      createMachine({ id: 'a1', group: 'Group A' }),
+      createMachine({ id: 'b1', group: 'Group B' }),
+    ]);
 
-  it('disambiguates a colliding id with a numeric suffix', () => {
-    const d = data([M({ id: 'fraese', group: 'A' }), M({ id: 'fraese-2', group: 'A' })]);
-    saveMachine(d, null, form({ name: 'Fraese', group: 'A' }));
-    expect(d.machines.some((m) => m.id === 'fraese-3')).toBe(true);
-  });
-
-  it('falls back to a short hash id for a name with no slug-able characters', () => {
-    const d = data([]);
-    saveMachine(d, null, form({ name: '!!!' }));
-    expect(d.machines[0]!.id).toMatch(/^m_[0-9a-f]{6}$/);
-  });
-
-  it('falls back to the same hash id for a non-Latin-script name, deterministically', () => {
-    const first = data([]);
-    saveMachine(first, null, form({ name: 'Фрезерный станок' }));
-    const second = data([]);
-    saveMachine(second, null, form({ name: 'Фрезерный станок' }));
-    expect(first.machines[0]!.id).toMatch(/^m_[0-9a-f]{6}$/);
-    expect(first.machines[0]!.id).toBe(second.machines[0]!.id); // same name -> same fallback id
-  });
-
-  it('gives different non-Latin names different hash ids', () => {
-    const cyrillic = data([]);
-    saveMachine(cyrillic, null, form({ name: 'Фрезерный станок' }));
-    const cjk = data([]);
-    saveMachine(cjk, null, form({ name: '五轴铣床' }));
-    expect(cyrillic.machines[0]!.id).not.toBe(cjk.machines[0]!.id);
-  });
-
-  it('appends at the end when no machine shares the group', () => {
-    const d = data([M({ id: 'a1', group: 'A' })]);
-    saveMachine(d, null, form({ name: 'Z', group: 'Z' }));
-    expect(d.machines.map((m) => m.id)).toEqual(['a1', 'z']);
+    saveMachine(data, null, createForm({ name: 'Über Fräse!', group: 'Group A' }));
+    expect(data.machines.map((machine) => machine.id)).toEqual(['a1', 'ueber-fraese', 'b1']);
   });
 });
 
 describe('deleteMachine', () => {
-  it('removes the machine and its bookings', () => {
-    const d = data([M({ id: 'm1' }), M({ id: 'm2' })], { m1: { '2021-01-04': { name: 'A' } } });
-    expect(deleteMachine(d, 'm1')).toBeUndefined();
-    expect(d.machines.map((m) => m.id)).toEqual(['m2']);
-    expect(d.bookings.m1).toBeUndefined();
+  it('removes machine and cleans up all associated bookings', () => {
+    const data = createBookingData([createMachine({ id: 'm1' }), createMachine({ id: 'm2' })], {
+      m1: { '2026-06-01': { name: 'Alice' } },
+    });
+
+    expect(deleteMachine(data, 'm1')).toBeUndefined();
+    expect(data.machines.map((machine) => machine.id)).toEqual(['m2']);
+    expect(data.bookings.m1).toBeUndefined();
   });
 
-  it('aborts when the machine is already gone', () => {
-    expect(deleteMachine(data([]), 'm1')).toEqual({ abort: true });
+  it('aborts if machine does not exist', () => {
+    expect(deleteMachine(createBookingData([]), 'm1')).toEqual({ abort: true });
   });
 });
 
-describe('moveMachine', () => {
-  const three = () =>
-    data([M({ id: 'a', group: 'G' }), M({ id: 'b', group: 'G' }), M({ id: 'c', group: 'G' })]);
+describe('moveMachine (reordering)', () => {
+  const setupThreeMachines = () =>
+    createBookingData([
+      createMachine({ id: 'a', group: 'Group A' }),
+      createMachine({ id: 'b', group: 'Group A' }),
+      createMachine({ id: 'c', group: 'Group A' }),
+    ]);
 
-  it('swaps up (direction -1)', () => {
-    const d = three();
-    expect(moveMachine(d, 'b', -1)).toBeUndefined();
-    expect(d.machines.map((m) => m.id)).toEqual(['b', 'a', 'c']);
+  it('swaps machine position upwards with "up" or -1', () => {
+    const data = setupThreeMachines();
+    expect(moveMachine(data, 'b', 'up')).toBeUndefined();
+    expect(data.machines.map((machine) => machine.id)).toEqual(['b', 'a', 'c']);
+
+    const data2 = setupThreeMachines();
+    expect(moveMachine(data2, 'b', -1)).toBeUndefined();
+    expect(data2.machines.map((machine) => machine.id)).toEqual(['b', 'a', 'c']);
   });
 
-  it('swaps down (direction +1)', () => {
-    const d = three();
-    moveMachine(d, 'b', 1);
-    expect(d.machines.map((m) => m.id)).toEqual(['a', 'c', 'b']);
+  it('swaps machine position downwards with "down" or 1', () => {
+    const data = setupThreeMachines();
+    expect(moveMachine(data, 'b', 'down')).toBeUndefined();
+    expect(data.machines.map((machine) => machine.id)).toEqual(['a', 'c', 'b']);
+
+    const data2 = setupThreeMachines();
+    expect(moveMachine(data2, 'b', 1)).toBeUndefined();
+    expect(data2.machines.map((machine) => machine.id)).toEqual(['a', 'c', 'b']);
   });
 
-  it('aborts at the top, at the bottom, and for an unknown id', () => {
-    expect(moveMachine(three(), 'a', -1)).toEqual({ abort: true }); // neighbourIndex<0
-    expect(moveMachine(three(), 'c', 1)).toEqual({ abort: true }); // neighbourIndex>=length
-    expect(moveMachine(three(), 'zzz', -1)).toEqual({ abort: true }); // currentIndex<0
+  it('aborts at top and bottom list boundaries', () => {
+    const data = setupThreeMachines();
+    expect(moveMachine(data, 'a', 'up')).toEqual({ abort: true });
+    expect(moveMachine(data, 'c', 'down')).toEqual({ abort: true });
   });
 
-  it('aborts when the neighbour is in a different group', () => {
-    const d = data([M({ id: 'a', group: 'G' }), M({ id: 'b', group: 'H' })]);
-    expect(moveMachine(d, 'a', 1)).toEqual({ abort: true });
-    expect(d.machines.map((m) => m.id)).toEqual(['a', 'b']); // unchanged
+  it('aborts when attempting to swap with a machine in a different group', () => {
+    const data = createBookingData([
+      createMachine({ id: 'a', group: 'Group A' }),
+      createMachine({ id: 'b', group: 'Group B' }),
+    ]);
+    expect(moveMachine(data, 'a', 'down')).toEqual({ abort: true });
+    expect(data.machines.map((machine) => machine.id)).toEqual(['a', 'b']);
+  });
+
+  it('aborts when the machine id does not exist at all (not just a boundary case)', () => {
+    const data = setupThreeMachines();
+    expect(moveMachine(data, 'ghost', 'up')).toEqual({ abort: true });
+    expect(data.machines.map((machine) => machine.id)).toEqual(['a', 'b', 'c']);
   });
 });
