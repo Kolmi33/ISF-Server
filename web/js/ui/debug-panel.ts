@@ -52,13 +52,14 @@ export function errorMessage(err: unknown): string {
 }
 
 /** Central error handling: swallows `AbortError` (an expected cancellation, not a real
- *  failure), otherwise logs to the console and the debug panel. Faithful port of legacy
+ *  failure), otherwise logs to the console and the debug panel. `source` is a short tag
+ *  identifying where the error came from (e.g. `'sse/presence'`). Faithful port of legacy
  *  `handleError`. */
-export function handleError(ctx: string, err: unknown): void {
+export function handleError(source: string, err: unknown): void {
   if (err && typeof err === 'object' && (err as { name?: unknown }).name === 'AbortError') return;
-  console.error('[' + ctx + ']', err);
+  console.error('[' + source + ']', err);
   try {
-    dbg('err', ctx + ': ' + errorMessage(err));
+    dbg('err', source + ': ' + errorMessage(err));
   } catch {
     /* dbg itself must never throw from inside an error handler */
   }

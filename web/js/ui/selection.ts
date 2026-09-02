@@ -39,11 +39,11 @@ export function computeSelCells(
 }
 
 /**
- * Clamp an index into a valid position for an array of `len` items: negatives snap to 0,
+ * Clamp an index into a valid position for an array of `length` items: negatives snap to 0,
  * anything at or past the end snaps to the last index. Faithful to the arrow-key math in
  * legacy (`Math.max(0, Math.min(len - 1, idx))`), which keeps the moved focus cell inside the
- * visible grid. `len` is assumed ≥ 1 — the caller guards against an empty grid before moving.
+ * visible grid. `length` is assumed ≥ 1 — the caller guards against an empty grid before moving.
  */
-export function clampIndex(idx: number, len: number): number {
-  return Math.max(0, Math.min(len - 1, idx));
+export function clampIndex(index: number, length: number): number {
+  return Math.max(0, Math.min(length - 1, index));
 }

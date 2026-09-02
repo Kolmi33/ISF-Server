@@ -381,7 +381,16 @@ which turns it into a data-shape change:
   `my-bookings.ts`'s `BookingRun` (two distinct types, same bare `.m` field) both →
   `machine`, across `AllBookingsModal.tsx`, `MyBookingsModal.tsx`,
   `all-bookings.test.ts`/`my-bookings.test.ts`. `npm run verify` green, 797/797 tests.
-- [ ] 8.4c Anything else in the same vein, found while doing 8.4b or afterward — not yet swept.
+- [x] 8.4c Rescanned for anything else in the same vein; found little — `el` (DOM element) and
+  `req`/`res` (Node's request/response) are the standard idiom for this domain and were
+  deliberately left alone, not renamed. Fixed the two real small findings: `selection.ts`'s
+  `clampIndex(idx, len)` → `(index, length)`; `debug-panel.ts`'s `handleError(ctx, err)` → `(source,
+  err)` (`ctx` wasn't a React/JS context object, just a short origin tag like `'sse/presence'`).
+  Noted but deliberately NOT done here — a separate, bigger candidate: the `/api/mutate` wire
+  types (`CellDelta.val`, `MutateChange.val`, `CellUndo.prev`) still use bare `val`/`prev`, same
+  category as the Phase 8.2 `mid`/`gid` rename (a live, non-persisted wire shape, renamable in
+  lockstep client+server) — scope it properly if it's ever picked up. **Phase 8 (naming &
+  structure clarity) is now complete.**
 
 ## Done log (newest first)
 - **2026-09-02 — Code-review fixes**: undo's CAS-check bug and `machById`'s stale-cache bug
