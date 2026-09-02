@@ -499,17 +499,20 @@ structural improvement, and it is prioritized accordingly.
 
 ## 10. Prioritized, actionable refactoring plan
 
-**Status (2026-09-02): F1, F2, F3, F4, F5, F6, F7 (minimal), and F9 are done**, each as its
-own verified commit (full gate green + a rebuilt-image browser smoke after F5 and after
+**Status (2026-09-02): F1, F2, F3, F4, F5, F6, F7 (minimal), F8, and F9 are done**, each as
+its own verified commit (full gate green + a rebuilt-image browser smoke after F5 and after
 F2's later extension). F9 landed in three slices — the bounded first slice (11 plain `.ts`
 files), then two component batches (18 React components, 63 sites) — each its own commit,
-each gate-verified. F8 remains fully open by design — needs a separate, deliberate
-decision, not a mechanical fix. See the individual write-ups below for what actually
-shipped in each case; they're kept in the original (pre-implementation) tense as the
-record of what was proposed, with the outcome noted inline where it's worth flagging (F2
-went beyond its original minimal proposal to the full cross-boundary merge; F7 shipped
-only its minimal option; F9 shipped in slices but ultimately covers every `window.S` site
-in the app's own modules).
+each gate-verified. F8 shipped *not* as originally framed: investigating its actual call
+sites (rather than trusting the "4 roots need to talk" framing) showed the real coupling was
+ordinary ES-module cycles and dead leftovers, unrelated to root count — see its write-up
+below for the reclassification and what shipped instead of a tree merge. See the individual
+write-ups below for what actually shipped in each case; they're kept in the original
+(pre-implementation) tense as the record of what was proposed, with the outcome noted inline
+where it's worth flagging (F2 went beyond its original minimal proposal to the full
+cross-boundary merge; F7 shipped only its minimal option; F8 shipped a different, smaller fix
+than its own original proposal; F9 shipped in slices but ultimately covers every `window.S`
+site in the app's own modules).
 
 Every item below was verified against real call sites in this pass (grep for every actual
 `window.<name>`/import/usage site, not filenames or assumptions), per the request. Each is
@@ -805,6 +808,72 @@ SAFE, for exactly the reason this was originally left as a P2 "needs its own dec
 8. **Tests:** would need a full pass across every affected component's tests; not scoped
    here.
 
+**Update (2026-09-02): DONE — but not as proposed above.** The user asked for a deeper dive
+before deciding, which surfaced a different picture than the original framing: grepping
+*every* live `Window`-interface entry's real call sites (not trusting the doc comments)
+showed the "4 roots need to talk to each other" story doesn't actually hold up. Four buckets
+emerged:
+
+1. **Dead leftovers, never pruned.** `window.paintSel` and `window.patchCells` had **zero**
+   real callers left — both had already been superseded by direct imports elsewhere in
+   earlier slices, and nobody noticed. Deleted outright, along with the corresponding dead
+   test-fixture lines. `window.notify` is in the same boat as an actual call target (nothing
+   calls it since F9 finished) but many test files still rely on it as a working safety net
+   for the store-aliasing pattern — left in place, its doc comment updated to say so, rather
+   than force a much larger unrelated test-file cleanup.
+2. **Leaf utilities with zero cycle risk — the large majority (~20 entries).**
+   `saveFilters`/`updateMachBtn`/`fillGroupSel`/`openStats`/`openCellAction`/`toggleFav`/
+   `gotoPrevFree`/`gotoNextFree`/`machById`/`updateUserChip`/`dbg`/`applyDebug`/`dbgOn`/
+   `handleError`/`presenceTick`/`connectSSE`/`refreshNow`/`stampRef`/`readFile`/
+   `applyTheme`/`centerToday`/`syncJumpControls`/`ensureOverflow`/`prependWeek`/
+   `nextFreePtr`/`prevFreeBefore`. Each source module's own imports were checked for a path
+   back to its caller; none exist. Converted to plain direct ES imports — mechanical, the
+   same risk profile as the F9 batches, not a redesign.
+3. **A genuine imperative-code-into-React need — but root count doesn't cause it.**
+   `window.render` was still called by `grid-scroll.ts`/`grid-interaction.ts`, which are
+   deliberately **not** React components (event-delegation/DOM-measurement code, by the
+   modules' own header comments) — merging the 4 roots into one tree would not have removed
+   this call, since non-React imperative code still needs *some* way to poke a mounted
+   component regardless of tree shape. Solved with a new `ui/grid-render-bridge.ts`
+   (`registerGridRenderTrigger`/`triggerGridRender`) — the same module-scope-ref pattern
+   `Grid.tsx` already used internally, factored out so the two plain modules can import it
+   directly without an import cycle (both already have an edge *from* `Grid.tsx` the other
+   way — `daysPerWeek`, `paintSelection`).
+4. **Two real import-graph cycles — also unrelated to root count.** `AdminModal.tsx` ↔
+   `MachineFormModal.tsx` ↔ `LogModal.tsx` now import `openAdmin`/`openMachineForm` directly
+   from each other, a genuine 3-way cycle — safe because every use is inside an event
+   handler, never at module top level (by the time a click can fire, every module involved
+   has finished evaluating; deferred ESM cycles of this shape are well-supported). `showCtx`/
+   `hideCtx`/`toggleFav`/`gotoPrevFree`/`gotoNextFree`/`openCellAction`/`prependWeek` instead
+   take an injected `GridInteractionHandlers` struct (`initGridInteraction(handlers)`) inside
+   `grid-interaction.ts`, since it's a dependency-graph "hub" several of those modules import
+   *from* (`selection`/`paintSelection`/`clearSelection`) — a direct import back would cycle.
+   `app.ts` (already importing every module, no cycle risk of its own) wires the real
+   implementations in once at boot, mirroring the render-bridge pattern above.
+
+**Conclusion: the original Option A (merge the 4 roots into one tree) was rejected outright**
+— nothing on the bridge actually needed tree machinery (React context, refs across siblings).
+Every component already reads the same module-singleton `store` regardless of where it's
+mounted, so there was never a prop-drilling problem a shared parent would solve. `app.ts`'s
+`Window` interface shrank from ~30 entries to 3: `S` (F9's own remaining shrink-as-you-go
+bridge), `notify` (documented dead-but-harmless safety net), and `mutate`/`askConfirm` (kept
+deliberately, per the file's own header comment, for their genuinely wide fan-out across
+already-gated components — a separate tradeoff this investigation didn't implicate, not
+something F8 caused or fixes).
+
+Test files were converted the same way as F9's cross-file fixes: `vi.mock()` the
+now-directly-imported module where a test needs to observe/control a call (the mock cleared,
+not reassigned, each test); left real implementations running unmocked where they're
+provably harmless (a pure function reading store data the test already set up, or a
+DOM/localStorage side effect with nothing present to break). Two component tests
+(`AssistantModal.test.tsx`, `ContextMenu.test.tsx`) needed a one-time `initGridInteraction()`
+call with a throwaway `#grid` element, since their rendered trees indirectly call
+`clearSelection()` → `handlers.hideCtx()`, and `grid-interaction.ts`'s `handlers` stays
+`null` until initialized.
+
+Verified: full gate green (789 tests, 62 files, stable — the many test-fixture conversions
+net out to the same count), 100% coverage on the new `grid-render-bridge.ts`.
+
 ### F9 — `window.S` is the de facto state API; `Store.set`/`Store.get` are dead
 
 1. **Current problem:** (already documented in §7 of this audit in full, with counts —
@@ -921,8 +990,8 @@ cleanup to do first," not "most important."
 | **Fix first (bug, not ranked with the refactors)** | **F1** | **DONE** — `server/model.ts` gained `blockReason`/`isDayAvailable`; `server/mutate.ts`'s `writeCell` now checks both. New tests in `model.test.ts`/`mutate.test.ts` cover the maint-slot and days-mask cases end to end. |
 | **P0 — obvious, safe improvements** | F2, F3, F4, F5 | **DONE**, four separate commits. F5 (the `app.ts` bridge prune) was additionally verified with a rebuilt production image + browser smoke (grid renders, zero console errors), since `app.ts` is coverage-excluded by design. |
 | **P1 — important architectural improvements** | F6, F7 (minimal) | **DONE.** F6: `getBooking` moved to `core/booking-queries.ts`, 6 call sites repointed. F7-minimal: `server/types-contract.test.ts` added — a compile-time field-name check between `shared/types.ts` and `server/types.ts`, verified to actually fail (not vacuous) by a throwaway sanity break before committing. |
-| **P2 — worthwhile but larger refactors** | F9 | **DONE**, in three commits (bounded first slice, then two component batches) — see the F9 write-up above. |
-| **P2 — worthwhile but larger refactors** | F7 (full merge version), F8 | **Open, by design.** Each needs a real decision (how much to merge, which integration pattern) that shouldn't be made as a side effect of cleanup. |
+| **P2 — worthwhile but larger refactors** | F8, F9 | **DONE.** F9: three commits (bounded first slice, then two component batches). F8: investigated first — the "4 roots" framing didn't hold up against actual call sites — then shipped a different, smaller fix (direct imports + 2 typed bridge modules), not a tree merge. See each write-up above. |
+| **P2 — worthwhile but larger refactors** | F7 (full merge version) | **Open, by design.** Needs a real decision (how much to merge) that shouldn't be made as a side effect of cleanup. |
 | **P3 — optional / aesthetic** | F10 | Checked, not worth doing. |
 
 A `formatTimestamp` consolidation (a triplicated `new Date(x).toLocaleString('de-DE')`
