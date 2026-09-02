@@ -17,6 +17,7 @@ import { openLog } from './LogModal.tsx';
 import { openMachineForm } from './MachineFormModal.tsx';
 import { Icon } from './Icon.tsx';
 import { store } from '../../store-instance.ts';
+import { toast } from '../toast.ts';
 
 const SORT_OPTIONS: ReadonlyArray<{ value: AdminSort; label: string }> = [
   { value: 'manual', label: 'Standard (manuell)' },
@@ -193,7 +194,15 @@ export function AdminModal() {
   );
 }
 
-/** Open Admin ("Verwalten"). Faithful port of legacy `openAdmin`. */
+/** Open Admin ("Verwalten"). Faithful port of legacy `openAdmin`. Guarded (E2 — flagged, not
+ *  in legacy): the toolbar button this is normally wired to stays hidden until the initial
+ *  load succeeds, so this is unreachable in practice, but AdminModal's body unwraps
+ *  `store.get('data')` with `!` — cheap defensive-in-depth against a future caller (or a
+ *  test) that opens it before data has loaded. */
 export function openAdmin(): void {
+  if (!store.get('data')) {
+    toast('Noch keine Daten geladen — bitte kurz warten.');
+    return;
+  }
   openReactModal(<AdminModal />);
 }

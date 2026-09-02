@@ -199,7 +199,15 @@ export function AllBookingsModal() {
   );
 }
 
-/** Open "All bookings". Faithful port of legacy `openAllBookings`. */
+/** Open "All bookings". Faithful port of legacy `openAllBookings`. Guarded (E2 — flagged, not
+ *  in legacy): the toolbar button this is normally wired to stays hidden until the initial
+ *  load succeeds, so this is unreachable in practice, but AllBookingsModal's initial-state
+ *  `useState` unwraps `store.get('data')` with `!` — cheap defensive-in-depth against a future
+ *  caller (or a test) that opens it before data has loaded. */
 export function openAllBookings(): void {
+  if (!store.get('data')) {
+    toast('Noch keine Daten geladen — bitte kurz warten.');
+    return;
+  }
   openReactModal(<AllBookingsModal />);
 }

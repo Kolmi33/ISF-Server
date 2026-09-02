@@ -167,4 +167,11 @@ describe('openStats', () => {
     });
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
   });
+
+  it('toasts instead of opening when data has not loaded yet', () => {
+    store.set({ data: null } as unknown as Partial<AppState>);
+    act(() => openStats());
+    expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
+    expect(document.getElementById('toast')!.textContent).toContain('Noch keine Daten geladen');
+  });
 });

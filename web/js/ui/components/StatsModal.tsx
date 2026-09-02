@@ -248,7 +248,15 @@ export function StatsModal({ presetPerson }: StatsModalProps) {
 }
 
 /** Open Statistik, optionally pre-filtered to one person (jumps straight into the Personen-mode
- *  drilldown). Faithful port of legacy `openStats`. */
+ *  drilldown). Faithful port of legacy `openStats`. Guarded (E2 — flagged, not in legacy): the
+ *  toolbar button this is normally wired to stays hidden until the initial load succeeds, so
+ *  this is unreachable in practice, but `computeAgg`'s initial-state `useState` unwraps
+ *  `store.get('data')` with `!` — cheap defensive-in-depth against a future caller (or a test)
+ *  that opens it before data has loaded. */
 export function openStats(presetPerson?: string): void {
+  if (!store.get('data')) {
+    toast('Noch keine Daten geladen — bitte kurz warten.');
+    return;
+  }
   openReactModal(<StatsModal presetPerson={presetPerson} />);
 }
