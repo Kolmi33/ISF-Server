@@ -37,21 +37,36 @@ export function matchRoute(pattern: string, pathname: string): RouteMatch | null
   return { params };
 }
 
+/** The subset of Node's `IncomingMessage.headers` shape a handler might need (e.g. `If-Match`
+ *  for a conditional write, Phase 9f) — declared structurally so this module still doesn't
+ *  import `node:http` just for a type. */
+export type ApiRequestHeaders = Record<string, string | string[] | undefined>;
+
 /** One registered endpoint: an HTTP method, a `:param` pattern, and the handler that serves it.
  *  `url` is the full parsed request URL (so a handler can read `url.searchParams` for filter/
  *  sort/pagination query params) — deliberately the standard web `URL`, not a Node-specific or
- *  DB-specific type, so this module stays usable without pulling in either. */
+ *  DB-specific type, so this module stays usable without pulling in either. `body` is the
+ *  already-JSON-parsed request body (undefined for a GET); `headers` the request headers — a
+ *  GET/DELETE handler with no use for either simply omits them from its own signature (fewer
+ *  parameters than the type still satisfies it). */
 export interface ApiRoute {
   method: string;
   pattern: string;
-  handler: (params: Record<string, string>, url: URL) => ApiResponse | Promise<ApiResponse>;
+  handler: (
+    params: Record<string, string>,
+    url: URL,
+    body: unknown,
+    headers: ApiRequestHeaders,
+  ) => ApiResponse | Promise<ApiResponse>;
 }
 
 /** What a route handler returns — mirrors `server.ts`'s own `send(res, status, body)` shape, so
- *  the HTTP layer can forward it verbatim. */
+ *  the HTTP layer can forward it verbatim. `headers` (Phase 9f: `ETag` on a booking resource) are
+ *  extra response headers, included only when a handler actually sets them. */
 export interface ApiResponse {
   status: number;
   body: unknown;
+  headers?: Record<string, string>;
 }
 
 /**

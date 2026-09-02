@@ -14,9 +14,12 @@ import { applyMutate } from './mutate.js';
 import { formatDateAsIsoString } from '../shared/dates.js';
 import type { MutateBody } from './types.js';
 import { findRoute, type ApiRoute } from './api-router.js';
+import { apiError } from './api-response.js';
 import { listMachines, getMachine } from './api-machines.js';
 import { listMachineBookings, getMachineBooking, listBookingsByGroup } from './api-bookings.js';
 import { listActivity } from './api-activity.js';
+import { createMachine, updateMachine, deleteMachine, moveMachine } from './api-machines-write.js';
+import { putBooking, deleteBooking, batchBook, batchDelete } from './api-bookings-write.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '3000');
@@ -32,8 +35,9 @@ const BUNDLED_JSON = join(currentDirectory, '..', 'buchungen.json'); // shipped 
 const db = openDb(DB_PATH);
 
 // ---------- REST API (Phase 9) — a second entrance onto the same data, not a second write
-// engine: read-only for now (9b), alongside the existing /api/state, /api/mutate, /api/stream
-// trio the live grid itself uses (see PROGRESS.md's Phase 9 plan for why the two don't merge).
+// engine: every write route below still goes through `mutate.ts`'s single `applyMutate` path,
+// alongside the existing /api/state, /api/mutate, /api/stream trio the live grid itself uses
+// (see PROGRESS.md's Phase 9 plan for why the two don't merge).
 const apiV1Routes: ApiRoute[] = [
   { method: 'GET', pattern: '/api/v1/machines', handler: (_params, url) => listMachines(db, url) },
   {
@@ -57,6 +61,50 @@ const apiV1Routes: ApiRoute[] = [
     handler: (_params, url) => listBookingsByGroup(db, url),
   },
   { method: 'GET', pattern: '/api/v1/activity', handler: (_params, url) => listActivity(db, url) },
+  // ---- writes (Phase 9e/9f) — every one of these funnels into `mutate.ts`'s single
+  // `applyMutate` write path; see `api-machines-write.ts`/`api-bookings-write.ts` headers.
+  {
+    method: 'POST',
+    pattern: '/api/v1/machines',
+    handler: (_params, _url, body) => createMachine(db, body, broadcast),
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/v1/machines/:id',
+    handler: (params, _url, body) => updateMachine(db, params.id!, body, broadcast),
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/v1/machines/:id',
+    handler: (params, _url, body) => deleteMachine(db, params.id!, body, broadcast),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/v1/machines/:id/move',
+    handler: (params, _url, body) => moveMachine(db, params.id!, body, broadcast),
+  },
+  {
+    method: 'PUT',
+    pattern: '/api/v1/machines/:id/bookings/:date',
+    handler: (params, _url, body, headers) =>
+      putBooking(db, params.id!, params.date!, body, headers, broadcast),
+  },
+  {
+    method: 'DELETE',
+    pattern: '/api/v1/machines/:id/bookings/:date',
+    handler: (params, _url, _body, headers) =>
+      deleteBooking(db, params.id!, params.date!, headers, broadcast),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/v1/bookings/batch',
+    handler: (_params, _url, body) => batchBook(db, body, broadcast),
+  },
+  {
+    method: 'POST',
+    pattern: '/api/v1/bookings/batch-delete',
+    handler: (_params, _url, body) => batchDelete(db, body, broadcast),
+  },
 ];
 
 // First-run seed: DB empty? Import from the volume (/data/buchungen.json), else from the
@@ -162,7 +210,11 @@ function send(
   res.writeHead(code, { 'Content-Type': 'application/json', ...headers });
   res.end(typeof body === 'string' ? body : JSON.stringify(body));
 }
-function readBody(req: IncomingMessage): Promise<MutateBody | null> {
+/** Read + JSON-parse a request body (shared by `/api/mutate` and every `/api/v1/*` write route)
+ *  — `null` means "reject with 400" (overflow or malformed JSON), `{}` an empty-but-valid body.
+ *  Deliberately untyped (`unknown`): the caller knows which shape it expects (`MutateBody` for
+ *  `/api/mutate`, a REST write's own body type for `/api/v1/*`). */
+function readBody(req: IncomingMessage): Promise<unknown | null> {
   return new Promise((resolve) => {
     let bodyText = '';
     req.on('data', (chunk) => {
@@ -174,7 +226,7 @@ function readBody(req: IncomingMessage): Promise<MutateBody | null> {
     });
     req.on('end', () => {
       try {
-        resolve(bodyText ? (JSON.parse(bodyText) as MutateBody) : {});
+        resolve(bodyText ? (JSON.parse(bodyText) as unknown) : {});
       } catch {
         resolve(null);
       }
@@ -231,14 +283,17 @@ async function serveStatic(res: ServerResponse, urlPath: string): Promise<void> 
 async function handleMutatePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const body = await readBody(req);
   if (body === null) return send(res, 400, { error: 'Ungültige oder zu große Anfrage' });
-  const result = applyMutate(db, body, broadcast, WEEKEND_BRIDGE);
+  const result = applyMutate(db, body as MutateBody, broadcast, WEEKEND_BRIDGE);
   return send(res, result.error ? 400 : 200, result);
 }
 
 /** Try the `/api/v1/*` route table; returns whether it handled the request (and already sent
  *  the response), so the caller falls through to static-file serving when it didn't. Split out
- *  purely to keep the main request handler under the complexity budget. */
+ *  purely to keep the main request handler under the complexity budget. Reads + parses the
+ *  request body for any non-GET method (a write route's handler ignores it otherwise), rejecting
+ *  with the REST error envelope — not `/api/mutate`'s plain `{error}` shape — on malformed JSON. */
 async function tryApiV1(
+  req: IncomingMessage,
   res: ServerResponse,
   method: string,
   urlPath: string,
@@ -246,8 +301,14 @@ async function tryApiV1(
 ): Promise<boolean> {
   const match = findRoute(apiV1Routes, method, urlPath);
   if (!match) return false;
-  const response = await match.route.handler(match.params, url);
-  send(res, response.status, response.body);
+  const body = method === 'GET' ? undefined : await readBody(req);
+  if (body === null) {
+    const parseError = apiError(400, 'VALIDATION', 'Ungültige oder zu große Anfrage');
+    send(res, parseError.status, parseError.body);
+    return true;
+  }
+  const response = await match.route.handler(match.params, url, body, req.headers);
+  send(res, response.status, response.body, response.headers);
   return true;
 }
 
@@ -265,7 +326,7 @@ const server = createServer(async (req, res) => {
     if (urlPath === '/api/state') return send(res, 200, getState(db));
     if (urlPath === '/api/stream') return openStream(req, res, url);
     if (req.method === 'POST' && urlPath === '/api/mutate') return handleMutatePost(req, res);
-    if (await tryApiV1(res, req.method || 'GET', urlPath, url)) return;
+    if (await tryApiV1(req, res, req.method || 'GET', urlPath, url)) return;
     return serveStatic(res, urlPath);
   } catch (error) {
     console.error(error);

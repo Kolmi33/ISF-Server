@@ -26,6 +26,14 @@ function machineExists(db: Db, machineId: string): boolean {
   return !!db.prepare('SELECT 1 FROM machines WHERE id=?').get(machineId);
 }
 
+/** A single booking cell's opaque CAS token: `"empty"` when nothing is booked there, else
+ *  derived from the booking's own name+ts (either changing invalidates a previously-fetched
+ *  tag). Exported for `api-bookings-write.ts`'s `If-Match` precondition (Phase 9f) — compared
+ *  byte-for-byte against a client-supplied header, never parsed or generated any other way. */
+export function bookingEtag(row: Pick<BookingRow, 'name' | 'ts'> | undefined): string {
+  return row ? `"${row.name}:${row.ts || ''}"` : '"empty"';
+}
+
 /**
  * `GET /api/v1/machines/:id/bookings?from=&to=`. Both bounds are required — an unbounded "every
  * booking ever" fetch isn't offered — and must be valid ISO days with `from <= to`. 404s when
@@ -62,7 +70,10 @@ export function getMachineBooking(db: Db, machineId: string, date: string): ApiR
   const row = db.prepare('SELECT * FROM bookings WHERE mid=? AND day=?').get(machineId, date) as
     BookingRow | undefined;
   if (!row) return apiError(404, 'NOT_FOUND', `Keine Buchung am ${date}.`);
-  return apiSuccess({ date: row.day, ...bookingOut(row) });
+  return {
+    ...apiSuccess({ date: row.day, ...bookingOut(row) }),
+    headers: { ETag: bookingEtag(row) },
+  };
 }
 
 /**

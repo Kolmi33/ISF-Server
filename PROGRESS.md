@@ -461,12 +461,54 @@ re-derived here — this backlog is the executable summary.
   `activityOut` mapper's `row.ts/user/action || ''` null-fallbacks are unreachable in practice —
   every writer already supplies real values — left as defensive rather than chased for 100%,
   since the schema technically allows null and `verify`'s aggregate 90/85 floor was already met).
-- [ ] 9e `POST/PUT/DELETE /api/v1/machines`, `POST /api/v1/machines/:id/move` — through
-  `core/machines.ts`'s existing reducers + a shared structural-write transaction helper
-- [ ] 9f `PUT/DELETE /api/v1/machines/:id/bookings/:date` (ETag/If-Match CAS -> 412 on mismatch),
-  `POST /api/v1/bookings/batch` (207 Multi-Status on partial success), `POST
-  /api/v1/bookings/batch-delete` — through `core/bookings.ts`'s reducers, broadcasting over the
-  same SSE channel so a REST-driven write shows up live in the grid UI too
+- [x] 9e+9f Write endpoints — `server/api-machines-write.ts`, `server/api-bookings-write.ts`,
+  `server/api-write-helpers.ts` (landed together: both re-derived the exact same "read current
+  state, apply one in-memory change, hand it to `applyMutate`" shape, so building them side by
+  side kept that shape honest instead of guessing at it twice).
+  - **9e** `POST/PUT/DELETE /api/v1/machines`, `POST /api/v1/machines/:id/move`. Not a second
+    write engine: each handler reads the full current machine list (`machineOut`-mapped, same
+    wire shape `/api/v1/machines` already returns), applies one change to it in memory — reducers
+    ported field-for-field from `core/machines.ts`'s `saveMachine`/`deleteMachine`/`moveMachine`
+    (slugify, group-insertion index, the legacy-status-clearing `applyFormFieldsToMachine`) the
+    same way `model.ts`'s `blockReason` ports rather than imports client logic (server code never
+    imports `web/js/*`) — then hands the whole list to `applyMutate`'s existing structural path.
+    That one call is doing all the real work: validation/clamping (`insertMachine`/`cleanMaint`),
+    the transaction, the revision bump, the SSE broadcast, and the activity log, so these REST
+    handlers add only the REST-specific shell (id-lookup 404s, a 409 `CONFLICT` for a move that
+    would run off the list or cross a group boundary, mapping `applyMutate`'s error string to 400
+    `VALIDATION`). A REST write without an explicit `log` auto-generates one tagged `(REST)` (e.g.
+    `Maschine angelegt: X (REST)`) in the same German phrasing the UI's own save/delete/move
+    already log, so `GET /api/v1/activity` reads the same regardless of origin.
+  - **9f** `PUT`/`DELETE /api/v1/machines/:id/bookings/:date`, `POST /api/v1/bookings/batch`,
+    `POST /api/v1/bookings/batch-delete`. Every write is one `applyMutate` cell-delta call — the
+    exact path the grid's own booking clicks use — so blocked-day checks, "never overwrite a
+    foreign booking" by name, weekend bridging, the broadcast, and the log all come for free.
+    Added an `ETag`/`If-Match` CAS layer on top (new: `bookingEtag(row)` in `api-bookings.ts`,
+    `"empty"` for a free cell else derived from the booking's own name+ts; `GET
+    .../bookings/:date` now returns it as a response header) — given, a stale `If-Match` is
+    refused with 412 before the write is even attempted; omitted, the write is unconditional
+    (falling back to `applyMutate`'s own same-name-only-overwrite rule, which still applies
+    either way). Batch book reports `{applied, conflicts}` and is 207 Multi-Status when some
+    cells conflicted, 200 when all applied cleanly; batch-delete is unconditional (no per-cell
+    `If-Match`; the single-cell DELETE is for that) and reports only `applied`.
+  - Extended `ApiRoute`/`ApiResponse` (`api-router.ts`) with `body`/`headers` on the request side
+    and an optional `headers` on the response side — additive, so every existing GET-only route
+    handler (fewer params than the type) kept compiling unchanged. Generalized `server.ts`'s
+    `readBody` to `Promise<unknown | null>` (was hard-typed to `MutateBody`) so `/api/v1/*` writes
+    reuse the same body-reading/overflow/malformed-JSON handling `/api/mutate` already had,
+    without a second copy of it.
+  - `npm run build:server` checked directly before the docker build (still the 9b lesson) — clean
+    on the first try. Verified live against a throwaway container with real seed data: created,
+    updated, moved (409 on an invalid direction), and deleted a machine via REST, confirming each
+    step in `GET /api/v1/activity`; booked a cell unconditionally, round-tripped its `ETag` via
+    GET, confirmed a stale `If-Match` 412s and the correct one 200s, confirmed the existing
+    same-name-conflict rule still 409s a REST write; batch-booked 2 cells clean (200), batch-
+    booked 2 more with one conflicting (207, `applied:1`), batch-deleted 3 cells (`applied:3`).
+    `npm run verify` green: 893/893 tests (57 new across the two write modules + the shared
+    helpers), 100% statement/function/line coverage on every new file (`api-machines-write.ts`
+    100/100/100/100; `api-bookings-write.ts` 100/89.55/100/100 branch — the handful of remaining
+    branches are header-array edge cases and defensive fallbacks, not untested request paths;
+    aggregate floor comfortably met either way).
 - [ ] 9g Auth decision (a hand-rolled `Authorization: Bearer` check against an env-var secret) —
   optional, only if/when something outside the trusted network needs to call this; no user table
   exists, so this is authentication only, never per-user authorization

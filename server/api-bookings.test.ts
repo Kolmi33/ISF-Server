@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { openDb, type Db } from './db.ts';
-import { listMachineBookings, getMachineBooking, listBookingsByGroup } from './api-bookings.ts';
+import {
+  listMachineBookings,
+  getMachineBooking,
+  listBookingsByGroup,
+  bookingEtag,
+} from './api-bookings.ts';
 
 function mem(): Db {
   const db = openDb(':memory:');
@@ -99,6 +104,27 @@ describe('getMachineBooking', () => {
       name: 'Anna',
       note: 'wichtig',
     });
+  });
+
+  it('carries an ETag header on a booked cell, for the write endpoints to CAS against', () => {
+    const db = mem();
+    book(db, 'm1', '2026-01-05', 'Anna');
+    const res = getMachineBooking(db, 'm1', '2026-01-05');
+    expect(res.headers).toEqual({ ETag: bookingEtag({ name: 'Anna', ts: 't0' }) });
+  });
+});
+
+describe('bookingEtag', () => {
+  it('is a fixed sentinel for an empty cell', () => {
+    expect(bookingEtag(undefined)).toBe('"empty"');
+  });
+
+  it('changes when the name or the ts changes, stable otherwise', () => {
+    const original = bookingEtag({ name: 'Anna', ts: 't0' });
+    expect(bookingEtag({ name: 'Anna', ts: 't0' })).toBe(original); // same inputs, same tag
+    expect(bookingEtag({ name: 'Bob', ts: 't0' })).not.toBe(original);
+    expect(bookingEtag({ name: 'Anna', ts: 't1' })).not.toBe(original);
+    expect(bookingEtag(undefined)).not.toBe(original);
   });
 });
 
