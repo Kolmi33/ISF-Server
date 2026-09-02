@@ -509,9 +509,26 @@ re-derived here — this backlog is the executable summary.
     100/100/100/100; `api-bookings-write.ts` 100/89.55/100/100 branch — the handful of remaining
     branches are header-array edge cases and defensive fallbacks, not untested request paths;
     aggregate floor comfortably met either way).
-- [ ] 9g Auth decision (a hand-rolled `Authorization: Bearer` check against an env-var secret) —
-  optional, only if/when something outside the trusted network needs to call this; no user table
-  exists, so this is authentication only, never per-user authorization
+- [x] 9g Auth decision: **not implementing it now** — a deliberate decision, not a skipped step.
+  `/api/v1/*` runs on the same trusted network as the existing `/api/state`/`/api/mutate`/
+  `/api/stream` trio, which has had zero auth since before this REST work started; nothing
+  outside that network calls any of it today, so a bearer-token check right now would be
+  speculative infrastructure with no concrete caller to protect against — exactly the kind of
+  guardrail PRINCIPLES.md's simplicity ordering (Correctness/Security → Maintainability →
+  **Simplicity** → …) argues against adding ahead of an actual need. It's also worth being
+  precise about what it could even be: this app has no user table or login, so "auth" here can
+  only ever be one shared secret gating all-or-nothing access to `/api/v1/*` — authentication,
+  never per-user authorization (the `user`/`log` fields REST writes accept are, like `/api/mutate`
+  today, an unauthenticated free-form display name, not an identity).
+  **If a real external caller shows up later**, the concrete shape to add (sketched now so it
+  isn't re-derived from scratch): an `API_BEARER_TOKEN` env var; `tryApiV1` in `server.ts` checks
+  the request's `Authorization: Bearer <token>` header against it *before* calling `findRoute` —
+  applied only to `/api/v1/*`, never to `/api/state`/`/api/mutate`/`/api/stream`, which keep
+  serving the live grid unauthenticated exactly as now; a missing/wrong token is a new
+  `ApiErrorCode` (`UNAUTHORIZED`) → 401, added to `api-response.ts`'s closed set at that time, not
+  preemptively. When `API_BEARER_TOKEN` is unset (every deployment today), the check is skipped
+  entirely — so adding it later is opt-in infrastructure, not a breaking change forced onto the
+  current deployment.
 - [ ] 9h Hand-written `openapi.yaml` — documentation only, no new dependency
 
 ## Done log (newest first)
