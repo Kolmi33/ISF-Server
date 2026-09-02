@@ -392,6 +392,35 @@ which turns it into a data-shape change:
   lockstep client+server) — scope it properly if it's ever picked up. **Phase 8 (naming &
   structure clarity) is now complete.**
 
+**Phase 9 — REST API (user-requested design, full plan discussed 2026-09-02/03)**
+A genuine `/api/v1/*` REST surface alongside the existing `/api/state`/`/api/mutate`/`/api/stream`
+trio, NOT replacing it — that trio is the live grid's own sync protocol (batch CAS writes, full-
+state reads, SSE push) and stays exactly as-is; REST is for external tooling/scripts/admin use
+that wants single-resource semantics instead. Full reasoning (resource list, endpoint map, status
+codes, auth stance, versioning, testing strategy) was worked out in conversation and isn't
+re-derived here — this backlog is the executable summary.
+
+- [x] 9a Routing plumbing, zero endpoints yet — `server/api-router.ts` (`matchRoute`/`findRoute`,
+  a `:param`-segment matcher over a plain route-array, no router dependency) and
+  `server/api-response.ts` (`apiSuccess`/`apiError`, the `{data}` / `{error,code,details?}`
+  envelope, `ApiErrorCode` = VALIDATION/NOT_FOUND/CONFLICT/PRECONDITION_FAILED/INTERNAL). Not
+  wired into `server.ts` at all yet — that starts in 9b. `npm run verify` green, 818/818 tests,
+  100% coverage on both new modules (21 new tests).
+- [ ] 9b `GET /api/v1/machines`, `GET /api/v1/machines/:id` — read-only, wired into `server.ts`'s
+  dispatch for the first time.
+- [ ] 9c `GET /api/v1/machines/:id/bookings[/:date]`, `GET /api/v1/bookings?groupId=`
+- [ ] 9d `GET /api/v1/activity` (the `log` table, cursor-paginated on its `id`)
+- [ ] 9e `POST/PUT/DELETE /api/v1/machines`, `POST /api/v1/machines/:id/move` — through
+  `core/machines.ts`'s existing reducers + a shared structural-write transaction helper
+- [ ] 9f `PUT/DELETE /api/v1/machines/:id/bookings/:date` (ETag/If-Match CAS -> 412 on mismatch),
+  `POST /api/v1/bookings/batch` (207 Multi-Status on partial success), `POST
+  /api/v1/bookings/batch-delete` — through `core/bookings.ts`'s reducers, broadcasting over the
+  same SSE channel so a REST-driven write shows up live in the grid UI too
+- [ ] 9g Auth decision (a hand-rolled `Authorization: Bearer` check against an env-var secret) —
+  optional, only if/when something outside the trusted network needs to call this; no user table
+  exists, so this is authentication only, never per-user authorization
+- [ ] 9h Hand-written `openapi.yaml` — documentation only, no new dependency
+
 ## Done log (newest first)
 - **2026-09-02 — Code-review fixes**: undo's CAS-check bug and `machById`'s stale-cache bug
   (both found by an external review, verified with a failing regression test before fixing —
