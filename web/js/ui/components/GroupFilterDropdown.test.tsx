@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, type RenderResult } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
+import { store } from '../../store-instance.ts';
 import { GroupFilterDropdown, fillGroupSel } from './GroupFilterDropdown.tsx';
 
 function machine(overrides: Partial<Machine> = {}): Machine {
@@ -10,15 +11,22 @@ function machine(overrides: Partial<Machine> = {}): Machine {
 
 let mounted: RenderResult;
 
+// window.S is kept aliased to store.state so the component (migrated onto the real store) and
+// this test agree; window.notify forwards to store.notify() exactly as app.ts does in
+// production, so notifySpy sees every repaint trigger.
+const notifySpy = vi.spyOn(store, 'notify');
+
 beforeEach(() => {
   document.body.innerHTML = `<button id="groupBtn">Alle Bereiche ▾</button><div id="groupDrop"></div>`;
-  window.S = {
+  store.set({
     data: { machines: [machine(), machine({ id: 'm2', name: 'Presse', group: 'Halle 2' })] },
     groupsSel: new Set(),
     machSel: new Set(),
     favs: new Set(),
-  } as unknown as AppState;
-  window.notify = vi.fn();
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
+  notifySpy.mockClear();
+  window.notify = () => store.notify();
   localStorage.clear();
   mounted = render(<GroupFilterDropdown />, { container: document.getElementById('groupDrop')! });
 });
@@ -46,7 +54,7 @@ describe('GroupFilterDropdown', () => {
     act(() => fireEvent.click(screen.getByRole('checkbox', { name: 'Halle 1' })));
     expect(window.S.groupsSel.has('Halle 1')).toBe(true);
     expect(JSON.parse(localStorage.getItem('mb_groupssel')!)).toEqual(['Halle 1']);
-    expect(window.notify).toHaveBeenCalled();
+    expect(notifySpy).toHaveBeenCalled();
     expect(document.getElementById('groupBtn')!.textContent).toBe('1 Bereich ▾');
   });
 
@@ -71,7 +79,7 @@ describe('GroupFilterDropdown', () => {
     openDropdown();
     act(() => fireEvent.click(screen.getByRole('checkbox', { name: /Alle Bereiche/ })));
     expect(window.S.groupsSel.size).toBe(0);
-    expect(window.notify).toHaveBeenCalled();
+    expect(notifySpy).toHaveBeenCalled();
   });
 
   it('an outside click closes the dropdown', () => {

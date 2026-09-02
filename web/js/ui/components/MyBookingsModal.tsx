@@ -1,7 +1,7 @@
 // The "My bookings" modal (Phase 7 slice B5). Faithful port of legacy `openMyBookings`/
 // `renderMyBookings`. The run STRUCTURE is frozen at open (`computeMyRuns` runs once, matching
 // legacy's own comment "Struktur einfrieren") but each run's *live* days are re-filtered
-// against the current `window.S.data.bookings` on every render, so a delete just makes a day
+// against the current `store.get('data').bookings` on every render, so a delete just makes a day
 // disappear from its run without recomputing the grouping — exactly legacy's behavior.
 
 import { useState } from 'react';
@@ -22,6 +22,7 @@ import { closeReactModal, openReactModal } from '../modal.tsx';
 import { toast, offerUndo } from '../toast.ts';
 import { Icon } from './Icon.tsx';
 import { askUserName } from './AskUserNameModal.tsx';
+import { store } from '../../store-instance.ts';
 
 /** One run's live state: its frozen machine + full date list, and which of those dates are
  *  still actually booked under the current user's name right now. */
@@ -32,14 +33,14 @@ interface LiveRun {
 }
 
 function liveRunsFrom(frozenRuns: readonly BookingRun[]): LiveRun[] {
-  const lowercaseUser = window.S.user.toLowerCase();
+  const lowercaseUser = store.get('user').toLowerCase();
+  const bookings = store.get('data')!.bookings;
   return frozenRuns
     .map((run) => ({
       machine: run.m,
       allDates: run.dates,
       liveDates: run.dates.filter(
-        (date) =>
-          getBooking(window.S.data!.bookings, run.m.id, date)?.name.toLowerCase() === lowercaseUser,
+        (date) => getBooking(bookings, run.m.id, date)?.name.toLowerCase() === lowercaseUser,
       ),
     }))
     .filter((run) => run.liveDates.length > 0);
@@ -51,7 +52,7 @@ function runKey(run: LiveRun): string {
 
 /** A day's optional note, as the small trailing hint legacy shows next to its date. */
 function DayNote({ machine, date }: { machine: Machine; date: string }) {
-  const note = getBooking(window.S.data!.bookings, machine.id, date)?.note;
+  const note = getBooking(store.get('data')!.bookings, machine.id, date)?.note;
   return note ? (
     <span className="hint" style={{ margin: 0 }}>
       {' '}
@@ -66,14 +67,18 @@ function DayNote({ machine, date }: { machine: Machine; date: string }) {
 function gotoRun(run: LiveRun): void {
   const targetDate = run.liveDates[0]!;
   closeReactModal();
-  window.S.cats.add(categoryOf(run.machine));
-  localStorage.setItem('mb_cats', JSON.stringify([...window.S.cats]));
-  window.S.collapsed.delete(run.machine.group);
-  if (window.S.favs.has(run.machine.id)) window.S.collapsed.delete(FAVORITES_GROUP_LABEL);
-  localStorage.setItem('mb_collapsed', JSON.stringify([...window.S.collapsed]));
-  window.S.startMonday = mondayOfDate(parseIsoDateString(targetDate));
+  const cats = store.get('cats');
+  cats.add(categoryOf(run.machine));
+  localStorage.setItem('mb_cats', JSON.stringify([...cats]));
+  const collapsed = store.get('collapsed');
+  collapsed.delete(run.machine.group);
+  if (store.get('favs').has(run.machine.id)) collapsed.delete(FAVORITES_GROUP_LABEL);
+  localStorage.setItem('mb_collapsed', JSON.stringify([...collapsed]));
+  // Silent, like resetView below — one notify covers this write plus resetView's own field
+  // reset, matching the original's single window.notify() after both.
+  store.state.startMonday = mondayOfDate(parseIsoDateString(targetDate));
   resetView();
-  window.notify();
+  store.notify();
   prependWeek();
   gotoDate(targetDate);
 }
@@ -169,10 +174,12 @@ function DayList({
 function MachineFilterButton({ machineIds }: { machineIds: readonly string[] }) {
   if (!machineIds.length) return null;
   function apply(): void {
-    window.S.machSel = new Set(machineIds);
+    // Silent — saveFilters()/updateMachBtn() run before the one notify, matching the
+    // original's single window.notify() after this write and both those calls.
+    store.state.machSel = new Set(machineIds);
     window.saveFilters();
     window.updateMachBtn();
-    window.notify();
+    store.notify();
     closeReactModal();
     toast(
       `Plan gefiltert: nur deine ${machineIds.length} Maschine${machineIds.length === 1 ? '' : 'n'}. Aufheben über „Filtern → Filter löschen".`,
@@ -226,9 +233,9 @@ function RunList({ runs, expandedKeys, onToggleExpand, onDeleteDates }: RunListP
 export function MyBookingsModal() {
   const [frozenRuns] = useState<readonly BookingRun[]>(() =>
     computeMyRuns(
-      orderedMachines(window.S.data!.machines, window.S.favs),
-      window.S.data!.bookings,
-      window.S.user,
+      orderedMachines(store.get('data')!.machines, store.get('favs')),
+      store.get('data')!.bookings,
+      store.get('user'),
       todayAsIsoDateString(),
     ),
   );
@@ -246,9 +253,10 @@ export function MyBookingsModal() {
   }
 
   async function deleteDates(machine: Machine, dates: readonly string[]): Promise<void> {
+    const user = store.get('user');
     const result = await window.mutate(
-      (fresh) => deleteOwnCells(fresh, machine.id, window.S.user, dates),
-      `Gelöscht: ${window.S.user} auf ${machine.name}, ${dates.length} Tag(e)`,
+      (fresh) => deleteOwnCells(fresh, machine.id, user, dates),
+      `Gelöscht: ${user} auf ${machine.name}, ${dates.length} Tag(e)`,
     );
     if (result && !result.abort) {
       forceRerender((tick) => tick + 1); // re-filter the live dates against the now-changed data
@@ -281,7 +289,7 @@ export function MyBookingsModal() {
  *  none is set yet (a read-only user with no name browsing straight to this would otherwise see
  *  an empty list that isn't really "theirs"). */
 export function openMyBookings(): void {
-  if (!window.S.user) {
+  if (!store.get('user')) {
     askUserName(false);
     return;
   }

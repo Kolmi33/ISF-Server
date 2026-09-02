@@ -15,13 +15,14 @@ import { orderedMachines } from '../grid.ts';
 import { buildMachineFilterRows, type MachineFilterRow } from '../machine-filter.ts';
 import { useToolbarDropdown } from '../toolbar-dropdown.ts';
 import { Icon } from './Icon.tsx';
+import { store } from '../../store-instance.ts';
 
 /** Persist the machine AND group filter selections. Faithful port of legacy `saveFilters` —
  *  shared by `GroupFilterDropdown.tsx` and three already-gated callers (AllBookingsModal's/
  *  AssistantResults's/MyBookingsModal's "only my machines" shortcuts). */
 export function saveFilters(): void {
-  localStorage.setItem('mb_machsel', JSON.stringify([...window.S.machSel]));
-  localStorage.setItem('mb_groupssel', JSON.stringify([...window.S.groupsSel]));
+  localStorage.setItem('mb_machsel', JSON.stringify([...store.get('machSel')]));
+  localStorage.setItem('mb_groupssel', JSON.stringify([...store.get('groupsSel')]));
 }
 
 /** Refresh the toolbar button's label/highlight from `S.machSel`. `#machBtn` is static
@@ -30,7 +31,7 @@ export function saveFilters(): void {
 export function updateMachBtn(): void {
   const button = document.getElementById('machBtn');
   if (!button) return;
-  const count = window.S.machSel.size;
+  const count = store.get('machSel').size;
   button.innerHTML =
     '<svg class="ic" aria-hidden="true"><use href="#i-search"/></svg> ' +
     (count ? `${count} gewählt ▾` : 'Filtern ▾');
@@ -153,19 +154,19 @@ function MachineFilterRowView({
  *  out from `MachineFilterDropdown` only to stay under the line budget. */
 function useMachineSelectionActions(bumpTick: () => void) {
   function handleMachineToggle(mid: string, isChecked: boolean): void {
-    if (isChecked) window.S.machSel.add(mid);
-    else window.S.machSel.delete(mid);
+    if (isChecked) store.get('machSel').add(mid);
+    else store.get('machSel').delete(mid);
     saveFilters();
     updateMachBtn();
-    window.notify();
+    store.notify();
     bumpTick();
   }
 
   function handleClear(): void {
-    window.S.machSel.clear();
+    store.get('machSel').clear();
     saveFilters();
     updateMachBtn();
-    window.notify();
+    store.notify();
     bumpTick();
   }
 
@@ -208,7 +209,7 @@ function MachineFilterBody({
         }}
       >
         <span className="hint" style={{ margin: 0 }}>
-          {window.S.machSel.size ? `${window.S.machSel.size} gewählt` : 'alle sichtbar'}
+          {store.get('machSel').size ? `${store.get('machSel').size} gewählt` : 'alle sichtbar'}
         </span>
         <button className="btn small clearbtn" onClick={onClear}>
           <Icon name="trash" /> Filter löschen
@@ -219,7 +220,7 @@ function MachineFilterBody({
           <MachineFilterRowView
             key={row.kind === 'machine' ? row.machine.id : row.key}
             row={row}
-            checked={row.kind === 'machine' && window.S.machSel.has(row.machine.id)}
+            checked={row.kind === 'machine' && store.get('machSel').has(row.machine.id)}
             onToggleOpen={state.toggleOpenKey}
             onToggleMachine={onToggleMachine}
           />
@@ -237,9 +238,9 @@ export function MachineFilterDropdown() {
   const { handleMachineToggle, handleClear } = useMachineSelectionActions(bumpTick);
   if (!isOpen) return null;
 
-  const machines = orderedMachines(window.S.data!.machines, window.S.favs);
+  const machines = orderedMachines(store.get('data')!.machines, store.get('favs'));
   const rows = buildMachineFilterRows(machines, {
-    favoriteIds: window.S.favs,
+    favoriteIds: store.get('favs'),
     searchQuery: state.searchQuery,
     openKeys: state.openKeys,
     shownCategories: state.shownCategories,

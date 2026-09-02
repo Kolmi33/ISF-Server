@@ -9,7 +9,7 @@
 // Store subscription: rather than adding a new subscription mechanism (and a circular import
 // with app.ts, which owns the store), this component reuses the existing bridge — legacy's
 // `render()` was the function the store already called on every change (`app.ts`'s
-// `store.subscribe(() => { if (window.S.data) window.render(); })`). This module's own
+// `store.subscribe(() => { if (store.get('data')) window.render(); })`). This module's own
 // `render()` becomes the new `window.render`, so that wiring needs no change at all.
 //
 // The body rows (`GridBodyRow` and everything under it) live in `GridBody.tsx`, split out
@@ -32,12 +32,13 @@ import { categoryTap, categoryTapCancel, toggleAllGroupsInCategory } from '../ca
 import { paintSelection } from '../grid-interaction.ts';
 import { Icon } from './Icon.tsx';
 import { GridBodyRow } from './GridBody.tsx';
+import { store } from '../../store-instance.ts';
 
 function CategoryToggleButtons() {
   return (
     <div className="catseg" role="group" aria-label="Kategorien ein-/ausklappen">
       {CATEGORIES.map(({ id, label, icon }) => {
-        const isOpen = window.S.cats.has(id);
+        const isOpen = store.get('cats').has(id);
         return (
           <button
             key={id}
@@ -114,29 +115,34 @@ interface GridViewModel {
 }
 
 /**
- * Everything `Grid` needs to render, computed fresh from `window.S` (legacy's shared mutable
- * state). Also mutates `S.visM`/`S.visD` as a side effect — other still-legacy code (selection,
- * jump-to-next-free) reads those two fields to know what's currently on screen, exactly as it
- * did when `render()` set them the same way. Pulled out of `Grid` itself only to stay under the
- * function-length budget.
+ * Everything `Grid` needs to render, computed fresh from the store's state. Also mutates
+ * `visM`/`visD` as a side effect — other code (selection, jump-to-next-free) reads those two
+ * fields to know what's currently on screen, exactly as it did when `render()` set them the
+ * same way. These are deliberately silent field writes (`store.state.x =`, not `store.set()`)
+ * — they run synchronously during render, as a side effect for other code to read later, not
+ * a change that should itself trigger another render (which would risk this very function
+ * re-running via the store's subscription while already mid-render). Pulled out of `Grid`
+ * itself only to stay under the function-length budget.
  */
 function computeGridViewModel(): GridViewModel {
   const columnsPerWeek = daysPerWeek();
-  const weekCount = window.S.weeks + window.S.extraWeeks;
-  const weeks = visibleWeeks(window.S.startMonday, weekCount, columnsPerWeek);
-  window.S.visD = weeks.flat();
+  const weekCount = store.get('weeks') + store.get('extraWeeks');
+  const weeks = visibleWeeks(store.get('startMonday'), weekCount, columnsPerWeek);
+  store.state.visD = weeks.flat();
   // Same text for every machine on a given date, so it's computed once here rather than once
   // per cell (faithful to `render()`'s own `dlbl` map, built once per pass and reused per row).
-  const dateLabels = new Map(window.S.visD.map((isoDate) => [isoDate, formatDateLong(isoDate)]));
+  const dateLabels = new Map(
+    store.get('visD').map((isoDate) => [isoDate, formatDateLong(isoDate)]),
+  );
 
-  const rows = buildGridRows(window.S.data!.machines, {
-    selectedGroups: window.S.groupsSel,
-    selectedMachineIds: window.S.machSel,
-    openCategories: window.S.cats,
-    collapsedGroups: window.S.collapsed,
-    favoriteIds: window.S.favs,
+  const rows = buildGridRows(store.get('data')!.machines, {
+    selectedGroups: store.get('groupsSel'),
+    selectedMachineIds: store.get('machSel'),
+    openCategories: store.get('cats'),
+    collapsedGroups: store.get('collapsed'),
+    favoriteIds: store.get('favs'),
   });
-  window.S.visM = rows.filter((row) => row.kind === 'machine').map((row) => row.machine.id);
+  store.state.visM = rows.filter((row) => row.kind === 'machine').map((row) => row.machine.id);
 
   return {
     today: todayAsIsoDateString(),
@@ -160,7 +166,7 @@ function gridRowKey(row: GridRow, index: number): string {
 }
 
 /**
- * The booking grid. See `computeGridViewModel` for how it reads and updates `window.S`.
+ * The booking grid. See `computeGridViewModel` for how it reads and updates the store.
  */
 export function Grid() {
   const [, forceRerender] = useState(0);
@@ -185,7 +191,7 @@ export function Grid() {
     requestAnimationFrame(window.ensureOverflow);
   });
 
-  if (!window.S.data) return null; // faithful to the store-subscription guard in app.ts
+  if (!store.get('data')) return null; // faithful to the store-subscription guard in app.ts
 
   const { today, weeks, columnsPerWeek, columnCount, dateLabels, rows } = computeGridViewModel();
 

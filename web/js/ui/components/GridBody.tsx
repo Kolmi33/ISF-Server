@@ -23,6 +23,7 @@ import {
   type GridRow,
 } from '../grid.ts';
 import { Icon } from './Icon.tsx';
+import { store } from '../../store-instance.ts';
 
 const CATEGORY_LABELS: Record<string, string> = {
   maschine: 'Maschinen',
@@ -35,7 +36,7 @@ function isDarkTheme(): boolean {
 
 /** The today-indicator dot (or maintenance icon) at the start of a machine's row. */
 function TodayDot({ machine, today }: { machine: Machine; today: string }) {
-  const booking = getBooking(window.S.data!.bookings, machine.id, today);
+  const booking = getBooking(store.get('data')!.bookings, machine.id, today);
   const slot = maintenanceSlotAt(machine, today);
   const state = classifyDot(slot?.type ?? null, booking, dayAvailable(machine, today));
 
@@ -93,7 +94,7 @@ interface CellAttrs {
 
 /** One data cell: a machine × date intersection, already classified as blocked. */
 function BlockedCell({ machine, isoDate, isToday, weekend, dateLabel }: CellAttrs) {
-  const booking = getBooking(window.S.data!.bookings, machine.id, isoDate);
+  const booking = getBooking(store.get('data')!.bookings, machine.id, isoDate);
   return (
     <td
       className={cellClass('blocked', { today: isToday, weekend })}
@@ -110,8 +111,8 @@ function BlockedCell({ machine, isoDate, isToday, weekend, dateLabel }: CellAttr
 
 /** One data cell, already classified as booked (and not blocked). */
 function BookedCell({ machine, isoDate, isToday, weekend, dateLabel }: CellAttrs) {
-  const booking = getBooking(window.S.data!.bookings, machine.id, isoDate)!;
-  const mine = isMine(window.S.user, booking.name);
+  const booking = getBooking(store.get('data')!.bookings, machine.id, isoDate)!;
+  const mine = isMine(store.get('user'), booking.name);
   return (
     <td
       className={cellClass('booked', { mine, today: isToday, weekend })}
@@ -138,7 +139,7 @@ function GridCell({
 }: Omit<CellAttrs, 'isToday' | 'weekend'> & { today: string }) {
   const isToday = isoDate === today;
   const weekend = isWeekend(parseIsoDateString(isoDate));
-  const booking = getBooking(window.S.data!.bookings, machine.id, isoDate);
+  const booking = getBooking(store.get('data')!.bookings, machine.id, isoDate);
   const state = classifyCell(
     isBlockedOnDate(machine, isoDate),
     booking,
@@ -232,7 +233,7 @@ function machineRowTitle(machine: Machine): string {
 
 /** The row-header cell's content: favorite star, today-dot, name, status tag, jump buttons. */
 function MachineRowHeaderCell({ machine, today }: { machine: Machine; today: string }) {
-  const isFavorite = window.S.favs.has(machine.id);
+  const isFavorite = store.get('favs').has(machine.id);
   return (
     <td
       className={`machcol ${hasBackJumpButton(machine, today) ? 'hasback' : ''}`}

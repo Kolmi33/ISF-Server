@@ -6,11 +6,12 @@
 import { useEffect, useReducer } from 'react';
 import { saveFilters } from './MachineFilterDropdown.tsx';
 import { useToolbarDropdown } from '../toolbar-dropdown.ts';
+import { store } from '../../store-instance.ts';
 
 /** The distinct group names across every machine, first-seen order. Faithful port of legacy
  *  `groupList`. */
 function groupList(): string[] {
-  return [...new Set(window.S.data!.machines.map((m) => m.group))];
+  return [...new Set(store.get('data')!.machines.map((m) => m.group))];
 }
 
 /** Refresh `#groupBtn`'s label from `S.groupsSel`. `#groupBtn` is static markup, not
@@ -19,7 +20,7 @@ function groupList(): string[] {
 function updateGroupBtn(): void {
   const button = document.getElementById('groupBtn');
   if (!button) return;
-  const count = window.S.groupsSel.size;
+  const count = store.get('groupsSel').size;
   button.textContent =
     count === 0 ? 'Alle Bereiche ▾' : `${count} Bereich${count > 1 ? 'e' : ''} ▾`;
 }
@@ -51,18 +52,18 @@ export function GroupFilterDropdown() {
   if (!isOpen) return null;
 
   function handleAllChange(): void {
-    window.S.groupsSel.clear();
+    store.get('groupsSel').clear();
     saveFilters();
-    window.notify();
+    store.notify();
     bumpTick();
   }
 
   function handleGroupChange(group: string, checked: boolean): void {
-    if (checked) window.S.groupsSel.add(group);
-    else window.S.groupsSel.delete(group);
-    if (window.S.groupsSel.size === groupList().length) window.S.groupsSel.clear(); // all = all
+    if (checked) store.get('groupsSel').add(group);
+    else store.get('groupsSel').delete(group);
+    if (store.get('groupsSel').size === groupList().length) store.get('groupsSel').clear(); // all = all
     saveFilters();
-    window.notify();
+    store.notify();
     bumpTick();
   }
 
@@ -70,7 +71,11 @@ export function GroupFilterDropdown() {
   return (
     <>
       <label>
-        <input type="checkbox" checked={window.S.groupsSel.size === 0} onChange={handleAllChange} />{' '}
+        <input
+          type="checkbox"
+          checked={store.get('groupsSel').size === 0}
+          onChange={handleAllChange}
+        />{' '}
         <b>Alle Bereiche</b>
       </label>
       <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '4px 0' }} />
@@ -78,7 +83,7 @@ export function GroupFilterDropdown() {
         <label key={group}>
           <input
             type="checkbox"
-            checked={window.S.groupsSel.has(group)}
+            checked={store.get('groupsSel').has(group)}
             onChange={(event) => handleGroupChange(group, event.target.checked)}
           />{' '}
           {group}

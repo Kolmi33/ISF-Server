@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
+import { store } from '../../store-instance.ts';
 import { MachineFilterDropdown, saveFilters, updateMachBtn } from './MachineFilterDropdown.tsx';
 
 function machine(overrides: Partial<Machine> = {}): Machine {
@@ -12,15 +13,22 @@ const m1 = machine();
 const m2 = machine({ id: 'm2', name: 'Presse', group: 'Halle 2' });
 const meas = machine({ id: 'm3', name: 'Messgerät', group: 'Labor', cat: 'messtechnik' });
 
+// window.S is kept aliased to store.state so the component (migrated onto the real store) and
+// this test agree; window.notify forwards to store.notify() exactly as app.ts does in
+// production, so notifySpy sees every repaint trigger.
+const notifySpy = vi.spyOn(store, 'notify');
+
 beforeEach(() => {
   document.body.innerHTML = `<button id="machBtn">Filtern ▾</button><div id="machDrop"></div>`;
-  window.S = {
+  store.set({
     data: { machines: [m1, m2, meas], bookings: {} },
     favs: new Set(),
     machSel: new Set(),
     groupsSel: new Set(),
-  } as unknown as AppState;
-  window.notify = vi.fn();
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
+  notifySpy.mockClear();
+  window.notify = () => store.notify();
   localStorage.clear();
   render(<MachineFilterDropdown />, { container: document.getElementById('machDrop')! });
 });
@@ -61,7 +69,7 @@ describe('MachineFilterDropdown', () => {
     act(() => fireEvent.click(screen.getByRole('checkbox', { name: 'Fräse' })));
     expect(window.S.machSel.has('m1')).toBe(true);
     expect(JSON.parse(localStorage.getItem('mb_machsel')!)).toEqual(['m1']);
-    expect(window.notify).toHaveBeenCalled();
+    expect(notifySpy).toHaveBeenCalled();
     expect(document.getElementById('machBtn')!.textContent).toContain('1 gewählt');
   });
 
@@ -78,7 +86,7 @@ describe('MachineFilterDropdown', () => {
     openDropdown();
     act(() => fireEvent.click(screen.getByRole('button', { name: /Messtechnik/ })));
     expect(document.querySelectorAll('.mlist .cathead')).toHaveLength(1); // only "Maschinen" left
-    expect(window.notify).not.toHaveBeenCalled();
+    expect(notifySpy).not.toHaveBeenCalled();
   });
 
   it('typing in the search box shows a flat, header-free list of matches', () => {
