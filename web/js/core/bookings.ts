@@ -1,6 +1,6 @@
 // The booking domain: pure read-only queries AND the write-path reducers, in one cohesive
 // file. No DOM, no I/O, no global state — the reducers take the FRESH server data and mutate
-// it in place, returning the same {abort} / {conflicts} / {count,undo} / {n,undo} shapes the
+// it in place, returning the same {abort} / {conflicts} / {count,undo} / {deletedCount,undo} shapes the
 // legacy `mutate(fresh => …)` callbacks returned; the queries are plain lookups over the same
 // data. Merged from a prior split (`booking.ts` mutations / `booking-queries.ts` queries,
 // PRINCIPLES.md E10's original "one domain, one file pair" shape) back into a single file per
@@ -267,7 +267,7 @@ export function deleteCells(
   machineId: string,
   name: string,
   dates: readonly string[],
-): { n: number; undo: CellUndo[] } {
+): { deletedCount: number; undo: CellUndo[] } {
   const machineBookings = freshServerData.bookings[machineId] || {};
   let deletedCount = 0;
   const undo: CellUndo[] = [];
@@ -280,7 +280,7 @@ export function deleteCells(
     }
   }
   undo.push(...sweepWeekends(freshServerData, machineId)); // remove orphaned Sat/Sun bridge days too
-  return { n: deletedCount, undo };
+  return { deletedCount, undo };
 }
 
 /**
@@ -294,7 +294,7 @@ export function deleteOwnCells(
   machineId: string,
   user: string,
   dates: readonly string[],
-): { n: number; undo: CellUndo[] } {
+): { deletedCount: number; undo: CellUndo[] } {
   const machineBookings = freshServerData.bookings[machineId] || {};
   const lowercaseUser = user.toLowerCase();
   let deletedCount = 0;
@@ -308,7 +308,7 @@ export function deleteOwnCells(
     }
   }
   undo.push(...sweepWeekends(freshServerData, machineId));
-  return { n: deletedCount, undo };
+  return { deletedCount, undo };
 }
 
 /**
@@ -319,7 +319,7 @@ export function deleteSelectedCells(
   freshServerData: BookingData,
   cells: readonly CellRef[],
   machineIds: readonly string[],
-): { n: number; undo: CellUndo[] } {
+): { deletedCount: number; undo: CellUndo[] } {
   let deletedCount = 0;
   const undo: CellUndo[] = [];
   for (const cellRef of cells) {
@@ -332,7 +332,7 @@ export function deleteSelectedCells(
     deletedCount++;
   }
   for (const machineId of machineIds) undo.push(...sweepWeekends(freshServerData, machineId));
-  return { n: deletedCount, undo };
+  return { deletedCount, undo };
 }
 
 /**
@@ -342,7 +342,7 @@ export function deleteSelectedCells(
 export function deleteGroup(
   freshServerData: BookingData,
   groupId: string,
-): { n: number; undo: CellUndo[] } {
+): { deletedCount: number; undo: CellUndo[] } {
   let deletedCount = 0;
   const undo: CellUndo[] = [];
   const affectedMachineIds = new Set<string>();
@@ -360,5 +360,5 @@ export function deleteGroup(
   }
   for (const machineId of affectedMachineIds)
     undo.push(...sweepWeekends(freshServerData, machineId));
-  return { n: deletedCount, undo };
+  return { deletedCount, undo };
 }

@@ -67,7 +67,7 @@ function broadcast(event: string, data: unknown): void {
   }
 }
 function sendPresence(): void {
-  broadcast('presence', { n: clients.size, users: presenceUsers() });
+  broadcast('presence', { clientCount: clients.size, users: presenceUsers() });
 }
 function log(user: string, action: string): void {
   try {

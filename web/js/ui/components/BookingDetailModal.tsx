@@ -39,7 +39,7 @@ async function deleteDates(
     `Gelöscht: ${booking.name} auf ${machine.name}, ${dates.length} Tag(e)`,
   );
   if (result && !result.abort)
-    offerUndo(`${result.n} Buchung(en) gelöscht.`, result.undo, 'Löschen');
+    offerUndo(`${result.deletedCount} Buchung(en) gelöscht.`, result.undo, 'Löschen');
 }
 
 interface RunDeleteButtonProps {
@@ -94,7 +94,7 @@ function GroupDeleteButton({
       `Gruppe gelöscht: ${groupTitle || booking.gid} (${booking.name})`,
     );
     if (result && !result.abort) {
-      offerUndo(`Buchungsgruppe gelöscht (${result.n} Tag(e)).`, result.undo, 'Löschen');
+      offerUndo(`Buchungsgruppe gelöscht (${result.deletedCount} Tag(e)).`, result.undo, 'Löschen');
     }
   }
   return (

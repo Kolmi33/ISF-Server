@@ -211,7 +211,7 @@ describe('deleteCells', () => {
       m1: { '2021-01-04': { name: 'Alice', ts: TS }, '2021-01-05': { name: 'Bob' } },
     });
     const res = deleteCells(d, 'm1', 'Alice', ['2021-01-04', '2021-01-05']);
-    expect(res.n).toBe(1); // only the Alice day
+    expect(res.deletedCount).toBe(1); // only the Alice day
     expect(res.undo).toContainEqual({
       machineId: 'm1',
       date: '2021-01-04',
@@ -224,7 +224,7 @@ describe('deleteCells', () => {
   it('is a no-op (n=0) when the machine has no bookings bucket', () => {
     const d = data([M()]);
     const res = deleteCells(d, 'm1', 'Alice', ['2021-01-04']);
-    expect(res).toEqual({ n: 0, undo: [] });
+    expect(res).toEqual({ deletedCount: 0, undo: [] });
   });
 
   it('sweeps the weekend bridge day orphaned by the delete', () => {
@@ -238,7 +238,7 @@ describe('deleteCells', () => {
       },
     });
     const res = deleteCells(d, 'm1', 'Alice', ['2021-01-11']);
-    expect(res.n).toBe(1);
+    expect(res.deletedCount).toBe(1);
     expect(d.bookings.m1!['2021-01-09']).toBeUndefined(); // Sat swept
     expect(d.bookings.m1!['2021-01-10']).toBeUndefined(); // Sun swept
     expect(res.undo.map((u) => u.date).sort()).toEqual(['2021-01-09', '2021-01-10', '2021-01-11']);
@@ -251,13 +251,16 @@ describe('deleteOwnCells', () => {
       m1: { '2021-01-04': { name: 'Alice' }, '2021-01-05': { name: 'Bob' } },
     });
     const res = deleteOwnCells(d, 'm1', 'ALICE', ['2021-01-04', '2021-01-05']);
-    expect(res.n).toBe(1);
+    expect(res.deletedCount).toBe(1);
     expect(d.bookings.m1!['2021-01-04']).toBeUndefined();
     expect(d.bookings.m1!['2021-01-05']!.name).toBe('Bob'); // not the user
   });
 
   it('is a no-op when the machine has no bookings bucket', () => {
-    expect(deleteOwnCells(data([M()]), 'm1', 'Alice', ['2021-01-04'])).toEqual({ n: 0, undo: [] });
+    expect(deleteOwnCells(data([M()]), 'm1', 'Alice', ['2021-01-04'])).toEqual({
+      deletedCount: 0,
+      undo: [],
+    });
   });
 
   it('sweeps orphaned bridge days after deleting the user’s Monday', () => {
@@ -270,7 +273,7 @@ describe('deleteOwnCells', () => {
       },
     });
     const res = deleteOwnCells(d, 'm1', 'Alice', ['2021-01-11']);
-    expect(res.n).toBe(1);
+    expect(res.deletedCount).toBe(1);
     expect(d.bookings.m1!['2021-01-09']).toBeUndefined();
     expect(d.bookings.m1!['2021-01-10']).toBeUndefined();
   });
@@ -290,7 +293,7 @@ describe('deleteSelectedCells', () => {
       ],
       ['m1', 'm2'],
     );
-    expect(res.n).toBe(2);
+    expect(res.deletedCount).toBe(2);
     expect(d.bookings.m1!['2021-01-04']).toBeUndefined();
     expect(d.bookings.m2!['2021-01-04']).toBeUndefined();
   });
@@ -306,7 +309,7 @@ describe('deleteSelectedCells', () => {
       ],
       ['m1'],
     );
-    expect(res.n).toBe(1);
+    expect(res.deletedCount).toBe(1);
     expect(d.bookings.m1!['2021-01-04']).toBeUndefined();
   });
 });
@@ -321,7 +324,7 @@ describe('deleteGroup', () => {
       m2: { '2021-01-04': { name: 'Alice', gid: 'g1' } },
     });
     const res = deleteGroup(d, 'g1');
-    expect(res.n).toBe(2);
+    expect(res.deletedCount).toBe(2);
     expect(d.bookings.m1!['2021-01-04']).toBeUndefined();
     expect(d.bookings.m2!['2021-01-04']).toBeUndefined();
     expect(d.bookings.m1!['2021-01-05']!.gid).toBe('other'); // different group untouched
@@ -337,7 +340,7 @@ describe('deleteGroup', () => {
       },
     });
     const res = deleteGroup(d, 'g1');
-    expect(res.n).toBe(1);
+    expect(res.deletedCount).toBe(1);
     expect(d.bookings.m1!['2021-01-09']).toBeUndefined(); // Sat swept
     expect(d.bookings.m1!['2021-01-10']).toBeUndefined(); // Sun swept
   });

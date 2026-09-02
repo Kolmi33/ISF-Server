@@ -366,9 +366,25 @@ which turns it into a data-shape change:
   wire-shape structs named above, updated in lockstep. Excludes everything the boundary keeps.
 - [x] 8.3 Rename `findConflicts` → `findBookingConflicts` (core/booking.ts) — states *what* it
   finds conflicts in, not just that it finds them.
-- [ ] 8.4 Sweep the remainder for the same pattern: bare `n` (→ `deletedCount`/whatever it counts),
-  bare `dir` (→ `direction`), any other function name that doesn't say its domain on its own.
-  Not yet scoped file-by-file — do that scoping as this item is picked up.
+- [x] 8.4a Bare `n`/`dir`/`id` — the two-domain sweep, done: `bookings.ts`'s four delete
+  reducers' `{ n, undo }` result → `{ deletedCount, undo }` (also fixed in `ui/mutate.ts`'s
+  `MutateResult` mirror type, and every consumer: `BookingDetailModal.tsx`, `ContextMenu.tsx`,
+  `MyBookingsModal.tsx` + their tests). `AdminModal.tsx`'s `onMove: (id, dir)` →
+  `(machineId, direction)`, matching `core/machines.ts`'s `moveMachine` signature it calls.
+  `server/server.ts`'s presence broadcast `{ n: clients.size }` → `{ clientCount }` (confirmed
+  dead-on-the-wire first — `live-connection.ts`'s presence handler only ever reads `.users`, so
+  this was a safe rename, not a coordinated client+server one).
+- [ ] 8.4b **Newly scoped, not yet done**: `web/js/ui/views/stats.ts`'s `StatsMachineRow`/
+  `StatsMaintRow` carry bare `m` (→ `machine`), `n` (→ `bookedWorkdayCount`, already the local
+  var name), `inst` (→ `maintenanceSlotCount` or similar), `pct` (→ `percent`, or keep — least
+  cryptic of the four). Consumers span `StatsDrilldown.tsx`, `StatsModal.tsx`,
+  `StatsOverviews.tsx`, `stats.test.ts` — real but contained blast radius. **Separately**,
+  `web/js/ui/views/all-bookings.ts`/`my-bookings.ts` define an unrelated `Run` type that ALSO
+  uses a bare `.m` field (`run.m.id`, `run.m.name`), consumed by `AllBookingsModal.tsx`/
+  `MyBookingsModal.tsx`/`all-bookings.test.ts`/`my-bookings.test.ts` — same rename, different
+  type, don't conflate the two `.m`s when scoping this. ~8 files total across both. Deliberately
+  not folded into 8.4a — a big enough unit to deserve its own commit.
+- [ ] 8.4c Anything else in the same vein, found while doing 8.4b or afterward — not yet swept.
 
 ## Done log (newest first)
 - **2026-09-02 — Code-review fixes**: undo's CAS-check bug and `machById`'s stale-cache bug

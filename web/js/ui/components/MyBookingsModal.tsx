@@ -261,7 +261,7 @@ export function MyBookingsModal() {
     );
     if (result && !result.abort) {
       forceRerender((tick) => tick + 1); // re-filter the live dates against the now-changed data
-      offerUndo(`${result.n} Buchung(en) gelöscht.`, result.undo, 'Löschen');
+      offerUndo(`${result.deletedCount} Buchung(en) gelöscht.`, result.undo, 'Löschen');
     }
   }
 

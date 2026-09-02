@@ -27,7 +27,7 @@ beforeEach(() => {
   document.body.innerHTML = `<div id="overlay"><div id="modal" tabindex="-1"></div></div><div id="modalReopen"></div><div id="toast"></div>`;
   store.set({ data: { machines: [machine()], bookings: {} } } as unknown as Partial<AppState>);
   window.S = store.state;
-  window.mutate = vi.fn().mockResolvedValue({ n: 1, undo: [] });
+  window.mutate = vi.fn().mockResolvedValue({ deletedCount: 1, undo: [] });
   window.askConfirm = vi.fn().mockResolvedValue(true);
   vi.mocked(openStats).mockClear();
 });
@@ -86,7 +86,7 @@ describe('BookingDetailModal', () => {
     const [reducer] = (window.mutate as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const fresh = { machines: [machine()], bookings: { ...window.S.data!.bookings } };
     const result = reducer(fresh);
-    expect(result.n).toBe(3);
+    expect(result.deletedCount).toBe(3);
   });
 
   it('does not delete the run when the confirm is declined', async () => {
@@ -157,7 +157,7 @@ describe('BookingDetailModal', () => {
     const [reducer] = (window.mutate as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const fresh = { machines: [machine()], bookings: { m1: { [TODAY]: booking() } } };
     const result = reducer(fresh);
-    expect(result.n).toBe(1);
+    expect(result.deletedCount).toBe(1);
   });
 });
 

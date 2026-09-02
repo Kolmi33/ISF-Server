@@ -75,11 +75,14 @@ describe('mutate — optimistic apply + logging', () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     const fn = vi.fn((fresh) => {
       fresh.bookings.m1 = { '2021-01-04': booking() };
-      return { n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] };
+      return { deletedCount: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] };
     });
     const result = await mutate(fn, 'Gebucht: Anna');
     expect(window.S.data!.bookings.m1!['2021-01-04']).toEqual(booking());
-    expect(result).toEqual({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] });
+    expect(result).toEqual({
+      deletedCount: 1,
+      undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }],
+    });
     expect(window.S.data!.log[0]).toMatchObject({ user: 'anna', action: 'Gebucht: Anna' });
   });
 
@@ -119,7 +122,7 @@ describe('mutate — optimistic apply + logging', () => {
     machById('m1'); // builds the cache
     window.S.data!.machines.push({ id: 'new-machine', name: 'Neu', group: 'Halle 1' }); // in place
     await mutate(
-      () => ({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
+      () => ({ deletedCount: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
       'Gebucht',
     );
     expect(machById('new-machine')).toBeUndefined(); // cache correctly left alone
@@ -129,7 +132,7 @@ describe('mutate — optimistic apply + logging', () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     document.body.innerHTML += '<table id="grid"><tbody></tbody></table>';
     await mutate(
-      () => ({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
+      () => ({ deletedCount: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
       'x',
     );
     expect(notifySpy).not.toHaveBeenCalled();
@@ -142,7 +145,7 @@ describe('mutate — optimistic apply + logging', () => {
       date: String(i),
       prev: null,
     }));
-    await mutate(() => ({ n: 501, undo }), 'x');
+    await mutate(() => ({ deletedCount: 501, undo }), 'x');
     expect(notifySpy).toHaveBeenCalledOnce();
   });
 
@@ -168,7 +171,7 @@ describe('mutate — persist (background)', () => {
     const fetchSpy = fetchReturning({ rev: 7 });
     vi.stubGlobal('fetch', fetchSpy);
     await mutate(
-      () => ({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
+      () => ({ deletedCount: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
       'Gebucht',
     );
     await vi.waitFor(() => expect(window.S.data!.revision).toBe(7));
@@ -198,7 +201,7 @@ describe('mutate — persist (background)', () => {
       fetchReturning({ rev: 9, conflicts: [{ machineId: 'm1', date: 'x', by: 'bob' }] }),
     );
     await mutate(
-      () => ({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
+      () => ({ deletedCount: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
       'x',
     );
     await vi.waitFor(() =>
@@ -211,7 +214,7 @@ describe('mutate — persist (background)', () => {
   it('on a server error response: toasts, and refreshes from the server', async () => {
     vi.stubGlobal('fetch', fetchReturning({ error: 'db locked' }));
     await mutate(
-      () => ({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
+      () => ({ deletedCount: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
       'x',
     );
     await vi.waitFor(() =>
@@ -232,7 +235,7 @@ describe('mutate — persist (background)', () => {
         }),
     );
     await mutate(
-      () => ({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
+      () => ({ deletedCount: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
       'x',
     );
     await vi.waitFor(() =>

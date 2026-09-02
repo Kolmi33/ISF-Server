@@ -69,7 +69,7 @@ async function handleDelete(info: MenuInfo): Promise<void> {
     `Bereich gelöscht: ${info.machineIds.length} Maschine(n), ${info.from} bis ${info.to}`,
   );
   if (result && !result.abort) {
-    offerUndo(`${result.n} Buchung(en) gelöscht.`, result.undo, 'Bereich löschen');
+    offerUndo(`${result.deletedCount} Buchung(en) gelöscht.`, result.undo, 'Bereich löschen');
   }
 }
 

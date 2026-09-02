@@ -33,7 +33,7 @@ export interface MutateResult {
   abort?: boolean;
   conflicts?: Conflict[];
   count?: number;
-  n?: number;
+  deletedCount?: number;
   undo?: CellUndo[];
 }
 

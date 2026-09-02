@@ -42,8 +42,8 @@ function StatusBadge({ machine }: { machine: Machine }) {
 interface AdminRowProps {
   machine: Machine;
   manual: boolean;
-  onEdit: (id: string) => void;
-  onMove: (id: string, dir: -1 | 1) => void;
+  onEdit: (machineId: string) => void;
+  onMove: (machineId: string, direction: -1 | 1) => void;
 }
 
 function AdminRow({ machine, manual, onEdit, onMove }: AdminRowProps) {
@@ -144,12 +144,12 @@ export function AdminModal() {
     localStorage.setItem('mb_admsort', nextSort);
   }
 
-  async function move(id: string, dir: -1 | 1): Promise<void> {
+  async function move(machineId: string, direction: -1 | 1): Promise<void> {
     // `moveMachine` returns void (not a truthy result) on success — only `{abort: true}` is
     // truthy — so the re-render must be unconditional except on that one case. Faithful port
     // of legacy `moveById`'s own `if(res&&res.abort) return; renderList();`.
     const result = await window.mutate(
-      (fresh) => moveMachine(fresh, id, dir),
+      (fresh) => moveMachine(fresh, machineId, direction),
       'Reihenfolge geändert',
     );
     if (result && result.abort) return;
@@ -177,8 +177,8 @@ export function AdminModal() {
               key={machine.id}
               machine={machine}
               manual={sort === 'manual'}
-              onEdit={(id) => openMachineForm(id)}
-              onMove={(id, dir) => void move(id, dir)}
+              onEdit={(machineId) => openMachineForm(machineId)}
+              onMove={(machineId, direction) => void move(machineId, direction)}
             />
           ))
         ) : (
