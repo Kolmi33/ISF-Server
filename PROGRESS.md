@@ -4,15 +4,22 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-09-02 — **Phase 6's two operational items are DONE.** The deploy
+_Last updated: 2026-09-02 — **The architecture audit (`docs/ARCHITECTURE_AUDIT.md`) is now
+fully resolved except F7's full-merge option (open by design) and F10 (checked, not worth
+doing).** F1–F7(minimal) landed earlier same-day; **F9** (the `window.S` → `store` migration)
+and **F8** (the "4 React roots" window cross-talk) both landed since, in F8's case after a
+re-investigation showed the original "merge the roots" framing didn't hold up against actual
+call sites — see the audit's own F8 write-up for what shipped instead. A follow-up code
+review then surfaced and fixed two real bugs (undo's CAS check silently skipped after
+undoing a booking creation; `machById`'s cache going stale after a machine create/delete)
+plus a defensive consistency fix (three modals guarded against opening before data loads) —
+see Known Bugs → Fixed. `npm run verify` is green at 797 tests / 62 files.
+Also done earlier same-day: Phase 6's two operational items — the deploy
 (`docker compose up -d --build`, user-authorized) and the one-time weekend backfill
 (`node server/backfill.js`, 1,484 rows inserted, re-run confirmed idempotent at 0) both
 ran successfully; production is on the current gated codebase with the weekend maintain
 hook live. Every "awaits authorization"/"not run" note below about these two items is
-now historical. Also done since: the wknd-on-patch bug fix (see Known Bugs → Fixed), and
-a full architecture audit (`docs/ARCHITECTURE_AUDIT.md`) whose P0/P1 findings (F1–F7) are
-all implemented and verified — see that file's §10/§11 for the current status of what's
-left open by design (F8/F9/F10)._
+now historical. Also done: the wknd-on-patch bug fix (see Known Bugs → Fixed)._
 
 _Previously: 2026-08-31 — **Phase 7 COMPLETE** — the frontend's React migration (Backlog B,
 tracked slice-by-slice in `PHASE7-PLAN.md`) has landed in full: `web/public/legacy.js` (the
@@ -148,24 +155,23 @@ _Previously: 2026-08-29 — **Phase 6 COMPLETE (code)** — backend → gated TS
 > `AS_TREE`-adapter are both moot now (`ui/modal.tsx` and the Assistant's `useAssistantTree` hook
 > superseded them in Phase 7 B7/B10d); the action-layer question resolved itself the same way —
 > `ui/mutate.ts` ported legacy's own `mutate` as the orchestrator, faithfully, no new `actions.ts`
-> layer. The **wknd-on-patch** known bug is fixed (see Known Bugs). A full architecture audit
-> (`docs/ARCHITECTURE_AUDIT.md`) landed 2026-09-02, and its P0/P1 findings (F1's server-side
-> blocking-rule bug fix, F2–F6's dedup/relocation refactors, F7's minimal type-contract test) are
-> all implemented and verified. What's actually still open, each needing its own deliberate
-> decision rather than a mechanical fix (audit §10/§11, F8/F9): the `window.S` → pure `store`
-> shrink (most modules still read `window.S.x` directly rather than through `store`; not urgent,
-> no known bug from it), and whether to consolidate the app's 4 independently-mounted React roots
-> (Grid/ContextMenu/the 2 filter dropdowns) so their remaining cross-root `window` bridge could
-> retire too.
+> layer. The **wknd-on-patch** known bug is fixed (see Known Bugs). The full architecture audit
+> (`docs/ARCHITECTURE_AUDIT.md`) is now resolved except F7's full-merge option (deliberately open)
+> and F10 (checked, not worth doing) — see that file's §10/§11 for the final status of every item,
+> including F8/F9, both done as of this update (see the "Last updated" note above).
 >
-> **View-layer decision (resolved, §15):** no framework — custom string render + the store
-> subscription (now live). Revisit only if the UI grows materially.
+> **What's actually still open:** F7's full `shared/types.ts`⟷`server/types.ts` merge (the
+> minimal compile-time contract test shipped instead; a full merge remains a real, larger
+> decision, not scheduled). Nothing else from the audit is outstanding.
 >
 > **View-layer decision (resolved, §15):** no framework — keep the custom string render + a tiny
 > store subscription (zero-dep). Revisit only if the UI grows materially.
 >
-> **Canonical-naming rule (do not drift):** `store` is canonical for all new TS; `window.S` is a
-> legacy-only bridge that only shrinks. No new code introduces `S` accesses. (ARCHITECTURE §14.)
+> **Canonical-naming rule (superseded by F9, done):** `store` was the canonical abstraction for
+> all new TS while `window.S` was migrating; that migration is now complete for every module this
+> app owns (F9). `window.S` still exists as the read bridge a handful of deliberately-still-window
+> -bridged utilities rely on (`mutate`/`askConfirm`, kept for their wide fan-out — see F8's
+> write-up) — no new code should reach for it directly.
 
 ## Backlog (task queue — the single canonical copy)
 Checked off as each item lands (one commit per item unless noted).
@@ -306,6 +312,34 @@ removed client-side migrations gone. Safety: daily VACUUM backup exists; backfil
 restore, and the sweep removes bridges automatically if a series later breaks.
 
 ## Done log (newest first)
+- **2026-09-02 — Code-review fixes**: undo's CAS-check bug and `machById`'s stale-cache bug
+  (both found by an external review, verified with a failing regression test before fixing —
+  see Known Bugs → Fixed for the full write-up), plus a defensive consistency fix (Admin/
+  AllBookings/Stats now guard against opening before `store.get('data')` has loaded, matching
+  `Grid.tsx`'s existing pattern — not a known crash, since the toolbar buttons that open them
+  stay hidden until load succeeds, but a real inconsistency worth closing cheaply). Three
+  separate commits, each its own regression test, `npm run verify` green throughout
+  (789 → 797 tests).
+- **2026-09-02 — F8** (`docs/ARCHITECTURE_AUDIT.md`): investigated before implementing —
+  grepped every live `window.*` bridge entry's actual call sites rather than trusting the
+  audit's original "4 independently-mounted React roots need to talk to each other" framing.
+  That framing didn't hold up: the real causes were dead leftovers never pruned, ~20 leaf
+  utilities with zero cycle risk, one genuine imperative-code-into-React need unrelated to
+  root count, and two real ES-module import cycles — none of it actually caused by having 4
+  separate mount points. Shipped direct ES imports for the majority, a new
+  `ui/grid-render-bridge.ts` for the render-trigger case, and an injected
+  `GridInteractionHandlers` struct for `grid-interaction.ts`'s dependency-hub shape. The
+  original "merge the 4 roots into one tree" proposal was rejected outright — nothing on the
+  bridge needed actual tree machinery (context, cross-sibling refs). `app.ts`'s `Window`
+  interface shrank from ~30 entries to 3.
+- **2026-09-02 — F9** (`docs/ARCHITECTURE_AUDIT.md`): the `window.S` → `store` migration,
+  completed in three slices — the bounded first slice (11 plain `.ts` orchestration files, 99
+  of ~162 sites), then two component batches (the remaining 18 React components, 63 sites).
+  Every app-owned module now reads/writes state via `store.get()`/`store.set()`/
+  `store.notify()`; `window.S` stays as the intentional, shrinking compat bridge F8's write-up
+  describes. Same notify-timing case-by-case analysis throughout (collapse a write+notify into
+  one `store.set()`, or keep a silent `store.state.x =` write where more logic runs before a
+  single eventual notify) as every other slice in this backlog.
 - Phase 6.3 weekend auto-bridging — `server/bridge.ts` (the ADD direction, mirror of core/weekend's sweep):
   pure `missingBridges(bookings)` (faithful recovery of the baseline `missingWeekendBridges` — for each booked
   Friday whose Monday is booked, fill the empty Sat/Sun with the Friday's name), `maintainBridges(db,mids,ts)`
@@ -444,6 +478,27 @@ restore, and the sweep removes bridges automatically if a series later breaks.
 (none currently)
 
 ### Fixed
+- **Undo's CAS check silently skipped after undoing a booking creation** — FIXED 2026-09-02,
+  found by an external code review and verified before fixing (a regression test proved the
+  bug first). `offerUndo` (`ui/toast.ts`) forwarded the *original* action's `CellUndo.prev`
+  (the state before that action) as the CAS check for the undo-click's own server request.
+  Undoing a deletion happened to still be safe (the "book" branch's own independent
+  conflict check doesn't consult `prev`), but undoing a *creation* has `prev: null` — which
+  the server (`server/mutate.ts`'s `writeCell`) treats as "no CAS check requested", so the
+  delete proceeded unconditionally against whatever was actually on the cell, including a
+  booking someone else made there since. Fix: `offerUndo` now captures the cell's actual
+  current value right before applying the undo, and sends *that* as the CAS check — matching
+  how every other write in the app already computes it. Two regression tests in
+  `toast.test.ts` (one per undo direction).
+- **`machById` cache stale after a machine create/delete** — FIXED 2026-09-02, same review.
+  `saveMachine`/`deleteMachine`/`moveMachine` (`core/booking.ts`) mutate `data.machines` IN
+  PLACE (`.splice()`/swap) rather than replacing the array, so `machById`'s
+  reference-equality cache never rebuilt for them. Traced per-operation: edits and reorders
+  were already safe (same object references); only create/delete left a window where
+  `machById` returned `undefined`/a stale object until the next full data reload. Fix: a new
+  `invalidateMachineLookupCache()` (`ui/machine-lookup.ts`), called from `ui/mutate.ts` on
+  the same "no `undo` array" signal that already distinguishes a structural change from a
+  booking-cell one — kept out of `core/booking.ts` to preserve its DOM-free purity rule.
 - **`wknd` class lost on cell patch** — FIXED post-Phase-7 (2026-09-01), as its own small
   flagged step (not part of the migration itself — the whole point of every Phase 7 slice was
   faithful conservation, so this waited until the migration was done and the code was safe to

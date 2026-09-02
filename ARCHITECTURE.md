@@ -45,6 +45,15 @@ booking app as inherited"). We can always diff against it.
 
 The app keeps working at every step. Directories move in their phase, not all at once.
 
+**This tree is the Phase 1–6 target, kept as originally written.** Phase 7 (§18) replaced the
+`legacy.js`-adapter view layer with React components under `ui/components/*.tsx` and added a
+few small orchestration modules (`web/js/store-instance.ts` — the store singleton + hydration,
+split out of `app.ts`; `web/js/ui/grid-render-bridge.ts` and the `GridInteractionHandlers`
+pattern in `ui/grid-interaction.ts` — F8, `docs/ARCHITECTURE_AUDIT.md`) that this sketch
+predates. The shape below (pure `core/`, thin `net/`, DOM-touching `ui/`, one store) is still
+accurate; only `ui/`'s own internals grew a `components/` subtree. `PHASE7-PLAN.md` has the
+authoritative slice-by-slice file list.
+
 ```
 maschinenplan-server/
 ├── shared/
@@ -62,18 +71,22 @@ maschinenplan-server/
 │   ├── css/app.css         # lifted out of the old <style> block
 │   └── js/
 │       ├── app.ts          # entry: boot, wire events, orchestrate
-│       ├── state.ts        # the store (replaces global S) + subscribe/notify
+│       ├── state.ts        # the store factory (createStore) — pure, DOM-free
+│       ├── store-instance.ts   # the app's one store instance + localStorage hydration (Phase 7)
 │       ├── core/           # PURE logic, no DOM — highest test value
 │       │   ├── machines.ts     # catOf, dayAvailable, maintAt, cellBookable, …
 │       │   ├── weekend.ts      # sweepWeekends, missingWeekendBridges
+│       │   ├── booking.ts      # the write-path reducers (book/delete/machine CRUD)
 │       │   └── assistant.ts    # device/group tree + N-of-M solver
 │       ├── net/            # server communication
 │       │   ├── api.ts          # apiGet/apiPost, mutate, persist, refreshNow
 │       │   └── sse.ts          # connectSSE, presence, live updates
 │       └── ui/             # DOM — extracted last, on top of a tested core
-│           ├── grid.ts, selection.ts, navigation.ts, modal.ts
-│           └── views/          # one file per screen (booking form/detail, assistant,
-│                               # stats, all/my bookings, admin, machine form, log, settings, help)
+│           ├── grid.ts, selection.ts, navigation.ts, modal.tsx, grid-render-bridge.ts, …
+│           ├── components/     # React components (Phase 7) — Grid, the modals, the toolbar
+│           │                   # dropdowns; each screen's view-model kernel stays in ui/views/
+│           └── views/          # one file per screen's pure view-model (booking form/detail,
+│                               # assistant, stats, all/my bookings, admin, machine form, log)
 ├── data/                   # runtime DB + backups (gitignored, created in container)
 ├── Dockerfile              # multi-stage: build web (vite) + server (tsc) -> lean runtime
 ├── docker-compose.yml      # production
@@ -111,7 +124,8 @@ concrete shape those principles take here:
 | 3 | State store + `net/` (api, sse) | **done** (store + api + sse; §14) |
 | 4 | UI: grid + reactive core, then selection, navigation, then each view | **done** (grid/selection/navigation + view kernels; §15) |
 | 5 | Polish: write-path reducers → `core/booking`, dead-code burn-down, knip in verify | **done** (§16) |
-| 6 | Backend → TypeScript (+ tests for mutate concurrency/validation) + weekend auto-bridging | **done — code-complete (§17); deploy + backfill await authorization** |
+| 6 | Backend → TypeScript (+ tests for mutate concurrency/validation) + weekend auto-bridging | **done** (§17; deploy + backfill ran 2026-09-01/02, see `PROGRESS.md`) |
+| 7 | View layer → React, `legacy.js` deleted whole | **done** (§18; slice-by-slice detail in `PHASE7-PLAN.md`) |
 
 ## 7. The per-module loop (the repeatable unit)
 
@@ -456,10 +470,11 @@ DOM (unlike core/), but keep the *pure* model logic in DOM-free functions so it 
   `refreshCell` now computes `weekend` the same way `GridBody.tsx` does (`isWeekend(parseIsoDateString(date))`)
   and passes it to `cellClass` on every branch. See `PROGRESS.md`'s Known Bugs (moved to Fixed).
 
-### Open questions (resolve before 4.1c)
-- The action layer for the 36 call sites: a thin `actions.ts` (`setWeek`, `toggleCat`, `setFilter`…) that
-  wraps `store.set` + persistence, or subscribe `render` and let existing mutations call `store.notify()`?
-  Decide when 4.1c starts, on the shape `render` has after 4.1a/b.
+### Action-layer question — RESOLVED (see §16)
+Resolved the same way in both places it was asked: no new `actions.ts` layer. `ui/mutate.ts`
+ported legacy's own `mutate` orchestrator faithfully — it already wraps the reducer +
+persistence + notify shape this question was asking whether to build. (This question was
+originally posed twice, once here and once in §16 below; both are the same resolution.)
 
 ## 16. Phase 5 design — write-path reducers + burn-down
 
@@ -532,10 +547,12 @@ console clean, `rev` 23.
 legacy-shrink items (modal markup, `AS_TREE`/`window.S`) are deferred with rationale above and travel with
 the Phase-6 backend work / a later store-migration slice.
 
-### Action-layer question (still open)
-`bookCells` and friends now have a caller shape that would suit a thin `actions.ts` (`book`/`del`/… →
-reducer + `store.set` + persistence + `notify`). Not yet built — the legacy `mutate` orchestrator still
-owns persistence and the optimistic patch. Resolve alongside the 5.2 store migration or Phase 6.
+### Action-layer question — RESOLVED (2026-09 update)
+`bookCells` and friends had a caller shape that would suit a thin `actions.ts` (`book`/`del`/… →
+reducer + `store.set` + persistence + `notify`). Resolution: no new layer. Phase 7 ported
+legacy's own `mutate` orchestrator to `ui/mutate.ts`, faithfully — it already wraps the
+reducer + persistence + optimistic-patch shape this question asked whether to build, so a
+separate `actions.ts` would have duplicated it. See `PROGRESS.md`'s "Carry forward" note.
 
 ## 17. Phase 6 design — backend → TypeScript
 

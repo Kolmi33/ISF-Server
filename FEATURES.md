@@ -81,8 +81,14 @@ covered by an automated test.
 
 ## Data & migrations
 - [ ] Client-side data validation (`validateData`)
-- [ ] Weekend migration (`migrateWeekends`)
-- [ ] Messtechnik migration (`migrateMesstechnik`)
+
+~~Weekend migration (`migrateWeekends`) / Messtechnik migration (`migrateMesstechnik`)~~ —
+removed as dead code in Phase 2.3 (`PROGRESS.md`'s Known Bugs → Fixed, "`migrating` bug"):
+both were obsolete one-time file-system-era migrations that threw on undeclared globals and
+never actually ran; the server also rejects the weekend-bridge write they'd have attempted
+(HTTP 400). Nothing to smoke here — the feature they implemented doesn't exist in this app
+any more (see instead: server-authoritative weekend auto-bridging, `server/bridge.ts`, under
+Assistant below).
 
 ## Backend behaviors (verify in Phase 6)
 - [ ] Seed on empty DB from volume JSON, else bundled JSON (logic-tested)

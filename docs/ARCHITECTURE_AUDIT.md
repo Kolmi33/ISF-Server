@@ -1,12 +1,18 @@
 # Architecture Audit — 2026-09-01
 
-Pre-implementation audit requested separately from any refactor work. **Nothing in this
-document has been acted on.** It is a map of the current system and a set of proposed,
-incremental improvements, gated on review before any code moves. Method: read every
-governing doc/config fresh, enumerate the full source tree, grep every non-test `import`
-and `export` statement to build the real dependency/export graph, and verify every
-suspected duplication/dead-code claim against actual call sites rather than filenames or
-guesses (per the request: "do not remove code simply because it looks similar").
+Started as a pre-implementation audit, requested separately from any refactor work — at that
+point nothing in it had been acted on; it was a map of the current system and a set of
+proposed, incremental improvements, gated on review before any code moved. **That gate has
+since been cleared for almost everything here**: see §10/§11 for the current status —
+F1–F9 are all done (each its own reviewed, verified commit), F10 was checked and correctly
+left alone, and only F7's full-merge option remains open by design. The individual write-ups
+below are kept in their original (pre-implementation) tense as the record of what was
+proposed, with an "Update" note appended inline wherever the outcome differs from or extends
+the original proposal. Method: read every governing doc/config fresh, enumerate the full
+source tree, grep every non-test `import` and `export` statement to build the real
+dependency/export graph, and verify every suspected duplication/dead-code claim against
+actual call sites rather than filenames or guesses (per the original request: "do not remove
+code simply because it looks similar").
 
 Scope note up front: `ARCHITECTURE.md §18` records that Phase 7 (the React migration)
 deliberately reused `core/`, `net/`, `state.ts` and the pre-existing `ui/*` modules
