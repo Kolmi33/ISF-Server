@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { AppState, Machine, ServerData } from '../../../shared/types.ts';
 import { store } from '../store-instance.ts';
-import { machById } from './machine-lookup.ts';
+import { machById, invalidateMachineLookupCache } from './machine-lookup.ts';
 
 function machine(overrides: Partial<Machine> = {}): Machine {
   return { id: 'm1', name: 'Fräse', group: 'Halle 1', ...overrides };
@@ -44,8 +44,19 @@ describe('machById', () => {
     window.S.data = serverData(machines);
     machById('m1'); // builds the cache
     machines.push(machine({ id: 'm2', name: 'Presse' })); // mutate in place, same reference
-    // Faithful to legacy: mutating in place without replacing the array does NOT rebuild —
-    // the new machine is invisible until something replaces S.data.machines wholesale.
+    // The cache's own check is reference-equality only — an in-place mutation is invisible to
+    // it by design (that's exactly the gap invalidateMachineLookupCache() below exists to
+    // close; ui/mutate.ts calls it after every machine-structural write, which is how this
+    // stays correct in practice without every machById() call re-scanning the array).
     expect(machById('m2')).toBeUndefined();
+  });
+
+  it('invalidateMachineLookupCache forces a rebuild on the next call, even with the same array reference', () => {
+    const machines = [machine()];
+    window.S.data = serverData(machines);
+    machById('m1'); // builds the cache
+    machines.push(machine({ id: 'm2', name: 'Presse' })); // mutate in place, same reference
+    invalidateMachineLookupCache();
+    expect(machById('m2')!.name).toBe('Presse');
   });
 });

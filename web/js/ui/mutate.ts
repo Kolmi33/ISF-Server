@@ -27,6 +27,7 @@ import { store } from '../store-instance.ts';
 import { toast } from './toast.ts';
 import { showCollisionBanner } from './collision-banner.ts';
 import { dbg, errorMessage } from './debug-panel.ts';
+import { invalidateMachineLookupCache } from './machine-lookup.ts';
 
 export interface MutateResult {
   abort?: boolean;
@@ -55,6 +56,15 @@ export async function refreshNow(silent: boolean): Promise<void> {
     if (el) el.textContent = '⚠ offline';
     if (!silent) toast('Aktualisieren fehlgeschlagen: ' + errorMessage(error), undefined, 6000);
   }
+}
+
+/** Whether `result` came from a machine-structural reducer (saveMachine/deleteMachine/
+ *  moveMachine, core/booking.ts) rather than a booking-cell one — those never return an
+ *  `undo` array, every booking-cell reducer always does (`buildMutateRequestBody` below makes
+ *  the same distinction, inline, for the request-shape decision). Split out purely so `mutate`
+ *  itself stays under the complexity budget. */
+function isStructuralChange(result: MutateResult | null): boolean {
+  return !(result && Array.isArray(result.undo));
 }
 
 interface MutateApiResponse {
@@ -141,6 +151,10 @@ export async function mutate(
   }
   const result = fn(store.get('data')!) as MutateResult | null;
   if (result && result.abort) return result; // conflict/cancel: S.data unchanged
+
+  // Machine CRUD mutates `data.machines` IN PLACE (splice/swap) rather than replacing the
+  // array — machById's reference-equality cache can't see that on its own.
+  if (isStructuralChange(result)) invalidateMachineLookupCache();
 
   const logEntry = {
     ts: new Date().toISOString(),

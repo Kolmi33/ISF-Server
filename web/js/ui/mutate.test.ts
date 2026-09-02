@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AppState, Booking, ServerData } from '../../../shared/types.ts';
 import { store } from '../store-instance.ts';
 import { mutate, refreshNow, stampRef } from './mutate.ts';
+import { machById } from './machine-lookup.ts';
 
 function serverData(overrides: Partial<ServerData> = {}): ServerData {
   return {
@@ -98,6 +99,30 @@ describe('mutate — optimistic apply + logging', () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     await mutate(() => ({ abort: false }), 'Maschine verschoben');
     expect(notifySpy).toHaveBeenCalledOnce();
+  });
+
+  it('invalidates the machine lookup cache for a structural change (no undo array)', async () => {
+    // saveMachine/deleteMachine/moveMachine (core/booking.ts) mutate `data.machines` in place
+    // — machById's own reference-equality cache can't see that on its own (machine-lookup
+    // .test.ts covers that gap directly); this proves mutate() closes it for the real path.
+    vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
+    machById('m1'); // builds the cache against the machines array set up in beforeEach
+    expect(machById('new-machine')).toBeUndefined();
+    await mutate((fresh) => {
+      fresh.machines.push({ id: 'new-machine', name: 'Neu', group: 'Halle 1' });
+    }, 'Maschine angelegt: Neu');
+    expect(machById('new-machine')?.name).toBe('Neu');
+  });
+
+  it('does NOT invalidate the machine lookup cache for a booking-cell change (undo array present)', async () => {
+    vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
+    machById('m1'); // builds the cache
+    window.S.data!.machines.push({ id: 'new-machine', name: 'Neu', group: 'Halle 1' }); // in place
+    await mutate(
+      () => ({ n: 1, undo: [{ mid: 'm1', date: '2021-01-04', prev: null }] }),
+      'Gebucht',
+    );
+    expect(machById('new-machine')).toBeUndefined(); // cache correctly left alone
   });
 
   it('a small undo list patches cells instead of a full notify()', async () => {
