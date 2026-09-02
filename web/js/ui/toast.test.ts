@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AppState, BookingData } from '../../../shared/types.ts';
-import type { CellUndo } from '../core/booking.ts';
+import type { CellUndo } from '../core/bookings.ts';
 import { toast, offerUndo } from './toast.ts';
 
 beforeEach(() => {

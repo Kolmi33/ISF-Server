@@ -9,7 +9,7 @@
 // dropdown's own list, never the grid (that's `ui/category-fold.ts`, a separate feature).
 
 import type { Machine, MachineCategory } from '../../../shared/types.ts';
-import { CATEGORIES, categoryOf } from '../core/machines-queries.ts';
+import { CATEGORIES, categoryOf } from '../core/machines.ts';
 
 const FAVORITES_KEY = 'fav';
 const FAVORITES_LABEL = '★ Favoriten';

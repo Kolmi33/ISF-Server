@@ -12,10 +12,10 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../../shared/dates.ts';
-import { categoryOf } from '../../core/machines-queries.ts';
-import { deleteOwnCells } from '../../core/booking.ts';
+import { categoryOf } from '../../core/machines.ts';
+import { deleteOwnCells } from '../../core/bookings.ts';
 import { orderedMachines, FAVORITES_GROUP_LABEL } from '../grid.ts';
-import { getBooking } from '../../core/booking-queries.ts';
+import { getBooking } from '../../core/bookings.ts';
 import { computeMyRuns, type BookingRun } from '../views/my-bookings.ts';
 import { gotoDate, prependWeek, resetView } from '../grid-scroll.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';

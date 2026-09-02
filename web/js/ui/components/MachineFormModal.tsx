@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
-import { groupsByCategory } from '../../core/machines-queries.ts';
+import { groupsByCategory } from '../../core/machines.ts';
 import { saveMachine, deleteMachine } from '../../core/machines.ts';
 import {
   initialMachineFormState,

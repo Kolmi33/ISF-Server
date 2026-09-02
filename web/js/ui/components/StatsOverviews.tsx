@@ -4,7 +4,7 @@
 // under the file-length budget. Faithful port of legacy `renderStats`'s `mode==='m'` (non-
 // drilldown), `mode==='w'` and `else` (Personen overview) branches.
 
-import { CATEGORIES } from '../../core/machines-queries.ts';
+import { CATEGORIES } from '../../core/machines.ts';
 import type { ResourceRow, StatsMaintRow, StatsPerson } from '../views/stats.ts';
 import { StatBar } from './StatsDrilldown.tsx';
 

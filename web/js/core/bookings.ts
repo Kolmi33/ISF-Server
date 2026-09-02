@@ -1,27 +1,35 @@
-// Pure booking write-path reducers extracted from the monolith (legacy.js). No DOM, no I/O,
-// no global state — each takes the FRESH server data (machines + bookings) and mutates
-// it in place, returning the same {abort} / {conflicts} / {count,undo} / {n,undo}
-// shapes the legacy `mutate(fresh => …)` callbacks returned. The two impurities the
-// booking apply needs — the wall-clock timestamp and the group-id factory — are
-// injected (E4), so the reducers are deterministic functions of their inputs.
+// The booking domain: pure read-only queries AND the write-path reducers, in one cohesive
+// file. No DOM, no I/O, no global state — the reducers take the FRESH server data and mutate
+// it in place, returning the same {abort} / {conflicts} / {count,undo} / {n,undo} shapes the
+// legacy `mutate(fresh => …)` callbacks returned; the queries are plain lookups over the same
+// data. Merged from a prior split (`booking.ts` mutations / `booking-queries.ts` queries,
+// PRINCIPLES.md E10's original "one domain, one file pair" shape) back into a single file per
+// domain — same reasoning `shared/types.ts`/`shared/dates.ts`/`web/js/state.ts` already use
+// (one file, one domain, sectioned internally), and `core/machines.ts` mirrors — see
+// PRINCIPLES.md E10 for the updated rule. Sectioned below: 1) types, 2) queries (read-only),
+// 3) mutations (write-path). The two impurities the booking apply needs — the wall-clock
+// timestamp and the group-id factory — are injected (E4), so the reducers stay deterministic
+// functions of their inputs.
 //
-// This belongs in core/ (domain logic, like sweepWeekends), NOT ui/. It is the booking
-// apply/conflict reducer and the various run-delete reducers — booking domain only; the
-// machine-CRUD reducers (save/delete/reorder) that used to live here too moved out to
-// core/machines.ts, so this file's name matches what it actually contains
-// (PRINCIPLES.md E10). Gate-only: they POST to /api/mutate, so they are verified by
-// exhaustive unit tests rather than a production-write browser smoke (ARCHITECTURE §15).
+// This belongs in core/ (domain logic, like sweepWeekends), NOT ui/. Gate-only: the mutations
+// POST to /api/mutate, so they're verified by exhaustive unit tests rather than a
+// production-write browser smoke (ARCHITECTURE §15).
 //
-// Naming note: each exported function here IS called by its bare name in `legacy.js`
-// (inside a `mutate(fresh => bookCells(fresh, ...))` callback, via the window bridge),
-// so the exported names themselves are left exactly as they were — they were already
-// full, descriptive words, not abbreviations. Only the INTERNAL parameters and local
-// variables below are renamed; a parameter's name is never visible to a caller, so
-// none of those renames need any change outside this file.
+// Naming note: each exported mutation here IS called by its bare name in `legacy.js` (inside a
+// `mutate(fresh => bookCells(fresh, ...))` callback, via the window bridge), so those exported
+// names are left exactly as they were — they were already full, descriptive words, not
+// abbreviations. Only INTERNAL parameters and local variables are spelled out in full
+// (PRINCIPLES.md E9); a parameter's name is never visible to a caller, so those renames need no
+// change outside this file.
 
-import type { Booking, BookingData, Machine } from '../../../shared/types.ts';
-import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from './machines-queries.ts';
+import type { Booking, Bookings, BookingData, Machine } from '../../../shared/types.ts';
+import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from './machines.ts';
+import { nextWeekday, previousWeekday } from '../../../shared/dates.ts';
 import { sweepWeekends } from './weekend.ts';
+
+// ---------------------------------------------------------------------------------------
+// 1. Types
+// ---------------------------------------------------------------------------------------
 
 /** A cell change, with the previous value for undo (`null` = the cell was empty). */
 export interface CellUndo {
@@ -59,6 +67,88 @@ export interface BookResult {
   undo?: CellUndo[];
 }
 
+/** A cell address (machine + ISO date) for the selection delete. */
+export interface CellRef {
+  machineId: string;
+  date: string;
+}
+
+/** Every cell (across every machine) sharing booking-group id `gid`, plus which machines and
+ *  dates that spans. Faithful port of legacy `openBookingDetail`'s group-collection loop. */
+export interface BookingGroup {
+  machineIds: Set<string>;
+  /** Every date in the group, sorted ascending. */
+  dates: string[];
+}
+
+// ---------------------------------------------------------------------------------------
+// 2. Queries (read-only)
+// ---------------------------------------------------------------------------------------
+
+/** The booking on `machineId` for `isoDate`, or undefined if that cell is free. Moved here
+ *  from `ui/grid.ts` (a rendering module) — it's a plain data lookup with no DOM/rendering
+ *  involvement, used by several components that have nothing to do with grid rendering
+ *  (ARCHITECTURE_AUDIT.md F6). */
+export function getBooking(
+  bookings: Bookings,
+  machineId: string,
+  isoDate: string,
+): Booking | undefined {
+  return bookings[machineId]?.[isoDate];
+}
+
+/**
+ * The contiguous run of workdays, centered on `isoDate`, that `machineId` has booked under
+ * the same `name` — weekends don't break the run (they're simply skipped over), but a gap of
+ * any other kind (a different booker, or a free/blocked day) does. Returned in chronological
+ * order, always including `isoDate` itself. Faithful port of legacy `openBookingDetail`'s
+ * backward/forward walk.
+ */
+export function findSameNameWorkdayRun(
+  bookings: Bookings,
+  machineId: string,
+  isoDate: string,
+  name: string,
+): string[] {
+  const machineBookings = bookings[machineId] || {};
+  const run = [isoDate];
+
+  let cursor = isoDate;
+  while (true) {
+    const previousWorkday = previousWeekday(cursor);
+    if (machineBookings[previousWorkday]?.name !== name) break;
+    cursor = previousWorkday;
+    run.unshift(cursor);
+  }
+
+  cursor = isoDate;
+  while (true) {
+    const nextWorkday = nextWeekday(cursor);
+    if (machineBookings[nextWorkday]?.name !== name) break;
+    cursor = nextWorkday;
+    run.push(cursor);
+  }
+
+  return run;
+}
+
+/** Every cell sharing booking-group id `groupId`, across every machine. Faithful port of
+ *  legacy `openBookingDetail`'s group-collection loop. */
+export function findBookingGroup(bookings: Bookings, groupId: string): BookingGroup {
+  const machineIds = new Set<string>();
+  const dates = new Set<string>();
+  for (const machineId of Object.keys(bookings)) {
+    const machineBookings = bookings[machineId]!;
+    for (const date of Object.keys(machineBookings)) {
+      if (machineBookings[date]?.gid === groupId) {
+        machineIds.add(machineId);
+        dates.add(date);
+      }
+    }
+  }
+  return { machineIds, dates: [...dates].sort() };
+}
+
 /** Conflicts against the fresh data: blocked days and already-booked days. */
 function findBookingConflicts(
   freshServerData: BookingData,
@@ -85,6 +175,10 @@ function findBookingConflicts(
   }
   return conflicts;
 }
+
+// ---------------------------------------------------------------------------------------
+// 3. Mutations (write-path reducers)
+// ---------------------------------------------------------------------------------------
 
 /** Write the bookable `dates` on one machine (`buildCell` builds a fresh cell each time). */
 function writeMachineCells(
@@ -215,12 +309,6 @@ export function deleteOwnCells(
   }
   undo.push(...sweepWeekends(freshServerData, machineId));
   return { n: deletedCount, undo };
-}
-
-/** A cell address (machine + ISO date) for the selection delete. */
-export interface CellRef {
-  machineId: string;
-  date: string;
 }
 
 /**

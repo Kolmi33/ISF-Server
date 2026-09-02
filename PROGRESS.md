@@ -349,6 +349,17 @@ which turns it into a data-shape change:
   `moveMachine`, `MachineForm`, and their private helpers) move into a new `core/machines.ts`.
   `booking.ts`'s header comment is trimmed to what it actually still owns. `moveMachine` also
   gets a doc-comment/readability pass in the move (the concrete example that started this phase).
+  **Superseded by 8.1r below — see that entry.**
+- [x] 8.1r **Revision**: merged the query/mutation split back into one file per domain
+  (`PRINCIPLES.md` E10 rewritten). `core/machines.ts` + `core/machines-queries.ts` →
+  `core/machines.ts`; `core/booking.ts` + `core/booking-queries.ts` → `core/bookings.ts` (new
+  plural name, matching `shared/types.ts`/`shared/dates.ts`/`web/js/state.ts`'s convention),
+  each sectioned internally (types / queries / mutations). Reason for reverting 8.1's own split:
+  its stated justification — staying under the `max-lines` ESLint budget (400) — doesn't hold in
+  practice (both merge back to well under 300 effective lines); what the split cost was the "one
+  place to look for this domain" property. Every real importer (39 import sites across
+  `web/js/ui/`, `web/js/ui/components/`, `server/model.ts`) repointed; all four old files and
+  their tests deleted, contents merged into `machines.test.ts`/new `bookings.test.ts`.
 - [x] 8.2 Rename `mid`→`machineId`, `gid`→`groupId` across every file the scope boundary above
   clears — one large mechanical commit (a partial rename doesn't type-check, so it can't be
   split further without breaking `HEAD` green). Includes the `data-mid` DOM attribute and the

@@ -9,7 +9,7 @@
 // legacy's own `groupCat` (a `group name → category` lookup, defined alongside these) had no
 // remaining callers anywhere — confirmed dead and deleted outright, not ported.
 
-import { categoryOf } from '../core/machines-queries.ts';
+import { categoryOf } from '../core/machines.ts';
 import { store } from '../store-instance.ts';
 
 /** Toggle whether `category`'s rows are shown in the grid at all. Faithful port of legacy

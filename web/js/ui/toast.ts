@@ -5,7 +5,7 @@
 // queue (still legacy, Phase 7 slice B8) calls `toast()` too, so this stays a simple function
 // rather than something that owns its own React-rendered queue.
 
-import type { CellUndo } from '../core/booking.ts';
+import type { CellUndo } from '../core/bookings.ts';
 
 let toastHideTimer: ReturnType<typeof setTimeout> | null = null;
 

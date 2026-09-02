@@ -20,7 +20,7 @@
 // unused `ts` field).
 
 import type { BookingData } from '../../../shared/types.ts';
-import type { CellUndo, Conflict } from '../core/booking.ts';
+import type { CellUndo, Conflict } from '../core/bookings.ts';
 import { apiPost, readFile } from '../net/api.ts';
 import { patchCells } from './cell-patch.ts';
 import { store } from '../store-instance.ts';

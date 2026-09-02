@@ -7,11 +7,11 @@
 // would cycle.
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { formatDateLong } from '../../../../shared/dates.ts';
-import { getBooking } from '../../core/booking-queries.ts';
+import { getBooking } from '../../core/bookings.ts';
 import { selection, clearSelection } from '../grid-interaction.ts';
 import { openBookingForm } from './BookingForm.tsx';
 import { offerUndo } from '../toast.ts';
-import { deleteSelectedCells } from '../../core/booking.ts';
+import { deleteSelectedCells } from '../../core/bookings.ts';
 import { escapeHtml } from '../escape-html.ts';
 import type { Cell } from '../selection.ts';
 import { store } from '../../store-instance.ts';

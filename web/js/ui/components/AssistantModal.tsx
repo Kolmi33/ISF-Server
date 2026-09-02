@@ -23,7 +23,7 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../../shared/dates.ts';
-import { isBlockedOnDate, dayAvailable } from '../../core/machines-queries.ts';
+import { isBlockedOnDate, dayAvailable } from '../../core/machines.ts';
 import {
   addDeviceToTree,
   changeGroupNeed,
@@ -42,7 +42,7 @@ import {
   type AssistContainer,
 } from '../../core/assistant.ts';
 import { orderedMachines } from '../grid.ts';
-import { getBooking } from '../../core/booking-queries.ts';
+import { getBooking } from '../../core/bookings.ts';
 import { buildAssistantResults, type AssistantResultRow } from '../assistant-results.ts';
 import { toast } from '../toast.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';

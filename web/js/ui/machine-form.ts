@@ -7,7 +7,7 @@
 
 import type { Machine, MaintSlot } from '../../../shared/types.ts';
 import type { MachineForm } from '../core/machines.ts';
-import { categoryOf, maintenanceSlots } from '../core/machines-queries.ts';
+import { categoryOf, maintenanceSlots } from '../core/machines.ts';
 import { WEEKDAY_SHORT_LABELS } from './machine-text.ts';
 
 /** One maintenance slot as edited (before trim/validate) — `MaintSlot` with `note` always a

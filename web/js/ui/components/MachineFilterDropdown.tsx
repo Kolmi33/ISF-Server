@@ -10,7 +10,7 @@
 
 import { useEffect, useReducer, useRef, useState } from 'react';
 import type { MachineCategory } from '../../../../shared/types.ts';
-import { CATEGORIES } from '../../core/machines-queries.ts';
+import { CATEGORIES } from '../../core/machines.ts';
 import { orderedMachines } from '../grid.ts';
 import { buildMachineFilterRows, type MachineFilterRow } from '../machine-filter.ts';
 import { useToolbarDropdown } from '../toolbar-dropdown.ts';

@@ -4,7 +4,7 @@
 // conceptually.
 
 import type { ChangeEvent } from 'react';
-import { CATEGORIES, groupsByCategory } from '../../core/machines-queries.ts';
+import { CATEGORIES, groupsByCategory } from '../../core/machines.ts';
 import type { MachineFormState } from '../machine-form.ts';
 import { WEEKDAY_SHORT_LABELS } from '../machine-text.ts';
 import { GroupOptions } from './GroupOptions.tsx';

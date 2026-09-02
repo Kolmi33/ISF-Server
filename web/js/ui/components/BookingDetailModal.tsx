@@ -11,13 +11,13 @@ import {
   isWeekend,
   parseIsoDateString,
 } from '../../../../shared/dates.ts';
-import { deleteCells, deleteGroup } from '../../core/booking.ts';
+import { deleteCells, deleteGroup } from '../../core/bookings.ts';
 import {
   findSameNameWorkdayRun,
   findBookingGroup,
   type BookingGroup,
-} from '../../core/booking-queries.ts';
-import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from '../../core/machines-queries.ts';
+} from '../../core/bookings.ts';
+import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from '../../core/machines.ts';
 import { daysMaskText, maintText } from '../machine-text.ts';
 import { escapeHtml } from '../escape-html.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';

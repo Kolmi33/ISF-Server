@@ -14,7 +14,7 @@
 import { useState } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
 import { getAllDaysInRange, formatDateLong } from '../../../../shared/dates.ts';
-import { bookCells, type Conflict } from '../../core/booking.ts';
+import { bookCells, type Conflict } from '../../core/bookings.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { toast, offerUndo } from '../toast.ts';
 import { store } from '../../store-instance.ts';

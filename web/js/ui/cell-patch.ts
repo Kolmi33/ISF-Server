@@ -9,9 +9,9 @@
 // a React re-render for a handful of cells.
 
 import { isMine, nameColor, cellClass, classifyCell, classifyDot } from './grid.ts';
-import { getBooking } from '../core/booking-queries.ts';
+import { getBooking } from '../core/bookings.ts';
 import { maintText } from './machine-text.ts';
-import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from '../core/machines-queries.ts';
+import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from '../core/machines.ts';
 import { isWeekend, parseIsoDateString, todayAsIsoDateString } from '../../../shared/dates.ts';
 import { paintSelection } from './grid-interaction.ts';
 import { machById } from './machine-lookup.ts';

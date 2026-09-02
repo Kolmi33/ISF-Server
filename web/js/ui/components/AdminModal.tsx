@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
 import { moveMachine } from '../../core/machines.ts';
-import { hasAnyMaintenanceSlot, maintenanceSlots } from '../../core/machines-queries.ts';
+import { hasAnyMaintenanceSlot, maintenanceSlots } from '../../core/machines.ts';
 import { statusRangeText, daysMaskText, maintenanceKind } from '../machine-text.ts';
 import { filterAdminMachines, type AdminSort } from '../views/admin.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';

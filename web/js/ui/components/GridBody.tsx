@@ -10,8 +10,8 @@ import {
   hasAnyMaintenanceSlot,
   isBlockedOnDate,
   maintenanceSlotAt,
-} from '../../core/machines-queries.ts';
-import { getBooking } from '../../core/booking-queries.ts';
+} from '../../core/machines.ts';
+import { getBooking } from '../../core/bookings.ts';
 import { daysMaskText, maintText, statusRangeText } from '../machine-text.ts';
 import {
   cellClass,

@@ -1,17 +1,32 @@
-// Pure machine-CRUD write-path reducers (save/delete/reorder), extracted from core/booking.ts
-// where they used to live mislabeled under the booking domain's file name. No DOM, no I/O, no
-// global state — each takes the FRESH server data and mutates it in place, returning the same
-// {abort} / void shapes the legacy `mutate(fresh => …)` callbacks returned. Pairs with
-// core/machines-queries.ts (the read-only side) the same way core/booking.ts pairs with
-// core/booking-queries.ts (PRINCIPLES.md E10 — one domain, one file pair).
+// The machine domain: pure category/maintenance/availability predicates AND the CRUD
+// write-path reducers (save/delete/reorder), in one cohesive file. No DOM, no I/O, no global
+// state. Merged from a prior split (`machines.ts` mutations / `machines-queries.ts` queries,
+// PRINCIPLES.md E10's original "one domain, one file pair" shape) back into a single file per
+// domain — same reasoning `shared/types.ts`/`shared/dates.ts`/`web/js/state.ts` already use
+// (one file, one domain, sectioned internally) — see PRINCIPLES.md E10 for the updated rule.
+// Sectioned below: 1) types, 2) queries/predicates (read-only), 3) mutations (write-path).
 //
-// Naming note: each exported function here IS called by its bare name in `legacy.js` (inside a
-// `mutate(fresh => saveMachine(fresh, ...))` callback, via the window bridge), so the exported
-// names themselves are left exactly as they were. Only the INTERNAL parameters and local
-// variables are spelled out in full (PRINCIPLES.md E9) — a parameter's name is never visible to
-// a caller, so none of those renames need any change outside this file.
+// `categoryOf`/`maintenanceSlots`/`maintenanceSlotAt`/`isBlockedOnDate`/`hasAnyMaintenanceSlot`
+// were each called by an old abbreviated name (`catOf`/`maintSlots`/`maintAt`/`isBlockedM`/
+// `anyMaint`) dozens of times across `legacy.js`, via window-bridge aliases — retired along
+// with `legacy.js` itself in Phase 7 slice B10g. The mutation exports (`saveMachine`/
+// `deleteMachine`/`moveMachine`) are likewise called by their bare names from `legacy.js`
+// (inside `mutate(fresh => saveMachine(fresh, ...))`), so those names are left exactly as they
+// were — only their internal parameters/locals are spelled out in full (PRINCIPLES.md E9).
 
-import type { BookingData, Machine, MaintSlot } from '../../../shared/types.ts';
+import type { Machine, MaintSlot, MachineCategory, BookingData } from '../../../shared/types.ts';
+import { mondayFirstWeekdayIndex, parseIsoDateString } from '../../../shared/dates.ts';
+
+// ---------------------------------------------------------------------------------------
+// 1. Types
+// ---------------------------------------------------------------------------------------
+
+/** One category's distinct group names (first-seen order), for the "Bereich" filter's
+ *  `<optgroup>` structure. */
+export interface CategoryGroups {
+  category: MachineCategory;
+  groups: string[];
+}
 
 /** The machine-form fields (already trimmed/validated by the form) a save applies. */
 export interface MachineForm {
@@ -25,6 +40,103 @@ export interface MachineForm {
   daysMask: string | null;
   maint: MaintSlot[];
 }
+
+// ---------------------------------------------------------------------------------------
+// 2. Queries & predicates (read-only)
+// ---------------------------------------------------------------------------------------
+
+/** A machine's category: 'messtechnik' for measurement devices, else 'maschine'. */
+export function categoryOf(machine: Machine | null | undefined): MachineCategory {
+  return machine && machine.cat === 'messtechnik' ? 'messtechnik' : 'maschine';
+}
+
+/** The two categories, in display order, with their German label and sprite icon. Faithful
+ *  port of legacy's `CATS`/`catLabel`/`catIco`. Shared by the grid's category toggle buttons
+ *  (B1) and the Statistik category filter (B5). */
+export const CATEGORIES: ReadonlyArray<{ id: MachineCategory; label: string; icon: string }> = [
+  { id: 'maschine', label: 'Maschinen', icon: 'factory' },
+  { id: 'messtechnik', label: 'Messtechnik', icon: 'gauge' },
+];
+
+/** One category's distinct group names (first-seen order), for the "Bereich" filter's
+ *  `<optgroup>` structure. A category with no groups is omitted entirely (legacy renders an
+ *  empty `<optgroup>`, which shows nothing — omitting it is the same net result). Faithful
+ *  port of the `CATS.map(...)`/`groupList()`/`groupCat()` expression in legacy
+ *  `openAllBookings`. */
+export function groupsByCategory(machines: readonly Machine[]): CategoryGroups[] {
+  const result: CategoryGroups[] = [];
+  for (const { id: category } of CATEGORIES) {
+    const seen = new Set<string>();
+    const groups: string[] = [];
+    for (const machine of machines) {
+      if (categoryOf(machine) !== category || seen.has(machine.group)) continue;
+      seen.add(machine.group);
+      groups.push(machine.group);
+    }
+    if (groups.length) result.push({ category, groups });
+  }
+  return result;
+}
+
+/**
+ * The maintenance slots of a machine. Prefers the structured `maint` array; otherwise
+ * synthesizes one slot from the legacy single-status fields (unless status is 'ok').
+ */
+export function maintenanceSlots(machine: Machine): MaintSlot[] {
+  if (Array.isArray(machine.maint)) return machine.maint;
+  if (machine.status && machine.status !== 'ok') {
+    return [
+      {
+        type: machine.status,
+        from: machine.statusFrom || '',
+        until: machine.statusUntil || '',
+        note: machine.statusNote || '',
+      },
+    ];
+  }
+  return [];
+}
+
+/** True if slot `slot` covers ISO date `isoDate` (open-ended when a bound is empty). */
+export function slotCovers(slot: MaintSlot, isoDate: string): boolean {
+  return (!slot.from || isoDate >= slot.from) && (!slot.until || isoDate <= slot.until);
+}
+
+/** The maintenance slot covering `isoDate`, or null if none. */
+export function maintenanceSlotAt(machine: Machine, isoDate: string): MaintSlot | null {
+  for (const slot of maintenanceSlots(machine)) {
+    if (slotCovers(slot, isoDate)) return slot;
+  }
+  return null;
+}
+
+/** True if the machine is blocked (maintenance/defect) on ISO date `isoDate`. */
+export function isBlockedOnDate(machine: Machine, isoDate: string): boolean {
+  return !!maintenanceSlotAt(machine, isoDate);
+}
+
+/** True if the machine has any maintenance slot at all. */
+export function hasAnyMaintenanceSlot(machine: Machine): boolean {
+  return maintenanceSlots(machine).length > 0;
+}
+
+/**
+ * True if the machine is available on the weekday of ISO date `isoDate`, per its `days`
+ * mask (Mo..So, '1' = available). A missing or malformed mask means available every day.
+ */
+export function dayAvailable(machine: Machine, isoDate: string): boolean {
+  if (!machine.days || machine.days.length !== 7) return true;
+  return machine.days.charAt(mondayFirstWeekdayIndex(parseIsoDateString(isoDate))) !== '0';
+}
+
+/** True if a cell is bookable: not blocked AND available on that weekday. */
+export function cellBookable(machine: Machine, isoDate: string): boolean {
+  return !isBlockedOnDate(machine, isoDate) && dayAvailable(machine, isoDate);
+}
+
+// ---------------------------------------------------------------------------------------
+// 3. Mutations (write-path reducers)
+// ---------------------------------------------------------------------------------------
 
 /** Apply the form fields onto a machine object (add-or-clear each optional field). */
 function applyFormFieldsToMachine(machine: Machine, form: MachineForm): void {

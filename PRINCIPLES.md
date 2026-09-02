@@ -149,16 +149,26 @@ exempted field gets a doc-comment carrying the clarity its name can't.
 documented storage-shape type; a reader unfamiliar with the codebase can restate what an
 identifier holds, or what a function returns, from its name alone.
 
-### E10 — One domain, one file pair
-A domain's write-path reducers live in `<domain>.ts`; its pure read-only lookups live in
-`<domain>-queries.ts` (the `booking.ts` / `booking-queries.ts` split is the reference). A file's
-header comment states its exact scope in one line; when another domain's logic accretes onto a
-file under a name that doesn't cover it (machine CRUD living in `booking.ts`), that's a missed
-split, not a shrug — move it to its own correctly-named file the moment it's noticed, don't wait
-for a dedicated cleanup pass.
-*Verify:* every exported function's domain matches its file's name; every domain with both a
-write path and a read path has both files; `grep -l "^export function"` on a file never turns up
-a function whose name belongs to a different domain than the filename says.
+### E10 — One domain, one file
+A domain's queries and its write-path reducers live in the SAME file, `<domain>.ts` (plural —
+`bookings.ts`, `machines.ts` — matching the convention `shared/types.ts`/`shared/dates.ts`/
+`web/js/state.ts` already use), sectioned internally as 1) types, 2) queries (read-only),
+3) mutations (write-path). A file's header comment states its exact scope in one line; when
+another domain's logic accretes onto a file under a name that doesn't cover it (machine CRUD
+once lived inside `booking.ts`), that's a missed split, not a shrug — move it out the moment
+it's noticed, don't wait for a dedicated cleanup pass.
+*(Revision note: an earlier version of this rule split queries into a separate `<domain>-queries.ts`
+file per domain — `booking.ts`/`booking-queries.ts`, later mirrored onto `machines.ts`/
+`machines-queries.ts`. Reverted: the split's original justification, keeping each file under the
+`max-lines` ESLint budget (400, comment/blank-stripped), doesn't hold in practice — both domains
+merge back to well under 300 effective lines. What it cost was the "one obvious place to look for
+this domain" property every other `core/`-adjacent file already had. The Queries/Mutations
+separation is kept as a section boundary WITHIN the file, not a file boundary, since the
+read/write distinction is still a real signal worth preserving — just not one that needs an
+import path to carry it.)*
+*Verify:* every exported function's domain matches its file's name; a file's internal
+Queries/Mutations sections are clearly marked; `grep -l "^export function"` on a file never turns
+up a function whose name belongs to a different domain than the filename says.
 
 ---
 

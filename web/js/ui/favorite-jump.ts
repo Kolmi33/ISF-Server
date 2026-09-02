@@ -18,8 +18,8 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../shared/dates.ts';
-import { dayAvailable, isBlockedOnDate, maintenanceSlots } from '../core/machines-queries.ts';
-import { getBooking } from '../core/booking-queries.ts';
+import { dayAvailable, isBlockedOnDate, maintenanceSlots } from '../core/machines.ts';
+import { getBooking } from '../core/bookings.ts';
 import { nextFreeDay, prevFreeDay, type FreeDay } from './navigation.ts';
 import { centerColumn } from './grid-scroll.ts';
 import { selection, paintSelection } from './grid-interaction.ts';
