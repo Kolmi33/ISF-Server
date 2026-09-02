@@ -424,7 +424,20 @@ re-derived here — this backlog is the executable summary.
   a server change actually builds for production — run `docker compose build` (or the full
   smoke pattern above) before considering a server-side slice done, not just `npm run check`.
   `npm run verify` green: 827/827 tests (9 new), 100% coverage on `api-machines.ts`.
-- [ ] 9c `GET /api/v1/machines/:id/bookings[/:date]`, `GET /api/v1/bookings?groupId=`
+- [x] 9c `server/api-bookings.ts`. `GET /api/v1/machines/:id/bookings` — `?from=&to=` both
+  required (400 `VALIDATION` otherwise, or if `from > to`), 404 if the machine doesn't exist,
+  empty array (not an error) for a range with nothing booked. `GET
+  /api/v1/machines/:id/bookings/:date` — 404 for an unknown machine, 400 for a malformed date,
+  404 for a free cell (no booking resource at that address yet). `GET
+  /api/v1/bookings?groupId=` — 400 without `groupId`, direct SQL on the existing `gid` index
+  rather than routing through the client's pure `core/bookings.ts` query logic (which expects
+  an in-memory `Bookings` map the server never builds). Wired into `server.ts`'s route table;
+  `DAY_RE` exported from `mutate.ts` rather than redefined, one source of truth for "valid ISO
+  day". `npm run build:server` checked directly before the docker build this time (the 9b
+  lesson) — clean on the first try. Verified live against a throwaway container: booked two
+  real cells sharing a `gid` via `/api/mutate`, then all three endpoints returned exactly the
+  expected data/errors (400s, 404s, the range list, the single cell, the cross-machine group
+  list). `npm run verify` green: 839/839 tests (12 new), 100% coverage on `api-bookings.ts`.
 - [ ] 9d `GET /api/v1/activity` (the `log` table, cursor-paginated on its `id`)
 - [ ] 9e `POST/PUT/DELETE /api/v1/machines`, `POST /api/v1/machines/:id/move` — through
   `core/machines.ts`'s existing reducers + a shared structural-write transaction helper

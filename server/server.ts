@@ -15,6 +15,7 @@ import { formatDateAsIsoString } from '../shared/dates.js';
 import type { MutateBody } from './types.js';
 import { findRoute, type ApiRoute } from './api-router.js';
 import { listMachines, getMachine } from './api-machines.js';
+import { listMachineBookings, getMachineBooking, listBookingsByGroup } from './api-bookings.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '3000');
@@ -38,6 +39,21 @@ const apiV1Routes: ApiRoute[] = [
     method: 'GET',
     pattern: '/api/v1/machines/:id',
     handler: (params) => getMachine(db, params.id!),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/v1/machines/:id/bookings',
+    handler: (params, url) => listMachineBookings(db, params.id!, url),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/v1/machines/:id/bookings/:date',
+    handler: (params) => getMachineBooking(db, params.id!, params.date!),
+  },
+  {
+    method: 'GET',
+    pattern: '/api/v1/bookings',
+    handler: (_params, url) => listBookingsByGroup(db, url),
   },
 ];
 

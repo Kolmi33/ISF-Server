@@ -25,7 +25,9 @@ export type Broadcast = (event: string, data: unknown) => void;
 
 type Stmt = ReturnType<Db['prepare']>;
 
-const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** An ISO 'YYYY-MM-DD' calendar day — the one definition of "valid day string" shared with
+ *  the REST API's own date validation (`api-bookings.ts`). */
+export const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 /**
  * Clamp an untrusted value to a plain string of at most `maxLength` characters, or null
  * when the input is null/undefined OR the clamped result would be empty (`|| null` after
