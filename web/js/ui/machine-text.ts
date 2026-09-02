@@ -6,7 +6,11 @@
 
 import type { Machine, MaintSlot } from '../../../shared/types.ts';
 import { formatDateLong, todayAsIsoDateString } from '../../../shared/dates.ts';
-import { maintenanceSlots, slotCovers, maintenanceSlotAt } from '../core/machines.ts';
+import {
+  getMaintenanceSlots,
+  isSlotCoveringDate,
+  getMaintenanceSlotAtDate,
+} from '../core/machines.ts';
 
 /** Mo..So, matching the index order of a `Machine.days` mask. Shared by `daysMaskText` and the
  *  machine form's weekday checkboxes. */
@@ -25,10 +29,10 @@ export function maintText(s: MaintSlot | null | undefined): string {
  * plus a `· +N weitere` suffix when more than one slot exists. Empty when the machine has no slots.
  */
 export function statusRangeText(m: Machine, today: string = todayAsIsoDateString()): string {
-  const ss = maintenanceSlots(m);
+  const ss = getMaintenanceSlots(m);
   if (!ss.length) return '';
   const active =
-    ss.find((s) => slotCovers(s, today)) ||
+    ss.find((s) => isSlotCoveringDate(s, today)) ||
     ss.slice().sort((a, b) => ((a.from || '0') < (b.from || '0') ? -1 : 1))[0];
   return maintText(active) + (ss.length > 1 ? ` · +${ss.length - 1} weitere` : '');
 }
@@ -40,7 +44,7 @@ export function statusRangeText(m: Machine, today: string = todayAsIsoDateString
  * (the grid row header and the machine-filter dropdown).
  */
 export function maintenanceKind(m: Machine, today: string = todayAsIsoDateString()): string | null {
-  return maintenanceSlotAt(m, today)?.type ?? null;
+  return getMaintenanceSlotAtDate(m, today)?.type ?? null;
 }
 
 /**

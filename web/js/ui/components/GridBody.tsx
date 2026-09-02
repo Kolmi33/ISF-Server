@@ -6,10 +6,10 @@ import { Fragment } from 'react';
 import type { Booking, Machine } from '../../../../shared/types.ts';
 import { isWeekend, parseIsoDateString } from '../../../../shared/dates.ts';
 import {
-  dayAvailable,
+  isMachineAvailableOnWeekday,
   hasAnyMaintenanceSlot,
-  isBlockedOnDate,
-  maintenanceSlotAt,
+  isMachineBlockedOnDate,
+  getMaintenanceSlotAtDate,
 } from '../../core/machines.ts';
 import { getBooking } from '../../core/bookings.ts';
 import { daysMaskText, maintText, statusRangeText } from '../machine-text.ts';
@@ -38,8 +38,12 @@ function isDarkTheme(): boolean {
 /** The today-indicator dot (or maintenance icon) at the start of a machine's row. */
 function TodayDot({ machine, today }: { machine: Machine; today: string }) {
   const booking = getBooking(store.get('data')!.bookings, machine.id, today);
-  const slot = maintenanceSlotAt(machine, today);
-  const state = classifyDot(slot?.type ?? null, booking, dayAvailable(machine, today));
+  const slot = getMaintenanceSlotAtDate(machine, today);
+  const state = classifyDot(
+    slot?.type ?? null,
+    booking,
+    isMachineAvailableOnWeekday(machine, today),
+  );
 
   if (state === 'defekt' || state === 'maint') {
     return (
@@ -103,7 +107,7 @@ function BlockedCell({ machine, isoDate, isToday, weekend, dateLabel }: CellAttr
       data-machine-id={machine.id}
       data-date={isoDate}
       aria-label={`${machine.name}, ${dateLabel}, gesperrt`}
-      title={maintText(maintenanceSlotAt(machine, isoDate))}
+      title={maintText(getMaintenanceSlotAtDate(machine, isoDate))}
     >
       {booking?.name ?? ''}
     </td>
@@ -142,9 +146,9 @@ function GridCell({
   const weekend = isWeekend(parseIsoDateString(isoDate));
   const booking = getBooking(store.get('data')!.bookings, machine.id, isoDate);
   const state = classifyCell(
-    isBlockedOnDate(machine, isoDate),
+    isMachineBlockedOnDate(machine, isoDate),
     booking,
-    dayAvailable(machine, isoDate),
+    isMachineAvailableOnWeekday(machine, isoDate),
   );
   const cellProps = { machine, isoDate, isToday, weekend, dateLabel };
 

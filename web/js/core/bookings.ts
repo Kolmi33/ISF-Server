@@ -23,7 +23,11 @@
 // change outside this file.
 
 import type { Booking, Bookings, BookingData, Machine } from '../../../shared/types.ts';
-import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from './machines.ts';
+import {
+  isMachineAvailableOnWeekday,
+  isMachineBlockedOnDate,
+  getMaintenanceSlotAtDate,
+} from './machines.ts';
 import { nextWeekday, previousWeekday } from '../../../shared/dates.ts';
 import { sweepWeekends } from './weekend.ts';
 
@@ -161,12 +165,12 @@ function findBookingConflicts(
     if (!machine) continue;
     const machineBookings = freshServerData.bookings[machineId] || {};
     for (const date of dates) {
-      if (!dayAvailable(machine, date)) continue; // unavailable weekdays are silently skipped
-      if (isBlockedOnDate(machine, date)) {
+      if (!isMachineAvailableOnWeekday(machine, date)) continue; // unavailable weekdays are silently skipped
+      if (isMachineBlockedOnDate(machine, date)) {
         conflicts.push({
           machineId,
           date,
-          by: `gesperrt (${maintenanceSlotAt(machine, date)?.type || 'Wartung'})`,
+          by: `gesperrt (${getMaintenanceSlotAtDate(machine, date)?.type || 'Wartung'})`,
         });
       } else if (machineBookings[date]) {
         conflicts.push({ machineId, date, by: machineBookings[date].name });
@@ -192,7 +196,11 @@ function writeMachineCells(
   const undo: CellUndo[] = [];
   for (const date of dates) {
     // Never overwrite an existing cell, and respect blocks + unavailable weekdays.
-    if (machineBookings[date] || isBlockedOnDate(machine, date) || !dayAvailable(machine, date)) {
+    if (
+      machineBookings[date] ||
+      isMachineBlockedOnDate(machine, date) ||
+      !isMachineAvailableOnWeekday(machine, date)
+    ) {
       continue;
     }
     machineBookings[date] = buildCell();

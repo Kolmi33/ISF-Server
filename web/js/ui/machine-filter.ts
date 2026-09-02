@@ -9,7 +9,7 @@
 // dropdown's own list, never the grid (that's `ui/category-fold.ts`, a separate feature).
 
 import type { Machine, MachineCategory } from '../../../shared/types.ts';
-import { CATEGORIES, categoryOf } from '../core/machines.ts';
+import { CATEGORIES, getMachineCategory } from '../core/machines.ts';
 
 const FAVORITES_KEY = 'fav';
 const FAVORITES_LABEL = '★ Favoriten';
@@ -72,7 +72,7 @@ function pushNonFavoriteRows(
   let currentCategory: MachineCategory | null = null;
   let currentGroupKey: string | null = null;
   for (const machine of rest) {
-    const category = categoryOf(machine);
+    const category = getMachineCategory(machine);
     if (!shownCategories.has(category)) continue;
     if (category !== currentCategory) {
       currentCategory = category;

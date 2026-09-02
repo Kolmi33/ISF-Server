@@ -23,7 +23,7 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../../shared/dates.ts';
-import { isBlockedOnDate, dayAvailable } from '../../core/machines.ts';
+import { isMachineBlockedOnDate, isMachineAvailableOnWeekday } from '../../core/machines.ts';
 import {
   addDeviceToTree,
   changeGroupNeed,
@@ -60,8 +60,8 @@ function isFreeDevice(id: string, day: string): boolean {
   return (
     !!machine &&
     !getBooking(store.get('data')!.bookings, id, day) &&
-    !isBlockedOnDate(machine, day) &&
-    dayAvailable(machine, day)
+    !isMachineBlockedOnDate(machine, day) &&
+    isMachineAvailableOnWeekday(machine, day)
   );
 }
 

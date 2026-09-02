@@ -6,7 +6,7 @@
 // legacy's `searching` branch exactly.
 
 import type { Machine } from '../../../shared/types.ts';
-import { CATEGORIES, categoryOf } from '../core/machines.ts';
+import { CATEGORIES, getMachineCategory } from '../core/machines.ts';
 
 const FAVORITES_KEY = 'fav';
 const FAVORITES_LABEL = '★ Favoriten';
@@ -63,7 +63,7 @@ function pushNonFavoriteRows(
   let currentCategory: string | null = null;
   let currentGroupKey: string | null = null;
   for (const machine of rest) {
-    const category = categoryOf(machine);
+    const category = getMachineCategory(machine);
     if (category !== currentCategory) {
       currentCategory = category;
       currentGroupKey = null;

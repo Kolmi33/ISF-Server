@@ -7,7 +7,7 @@
 
 import type { Machine, MaintSlot } from '../../../shared/types.ts';
 import type { MachineForm } from '../core/machines.ts';
-import { categoryOf, maintenanceSlots } from '../core/machines.ts';
+import { getMachineCategory, getMaintenanceSlots } from '../core/machines.ts';
 import { WEEKDAY_SHORT_LABELS } from './machine-text.ts';
 
 /** One maintenance slot as edited (before trim/validate) — `MaintSlot` with `note` always a
@@ -22,7 +22,7 @@ export interface MaintSlotDraft {
 /** A machine's maintenance slots as edit-ready drafts; empty for a new machine. */
 export function draftMaintSlots(machine: Machine | null): MaintSlotDraft[] {
   if (!machine) return [];
-  return maintenanceSlots(machine).map((slot) => ({
+  return getMaintenanceSlots(machine).map((slot) => ({
     type: slot.type === 'defekt' ? 'defekt' : 'wartung',
     from: slot.from || '',
     until: slot.until || '',
@@ -54,7 +54,7 @@ export function initialMachineFormState(
   const days = machine?.days;
   return {
     name: machine?.name ?? '',
-    cat: categoryOf(machine),
+    cat: getMachineCategory(machine),
     group: machine?.group ?? machines[0]?.group ?? '',
     newGroup: '',
     info: machine?.info || '',

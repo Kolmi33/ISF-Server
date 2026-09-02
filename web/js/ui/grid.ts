@@ -8,7 +8,7 @@
 
 import type { Booking, Machine, MachineCategory } from '../../../shared/types.ts';
 import { addDays, formatDateAsIsoString } from '../../../shared/dates.ts';
-import { categoryOf, maintenanceSlotAt } from '../core/machines.ts';
+import { getMachineCategory, getMaintenanceSlotAtDate } from '../core/machines.ts';
 
 /** The four mutually exclusive states a grid cell can be in, in priority order. */
 export type CellState = 'blocked' | 'booked' | 'unavail' | 'free';
@@ -92,7 +92,7 @@ export function orderedMachines(
   favoriteIds: ReadonlySet<string>,
 ): Machine[] {
   const isMesstechnik = (machine: Machine): number =>
-    categoryOf(machine) === 'messtechnik' ? 1 : 0;
+    getMachineCategory(machine) === 'messtechnik' ? 1 : 0;
   const favorites = machines.filter((machine) => favoriteIds.has(machine.id));
   const everyoneElse = machines
     .filter((machine) => !favoriteIds.has(machine.id))
@@ -136,7 +136,7 @@ export function nameColor(name: string, isDarkTheme: boolean): string {
 
 /** The type of the maintenance/defect slot active on `machine` today, or null if none. */
 export function maintenanceKindToday(machine: Machine, today: string): string | null {
-  const slot = maintenanceSlotAt(machine, today);
+  const slot = getMaintenanceSlotAtDate(machine, today);
   return slot ? slot.type : null;
 }
 
@@ -208,7 +208,7 @@ class GridRowsCursor {
     isMachineFilterActive: boolean,
     rows: GridRow[],
   ): boolean {
-    const category = categoryOf(machine);
+    const category = getMachineCategory(machine);
     if (!isFavoritesGroup && category !== this.category) {
       this.category = category;
       this.group = null; // force the new category's first group header to (re-)emit

@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
 import { moveMachine } from '../../core/machines.ts';
-import { hasAnyMaintenanceSlot, maintenanceSlots } from '../../core/machines.ts';
+import { hasAnyMaintenanceSlot, getMaintenanceSlots } from '../../core/machines.ts';
 import { statusRangeText, daysMaskText, maintenanceKind } from '../machine-text.ts';
 import { filterAdminMachines, type AdminSort } from '../views/admin.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
@@ -30,7 +30,7 @@ const SORT_OPTIONS: ReadonlyArray<{ value: AdminSort; label: string }> = [
 function StatusBadge({ machine }: { machine: Machine }) {
   if (!hasAnyMaintenanceSlot(machine)) return null;
   const kind = maintenanceKind(machine);
-  const slotCount = maintenanceSlots(machine).length;
+  const slotCount = getMaintenanceSlots(machine).length;
   return (
     <span className={`tag ${kind || 'wartung'}`} title={statusRangeText(machine)}>
       {kind === 'defekt' ? 'defekt' : 'Wartung'}

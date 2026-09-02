@@ -12,7 +12,7 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../../shared/dates.ts';
-import { categoryOf } from '../../core/machines.ts';
+import { getMachineCategory } from '../../core/machines.ts';
 import { deleteOwnCells } from '../../core/bookings.ts';
 import { orderedMachines, FAVORITES_GROUP_LABEL } from '../grid.ts';
 import { getBooking } from '../../core/bookings.ts';
@@ -69,7 +69,7 @@ function gotoRun(run: LiveRun): void {
   const targetDate = run.liveDates[0]!;
   closeReactModal();
   const cats = store.get('cats');
-  cats.add(categoryOf(run.machine));
+  cats.add(getMachineCategory(run.machine));
   localStorage.setItem('mb_cats', JSON.stringify([...cats]));
   const collapsed = store.get('collapsed');
   collapsed.delete(run.machine.group);

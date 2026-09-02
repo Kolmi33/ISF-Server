@@ -9,7 +9,7 @@
 // legacy's own `groupCat` (a `group name → category` lookup, defined alongside these) had no
 // remaining callers anywhere — confirmed dead and deleted outright, not ported.
 
-import { categoryOf } from '../core/machines.ts';
+import { getMachineCategory } from '../core/machines.ts';
 import { store } from '../store-instance.ts';
 
 /** Toggle whether `category`'s rows are shown in the grid at all. Faithful port of legacy
@@ -35,7 +35,7 @@ export function toggleAllGroupsInCategory(category: string): void {
     ...new Set(
       store
         .get('data')!
-        .machines.filter((machine) => categoryOf(machine) === category)
+        .machines.filter((machine) => getMachineCategory(machine) === category)
         .map((machine) => machine.group),
     ),
   ];

@@ -43,7 +43,7 @@ export function addDays(date: Date, numberOfDays: number): Date {
  * falls in: this file's own `mondayOfDate`/`getIsoWeekNumber`, and — since it used to be
  * reimplemented identically on both sides of the frontend/backend boundary the moment the
  * backend needed it too — machine weekday-availability masks (`core/machines.ts`'s
- * `dayAvailable`, `server/model.ts`'s `isDayAvailable`).
+ * `isMachineAvailableOnWeekday`, `server/model.ts`'s `isDayAvailable`).
  */
 export function mondayFirstWeekdayIndex(date: Date): number {
   return (date.getUTCDay() + 6) % 7;

@@ -11,7 +11,11 @@
 import { isMine, nameColor, cellClass, classifyCell, classifyDot } from './grid.ts';
 import { getBooking } from '../core/bookings.ts';
 import { maintText } from './machine-text.ts';
-import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from '../core/machines.ts';
+import {
+  isMachineAvailableOnWeekday,
+  isMachineBlockedOnDate,
+  getMaintenanceSlotAtDate,
+} from '../core/machines.ts';
 import { isWeekend, parseIsoDateString, todayAsIsoDateString } from '../../../shared/dates.ts';
 import { paintSelection } from './grid-interaction.ts';
 import { machById } from './machine-lookup.ts';
@@ -42,11 +46,15 @@ export function refreshCell(machineId: string, date: string): void {
   const isToday = date === todayAsIsoDateString();
   const weekend = isWeekend(parseIsoDateString(date));
   const booking = getBooking(store.get('data')!.bookings, machineId, date);
-  const state = classifyCell(isBlockedOnDate(machine, date), booking, dayAvailable(machine, date));
+  const state = classifyCell(
+    isMachineBlockedOnDate(machine, date),
+    booking,
+    isMachineAvailableOnWeekday(machine, date),
+  );
   if (state === 'blocked') {
     el.className = cellClass('blocked', { today: isToday, weekend });
     el.style.background = '';
-    el.title = maintText(maintenanceSlotAt(machine, date));
+    el.title = maintText(getMaintenanceSlotAtDate(machine, date));
     el.textContent = booking?.name ?? '';
   } else if (state === 'booked') {
     el.className = cellClass('booked', {
@@ -85,7 +93,7 @@ export function refreshDot(machineId: string): void {
   if (!machine) return;
   const today = todayAsIsoDateString();
   const todaysBooking = getBooking(store.get('data')!.bookings, machineId, today);
-  const state = classifyDot(null, todaysBooking, dayAvailable(machine, today));
+  const state = classifyDot(null, todaysBooking, isMachineAvailableOnWeekday(machine, today));
   if (state === 'busy') {
     dot.className = 'dot busy';
     dot.title = 'heute belegt: ' + todaysBooking!.name;

@@ -8,22 +8,15 @@ import {
   ensureUniqueMachineId,
   findGroupInsertionIndex,
   getMachineCategory,
-  categoryOf,
   CATEGORIES,
   groupsByCategory,
   getMaintenanceSlots,
-  maintenanceSlots,
   isSlotCoveringDate,
-  slotCovers,
   getMaintenanceSlotAtDate,
-  maintenanceSlotAt,
   isMachineBlockedOnDate,
-  isBlockedOnDate,
   hasAnyMaintenanceSlot,
   isMachineAvailableOnWeekday,
-  dayAvailable,
   isCellBookable,
-  cellBookable,
   type MachineForm,
 } from './machines.ts';
 
@@ -110,10 +103,9 @@ describe('ensureUniqueMachineId & findGroupInsertionIndex', () => {
   });
 });
 
-describe('getMachineCategory & categoryOf', () => {
+describe('getMachineCategory', () => {
   it('returns messtechnik for machines tagged with cat="messtechnik"', () => {
     expect(getMachineCategory(createMachine({ cat: 'messtechnik' }))).toBe('messtechnik');
-    expect(categoryOf(createMachine({ cat: 'messtechnik' }))).toBe('messtechnik');
   });
 
   it('defaults to maschine for empty or standard machine', () => {
@@ -144,12 +136,11 @@ describe('CATEGORIES & groupsByCategory', () => {
   });
 });
 
-describe('getMaintenanceSlots & slotCovers', () => {
+describe('getMaintenanceSlots & isSlotCoveringDate', () => {
   it('returns modern maintenance array when present', () => {
     const slots: MaintenanceSlot[] = [{ type: 'wartung', from: '2026-01-01', until: '2026-01-05' }];
     const machine = createMachine({ maint: slots });
     expect(getMaintenanceSlots(machine)).toBe(slots);
-    expect(maintenanceSlots(machine)).toBe(slots);
   });
 
   it('synthesizes legacy status if no maint array exists', () => {
@@ -169,37 +160,35 @@ describe('getMaintenanceSlots & slotCovers', () => {
     ]);
   });
 
-  it('slotCovers handles bounded and open-ended date ranges correctly', () => {
+  it('isSlotCoveringDate handles bounded and open-ended date ranges correctly', () => {
     const bounded: MaintenanceSlot = { type: 'wartung', from: '2026-05-10', until: '2026-05-20' };
     expect(isSlotCoveringDate(bounded, '2026-05-09')).toBe(false);
     expect(isSlotCoveringDate(bounded, '2026-05-10')).toBe(true);
     expect(isSlotCoveringDate(bounded, '2026-05-15')).toBe(true);
     expect(isSlotCoveringDate(bounded, '2026-05-20')).toBe(true);
-    expect(slotCovers(bounded, '2026-05-21')).toBe(false);
+    expect(isSlotCoveringDate(bounded, '2026-05-21')).toBe(false);
   });
 });
 
-describe('maintenanceSlotAt, isBlockedOnDate, hasAnyMaintenanceSlot', () => {
+describe('getMaintenanceSlotAtDate, isMachineBlockedOnDate, hasAnyMaintenanceSlot', () => {
   it('identifies covering maintenance slot and blocked status', () => {
     const slot: MaintenanceSlot = { type: 'wartung', from: '2026-06-01', until: '2026-06-05' };
     const machine = createMachine({ maint: [slot] });
 
     expect(getMaintenanceSlotAtDate(machine, '2026-06-03')).toEqual(slot);
-    expect(maintenanceSlotAt(machine, '2026-06-03')).toEqual(slot);
     expect(getMaintenanceSlotAtDate(machine, '2026-06-10')).toBeNull();
 
     expect(isMachineBlockedOnDate(machine, '2026-06-03')).toBe(true);
-    expect(isBlockedOnDate(machine, '2026-06-03')).toBe(true);
     expect(hasAnyMaintenanceSlot(machine)).toBe(true);
     expect(hasAnyMaintenanceSlot(createMachine())).toBe(false);
   });
 });
 
-describe('dayAvailable & cellBookable', () => {
+describe('isMachineAvailableOnWeekday & isCellBookable', () => {
   it('evaluates weekday mask Mo..So correctly', () => {
     const machine = createMachine({ days: '1111100' });
     expect(isMachineAvailableOnWeekday(machine, '2026-06-01')).toBe(true); // Monday
-    expect(dayAvailable(machine, '2026-06-06')).toBe(false); // Saturday
+    expect(isMachineAvailableOnWeekday(machine, '2026-06-06')).toBe(false); // Saturday
   });
 
   it('defaults to available every day when no mask (or a malformed one) is set', () => {
@@ -207,7 +196,7 @@ describe('dayAvailable & cellBookable', () => {
     expect(isMachineAvailableOnWeekday(createMachine({ days: '101' }), '2026-06-06')).toBe(true); // wrong length
   });
 
-  it('cellBookable requires both not blocked and dayAvailable', () => {
+  it('isCellBookable requires both not blocked and available that weekday', () => {
     const machine = createMachine({
       days: '1111100',
       maint: [{ type: 'wartung', from: '2026-06-01', until: '2026-06-01' }],
@@ -215,7 +204,7 @@ describe('dayAvailable & cellBookable', () => {
 
     expect(isCellBookable(machine, '2026-06-01')).toBe(false); // blocked by maintenance
     expect(isCellBookable(machine, '2026-06-02')).toBe(true); // available
-    expect(cellBookable(machine, '2026-06-06')).toBe(false); // weekend off
+    expect(isCellBookable(machine, '2026-06-06')).toBe(false); // weekend off
   });
 });
 

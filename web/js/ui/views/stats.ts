@@ -7,7 +7,11 @@
 
 import type { Machine, Bookings, MachineCategory } from '../../../../shared/types.ts';
 import { getWeekdaysInRange, getAllDaysInRange } from '../../../../shared/dates.ts';
-import { maintenanceSlots, isBlockedOnDate, categoryOf } from '../../core/machines.ts';
+import {
+  getMaintenanceSlots,
+  isMachineBlockedOnDate,
+  getMachineCategory,
+} from '../../core/machines.ts';
 
 /** One person's day count on a single machine (the per-machine drilldown row). */
 export interface StatsPersonDays {
@@ -93,12 +97,12 @@ function aggregateMaint(
   let totalSlotCount = 0;
   let totalBlockedDayCount = 0;
   for (const machine of machines) {
-    const slotsInRange = maintenanceSlots(machine).filter(
+    const slotsInRange = getMaintenanceSlots(machine).filter(
       (slot) => (!slot.until || slot.until >= from) && (!slot.from || slot.from <= to),
     );
     let blockedDayCount = 0;
     for (const date of calDays) {
-      if (isBlockedOnDate(machine, date)) blockedDayCount++;
+      if (isMachineBlockedOnDate(machine, date)) blockedDayCount++;
     }
     if (slotsInRange.length || blockedDayCount) {
       rows.push({ machine, slotCount: slotsInRange.length, days: blockedDayCount });
@@ -179,7 +183,7 @@ function bucketResourceRows(
   const rowsByGroupInCategory = new Map<string, StatsMachineRow[]>();
   for (const row of machRows) {
     if (lowercaseQuery && !row.machine.name.toLowerCase().includes(lowercaseQuery)) continue;
-    const category = categoryOf(row.machine);
+    const category = getMachineCategory(row.machine);
     if (!visibleCategories.has(category)) continue;
     if (!groupsByCategory.has(category)) {
       groupsByCategory.set(category, []);

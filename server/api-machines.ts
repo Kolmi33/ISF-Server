@@ -14,7 +14,7 @@ function allMachineRows(db: Db): MachineRow[] {
 }
 
 /** A machine's category the way the wire shape expresses it: `cat` absent means 'maschine'
- *  (mirrors the client's own `core/machines.ts` `categoryOf` convention). */
+ *  (mirrors the client's own `core/machines.ts` `getMachineCategory` convention). */
 function categoryOfOut(machine: MachineOut): string {
   return machine.cat === 'messtechnik' ? 'messtechnik' : 'maschine';
 }

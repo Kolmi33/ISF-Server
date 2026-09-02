@@ -87,9 +87,6 @@ export function getMachineCategory(machine: Machine | null | undefined): Machine
   return machine && machine.cat === 'messtechnik' ? 'messtechnik' : 'maschine';
 }
 
-/** Legacy alias for getMachineCategory */
-export const categoryOf = getMachineCategory;
-
 /**
  * The standard list of resource categories in display order, including their German labels and icon names.
  */
@@ -162,9 +159,6 @@ export function getMaintenanceSlots(machine: Machine): MaintenanceSlot[] {
   return [];
 }
 
-/** Legacy alias for getMaintenanceSlots */
-export const maintenanceSlots = getMaintenanceSlots;
-
 /**
  * Checks whether a maintenance slot covers a given ISO date ('YYYY-MM-DD').
  *
@@ -178,9 +172,6 @@ export function isSlotCoveringDate(slot: MaintenanceSlot, isoDate: string): bool
   const isBeforeOrAtEnd = !slot.until || isoDate <= slot.until;
   return isAfterOrAtStart && isBeforeOrAtEnd;
 }
-
-/** Legacy alias for isSlotCoveringDate */
-export const slotCovers = isSlotCoveringDate;
 
 /**
  * Finds the maintenance or defect slot covering a specific ISO date.
@@ -202,9 +193,6 @@ export function getMaintenanceSlotAtDate(
   return null;
 }
 
-/** Legacy alias for getMaintenanceSlotAtDate */
-export const maintenanceSlotAt = getMaintenanceSlotAtDate;
-
 /**
  * Checks if a machine is blocked by maintenance or defect on a specific ISO date.
  * Returns `true` if any maintenance slot covers that date; otherwise `false`.
@@ -212,9 +200,6 @@ export const maintenanceSlotAt = getMaintenanceSlotAtDate;
 export function isMachineBlockedOnDate(machine: Machine, isoDate: string): boolean {
   return getMaintenanceSlotAtDate(machine, isoDate) !== null;
 }
-
-/** Legacy alias for isMachineBlockedOnDate */
-export const isBlockedOnDate = isMachineBlockedOnDate;
 
 /**
  * Checks if a machine has any maintenance or defect slots defined at all.
@@ -246,9 +231,6 @@ export function isMachineAvailableOnWeekday(machine: Machine, isoDate: string): 
   return machine.days.charAt(weekdayIndex) !== '0';
 }
 
-/** Legacy alias for isMachineAvailableOnWeekday */
-export const dayAvailable = isMachineAvailableOnWeekday;
-
 /**
  * Determines if a specific cell (machine × date) can be booked.
  *
@@ -259,9 +241,6 @@ export const dayAvailable = isMachineAvailableOnWeekday;
 export function isCellBookable(machine: Machine, isoDate: string): boolean {
   return !isMachineBlockedOnDate(machine, isoDate) && isMachineAvailableOnWeekday(machine, isoDate);
 }
-
-/** Legacy alias for isCellBookable */
-export const cellBookable = isCellBookable;
 
 // ---------------------------------------------------------------------------------------
 // 3. Write-Path Reducers (Mutations)

@@ -17,7 +17,11 @@ import {
   findBookingGroup,
   type BookingGroup,
 } from '../../core/bookings.ts';
-import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from '../../core/machines.ts';
+import {
+  isMachineAvailableOnWeekday,
+  isMachineBlockedOnDate,
+  getMaintenanceSlotAtDate,
+} from '../../core/machines.ts';
 import { daysMaskText, maintText } from '../machine-text.ts';
 import { escapeHtml } from '../escape-html.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
@@ -244,11 +248,11 @@ export function openCellAction(machineId: string, date: string): void {
   const machine = machById(machineId);
   if (!machine) return;
   const booking = store.get('data')!.bookings[machineId]?.[date];
-  if (isBlockedOnDate(machine, date) && !booking) {
-    toast(`${machine.name}: ${maintText(maintenanceSlotAt(machine, date))}`);
+  if (isMachineBlockedOnDate(machine, date) && !booking) {
+    toast(`${machine.name}: ${maintText(getMaintenanceSlotAtDate(machine, date))}`);
     return;
   }
-  if (!dayAvailable(machine, date) && !booking) {
+  if (!isMachineAvailableOnWeekday(machine, date) && !booking) {
     toast(
       `${machine.name}: an diesem Wochentag nicht verfügbar (verfügbar: ${daysMaskText(machine)}).`,
     );

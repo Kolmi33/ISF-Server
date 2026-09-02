@@ -18,7 +18,11 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../shared/dates.ts';
-import { dayAvailable, isBlockedOnDate, maintenanceSlots } from '../core/machines.ts';
+import {
+  isMachineAvailableOnWeekday,
+  isMachineBlockedOnDate,
+  getMaintenanceSlots,
+} from '../core/machines.ts';
 import { getBooking } from '../core/bookings.ts';
 import { nextFreeDay, prevFreeDay, type FreeDay } from './navigation.ts';
 import { centerColumn } from './grid-scroll.ts';
@@ -50,8 +54,8 @@ function centerOnDate(isoDate: string): void {
 function isFreeFor(machine: Machine): FreeDay {
   return (isoDate) =>
     !getBooking(store.get('data')!.bookings, machine.id, isoDate) &&
-    !isBlockedOnDate(machine, isoDate) &&
-    dayAvailable(machine, isoDate);
+    !isMachineBlockedOnDate(machine, isoDate) &&
+    isMachineAvailableOnWeekday(machine, isoDate);
 }
 
 /** The next free working day for `machine` strictly after `fromIso` (or from today when null).
@@ -89,7 +93,7 @@ function jumpToSlot(machine: Machine, isoDate: string, isBack: boolean): void {
       .filter((date) => date >= today)
       .sort()
       .pop() || '';
-  const slots = maintenanceSlots(machine);
+  const slots = getMaintenanceSlots(machine);
   const lastBlockedDate = slots.length
     ? slots.some((slot) => !slot.until)
       ? '9999-12-31'

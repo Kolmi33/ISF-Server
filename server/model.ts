@@ -30,7 +30,7 @@ function parsedMaintenanceSlots(machine: MachineRow): MaintenanceSlot[] {
 
 /** The maintenance slot covering `day` (bounds are inclusive; an empty bound is
  *  open-ended), or null if none. Mirrors the client's `core/machines.ts`
- *  `maintenanceSlotAt`, over the row's raw JSON rather than the wire's parsed array. */
+ *  `getMaintenanceSlotAtDate`, over the row's raw JSON rather than the wire's parsed array. */
 function maintenanceSlotAt(machine: MachineRow, day: string): MaintenanceSlot | null {
   for (const slot of parsedMaintenanceSlots(machine)) {
     if ((!slot.from || day >= slot.from) && (!slot.until || day <= slot.until)) return slot;
@@ -41,7 +41,7 @@ function maintenanceSlotAt(machine: MachineRow, day: string): MaintenanceSlot | 
 /**
  * Why machine `machine` is blocked on ISO date `day` (a display-ready label), or null if
  * it isn't. Prefers a structured `maint` slot over the legacy single-status fields,
- * matching the client's own preference (`core/machines.ts`'s `maintenanceSlots`) —
+ * matching the client's own preference (`core/machines.ts`'s `getMaintenanceSlots`) —
  * **this server-side check used to look at the legacy fields only**, so a machine blocked
  * solely via the newer `maint` slots (the only form the machine-edit form has written
  * since `core/machines.ts`'s `saveMachine` started clearing the legacy fields on every
@@ -68,9 +68,9 @@ export function isBlocked(machine: MachineRow, day: string): boolean {
 /**
  * True if the machine is available on the weekday of ISO date `day`, per its `days` mask
  * (Mo..So, '1' = available). A missing or malformed mask means available every day.
- * Faithful port of the client's `core/machines.ts` `dayAvailable` — like `blockReason`
- * above, this had no server-side equivalent at all before F1 (a machine closed on a given
- * weekday could still be booked for it via a direct write).
+ * Faithful port of the client's `core/machines.ts` `isMachineAvailableOnWeekday` — like
+ * `blockReason` above, this had no server-side equivalent at all before F1 (a machine closed
+ * on a given weekday could still be booked for it via a direct write).
  */
 export function isDayAvailable(machine: MachineRow, day: string): boolean {
   if (!machine.days || machine.days.length !== 7) return true;
