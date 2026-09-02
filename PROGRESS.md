@@ -374,16 +374,13 @@ which turns it into a data-shape change:
   `server/server.ts`'s presence broadcast `{ n: clients.size }` → `{ clientCount }` (confirmed
   dead-on-the-wire first — `live-connection.ts`'s presence handler only ever reads `.users`, so
   this was a safe rename, not a coordinated client+server one).
-- [ ] 8.4b **Newly scoped, not yet done**: `web/js/ui/views/stats.ts`'s `StatsMachineRow`/
-  `StatsMaintRow` carry bare `m` (→ `machine`), `n` (→ `bookedWorkdayCount`, already the local
-  var name), `inst` (→ `maintenanceSlotCount` or similar), `pct` (→ `percent`, or keep — least
-  cryptic of the four). Consumers span `StatsDrilldown.tsx`, `StatsModal.tsx`,
-  `StatsOverviews.tsx`, `stats.test.ts` — real but contained blast radius. **Separately**,
-  `web/js/ui/views/all-bookings.ts`/`my-bookings.ts` define an unrelated `Run` type that ALSO
-  uses a bare `.m` field (`run.m.id`, `run.m.name`), consumed by `AllBookingsModal.tsx`/
-  `MyBookingsModal.tsx`/`all-bookings.test.ts`/`my-bookings.test.ts` — same rename, different
-  type, don't conflate the two `.m`s when scoping this. ~8 files total across both. Deliberately
-  not folded into 8.4a — a big enough unit to deserve its own commit.
+- [x] 8.4b `web/js/ui/views/stats.ts`'s `StatsMachineRow`/`StatsMaintRow`: `m`→`machine`,
+  `n`→`bookedWorkdayCount` (already the local var name), `inst`→`slotCount`, `pct`→`percent`.
+  Updated every consumer: `StatsDrilldown.tsx`, `StatsModal.tsx`, `StatsOverviews.tsx`,
+  `stats.test.ts`. Separately, `web/js/ui/views/all-bookings.ts`'s `AllRun` and
+  `my-bookings.ts`'s `BookingRun` (two distinct types, same bare `.m` field) both →
+  `machine`, across `AllBookingsModal.tsx`, `MyBookingsModal.tsx`,
+  `all-bookings.test.ts`/`my-bookings.test.ts`. `npm run verify` green, 797/797 tests.
 - [ ] 8.4c Anything else in the same vein, found while doing 8.4b or afterward — not yet swept.
 
 ## Done log (newest first)

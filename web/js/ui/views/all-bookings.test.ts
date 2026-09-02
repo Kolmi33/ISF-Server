@@ -25,7 +25,7 @@ describe('computeAllRuns', () => {
   const runs = computeAllRuns([m1, m2], bookings, '2021-01-04');
 
   it('splits on person change, gaps, and keeps consecutive workdays; sorts by first date', () => {
-    expect(runs.map((r) => ({ id: r.m.id, name: r.name, dates: r.dates }))).toEqual([
+    expect(runs.map((r) => ({ id: r.machine.id, name: r.name, dates: r.dates }))).toEqual([
       { id: 'm1', name: 'anna', dates: ['2021-01-04', '2021-01-05'] },
       { id: 'm1', name: 'bob', dates: ['2021-01-06'] },
       { id: 'm2', name: 'carol', dates: ['2021-01-07'] },
@@ -50,9 +50,14 @@ describe('filterAllRuns', () => {
   const mA = mach('a', 'Alpha', 'Halle');
   const mB = mach('b', 'Beta', 'Labor');
   const mC = mach('c', 'Gamma', 'Halle');
-  const A: AllRun = { m: mA, name: 'Anna', dates: ['2021-01-04', '2021-01-05'], ts: '2021-01-03' };
-  const B: AllRun = { m: mB, name: 'Bob', dates: ['2021-01-10'], ts: '2021-01-01' };
-  const C: AllRun = { m: mC, name: 'Carla', dates: ['2021-01-20'], ts: '' };
+  const A: AllRun = {
+    machine: mA,
+    name: 'Anna',
+    dates: ['2021-01-04', '2021-01-05'],
+    ts: '2021-01-03',
+  };
+  const B: AllRun = { machine: mB, name: 'Bob', dates: ['2021-01-10'], ts: '2021-01-01' };
+  const C: AllRun = { machine: mC, name: 'Carla', dates: ['2021-01-20'], ts: '' };
   const all = [A, B, C];
   const base = { person: '', mach: '', group: '', from: '', to: '', sort: 'termin' };
   const ids = (rs: AllRun[]) => rs.map((r) => r.name);
@@ -101,8 +106,8 @@ describe('filterAllRuns', () => {
 
   it('breaks group/machine/person ties by first date (both input orders)', () => {
     // same machine (group+name) and same person → all three sorters fall to the date tiebreak
-    const early: AllRun = { m: mA, name: 'Anna', dates: ['2021-01-04'], ts: '' };
-    const late: AllRun = { m: mA, name: 'Anna', dates: ['2021-01-08'], ts: '' };
+    const early: AllRun = { machine: mA, name: 'Anna', dates: ['2021-01-04'], ts: '' };
+    const late: AllRun = { machine: mA, name: 'Anna', dates: ['2021-01-08'], ts: '' };
     const d = (rs: AllRun[]) => rs.map((r) => r.dates[0]);
     for (const sort of ['bereich', 'maschine', 'person']) {
       expect(d(filterAllRuns([late, early], { ...base, sort }))).toEqual([
@@ -117,9 +122,9 @@ describe('filterAllRuns', () => {
   });
 
   it('termin: sorts out-of-order input ascending and ties equal first dates (stable)', () => {
-    const x04: AllRun = { m: mA, name: 'X', dates: ['2021-01-04'], ts: '' };
-    const x08: AllRun = { m: mA, name: 'Y', dates: ['2021-01-08'], ts: '' };
-    const y04: AllRun = { m: mB, name: 'Z', dates: ['2021-01-04'], ts: '' };
+    const x04: AllRun = { machine: mA, name: 'X', dates: ['2021-01-04'], ts: '' };
+    const x08: AllRun = { machine: mA, name: 'Y', dates: ['2021-01-08'], ts: '' };
+    const y04: AllRun = { machine: mB, name: 'Z', dates: ['2021-01-04'], ts: '' };
     expect(filterAllRuns([x08, x04], { ...base, sort: 'termin' }).map((r) => r.dates[0])).toEqual([
       '2021-01-04',
       '2021-01-08',
@@ -131,9 +136,14 @@ describe('filterAllRuns', () => {
   });
 
   it('handles empty group / name / ts in the comparators (both operand positions)', () => {
-    const eGroup: AllRun = { m: mach('e', 'E', ''), name: 'Zed', dates: ['2021-01-05'], ts: '' };
-    const eName: AllRun = { m: mA, name: '', dates: ['2021-01-05'], ts: '' };
-    const noTs: AllRun = { m: mB, name: 'Bob', dates: ['2021-01-05'], ts: '' };
+    const eGroup: AllRun = {
+      machine: mach('e', 'E', ''),
+      name: 'Zed',
+      dates: ['2021-01-05'],
+      ts: '',
+    };
+    const eName: AllRun = { machine: mA, name: '', dates: ['2021-01-05'], ts: '' };
+    const noTs: AllRun = { machine: mB, name: 'Bob', dates: ['2021-01-05'], ts: '' };
     // each call runs the comparator once as (arr[0], arr[1]); both orders cover a-side and b-side.
     for (const [x, y] of [
       [eGroup, A],
@@ -151,6 +161,6 @@ describe('filterAllRuns', () => {
     ] as const)
       expect(() => filterAllRuns([x, y], { ...base, sort: 'erstellt' })).not.toThrow();
     // sanity: an empty-group run sorts ahead of a 'Halle' run under bereich
-    expect(filterAllRuns([A, eGroup], { ...base, sort: 'bereich' })[0]!.m.group).toBe('');
+    expect(filterAllRuns([A, eGroup], { ...base, sort: 'bereich' })[0]!.machine.group).toBe('');
   });
 });

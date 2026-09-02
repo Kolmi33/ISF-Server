@@ -44,7 +44,7 @@ function goto(run: AllRun): void {
   closeReactModal();
   // Both writes stay silent — saveFilters()/updateMachBtn()/resetView() run before the one
   // notify, matching the original's single window.notify() after all of this.
-  store.state.machSel = new Set([run.m.id]);
+  store.state.machSel = new Set([run.machine.id]);
   saveFilters();
   updateMachBtn();
   store.state.startMonday = mondayOfDate(parseIsoDateString(run.dates[0]!));
@@ -52,7 +52,7 @@ function goto(run: AllRun): void {
   store.notify();
   prependWeek();
   gotoDate(run.dates[0]!);
-  toast(`Plan gefiltert auf „${run.m.name}".`, undefined, 4000);
+  toast(`Plan gefiltert auf „${run.machine.name}".`, undefined, 4000);
 }
 
 interface AllBookingsFiltersProps {
@@ -117,9 +117,9 @@ function AllBookingsRow({ run }: { run: AllRun }) {
     <div className="mybk">
       <div style={{ minWidth: 0 }}>
         <div className="abmach">
-          <b>{run.m.name}</b>{' '}
+          <b>{run.machine.name}</b>{' '}
           <span className="hint" style={{ margin: 0 }}>
-            · {run.m.group}
+            · {run.machine.group}
           </span>
         </div>
         <div className="abdate">
@@ -184,7 +184,7 @@ export function AllBookingsModal() {
       <div className="resultlist" style={{ maxHeight: 420 }}>
         {rows.length ? (
           rows.map((run) => (
-            <AllBookingsRow key={`${run.m.id}|${run.dates[0]}|${run.name}`} run={run} />
+            <AllBookingsRow key={`${run.machine.id}|${run.dates[0]}|${run.name}`} run={run} />
           ))
         ) : (
           <p className="hint">Keine Buchungen für diese Filter gefunden.</p>

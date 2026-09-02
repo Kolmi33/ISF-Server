@@ -9,7 +9,7 @@ import { parseIsoDateString, isWeekend, nextWeekday } from '../../../../shared/d
 
 /** A booking run: consecutive workdays booked by one person on one machine, with the earliest ts. */
 export interface AllRun {
-  m: Machine;
+  machine: Machine;
   name: string;
   dates: string[];
   ts: string;
@@ -50,7 +50,7 @@ export function computeAllRuns(
       } else {
         if (currentRunDates.length) {
           runs.push({
-            m: machine,
+            machine,
             name: currentRunName!,
             dates: currentRunDates,
             ts: earliestTimestamp(currentRunDates),
@@ -62,7 +62,7 @@ export function computeAllRuns(
     }
     if (currentRunDates.length) {
       runs.push({
-        m: machine,
+        machine,
         name: currentRunName!,
         dates: currentRunDates,
         ts: earliestTimestamp(currentRunDates),
@@ -89,11 +89,12 @@ const sorters: Record<string, (runA: AllRun, runB: AllRun) => number> = {
     runA.dates[0]! < runB.dates[0]! ? -1 : runA.dates[0]! > runB.dates[0]! ? 1 : 0,
   erstellt: (runA, runB) => (runB.ts || '').localeCompare(runA.ts || ''),
   bereich: (runA, runB) =>
-    (runA.m.group || '').localeCompare(runB.m.group || '', 'de') ||
-    runA.m.name.localeCompare(runB.m.name, 'de') ||
+    (runA.machine.group || '').localeCompare(runB.machine.group || '', 'de') ||
+    runA.machine.name.localeCompare(runB.machine.name, 'de') ||
     (runA.dates[0]! < runB.dates[0]! ? -1 : 1),
   maschine: (runA, runB) =>
-    runA.m.name.localeCompare(runB.m.name, 'de') || (runA.dates[0]! < runB.dates[0]! ? -1 : 1),
+    runA.machine.name.localeCompare(runB.machine.name, 'de') ||
+    (runA.dates[0]! < runB.dates[0]! ? -1 : 1),
   person: (runA, runB) =>
     (runA.name || '').localeCompare(runB.name || '', 'de') ||
     (runA.dates[0]! < runB.dates[0]! ? -1 : 1),
@@ -114,8 +115,8 @@ export function filterAllRuns(
     .filter(
       (run) =>
         (!lowercasePerson || run.name.toLowerCase().includes(lowercasePerson)) &&
-        (!lowercaseMachine || run.m.name.toLowerCase().includes(lowercaseMachine)) &&
-        (!filterCriteria.group || run.m.group === filterCriteria.group) &&
+        (!lowercaseMachine || run.machine.name.toLowerCase().includes(lowercaseMachine)) &&
+        (!filterCriteria.group || run.machine.group === filterCriteria.group) &&
         (!filterCriteria.from || run.dates[run.dates.length - 1]! >= filterCriteria.from) &&
         (!filterCriteria.to || run.dates[0]! <= filterCriteria.to),
     )

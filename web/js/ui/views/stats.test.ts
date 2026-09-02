@@ -39,14 +39,14 @@ describe('computeStats', () => {
   });
 
   it('builds per-machine rows with counts, percent, and a person breakdown', () => {
-    const r1 = stats.machRows.find((r) => r.m.id === 'm1')!;
-    expect(r1.n).toBe(3);
-    expect(r1.pct).toBe(60); // 3 of 5 weekdays
+    const r1 = stats.machRows.find((r) => r.machine.id === 'm1')!;
+    expect(r1.bookedWorkdayCount).toBe(3);
+    expect(r1.percent).toBe(60); // 3 of 5 weekdays
     expect(r1.persons.get('anna')).toEqual({ name: 'Anna', days: 2 }); // case-folded key, kept display name
     expect(r1.persons.get('bob')).toEqual({ name: 'bob', days: 1 });
-    const r2 = stats.machRows.find((r) => r.m.id === 'm2')!;
-    expect(r2.n).toBe(1);
-    expect(r2.pct).toBe(20);
+    const r2 = stats.machRows.find((r) => r.machine.id === 'm2')!;
+    expect(r2.bookedWorkdayCount).toBe(1);
+    expect(r2.percent).toBe(20);
   });
 
   it('indexes people across machines with a per-machine day breakdown', () => {
@@ -58,17 +58,17 @@ describe('computeStats', () => {
     expect(Object.fromEntries(bob.machines)).toEqual({ M1: 1 });
   });
 
-  it('tallies maintenance: intersecting slots (inst) and blocked calendar days', () => {
-    expect(stats.maint.inst).toBe(1);
+  it('tallies maintenance: intersecting slots (slotCount) and blocked calendar days', () => {
+    expect(stats.maint.slotCount).toBe(1);
     expect(stats.maint.days).toBe(2); // 2021-01-05 and -06 blocked
-    expect(stats.maint.rows).toEqual([{ m: m1, inst: 1, days: 2 }]); // m2 omitted (no maint, no block)
+    expect(stats.maint.rows).toEqual([{ machine: m1, slotCount: 1, days: 2 }]); // m2 omitted (no maint, no block)
   });
 
   it('yields zero percent when the range has no weekdays', () => {
     const s = computeStats([m1], { m1: { '2021-01-09': bk('anna') } }, '2021-01-09', '2021-01-09');
     expect(s.days).toEqual([]); // Saturday only
-    expect(s.machRows[0]!.n).toBe(0);
-    expect(s.machRows[0]!.pct).toBe(0);
+    expect(s.machRows[0]!.bookedWorkdayCount).toBe(0);
+    expect(s.machRows[0]!.percent).toBe(0);
   });
 
   it('is empty when there are no machines', () => {
@@ -81,7 +81,7 @@ describe('computeStats', () => {
   it('handles a machine with no bookings entry at all', () => {
     // m2 has no key in `bookings` → the `|| {}` fallback; no maint either → omitted from maint rows.
     const s = computeStats([m2], {}, '2021-01-04', '2021-01-08');
-    expect(s.machRows[0]!.n).toBe(0);
+    expect(s.machRows[0]!.bookedWorkdayCount).toBe(0);
     expect(s.machRows[0]!.persons.size).toBe(0);
     expect(s.persons.size).toBe(0);
     expect(s.maint.rows).toEqual([]);
@@ -96,13 +96,16 @@ describe('buildResourceRows', () => {
   };
 
   const row = (
-    overrides: Partial<StatsMachineRow['m']> & { pct?: number; n?: number } = {},
+    overrides: Partial<StatsMachineRow['machine']> & {
+      percent?: number;
+      bookedWorkdayCount?: number;
+    } = {},
   ): StatsMachineRow => {
-    const { pct = 0, n = 0, ...machineOverrides } = overrides;
+    const { percent = 0, bookedWorkdayCount = 0, ...machineOverrides } = overrides;
     return {
-      m: { id: 'm1', name: 'M1', group: 'Halle', ...machineOverrides },
-      n,
-      pct,
+      machine: { id: 'm1', name: 'M1', group: 'Halle', ...machineOverrides },
+      bookedWorkdayCount,
+      percent,
       persons: new Map(),
     };
   };
@@ -130,9 +133,9 @@ describe('buildResourceRows', () => {
   it("a category's average covers every row in it, even ones in a folded group", () => {
     const rows = buildResourceRows(
       [
-        row({ id: 'm1', group: 'A', pct: 100 }),
-        row({ id: 'm2', group: 'B', pct: 0, cat: 'messtechnik' }),
-        row({ id: 'm3', group: 'B', pct: 0, cat: 'messtechnik' }),
+        row({ id: 'm1', group: 'A', percent: 100 }),
+        row({ id: 'm2', group: 'B', percent: 0, cat: 'messtechnik' }),
+        row({ id: 'm3', group: 'B', percent: 0, cat: 'messtechnik' }),
       ],
       { ...noFilter, closedKeys: new Set(['g:B']) },
     );
@@ -142,7 +145,7 @@ describe('buildResourceRows', () => {
     expect(messtechnikCategory).toMatchObject({ averagePercent: 0 }); // both B rows count, despite being folded
     const groupB = rows.find((r) => r.kind === 'group' && r.group === 'B');
     expect(groupB).toMatchObject({ collapsed: true });
-    expect(rows.filter((r) => r.kind === 'machine' && r.row.m.group === 'B')).toEqual([]); // rows hidden
+    expect(rows.filter((r) => r.kind === 'machine' && r.row.machine.group === 'B')).toEqual([]); // rows hidden
   });
 
   it('folding a category hides its group headers and rows too, not just the category', () => {
@@ -155,10 +158,10 @@ describe('buildResourceRows', () => {
 
   it('sorts machines within a group by percent descending, then by German name order', () => {
     const rows = buildResourceRows(
-      [row({ id: 'm1', name: 'Beta', pct: 50 }), row({ id: 'm2', name: 'Alpha', pct: 80 })],
+      [row({ id: 'm1', name: 'Beta', percent: 50 }), row({ id: 'm2', name: 'Alpha', percent: 80 })],
       noFilter,
     );
-    const names = rows.filter((r) => r.kind === 'machine').map((r) => r.row.m.name);
+    const names = rows.filter((r) => r.kind === 'machine').map((r) => r.row.machine.name);
     expect(names).toEqual(['Alpha', 'Beta']);
   });
 
@@ -181,15 +184,18 @@ describe('buildResourceRows', () => {
 });
 
 describe('buildMaintRows', () => {
-  // `blockedDays`/`instances` (not `days`/`inst`) to avoid colliding with `Machine`'s own
+  // `blockedDays`/`instances` (not `days`/`slotCount`) to avoid colliding with `Machine`'s own
   // `days` field (the weekday-availability mask) when intersected below.
   const maintRow = (
-    overrides: Partial<StatsMaintRow['m']> & { instances?: number; blockedDays?: number } = {},
+    overrides: Partial<StatsMaintRow['machine']> & {
+      instances?: number;
+      blockedDays?: number;
+    } = {},
   ): StatsMaintRow => {
     const { instances = 0, blockedDays = 0, ...machineOverrides } = overrides;
     return {
-      m: { id: 'm1', name: 'M1', group: 'Halle', ...machineOverrides },
-      inst: instances,
+      machine: { id: 'm1', name: 'M1', group: 'Halle', ...machineOverrides },
+      slotCount: instances,
       days: blockedDays,
     };
   };
@@ -203,7 +209,7 @@ describe('buildMaintRows', () => {
       ],
       '',
     );
-    expect(rows.map((r) => r.m.name)).toEqual(['Alpha', 'Gamma', 'Beta']);
+    expect(rows.map((r) => r.machine.name)).toEqual(['Alpha', 'Gamma', 'Beta']);
   });
 
   it('filters by machine name, case-insensitively', () => {
@@ -211,7 +217,7 @@ describe('buildMaintRows', () => {
       [maintRow({ id: 'a', name: 'Fräse' }), maintRow({ id: 'b', name: 'Presse' })],
       'FRÄ',
     );
-    expect(rows.map((r) => r.m.name)).toEqual(['Fräse']);
+    expect(rows.map((r) => r.machine.name)).toEqual(['Fräse']);
   });
 });
 

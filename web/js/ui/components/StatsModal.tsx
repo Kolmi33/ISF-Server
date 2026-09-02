@@ -71,7 +71,8 @@ function useStatsSelection(presetPerson: string | undefined, agg: Stats) {
   const [selP, setSelP] = useState<string | null>(presetPerson ?? null);
   const [filterQuery, setFilterQuery] = useState('');
 
-  const machineRow = mode === 'm' && selM ? agg.machRows.find((r) => r.m.id === selM) : undefined;
+  const machineRow =
+    mode === 'm' && selM ? agg.machRows.find((r) => r.machine.id === selM) : undefined;
   const person = mode === 'p' && selP ? agg.persons.get(selP) : undefined;
 
   // Legacy resets a stale drilldown selection (its machine/person has no data in the recomputed
@@ -182,7 +183,7 @@ function StatsBody({
     return (
       <MaintenanceOverview
         rows={buildMaintRows(agg.maint.rows, filterQuery)}
-        totalInstances={agg.maint.inst}
+        totalInstances={agg.maint.slotCount}
         totalDays={agg.maint.days}
       />
     );

@@ -51,13 +51,13 @@ function ResourceRowView({
   return (
     <div
       className="statrow click"
-      title={`Klicken: wer hat ${row.row.m.name} belegt?`}
-      onClick={() => onSelectMachine(row.row.m.id)}
+      title={`Klicken: wer hat ${row.row.machine.name} belegt?`}
+      onClick={() => onSelectMachine(row.row.machine.id)}
     >
-      <span className="nm">{row.row.m.name}</span>
-      <StatBar percent={row.row.pct} />
+      <span className="nm">{row.row.machine.name}</span>
+      <StatBar percent={row.row.percent} />
       <span className="pct">
-        {row.row.n}/{totalDays} · {row.row.pct}%
+        {row.row.bookedWorkdayCount}/{totalDays} · {row.row.percent}%
       </span>
     </div>
   );
@@ -83,7 +83,7 @@ export function ResourcesOverview({
       <div className="resultlist" style={{ maxHeight: 400 }}>
         {rows.map((row, index) => (
           <ResourceRowView
-            key={`${row.kind}:${row.kind === 'machine' ? row.row.m.id : row.kind === 'category' ? row.category : row.group}:${index}`}
+            key={`${row.kind}:${row.kind === 'machine' ? row.row.machine.id : row.kind === 'category' ? row.category : row.group}:${index}`}
             row={row}
             totalDays={totalDays}
             onToggleFold={onToggleFold}
@@ -113,13 +113,13 @@ export function MaintenanceOverview({ rows, totalInstances, totalDays }: Mainten
       <div className="resultlist" style={{ maxHeight: 400 }}>
         {rows.length ? (
           rows.map((row) => (
-            <div className="statrow" key={row.m.id}>
-              <span className="nm" title={row.m.group}>
-                {row.m.name}
+            <div className="statrow" key={row.machine.id}>
+              <span className="nm" title={row.machine.group}>
+                {row.machine.name}
               </span>
               <StatBar percent={Math.round((row.days * 100) / maxDays)} />
               <span className="pct">
-                {row.inst}× · {row.days} Tg
+                {row.slotCount}× · {row.days} Tg
               </span>
             </div>
           ))

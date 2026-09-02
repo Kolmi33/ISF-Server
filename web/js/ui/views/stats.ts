@@ -20,17 +20,17 @@ export interface StatsPerson {
   days: number;
   machines: Map<string, number>;
 }
-/** A machine's utilisation over the range: booked workdays `n`, percent, and who booked them. */
+/** A machine's utilisation over the range: booked workdays, percent, and who booked them. */
 export interface StatsMachineRow {
-  m: Machine;
-  n: number;
-  pct: number;
+  machine: Machine;
+  bookedWorkdayCount: number;
+  percent: number;
   persons: Map<string, StatsPersonDays>;
 }
 /** A machine's maintenance/downtime over the range: intersecting slots + blocked calendar days. */
 export interface StatsMaintRow {
-  m: Machine;
-  inst: number;
+  machine: Machine;
+  slotCount: number;
   days: number;
 }
 /** The full aggregation the stats modal renders from (all four modes share it). */
@@ -38,7 +38,7 @@ export interface Stats {
   days: string[];
   machRows: StatsMachineRow[];
   persons: Map<string, StatsPerson>;
-  maint: { rows: StatsMaintRow[]; inst: number; days: number };
+  maint: { rows: StatsMaintRow[]; slotCount: number; days: number };
 }
 
 function aggregateBookings(
@@ -74,9 +74,9 @@ function aggregateBookings(
       personEntry.machines.set(machine.name, (personEntry.machines.get(machine.name) || 0) + 1);
     }
     machRows.push({
-      m: machine,
-      n: bookedWorkdayCount,
-      pct: days.length ? Math.round((bookedWorkdayCount * 100) / days.length) : 0,
+      machine,
+      bookedWorkdayCount,
+      percent: days.length ? Math.round((bookedWorkdayCount * 100) / days.length) : 0,
       persons: personDaysOnThisMachine,
     });
   }
@@ -101,12 +101,12 @@ function aggregateMaint(
       if (isBlockedOnDate(machine, date)) blockedDayCount++;
     }
     if (slotsInRange.length || blockedDayCount) {
-      rows.push({ m: machine, inst: slotsInRange.length, days: blockedDayCount });
+      rows.push({ machine, slotCount: slotsInRange.length, days: blockedDayCount });
       totalSlotCount += slotsInRange.length;
       totalBlockedDayCount += blockedDayCount;
     }
   }
-  return { rows, inst: totalSlotCount, days: totalBlockedDayCount };
+  return { rows, slotCount: totalSlotCount, days: totalBlockedDayCount };
 }
 
 /**
@@ -178,14 +178,14 @@ function bucketResourceRows(
   const groupsByCategory = new Map<MachineCategory, string[]>();
   const rowsByGroupInCategory = new Map<string, StatsMachineRow[]>();
   for (const row of machRows) {
-    if (lowercaseQuery && !row.m.name.toLowerCase().includes(lowercaseQuery)) continue;
-    const category = categoryOf(row.m);
+    if (lowercaseQuery && !row.machine.name.toLowerCase().includes(lowercaseQuery)) continue;
+    const category = categoryOf(row.machine);
     if (!visibleCategories.has(category)) continue;
     if (!groupsByCategory.has(category)) {
       groupsByCategory.set(category, []);
       categoriesInOrder.push(category);
     }
-    const group = row.m.group;
+    const group = row.machine.group;
     const bucketKey = `${category}::${group}`;
     if (!rowsByGroupInCategory.has(bucketKey)) {
       rowsByGroupInCategory.set(bucketKey, []);
@@ -228,7 +228,7 @@ export function buildResourceRows(
         kind: 'category',
         category,
         collapsed: categoryClosed,
-        averagePercent: average(allRowsInCategory.map((row) => row.pct)),
+        averagePercent: average(allRowsInCategory.map((row) => row.percent)),
       });
     }
     if (categoryClosed) continue; // hides every group (and row) under this category
@@ -237,13 +237,15 @@ export function buildResourceRows(
       const rowsInGroup = rowsByGroupInCategory
         .get(`${category}::${group}`)!
         .slice()
-        .sort((a, b) => b.pct - a.pct || a.m.name.localeCompare(b.m.name, 'de'));
+        .sort(
+          (a, b) => b.percent - a.percent || a.machine.name.localeCompare(b.machine.name, 'de'),
+        );
       const groupClosed = closedKeys.has(`g:${group}`);
       rows.push({
         kind: 'group',
         group,
         collapsed: groupClosed,
-        averagePercent: average(rowsInGroup.map((row) => row.pct)),
+        averagePercent: average(rowsInGroup.map((row) => row.percent)),
       });
       if (groupClosed) continue; // the group header stays; only its machine rows hide
 
@@ -266,8 +268,13 @@ export function buildMaintRows(
 ): StatsMaintRow[] {
   const lowercaseQuery = filterQuery.trim().toLowerCase();
   return maintRows
-    .filter((row) => !lowercaseQuery || row.m.name.toLowerCase().includes(lowercaseQuery))
-    .sort((a, b) => b.days - a.days || b.inst - a.inst || a.m.name.localeCompare(b.m.name, 'de'));
+    .filter((row) => !lowercaseQuery || row.machine.name.toLowerCase().includes(lowercaseQuery))
+    .sort(
+      (a, b) =>
+        b.days - a.days ||
+        b.slotCount - a.slotCount ||
+        a.machine.name.localeCompare(b.machine.name, 'de'),
+    );
 }
 
 /**

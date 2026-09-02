@@ -22,8 +22,8 @@ export function MachineDrilldown({ row, totalDays }: { row: StatsMachineRow; tot
   return (
     <>
       <p className="hint">
-        <b>{row.m.name}</b> ({row.m.group}) — belegt an <b>{row.n}</b> von {totalDays} Werktagen (
-        {row.pct}%)
+        <b>{row.machine.name}</b> ({row.machine.group}) — belegt an <b>{row.bookedWorkdayCount}</b>{' '}
+        von {totalDays} Werktagen ({row.percent}%)
       </p>
       <div className="statgrp">
         <Icon name="user" /> Am meisten belegt von
@@ -35,7 +35,11 @@ export function MachineDrilldown({ row, totalDays }: { row: StatsMachineRow; tot
               <span className="nm">{person.name}</span>
               <StatBar percent={Math.round((person.days * 100) / maxDays)} />
               <span className="pct">
-                {person.days} Tg · {row.n ? Math.round((person.days * 100) / row.n) : 0}%
+                {person.days} Tg ·{' '}
+                {row.bookedWorkdayCount
+                  ? Math.round((person.days * 100) / row.bookedWorkdayCount)
+                  : 0}
+                %
               </span>
             </div>
           ))

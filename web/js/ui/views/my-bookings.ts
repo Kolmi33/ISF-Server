@@ -9,7 +9,7 @@ import { parseIsoDateString, isWeekend, nextWeekday } from '../../../../shared/d
 
 /** A run of consecutive workdays the user has booked on one machine (a bookable "series"). */
 export interface BookingRun {
-  m: Machine;
+  machine: Machine;
   dates: string[];
 }
 
@@ -45,11 +45,11 @@ export function computeMyRuns(
       if (continuesCurrentRun) {
         currentRunDates.push(date);
       } else {
-        if (currentRunDates.length) runs.push({ m: machine, dates: currentRunDates });
+        if (currentRunDates.length) runs.push({ machine, dates: currentRunDates });
         currentRunDates = [date];
       }
     }
-    if (currentRunDates.length) runs.push({ m: machine, dates: currentRunDates });
+    if (currentRunDates.length) runs.push({ machine, dates: currentRunDates });
   }
   runs.sort((runA, runB) => (runA.dates[0]! < runB.dates[0]! ? -1 : 1));
   return runs;

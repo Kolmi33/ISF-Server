@@ -38,10 +38,10 @@ function liveRunsFrom(frozenRuns: readonly BookingRun[]): LiveRun[] {
   const bookings = store.get('data')!.bookings;
   return frozenRuns
     .map((run) => ({
-      machine: run.m,
+      machine: run.machine,
       allDates: run.dates,
       liveDates: run.dates.filter(
-        (date) => getBooking(bookings, run.m.id, date)?.name.toLowerCase() === lowercaseUser,
+        (date) => getBooking(bookings, run.machine.id, date)?.name.toLowerCase() === lowercaseUser,
       ),
     }))
     .filter((run) => run.liveDates.length > 0);

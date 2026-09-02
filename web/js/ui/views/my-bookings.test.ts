@@ -21,15 +21,15 @@ describe('computeMyRuns', () => {
     };
     const runs = computeMyRuns([m1], bookings, 'anna', today);
     expect(runs).toEqual([
-      { m: m1, dates: ['2021-01-04', '2021-01-05'] },
-      { m: m1, dates: ['2021-01-07'] },
+      { machine: m1, dates: ['2021-01-04', '2021-01-05'] },
+      { machine: m1, dates: ['2021-01-07'] },
     ]);
   });
 
   it('treats Fri→Mon as one run (weekend skipped)', () => {
     const bookings: Bookings = { m1: { '2021-01-08': bk('anna'), '2021-01-11': bk('anna') } };
     const runs = computeMyRuns([m1], bookings, 'anna', today);
-    expect(runs).toEqual([{ m: m1, dates: ['2021-01-08', '2021-01-11'] }]);
+    expect(runs).toEqual([{ machine: m1, dates: ['2021-01-08', '2021-01-11'] }]);
   });
 
   it('drops past days, weekend bookings, and other users; matches case-insensitively', () => {
@@ -42,7 +42,7 @@ describe('computeMyRuns', () => {
       },
     };
     const runs = computeMyRuns([m1], bookings, 'anna', today);
-    expect(runs).toEqual([{ m: m1, dates: ['2021-01-05'] }]);
+    expect(runs).toEqual([{ machine: m1, dates: ['2021-01-05'] }]);
   });
 
   it('sorts runs across machines by their first date', () => {
@@ -52,7 +52,7 @@ describe('computeMyRuns', () => {
     };
     // machine order [m1, m2], but result is date-sorted: 04(m1), 06(m2), 07(m1)
     const runs = computeMyRuns([m1, m2], bookings, 'anna', today);
-    expect(runs.map((r) => ({ id: r.m.id, first: r.dates[0] }))).toEqual([
+    expect(runs.map((r) => ({ id: r.machine.id, first: r.dates[0] }))).toEqual([
       { id: 'm1', first: '2021-01-04' },
       { id: 'm2', first: '2021-01-06' },
       { id: 'm1', first: '2021-01-07' },
