@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AppState, BookingData } from '../../../shared/types.ts';
+import type { CellUndo } from '../core/booking.ts';
 import { toast, offerUndo } from './toast.ts';
 
 beforeEach(() => {
@@ -98,6 +99,59 @@ describe('offerUndo', () => {
     expect(window.mutate).toHaveBeenCalledWith(expect.any(Function), 'Rückgängig: Buchung');
     expect(bookings['m1']!['2021-01-04']).toBeUndefined();
     expect(bookings['m1']!['2021-01-05']).toEqual({ name: 'bob' });
+  });
+
+  it('undoing a just-created booking sends the CURRENT cell value as the CAS check, not the pre-creation state', async () => {
+    // Bug: entry.prev (null, since nothing was there before the ORIGINAL booking) used to be
+    // forwarded as-is into the undo's own server request. The server treats a null `prev` as
+    // "no CAS check requested" and deletes unconditionally — including a booking someone else
+    // made on that cell after the original write. The fix must instead send what's actually
+    // on the cell right now (about to be deleted), so the server can detect a takeover.
+    const bookings: Record<string, Record<string, unknown>> = {
+      m1: { '2021-01-04': { name: 'anna' } }, // the original write has already landed
+    };
+    let capturedResult: { undo: CellUndo[] } | undefined;
+    window.mutate = vi.fn(async (fn: (fresh: BookingData) => unknown) => {
+      capturedResult = fn({ machines: [], bookings } as unknown as BookingData) as {
+        undo: CellUndo[];
+      };
+      return capturedResult;
+    }) as unknown as typeof window.mutate;
+
+    offerUndo(
+      'Gebucht.',
+      [{ mid: 'm1', date: '2021-01-04', prev: null }], // undo: this cell was newly created
+      'Buchung',
+    );
+    document.getElementById('undoBtn')!.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(capturedResult!.undo).toEqual([
+      { mid: 'm1', date: '2021-01-04', prev: { name: 'anna' } },
+    ]);
+  });
+
+  it('undoing a deletion still sends the (empty) current state as the CAS check', async () => {
+    const bookings: Record<string, Record<string, unknown>> = { m1: {} }; // already deleted
+    let capturedResult: { undo: CellUndo[] } | undefined;
+    window.mutate = vi.fn(async (fn: (fresh: BookingData) => unknown) => {
+      capturedResult = fn({ machines: [], bookings } as unknown as BookingData) as {
+        undo: CellUndo[];
+      };
+      return capturedResult;
+    }) as unknown as typeof window.mutate;
+
+    offerUndo(
+      'Gelöscht.',
+      [{ mid: 'm1', date: '2021-01-04', prev: { name: 'bob' } }], // undo: restore bob's booking
+      'Löschen',
+    );
+    document.getElementById('undoBtn')!.click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(capturedResult!.undo).toEqual([{ mid: 'm1', date: '2021-01-04', prev: null }]);
   });
 
   it('shows a confirmation toast once the undo mutate call succeeds', async () => {

@@ -59,12 +59,21 @@ export function offerUndo(
   }
   toast(message, async () => {
     const result = await window.mutate((fresh) => {
+      const undoOfUndo: CellUndo[] = [];
       for (const entry of entries) {
         fresh.bookings[entry.mid] = fresh.bookings[entry.mid] || {};
+        // The CAS check for THIS write must be what's actually on the cell right now (about
+        // to be overwritten/removed), not `entry.prev` — that describes the state before the
+        // ORIGINAL action, which only coincides with "now" when undoing a deletion. Undoing a
+        // creation has `entry.prev === null`; sending that as-is would tell the server "no
+        // CAS check requested", so it deletes unconditionally — including a booking someone
+        // else made on that cell after the original write, with no conflict detected.
+        const current = fresh.bookings[entry.mid]![entry.date] ?? null;
+        undoOfUndo.push({ mid: entry.mid, date: entry.date, prev: current });
         if (entry.prev) fresh.bookings[entry.mid]![entry.date] = entry.prev;
         else delete fresh.bookings[entry.mid]![entry.date];
       }
-      return { undo: entries }; // same cells → mutate()'s patch path, not a full re-render
+      return { undo: undoOfUndo }; // same cells → mutate()'s patch path, not a full re-render
     }, 'Rückgängig: ' + label);
     if (result && !result.abort) toast('Rückgängig gemacht ✓');
   });
