@@ -102,7 +102,7 @@ describe('mutate — optimistic apply + logging', () => {
   });
 
   it('invalidates the machine lookup cache for a structural change (no undo array)', async () => {
-    // saveMachine/deleteMachine/moveMachine (core/booking.ts) mutate `data.machines` in place
+    // saveMachine/deleteMachine/moveMachine (core/machines.ts) mutate `data.machines` in place
     // — machById's own reference-equality cache can't see that on its own (machine-lookup
     // .test.ts covers that gap directly); this proves mutate() closes it for the real path.
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));

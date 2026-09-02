@@ -311,6 +311,54 @@ removed in 2.3 — recover from git if useful) in a **tested** module the TS bac
 removed client-side migrations gone. Safety: daily VACUUM backup exists; backfill is reversible via
 restore, and the sweep removes bridges automatically if a series later breaks.
 
+**Phase 8 — Naming & structure clarity (`PRINCIPLES.md` E9/E10)**
+User-driven code-review pass (2026-09-02): the codebase has real anti-patterns — machine CRUD
+reducers hiding inside `booking.ts` with no `machines.ts` mutation-side counterpart (breaking the
+`booking.ts`/`booking-queries.ts` pairing E10 now names), and `mid`/`gid`/`n`/`dir`-style
+unexplained abbreviations spread across ~46 files. Two principles now govern the fix (E9, E10);
+this is their systematic application, file by file, one commit per safe-to-isolate module.
+
+**Scope boundary — decided once, applied everywhere (do not re-litigate per file):**
+Renaming is a plain identifier change UNLESS it touches something already fixed elsewhere,
+which turns it into a data-shape change:
+- **Stays exactly as-is:** SQL DDL/DML text (`server/db.ts`'s `CREATE TABLE`/column names,
+  every `db.prepare(...)` string) — a real column rename needs a migration, out of scope here.
+- **Stays exactly as-is:** `server/types.ts`'s `MachineRow`/`BookingRow` (typed 1:1 against a raw
+  `SELECT *`) — same precedent the file already sets itself (`grp` stays raw there; `group` is
+  the cleaned-up name one layer out, in `MachineOut`).
+- **Stays exactly as-is:** `shared/types.ts`'s `Machine`/`Booking`/`MaintSlot` fields (`gid`,
+  `gtitle`, `redu`, `cat`, `maint`, `days`) — these are the literal at-rest shape of the bundled
+  seed `buchungen.json` and round-trip through `/api/state` unchanged; renaming needs an
+  import/export transform, not a naming pass. Each gets/keeps a doc-comment carrying the clarity
+  its name can't (most already do).
+- **Renamed, in lockstep client+server, same commit:** every *live, non-persisted* wire shape —
+  `/api/mutate` request cells (`CellDelta.mid`), its conflict/change response arrays
+  (`MutateConflict`/`MutateChange`), the SSE change/presence payloads, and the `data-mid` DOM
+  attribute the grid renders and every interaction/patch module queries by. None of these are
+  ever written to disk verbatim; both ends of each always deploy together, so there's no
+  compatibility window to break.
+- **Renamed freely, no coordination needed:** every local variable, function parameter, and
+  purely in-memory/computed type (`CellUndo`, `CellRef`, `BookingGroup`, `Bridge` — the last
+  feeds `db.prepare(...).run(...)` **positionally**, so its field names carry no SQL meaning) —
+  the vast majority of the ~46 files.
+
+**Backlog:**
+- [ ] 8.1 Split `core/machines.ts`: the pure predicates it already holds move to
+  `core/machines-queries.ts` (naming mirrors `booking-queries.ts` exactly); the machine-CRUD
+  reducers currently mislabeled inside `booking.ts` (`saveMachine`, `deleteMachine`,
+  `moveMachine`, `MachineForm`, and their private helpers) move into a new `core/machines.ts`.
+  `booking.ts`'s header comment is trimmed to what it actually still owns. `moveMachine` also
+  gets a doc-comment/readability pass in the move (the concrete example that started this phase).
+- [ ] 8.2 Rename `mid`→`machineId`, `gid`→`groupId` across every file the scope boundary above
+  clears — one large mechanical commit (a partial rename doesn't type-check, so it can't be
+  split further without breaking `HEAD` green). Includes the `data-mid` DOM attribute and the
+  wire-shape structs named above, updated in lockstep. Excludes everything the boundary keeps.
+- [ ] 8.3 Rename `findConflicts` → `findBookingConflicts` (core/booking.ts) — states *what* it
+  finds conflicts in, not just that it finds them.
+- [ ] 8.4 Sweep the remainder for the same pattern: bare `n` (→ `deletedCount`/whatever it counts),
+  bare `dir` (→ `direction`), any other function name that doesn't say its domain on its own.
+  Not yet scoped file-by-file — do that scoping as this item is picked up.
+
 ## Done log (newest first)
 - **2026-09-02 — Code-review fixes**: undo's CAS-check bug and `machById`'s stale-cache bug
   (both found by an external review, verified with a failing regression test before fixing —

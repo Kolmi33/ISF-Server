@@ -2,12 +2,12 @@
 // `core/machines`; no DOM. The form chrome (`ui/components/MachineFormModal.tsx` + its split-
 // out `MachineFormFields.tsx`/`MaintenanceSlotEditor.tsx`) just renders this and calls
 // `validateMachineForm` before mutating. The actual save/delete reducers (slug/id generation,
-// group insertion, field application) already live in `core/booking.ts` (`saveMachine`/
+// group insertion, field application) already live in `core/machines.ts` (`saveMachine`/
 // `deleteMachine`, Phase 5.1) — this module only prepares their `MachineForm` input.
 
 import type { Machine, MaintSlot } from '../../../shared/types.ts';
-import type { MachineForm } from '../core/booking.ts';
-import { categoryOf, maintenanceSlots } from '../core/machines.ts';
+import type { MachineForm } from '../core/machines.ts';
+import { categoryOf, maintenanceSlots } from '../core/machines-queries.ts';
 import { WEEKDAY_SHORT_LABELS } from './machine-text.ts';
 
 /** One maintenance slot as edited (before trim/validate) — `MaintSlot` with `note` always a

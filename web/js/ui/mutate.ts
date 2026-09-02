@@ -59,7 +59,7 @@ export async function refreshNow(silent: boolean): Promise<void> {
 }
 
 /** Whether `result` came from a machine-structural reducer (saveMachine/deleteMachine/
- *  moveMachine, core/booking.ts) rather than a booking-cell one — those never return an
+ *  moveMachine, core/machines.ts) rather than a booking-cell one — those never return an
  *  `undo` array, every booking-cell reducer always does (`buildMutateRequestBody` below makes
  *  the same distinction, inline, for the request-shape decision). Split out purely so `mutate`
  *  itself stays under the complexity budget. */

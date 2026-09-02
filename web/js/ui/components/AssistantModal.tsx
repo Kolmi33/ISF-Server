@@ -23,7 +23,7 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../../shared/dates.ts';
-import { isBlockedOnDate, dayAvailable } from '../../core/machines.ts';
+import { isBlockedOnDate, dayAvailable } from '../../core/machines-queries.ts';
 import {
   addDeviceToTree,
   changeGroupNeed,

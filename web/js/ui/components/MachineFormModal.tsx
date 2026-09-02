@@ -3,7 +3,8 @@
 // the fields and the maintenance-slot list are split into `MachineFormFields.tsx`/
 // `MaintenanceSlotEditor.tsx` — all purely to stay under the file-length/function-length
 // budgets, and all one form conceptually. The actual save/delete reducers already live in
-// `core/booking.ts` (`saveMachine`/`deleteMachine`, Phase 5.1).
+// `core/machines.ts` (`saveMachine`/`deleteMachine`, Phase 5.1; moved out of `core/booking.ts`
+// in the Phase 8 naming/structure cleanup — PRINCIPLES.md E10).
 //
 // "Zurück" and a successful save/delete all route to `openAdmin()`, a direct import from
 // `AdminModal.tsx` (B5) that closes a real three-way cycle with it and `LogModal.tsx` — see
@@ -11,8 +12,8 @@
 
 import { useState } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
-import { groupsByCategory } from '../../core/machines.ts';
-import { saveMachine, deleteMachine } from '../../core/booking.ts';
+import { groupsByCategory } from '../../core/machines-queries.ts';
+import { saveMachine, deleteMachine } from '../../core/machines.ts';
 import {
   initialMachineFormState,
   validateMachineForm,

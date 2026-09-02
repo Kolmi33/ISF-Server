@@ -4,7 +4,7 @@
 // each `<option>` (its value defaults to its text content, the group name), matching legacy's
 // own markup so the enclosing `<select>`'s plain string `value` still just works.
 
-import { CATEGORIES, type CategoryGroups } from '../../core/machines.ts';
+import { CATEGORIES, type CategoryGroups } from '../../core/machines-queries.ts';
 
 export function GroupOptions({ groupOptions }: { groupOptions: readonly CategoryGroups[] }) {
   return (

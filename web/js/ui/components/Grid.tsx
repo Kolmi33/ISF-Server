@@ -30,7 +30,7 @@ import {
 } from '../../../../shared/dates.ts';
 import { buildGridRows, visibleWeeks, type GridRow } from '../grid.ts';
 import { daysPerWeek, syncJumpControls, ensureOverflow } from '../grid-scroll.ts';
-import { CATEGORIES } from '../../core/machines.ts';
+import { CATEGORIES } from '../../core/machines-queries.ts';
 import { categoryTap, categoryTapCancel, toggleAllGroupsInCategory } from '../category-fold.ts';
 import { paintSelection } from '../grid-interaction.ts';
 import { Icon } from './Icon.tsx';

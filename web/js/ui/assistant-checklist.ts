@@ -6,7 +6,7 @@
 // legacy's `searching` branch exactly.
 
 import type { Machine } from '../../../shared/types.ts';
-import { CATEGORIES, categoryOf } from '../core/machines.ts';
+import { CATEGORIES, categoryOf } from '../core/machines-queries.ts';
 
 const FAVORITES_KEY = 'fav';
 const FAVORITES_LABEL = '★ Favoriten';

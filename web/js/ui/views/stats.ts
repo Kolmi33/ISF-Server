@@ -7,7 +7,7 @@
 
 import type { Machine, Bookings, MachineCategory } from '../../../../shared/types.ts';
 import { getWeekdaysInRange, getAllDaysInRange } from '../../../../shared/dates.ts';
-import { maintenanceSlots, isBlockedOnDate, categoryOf } from '../../core/machines.ts';
+import { maintenanceSlots, isBlockedOnDate, categoryOf } from '../../core/machines-queries.ts';
 
 /** One person's day count on a single machine (the per-machine drilldown row). */
 export interface StatsPersonDays {

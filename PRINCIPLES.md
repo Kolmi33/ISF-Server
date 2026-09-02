@@ -131,6 +131,35 @@ Layers open only in their phase — the backend stays sealed until Phase 6. (Wee
 → Phase 6.3.)
 *Verify:* item exists in `PROGRESS.md` with enough detail to execute cold.
 
+### E9 — Self-explanatory names, no silent abbreviations
+Every exported type field, function name, and parameter must be readable **without** consulting
+the call site. `mid` (which "mid"? machine id? middle? mid-week?), `n`, `dir`, `redu` as a bare
+local/parameter name — none say what they hold. Spell the word out: `machineId`, `deletedCount`,
+`direction`. A function name states its own effect in domain terms a reader outside the module
+already has — `findConflicts` doesn't say conflicts *in what*; `findBookingConflicts` does.
+This is P5 ("meaningful names") made concrete with a hard rule: **the only exemption is an
+identifier that mirrors an actual persisted or wire contract already fixed elsewhere** (a SQL
+column, a field in `shared/types.ts` that round-trips through the seed JSON / `/api/state`) —
+there, renaming is a data-shape change, not a naming cleanup, and the existing project precedent
+(`MachineRow.grp` stays raw; `MachineOut.group` is the cleaned-up wire name — `server/types.ts`)
+is to keep the raw storage-facing name **only in the type that's typed 1:1 against that
+storage**, and rename everywhere the value travels as a plain in-memory string afterward. An
+exempted field gets a doc-comment carrying the clarity its name can't.
+*Verify:* grep the changed file/module for the abbreviation — zero hits outside an explicitly
+documented storage-shape type; a reader unfamiliar with the codebase can restate what an
+identifier holds, or what a function returns, from its name alone.
+
+### E10 — One domain, one file pair
+A domain's write-path reducers live in `<domain>.ts`; its pure read-only lookups live in
+`<domain>-queries.ts` (the `booking.ts` / `booking-queries.ts` split is the reference). A file's
+header comment states its exact scope in one line; when another domain's logic accretes onto a
+file under a name that doesn't cover it (machine CRUD living in `booking.ts`), that's a missed
+split, not a shrug — move it to its own correctly-named file the moment it's noticed, don't wait
+for a dedicated cleanup pass.
+*Verify:* every exported function's domain matches its file's name; every domain with both a
+write path and a read path has both files; `grep -l "^export function"` on a file never turns up
+a function whose name belongs to a different domain than the filename says.
+
 ---
 
 ## What the automated gate enforces (and what it can't)

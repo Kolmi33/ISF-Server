@@ -8,7 +8,7 @@
 
 import type { Booking, Machine, MachineCategory } from '../../../shared/types.ts';
 import { addDays, formatDateAsIsoString } from '../../../shared/dates.ts';
-import { categoryOf, maintenanceSlotAt } from '../core/machines.ts';
+import { categoryOf, maintenanceSlotAt } from '../core/machines-queries.ts';
 
 /** The four mutually exclusive states a grid cell can be in, in priority order. */
 export type CellState = 'blocked' | 'booked' | 'unavail' | 'free';

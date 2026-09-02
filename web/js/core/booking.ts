@@ -1,14 +1,16 @@
-// Pure write-path reducers extracted from the monolith (legacy.js). No DOM, no I/O,
+// Pure booking write-path reducers extracted from the monolith (legacy.js). No DOM, no I/O,
 // no global state — each takes the FRESH server data (machines + bookings) and mutates
 // it in place, returning the same {abort} / {conflicts} / {count,undo} / {n,undo}
 // shapes the legacy `mutate(fresh => …)` callbacks returned. The two impurities the
 // booking apply needs — the wall-clock timestamp and the group-id factory — are
 // injected (E4), so the reducers are deterministic functions of their inputs.
 //
-// These belong in core/ (domain logic, like sweepWeekends), NOT ui/. They are the
-// booking apply/conflict reducer, the run delete, and the machine CRUD (save/delete/
-// reorder). Gate-only: they POST to /api/mutate, so they are verified by exhaustive
-// unit tests rather than a production-write browser smoke (ARCHITECTURE §15).
+// This belongs in core/ (domain logic, like sweepWeekends), NOT ui/. It is the booking
+// apply/conflict reducer and the various run-delete reducers — booking domain only; the
+// machine-CRUD reducers (save/delete/reorder) that used to live here too moved out to
+// core/machines.ts, so this file's name matches what it actually contains
+// (PRINCIPLES.md E10). Gate-only: they POST to /api/mutate, so they are verified by
+// exhaustive unit tests rather than a production-write browser smoke (ARCHITECTURE §15).
 //
 // Naming note: each exported function here IS called by its bare name in `legacy.js`
 // (inside a `mutate(fresh => bookCells(fresh, ...))` callback, via the window bridge),
@@ -17,8 +19,8 @@
 // variables below are renamed; a parameter's name is never visible to a caller, so
 // none of those renames need any change outside this file.
 
-import type { Booking, BookingData, Machine, MaintSlot } from '../../../shared/types.ts';
-import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from './machines.ts';
+import type { Booking, BookingData, Machine } from '../../../shared/types.ts';
+import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from './machines-queries.ts';
 import { sweepWeekends } from './weekend.ts';
 
 /** A cell change, with the previous value for undo (`null` = the cell was empty). */
@@ -270,140 +272,4 @@ export function deleteGroup(
   }
   for (const mid of affectedMachineIds) undo.push(...sweepWeekends(freshServerData, mid));
   return { n: deletedCount, undo };
-}
-
-/** The machine-form fields (already trimmed/validated by the form) a save applies. */
-export interface MachineForm {
-  name: string;
-  group: string;
-  /** 'messtechnik' or 'maschine' ('maschine' = default, stored as no `cat` field). */
-  cat: string;
-  info: string;
-  redu: string;
-  /** 7-char Mo..So mask, or null for "available every day". */
-  daysMask: string | null;
-  maint: MaintSlot[];
-}
-
-/** Apply the form fields onto a machine object (add-or-clear each optional field). */
-function applyFormFieldsToMachine(machine: Machine, form: MachineForm): void {
-  machine.name = form.name;
-  machine.group = form.group;
-  machine.info = form.info;
-  if (form.redu) machine.redu = form.redu;
-  else delete machine.redu; // redundancy marker (label only)
-  if (form.daysMask) machine.days = form.daysMask;
-  else delete machine.days; // available weekdays
-  if (form.maint.length) machine.maint = form.maint;
-  else delete machine.maint; // maintenance/defect slots
-  delete machine.status;
-  delete machine.statusNote;
-  delete machine.statusFrom;
-  delete machine.statusUntil; // legacy single-status replaced by maint
-  if (form.cat === 'messtechnik') machine.cat = 'messtechnik';
-  else delete machine.cat; // 'maschine' = default (no field)
-}
-
-/**
- * Derive a URL-safe machine id base from a name: lowercase, German umlauts/ß spelled
- * out (so "Prüfgerät" -> "pruefgeraet"), everything else that isn't a-z0-9 collapsed
- * to a single hyphen, and leading/trailing hyphens trimmed.
- */
-function slugify(name: string): string {
-  const transliterated = name
-    .toLowerCase()
-    .replace(/ä/g, 'ae')
-    .replace(/ö/g, 'oe')
-    .replace(/ü/g, 'ue')
-    .replace(/ß/g, 'ss');
-  const slug = transliterated
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 40);
-  return slug || 'maschine';
-}
-
-/** A unique machine id starting from `baseSlug`, appending `-2`, `-3`, … until free. */
-function findUniqueMachineId(machines: readonly Machine[], baseSlug: string): string {
-  let candidateId = baseSlug;
-  let suffix = 2;
-  while (machines.some((machine) => machine.id === candidateId)) {
-    candidateId = `${baseSlug}-${suffix}`;
-    suffix++;
-  }
-  return candidateId;
-}
-
-/**
- * Where to insert a newly created machine: right after the last existing machine of
- * the same group, so new machines stay grouped with their siblings instead of always
- * landing at the very end of the list. Falls back to the end when the group is new.
- */
-function findGroupInsertionIndex(machines: readonly Machine[], group: string): number {
-  for (let index = machines.length - 1; index >= 0; index--) {
-    if (machines[index]!.group === group) {
-      return index + 1;
-    }
-  }
-  return machines.length;
-}
-
-/**
- * Save the machine form: when `mid` is set, apply the fields onto that machine (abort
- * if it vanished from the fresh data); otherwise create a new machine — a unique
- * slugged id, inserted after the last machine of the same group. Faithful port of the
- * `mfSave` mutate callback (returns nothing on success, `{abort:true}` on failure).
- */
-export function saveMachine(
-  freshServerData: BookingData,
-  mid: string | null,
-  form: MachineForm,
-): { abort: true } | void {
-  if (mid) {
-    const existingMachine = freshServerData.machines.find((candidate) => candidate.id === mid);
-    if (!existingMachine) return { abort: true };
-    applyFormFieldsToMachine(existingMachine, form);
-    return;
-  }
-  const newMachineId = findUniqueMachineId(freshServerData.machines, slugify(form.name));
-  const insertionIndex = findGroupInsertionIndex(freshServerData.machines, form.group);
-  const newMachine = { id: newMachineId } as Machine;
-  applyFormFieldsToMachine(newMachine, form);
-  freshServerData.machines.splice(insertionIndex, 0, newMachine);
-}
-
-/**
- * Remove machine `mid` and all its bookings. Faithful port of the `mfDel` mutate
- * callback (`{abort:true}` if the machine is already gone).
- */
-export function deleteMachine(freshServerData: BookingData, mid: string): { abort: true } | void {
-  const machineIndex = freshServerData.machines.findIndex((candidate) => candidate.id === mid);
-  if (machineIndex < 0) return { abort: true };
-  freshServerData.machines.splice(machineIndex, 1);
-  delete freshServerData.bookings[mid];
-}
-
-/**
- * Move machine `id` one step (`dir` = -1 up / +1 down) within its group by swapping
- * with its neighbour. Aborts at the list ends or across a group boundary (reorder is
- * only allowed inside the same group). Faithful port of the admin `moveById`.
- */
-export function moveMachine(
-  freshServerData: BookingData,
-  id: string,
-  dir: number,
-): { abort: true } | void {
-  const machineIndex = freshServerData.machines.findIndex((machine) => machine.id === id);
-  const neighborIndex = machineIndex + dir;
-  const machines = freshServerData.machines;
-  if (machineIndex < 0 || neighborIndex < 0 || neighborIndex >= machines.length) {
-    return { abort: true };
-  }
-  if (machines[machineIndex]!.group !== machines[neighborIndex]!.group) {
-    return { abort: true };
-  }
-  [machines[machineIndex], machines[neighborIndex]] = [
-    machines[neighborIndex]!,
-    machines[machineIndex]!,
-  ];
 }

@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
-import { hasAnyMaintenanceSlot } from '../../core/machines.ts';
+import { hasAnyMaintenanceSlot } from '../../core/machines-queries.ts';
 import { maintenanceKind, statusRangeText } from '../machine-text.ts';
 import { buildChecklistRows, type ChecklistRow } from '../assistant-checklist.ts';
 import { Icon } from './Icon.tsx';

@@ -12,7 +12,7 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../../shared/dates.ts';
-import { categoryOf } from '../../core/machines.ts';
+import { categoryOf } from '../../core/machines-queries.ts';
 import { deleteOwnCells } from '../../core/booking.ts';
 import { orderedMachines, FAVORITES_GROUP_LABEL } from '../grid.ts';
 import { getBooking } from '../../core/booking-queries.ts';

@@ -17,7 +17,7 @@ import {
   findBookingGroup,
   type BookingGroup,
 } from '../../core/booking-queries.ts';
-import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from '../../core/machines.ts';
+import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from '../../core/machines-queries.ts';
 import { daysMaskText, maintText } from '../machine-text.ts';
 import { escapeHtml } from '../escape-html.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';

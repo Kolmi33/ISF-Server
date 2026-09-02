@@ -6,7 +6,7 @@
 
 import type { Machine, MaintSlot } from '../../../shared/types.ts';
 import { formatDateLong, todayAsIsoDateString } from '../../../shared/dates.ts';
-import { maintenanceSlots, slotCovers, maintenanceSlotAt } from '../core/machines.ts';
+import { maintenanceSlots, slotCovers, maintenanceSlotAt } from '../core/machines-queries.ts';
 
 /** Mo..So, matching the index order of a `Machine.days` mask. Shared by `daysMaskText` and the
  *  machine form's weekday checkboxes. */

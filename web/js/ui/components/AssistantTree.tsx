@@ -14,7 +14,7 @@ import type { DragEvent } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
 import type { AssistContainer, AssistDev, AssistGrp, AssistNode } from '../../core/assistant.ts';
 import { effectiveNeed } from '../../core/assistant.ts';
-import { hasAnyMaintenanceSlot } from '../../core/machines.ts';
+import { hasAnyMaintenanceSlot } from '../../core/machines-queries.ts';
 import { maintenanceKind, statusRangeText } from '../machine-text.ts';
 import { Icon } from './Icon.tsx';
 

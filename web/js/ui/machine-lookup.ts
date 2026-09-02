@@ -1,7 +1,7 @@
 // O(1) machine lookup by id (Phase 7 slice B10f). Faithful port of legacy `machById` — a
 // memoized `Map`, rebuilt whenever `S.data.machines` is replaced by a new array reference
 // (`readFile`'s full reload does this) OR when explicitly told to via
-// `invalidateMachineLookupCache()`. That second path exists because `core/booking.ts`'s
+// `invalidateMachineLookupCache()`. That second path exists because `core/machines.ts`'s
 // machine CRUD (`saveMachine`/`deleteMachine`/`moveMachine`) mutates the `machines` array IN
 // PLACE (`.splice()`, element swap) rather than replacing it — the array reference alone
 // can't tell this cache a machine was added or removed (bug found in review, fixed here;

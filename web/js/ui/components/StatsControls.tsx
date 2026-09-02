@@ -5,7 +5,7 @@
 // `openModal(...)` template.
 
 import type { ChangeEvent } from 'react';
-import { CATEGORIES } from '../../core/machines.ts';
+import { CATEGORIES } from '../../core/machines-queries.ts';
 import { Icon } from './Icon.tsx';
 
 export type StatsMode = 'm' | 'p' | 'w';
