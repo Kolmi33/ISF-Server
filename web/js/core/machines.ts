@@ -9,10 +9,12 @@
 // `categoryOf`/`maintenanceSlots`/`maintenanceSlotAt`/`isBlockedOnDate`/`hasAnyMaintenanceSlot`
 // were each called by an old abbreviated name (`catOf`/`maintSlots`/`maintAt`/`isBlockedM`/
 // `anyMaint`) dozens of times across `legacy.js`, via window-bridge aliases — retired along
-// with `legacy.js` itself in Phase 7 slice B10g. The mutation exports (`saveMachine`/
-// `deleteMachine`/`moveMachine`) are likewise called by their bare names from `legacy.js`
-// (inside `mutate(fresh => saveMachine(fresh, ...))`), so those names are left exactly as they
-// were — only their internal parameters/locals are spelled out in full (PRINCIPLES.md E9).
+// with `legacy.js` itself in Phase 7 slice B10g (`legacy.js` no longer exists in this repo).
+// The mutation exports (`saveMachine`/`deleteMachine`/`moveMachine`) are called the same bare
+// way today from the current React components (`MachineFormModal.tsx`/`AdminModal.tsx`, inside
+// `window.mutate((fresh) => saveMachine(fresh, ...))`) — not a legacy holdover, just their
+// permanent name; only their internal parameters/locals are spelled out in full (PRINCIPLES.md
+// E9).
 
 import type { Machine, MaintSlot, MachineCategory, BookingData } from '../../../shared/types.ts';
 import { mondayFirstWeekdayIndex, parseIsoDateString } from '../../../shared/dates.ts';
@@ -66,11 +68,11 @@ export const CATEGORIES: ReadonlyArray<{ id: MachineCategory; label: string; ico
 export function groupsByCategory(machines: readonly Machine[]): CategoryGroups[] {
   const result: CategoryGroups[] = [];
   for (const { id: category } of CATEGORIES) {
-    const seen = new Set<string>();
+    const seenGroupNames = new Set<string>();
     const groups: string[] = [];
     for (const machine of machines) {
-      if (categoryOf(machine) !== category || seen.has(machine.group)) continue;
-      seen.add(machine.group);
+      if (categoryOf(machine) !== category || seenGroupNames.has(machine.group)) continue;
+      seenGroupNames.add(machine.group);
       groups.push(machine.group);
     }
     if (groups.length) result.push({ category, groups });
@@ -222,7 +224,9 @@ export function saveMachine(
   }
   const newMachineId = findUniqueMachineId(freshServerData.machines, slugify(form.name));
   const insertionIndex = findGroupInsertionIndex(freshServerData.machines, form.group);
-  const newMachine = { id: newMachineId } as Machine;
+  // A real Machine from the start (name/group already known from the form) — no unsound cast
+  // through an object that's temporarily missing required fields.
+  const newMachine: Machine = { id: newMachineId, name: form.name, group: form.group };
   applyFormFieldsToMachine(newMachine, form);
   freshServerData.machines.splice(insertionIndex, 0, newMachine);
 }
