@@ -3,7 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import type { AppState } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
+
+// LogModal.tsx imports `openAdmin` directly from `./AdminModal.tsx` (part of a real 3-way
+// import cycle with MachineFormModal.tsx too — F8 cleanup, ARCHITECTURE_AUDIT.md) rather than
+// reaching through `window.openAdmin` — mocked here so this test keeps observing it as before.
+vi.mock('./AdminModal.tsx', () => ({ openAdmin: vi.fn() }));
+
 import { LogModal, openLog } from './LogModal.tsx';
+import { openAdmin } from './AdminModal.tsx';
 
 describe('LogModal', () => {
   it('shows a placeholder when there are no entries', () => {
@@ -41,7 +48,7 @@ describe('openLog', () => {
       data: { log: [{ ts: '2021-01-04T10:00:00.000Z', user: 'A', action: 'B' }] },
     } as unknown as Partial<AppState>);
     window.S = store.state;
-    window.openAdmin = vi.fn();
+    vi.mocked(openAdmin).mockClear();
   });
 
   it('opens with a snapshot of the log', () => {
@@ -49,9 +56,9 @@ describe('openLog', () => {
     expect(screen.getByText('letzte 1')).toBeInTheDocument();
   });
 
-  it('"Zurück" calls the still-legacy openAdmin global', () => {
+  it('"Zurück" calls openAdmin', () => {
     act(() => openLog());
     screen.getByRole('button', { name: 'Zurück' }).click();
-    expect(window.openAdmin).toHaveBeenCalledOnce();
+    expect(openAdmin).toHaveBeenCalledOnce();
   });
 });

@@ -35,9 +35,6 @@ beforeEach(() => {
     visD: [TODAY],
   } as unknown as Partial<AppState>);
   window.S = store.state;
-  window.machById = vi.fn((id: string) => window.S.data!.machines.find((m) => m.id === id));
-  window.paintSel = vi.fn();
-  window.hideCtx = vi.fn();
 });
 
 describe('refreshCell', () => {

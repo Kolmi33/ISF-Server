@@ -1,8 +1,10 @@
 // The grid's right-click / after-drag context menu (Phase 7 slice B10b). Faithful port of
 // legacy `showCtx`/`hideCtx` + the document-level outside-click dismissal. Mounted once at
 // boot onto the static `<div id="ctxMenu">` (same pattern as `Grid.tsx` onto `#grid`);
-// `ui/grid-interaction.ts` (B2, already gated) calls it via the `window.showCtx`/
-// `window.hideCtx` bridge, unchanged.
+// `ui/grid-interaction.ts` (B2) calls `showCtx`/`hideCtx` via its injected
+// `GridInteractionHandlers` (F8 cleanup, ARCHITECTURE_AUDIT.md) rather than a direct import —
+// this module imports `selection`/`clearSelection` FROM grid-interaction.ts, so the reverse
+// would cycle.
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { formatDateLong } from '../../../../shared/dates.ts';
 import { getBooking } from '../../core/booking-queries.ts';

@@ -6,11 +6,14 @@
 // `data-mid`/`data-date`/`data-group`/`data-catgroup` attributes) for selection, jump-to-next-
 // free and keyboard navigation to keep working completely unmodified.
 //
-// Store subscription: rather than adding a new subscription mechanism (and a circular import
-// with app.ts, which owns the store), this component reuses the existing bridge — legacy's
-// `render()` was the function the store already called on every change (`app.ts`'s
-// `store.subscribe(() => { if (store.get('data')) window.render(); })`). This module's own
-// `render()` becomes the new `window.render`, so that wiring needs no change at all.
+// Store subscription: rather than adding a new subscription mechanism, this component reuses
+// the existing bridge — legacy's `render()` was the function the store already called on every
+// change (`app.ts`'s `store.subscribe(() => { if (store.get('data')) triggerGridRender(); })`).
+// The force-update trigger itself is registered with `grid-render-bridge.ts` (F8 cleanup,
+// ARCHITECTURE_AUDIT.md) rather than held as a local ref bridged onto `window`: `grid-scroll.ts`
+// and `grid-interaction.ts` both need to trigger a repaint too, and both already have an
+// existing import edge FROM this component (`daysPerWeek`, `paintSelection`) — a direct import
+// the other way would cycle, so the bridge module holds the mutable ref instead of either side.
 //
 // The body rows (`GridBodyRow` and everything under it) live in `GridBody.tsx`, split out
 // purely to stay under the file-length budget — conceptually this is one component.
@@ -26,13 +29,14 @@ import {
   todayAsIsoDateString,
 } from '../../../../shared/dates.ts';
 import { buildGridRows, visibleWeeks, type GridRow } from '../grid.ts';
-import { daysPerWeek } from '../grid-scroll.ts';
+import { daysPerWeek, syncJumpControls, ensureOverflow } from '../grid-scroll.ts';
 import { CATEGORIES } from '../../core/machines.ts';
 import { categoryTap, categoryTapCancel, toggleAllGroupsInCategory } from '../category-fold.ts';
 import { paintSelection } from '../grid-interaction.ts';
 import { Icon } from './Icon.tsx';
 import { GridBodyRow } from './GridBody.tsx';
 import { store } from '../../store-instance.ts';
+import { registerGridRenderTrigger, triggerGridRender } from '../grid-render-bridge.ts';
 
 function CategoryToggleButtons() {
   return (
@@ -100,10 +104,6 @@ function GridHeaderRows({ weeks, columnsPerWeek }: { weeks: string[][]; columnsP
     </>
   );
 }
-
-/** Reference to the mounted grid's force-update function; see `Grid`'s effect. `window.render`
- *  (bridged below) calls through this instead of the module holding its own React root. */
-const windowRenderTrigger: { current: (() => void) | null } = { current: null };
 
 interface GridViewModel {
   today: string;
@@ -173,9 +173,9 @@ export function Grid() {
   const theadRef = useRef<HTMLTableSectionElement>(null);
 
   useEffect(() => {
-    windowRenderTrigger.current = () => forceRerender((tick) => tick + 1);
+    registerGridRenderTrigger(() => forceRerender((tick) => tick + 1));
     return () => {
-      windowRenderTrigger.current = null;
+      registerGridRenderTrigger(null);
     };
   }, []);
 
@@ -187,8 +187,8 @@ export function Grid() {
       );
     }
     paintSelection();
-    window.syncJumpControls();
-    requestAnimationFrame(window.ensureOverflow);
+    syncJumpControls();
+    requestAnimationFrame(ensureOverflow);
   });
 
   if (!store.get('data')) return null; // faithful to the store-subscription guard in app.ts
@@ -216,8 +216,10 @@ export function Grid() {
   );
 }
 
-/** Bridged as `window.render` (Phase 7 slice B1) — re-renders the mounted grid. Faithful
- *  replacement for legacy's own `render()`, called by the same store subscription in app.ts. */
+/** Re-renders the mounted grid via `grid-render-bridge.ts`. Faithful replacement for legacy's
+ *  own `render()`, called by the same store subscription in app.ts. Kept as a thin named
+ *  export (rather than having every caller import the bridge module itself) so this stays the
+ *  one place that names "the grid's own repaint" — existing imports/tests are unaffected. */
 export function render(): void {
-  windowRenderTrigger.current?.();
+  triggerGridRender();
 }

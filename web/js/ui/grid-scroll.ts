@@ -16,6 +16,7 @@ import {
 } from '../../../shared/dates.ts';
 import { selection } from './grid-interaction.ts';
 import { store } from '../store-instance.ts';
+import { triggerGridRender } from './grid-render-bridge.ts';
 
 const DAYS_PER_WEEK_WITH_WEEKENDS = 7;
 const DAYS_PER_WEEK_WITHOUT_WEEKENDS = 5;
@@ -129,7 +130,9 @@ function measuredWeekWidth(): number {
  * `extraWeeks` (otherwise the window slides — see the scroll handler for the "already at the
  * cap" case, which shifts forward instead of growing). Compensates `scrollLeft` by however much
  * the grid actually grew, so the visible content doesn't jump. Faithful port of legacy
- * `prependWeek`; bridged as `window.prependWeek` for B2's drag-auto-scroll and arrow-key growth.
+ * `prependWeek`; `grid-interaction.ts` (B2) calls this via its injected
+ * `GridInteractionHandlers` for drag-auto-scroll and arrow-key growth — a direct import would
+ * cycle, since this module already imports `selection` from `grid-interaction.ts`.
  */
 export function prependWeek(): void {
   if (extendPending) return;
@@ -188,22 +191,22 @@ function handleGridWrapWheel(event: WheelEvent): void {
 /**
  * Keep the grid wider than the viewport so there's always room to scroll right (which is what
  * triggers `handleGridWrapScroll`'s own growth). Faithful port of legacy `ensureOverflow`;
- * bridged as `window.ensureOverflow`, called from the React Grid's (B1) post-render effect.
- * Grows directly, bypassing the store, exactly as legacy's own comment calls out.
+ * imported directly by the React Grid's (B1) post-render effect. Grows directly, bypassing
+ * the store, exactly as legacy's own comment calls out.
  */
 export function ensureOverflow(): void {
   const wrap = gridWrapElement();
   if (wrap.style.display === 'none') return;
   if (needsOverflowGrowth(store.get('extraWeeks'), wrap.scrollWidth, wrap.clientWidth)) {
     // Direct field mutation, deliberately NOT store.set() — bypasses the store's notify
-    // exactly as legacy's own comment calls out; window.render() below repaints directly.
+    // exactly as legacy's own comment calls out; triggerGridRender() below repaints directly.
     store.state.extraWeeks++;
-    window.render();
+    triggerGridRender();
   }
 }
 
 /** Scroll so `isoDate`'s column sits at the grid's visual center. Faithful port of legacy
- *  `centerCol`; bridged as `window.centerCol` for B2/B4's "jump to this date" features. */
+ *  `centerCol`, imported directly by `favorite-jump.ts`'s (B10a) "jump to this date". */
 export function centerColumn(isoDate: string): void {
   const cell = document.querySelector<HTMLElement>(`td.cell[data-date="${isoDate}"]`);
   const wrap = document.getElementById('gridWrap');
@@ -237,8 +240,8 @@ export function gotoDate(isoDate: string): void {
 
 /** Reset the month/year jump controls to reflect the week block currently at the grid's start
  *  (its Wednesday, so e.g. a Monday-29th week still reads as the following month). Faithful
- *  port of legacy `syncJumpControls`; bridged as `window.syncJumpControls`, called from the
- *  React Grid's (B1) post-render effect. */
+ *  port of legacy `syncJumpControls`, imported directly by the React Grid's (B1) post-render
+ *  effect. */
 export function syncJumpControls(): void {
   const midWeek = addDays(store.get('startMonday'), 3);
   const monthSelect = document.getElementById('jumpMonth') as HTMLSelectElement | null;

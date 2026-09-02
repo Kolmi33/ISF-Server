@@ -26,6 +26,7 @@ import { toast } from '../toast.ts';
 import { Icon } from './Icon.tsx';
 import { GroupOptions } from './GroupOptions.tsx';
 import { store } from '../../store-instance.ts';
+import { saveFilters, updateMachBtn } from './MachineFilterDropdown.tsx';
 
 const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'termin', label: 'Termin der Buchung' },
@@ -44,8 +45,8 @@ function goto(run: AllRun): void {
   // Both writes stay silent — saveFilters()/updateMachBtn()/resetView() run before the one
   // notify, matching the original's single window.notify() after all of this.
   store.state.machSel = new Set([run.m.id]);
-  window.saveFilters();
-  window.updateMachBtn();
+  saveFilters();
+  updateMachBtn();
   store.state.startMonday = mondayOfDate(parseIsoDateString(run.dates[0]!));
   resetView();
   store.notify();

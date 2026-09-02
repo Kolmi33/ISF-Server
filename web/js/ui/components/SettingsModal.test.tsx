@@ -3,7 +3,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { AppState } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
+
+// SettingsModal.tsx imports these directly (F8 cleanup, ARCHITECTURE_AUDIT.md) rather than
+// reaching through `window.*` — mocked here so this test keeps controlling/observing them as
+// before.
+vi.mock('../live-connection.ts', () => ({
+  connectSSE: vi.fn(),
+  presenceTick: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../mutate.ts', () => ({ refreshNow: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../theme.ts', () => ({ applyTheme: vi.fn() }));
+vi.mock('../grid-scroll.ts', () => ({ centerToday: vi.fn() }));
+vi.mock('../debug-panel.ts', () => ({
+  applyDebug: vi.fn(),
+  dbgOn: vi.fn().mockReturnValue(false),
+}));
+
 import { SettingsModal } from './SettingsModal.tsx';
+import { connectSSE, presenceTick } from '../live-connection.ts';
+import { refreshNow } from '../mutate.ts';
+import { applyTheme } from '../theme.ts';
+import { centerToday } from '../grid-scroll.ts';
+import { applyDebug, dbgOn } from '../debug-panel.ts';
 
 // window.S is kept aliased to store.state so the component (migrated onto the real store) and
 // this test agree; window.notify forwards to store.notify() exactly as app.ts does in
@@ -16,22 +37,22 @@ beforeEach(() => {
   store.set({ user: 'Kolmanovskyi', extraWeeks: 3 } as unknown as Partial<AppState>);
   window.S = store.state;
   notifySpy.mockClear();
-  window.connectSSE = vi.fn();
-  window.refreshNow = vi.fn().mockResolvedValue(undefined);
-  window.applyTheme = vi.fn();
   window.notify = () => store.notify();
-  window.presenceTick = vi.fn().mockResolvedValue(undefined);
-  window.centerToday = vi.fn();
-  window.applyDebug = vi.fn();
-  window.dbgOn = vi.fn().mockReturnValue(false);
+  vi.mocked(connectSSE).mockClear();
+  vi.mocked(refreshNow).mockClear();
+  vi.mocked(applyTheme).mockClear();
+  vi.mocked(presenceTick).mockClear();
+  vi.mocked(centerToday).mockClear();
+  vi.mocked(applyDebug).mockClear();
+  vi.mocked(dbgOn).mockReset().mockReturnValue(false);
 });
 
 describe('SettingsModal', () => {
   it('"Neu verbinden" reconnects SSE and silently refreshes', () => {
     render(<SettingsModal />);
     screen.getByRole('button', { name: /Neu verbinden/ }).click();
-    expect(window.connectSSE).toHaveBeenCalledOnce();
-    expect(window.refreshNow).toHaveBeenCalledWith(false);
+    expect(connectSSE).toHaveBeenCalledOnce();
+    expect(refreshNow).toHaveBeenCalledWith(false);
   });
 
   it('changing the theme select persists mb_theme and re-applies + notifies', () => {
@@ -40,7 +61,7 @@ describe('SettingsModal', () => {
     select.value = 'dark';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     expect(localStorage.getItem('mb_theme')).toBe('dark');
-    expect(window.applyTheme).toHaveBeenCalledOnce();
+    expect(applyTheme).toHaveBeenCalledOnce();
     expect(notifySpy).toHaveBeenCalledOnce();
   });
 
@@ -51,7 +72,7 @@ describe('SettingsModal', () => {
     render(<SettingsModal />);
     screen.getByLabelText(/als „aktiv" teilen/).click();
     expect(localStorage.getItem('mb_presence')).toBe('off');
-    expect(window.presenceTick).toHaveBeenCalledOnce();
+    expect(presenceTick).toHaveBeenCalledOnce();
   });
 
   it('toggling weekends resets extraWeeks, notifies, and re-centers today', () => {
@@ -60,7 +81,7 @@ describe('SettingsModal', () => {
     expect(localStorage.getItem('mb_weekends')).toBe('on');
     expect(window.S.extraWeeks).toBe(0);
     expect(notifySpy).toHaveBeenCalledOnce();
-    expect(window.centerToday).toHaveBeenCalledOnce();
+    expect(centerToday).toHaveBeenCalledOnce();
   });
 
   it('toggling compact mode adds/removes the body class directly (no notify needed)', () => {
@@ -79,6 +100,6 @@ describe('SettingsModal', () => {
     render(<SettingsModal />);
     screen.getByLabelText(/Debug-Panel anzeigen/).click();
     expect(localStorage.getItem('mb_debug')).toBe('on');
-    expect(window.applyDebug).toHaveBeenCalledOnce();
+    expect(applyDebug).toHaveBeenCalledOnce();
   });
 });

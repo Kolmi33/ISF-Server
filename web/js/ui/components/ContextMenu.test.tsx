@@ -2,9 +2,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import type { AppState, Booking, Machine } from '../../../../shared/types.ts';
-import { selection } from '../grid-interaction.ts';
+import { selection, initGridInteraction } from '../grid-interaction.ts';
 import { store } from '../../store-instance.ts';
 import { ContextMenu, showCtx, hideCtx } from './ContextMenu.tsx';
+
+// ContextMenu's own "Abbrechen" button calls grid-interaction.ts's `clearSelection()`, which
+// hands `hideCtx` off to the injected `GridInteractionHandlers` struct (F8 cleanup,
+// ARCHITECTURE_AUDIT.md) rather than `window.hideCtx` — initialized once here, matching
+// `initGridInteraction`'s real one-time-at-boot contract, mirroring app.ts's own
+// `hideCtx: contextMenu.hideCtx` wiring. The `#grid` element only this one call needs is
+// thrown away immediately after; nothing else in this file drives grid DOM interactions.
+document.body.innerHTML = '<table id="grid"></table>';
+initGridInteraction({
+  showCtx: vi.fn(),
+  hideCtx,
+  toggleFav: vi.fn(),
+  gotoPrevFree: vi.fn(),
+  gotoNextFree: vi.fn(),
+  openCellAction: vi.fn(),
+  prependWeek: vi.fn(),
+});
 
 function machine(overrides: Partial<Machine> = {}): Machine {
   return { id: 'm1', name: 'Fräse', group: 'Halle 1', ...overrides };
@@ -28,12 +45,13 @@ beforeEach(() => {
     visD: [],
   } as unknown as Partial<AppState>);
   window.S = store.state;
-  window.machById = (id: string) => window.S.data!.machines.find((m) => m.id === id);
+  // machById (../machine-lookup.ts, used by BookingForm.tsx's machine list) is a direct
+  // import now (F8 cleanup, ARCHITECTURE_AUDIT.md) — needs no mock, the real one reads the
+  // store data set up above.
   window.mutate = vi.fn((fn: (fresh: unknown) => unknown) =>
     Promise.resolve(fn(window.S.data)),
   ) as typeof window.mutate;
   window.askConfirm = vi.fn().mockResolvedValue(true);
-  window.hideCtx = hideCtx;
   selection.anchor = { mid: 'm1', date: '2021-01-04' };
   selection.focus = { mid: 'm1', date: '2021-01-05' };
   selection.cells = [

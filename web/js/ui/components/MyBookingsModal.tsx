@@ -23,6 +23,7 @@ import { toast, offerUndo } from '../toast.ts';
 import { Icon } from './Icon.tsx';
 import { askUserName } from './AskUserNameModal.tsx';
 import { store } from '../../store-instance.ts';
+import { saveFilters, updateMachBtn } from './MachineFilterDropdown.tsx';
 
 /** One run's live state: its frozen machine + full date list, and which of those dates are
  *  still actually booked under the current user's name right now. */
@@ -177,8 +178,8 @@ function MachineFilterButton({ machineIds }: { machineIds: readonly string[] }) 
     // Silent — saveFilters()/updateMachBtn() run before the one notify, matching the
     // original's single window.notify() after this write and both those calls.
     store.state.machSel = new Set(machineIds);
-    window.saveFilters();
-    window.updateMachBtn();
+    saveFilters();
+    updateMachBtn();
     store.notify();
     closeReactModal();
     toast(

@@ -1,14 +1,15 @@
 // The change-log modal (Phase 7 slice B9). Faithful JSX port of legacy `openLog()` — a
 // snapshot of `S.data.log` at open time (not a live subscription; the original didn't
-// update while the modal was open either). "Zurück" calls `window.openAdmin()` — bridged
-// from `AdminModal.tsx` since Phase 7 slice B5, kept as a window call rather than a direct
-// import to avoid a circular import between the two modals.
+// update while the modal was open either). "Zurück" calls `openAdmin()`, a direct import from
+// `AdminModal.tsx` (which imports back from here for its own "Änderungsprotokoll" button) —
+// see `AdminModal.tsx`'s header comment for why that cycle is safe.
 
 import type { LogEntry } from '../../../../shared/types.ts';
 import { formatTimestamp } from '../../../../shared/dates.ts';
 import { Icon } from './Icon.tsx';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { store } from '../../store-instance.ts';
+import { openAdmin } from './AdminModal.tsx';
 
 /** Open the change-log modal with a snapshot of the current log. Faithful port of legacy
  *  `openLog()`. */
@@ -43,7 +44,7 @@ export function LogModal({ entries }: LogModalProps) {
         )}
       </div>
       <div className="modal-actions">
-        <button className="btn" onClick={() => window.openAdmin()}>
+        <button className="btn" onClick={() => openAdmin()}>
           Zurück
         </button>
         <button className="btn" onClick={closeReactModal}>

@@ -3,7 +3,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, act, fireEvent } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
+
+// MachineFormModal.tsx imports `fillGroupSel` directly from `./GroupFilterDropdown.tsx` and
+// `openAdmin` directly from `./AdminModal.tsx` (part of a real 3-way import cycle with
+// LogModal.tsx too — F8 cleanup, ARCHITECTURE_AUDIT.md) rather than reaching through
+// `window.fillGroupSel`/`window.openAdmin` — mocked here so this test keeps
+// controlling/observing them as before. `machById` (../machine-lookup.ts) is also a direct
+// import now, but needs no mock — the real one reads the store data set up below.
+vi.mock('./GroupFilterDropdown.tsx', () => ({ fillGroupSel: vi.fn() }));
+vi.mock('./AdminModal.tsx', () => ({ openAdmin: vi.fn() }));
+
 import { openMachineForm } from './MachineFormModal.tsx';
+import { fillGroupSel } from './GroupFilterDropdown.tsx';
+import { openAdmin } from './AdminModal.tsx';
 
 function machine(overrides: Partial<Machine> = {}): Machine {
   return { id: 'm1', name: 'Fräse', group: 'Halle 1', ...overrides };
@@ -30,9 +42,8 @@ beforeEach(() => {
   window.S = store.state;
   window.mutate = vi.fn((fn) => Promise.resolve(fn(window.S.data!)));
   window.askConfirm = vi.fn().mockResolvedValue(true);
-  window.fillGroupSel = vi.fn();
-  window.openAdmin = vi.fn();
-  window.machById = (mid: string) => window.S.data!.machines.find((m) => m.id === mid);
+  vi.mocked(fillGroupSel).mockClear();
+  vi.mocked(openAdmin).mockClear();
 });
 
 describe('MachineFormModal — new machine', () => {
@@ -69,8 +80,8 @@ describe('MachineFormModal — new machine', () => {
       'Maschine angelegt: Neue Maschine',
     );
     expect(window.S.data!.machines.some((m) => m.name === 'Neue Maschine')).toBe(true);
-    expect(window.fillGroupSel).toHaveBeenCalled();
-    expect(window.openAdmin).toHaveBeenCalled();
+    expect(fillGroupSel).toHaveBeenCalled();
+    expect(openAdmin).toHaveBeenCalled();
     expect(document.getElementById('toast')!.textContent).toBe('Gespeichert ✓');
   });
 
@@ -155,7 +166,7 @@ describe('MachineFormModal — edit', () => {
     );
     expect(window.mutate).toHaveBeenCalledWith(expect.any(Function), 'Maschine gelöscht: Fräse');
     expect(window.S.data!.machines.some((m) => m.id === 'm1')).toBe(false);
-    expect(window.openAdmin).toHaveBeenCalled();
+    expect(openAdmin).toHaveBeenCalled();
     expect(document.getElementById('toast')!.textContent).toBe('Maschine gelöscht.');
   });
 
@@ -175,7 +186,7 @@ describe('MachineFormModal — edit', () => {
     act(() => {
       screen.getByRole('button', { name: 'Zurück' }).click();
     });
-    expect(window.openAdmin).toHaveBeenCalled();
+    expect(openAdmin).toHaveBeenCalled();
     expect(window.mutate).not.toHaveBeenCalled();
   });
 });

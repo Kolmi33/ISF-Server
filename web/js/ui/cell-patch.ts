@@ -14,6 +14,7 @@ import { maintText } from './machine-text.ts';
 import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from '../core/machines.ts';
 import { isWeekend, parseIsoDateString, todayAsIsoDateString } from '../../../shared/dates.ts';
 import { paintSelection } from './grid-interaction.ts';
+import { machById } from './machine-lookup.ts';
 import { store } from '../store-instance.ts';
 
 function findCellElement(mid: string, date: string): HTMLElement | null {
@@ -34,7 +35,7 @@ function isDarkTheme(): boolean {
 export function refreshCell(mid: string, date: string): void {
   const el = findCellElement(mid, date);
   if (!el) return; // e.g. a weekend column that isn't shown
-  const machine = window.machById(mid);
+  const machine = machById(mid);
   if (!machine) return;
   const isToday = date === todayAsIsoDateString();
   const weekend = isWeekend(parseIsoDateString(date));
@@ -78,7 +79,7 @@ export function refreshDot(mid: string): void {
   if (!row) return;
   const dot = row.querySelector<HTMLElement>('.dot');
   if (!dot) return;
-  const machine = window.machById(mid);
+  const machine = machById(mid);
   if (!machine) return;
   const today = todayAsIsoDateString();
   const todaysBooking = getBooking(store.get('data')!.bookings, mid, today);
@@ -97,8 +98,7 @@ export function refreshDot(mid: string): void {
 
 /** Patch every cell an undo-entries list names, refresh their rows' today-dots, then restore
  *  the selection/focus marks (the classNames patched above just wiped them). Faithful port of
- *  legacy `patchCells`; bridged as `window.patchCells`, called from the still-legacy `mutate`'s
- *  optimistic-apply path. */
+ *  legacy `patchCells`, imported directly by `ui/mutate.ts`'s optimistic-apply path. */
 export function patchCells(entries: readonly { mid: string; date: string }[]): void {
   const machineIds = new Set<string>();
   for (const entry of entries) {

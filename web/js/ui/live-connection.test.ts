@@ -2,6 +2,27 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AppState } from '../../../shared/types.ts';
 import { store } from '../store-instance.ts';
+
+// live-connection.ts now imports these directly (F8 cleanup, ARCHITECTURE_AUDIT.md) rather
+// than reaching through `window.*` — mocked here so this test keeps observing/controlling
+// them exactly as it did via the old window stubs. `../net/api.ts` keeps its real `API`
+// export (used to build the SSE URL); only `readFile` is replaced.
+vi.mock('./mutate.ts', () => ({
+  stampRef: vi.fn(),
+  refreshNow: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('./debug-panel.ts', () => ({
+  dbg: vi.fn(),
+  handleError: vi.fn(),
+}));
+vi.mock('./components/GroupFilterDropdown.tsx', () => ({
+  fillGroupSel: vi.fn(),
+}));
+vi.mock('../net/api.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../net/api.ts')>()),
+  readFile: vi.fn().mockResolvedValue({ machines: [], bookings: {} }),
+}));
+
 import {
   activeUserRows,
   connectSSE,
@@ -9,6 +30,10 @@ import {
   presenceTick,
   startLiveTimers,
 } from './live-connection.ts';
+import { stampRef, refreshNow } from './mutate.ts';
+import { dbg, handleError } from './debug-panel.ts';
+import { fillGroupSel } from './components/GroupFilterDropdown.tsx';
+import { readFile } from '../net/api.ts';
 
 class MockEventSource {
   static instances: MockEventSource[] = [];
@@ -55,14 +80,8 @@ beforeEach(() => {
     visM: [],
   } as unknown as Partial<AppState>);
   window.S = store.state;
-  notifySpy.mockClear();
-  window.stampRef = vi.fn();
-  window.dbg = vi.fn();
-  window.handleError = vi.fn();
   for (const key of Object.keys(presenceData)) delete presenceData[key];
-  window.readFile = vi.fn().mockResolvedValue({ machines: [], bookings: {} });
-  window.fillGroupSel = vi.fn();
-  window.refreshNow = vi.fn().mockResolvedValue(undefined);
+  vi.clearAllMocks(); // clears notifySpy's call history too; implementations survive
 });
 
 describe('connectSSE', () => {
@@ -88,8 +107,8 @@ describe('connectSSE', () => {
   it('"hello" stamps the last-refresh time and logs', () => {
     connectSSE();
     latestEventSource().emit('hello');
-    expect(window.stampRef).toHaveBeenCalled();
-    expect(window.dbg).toHaveBeenCalledWith('info', expect.any(String));
+    expect(stampRef).toHaveBeenCalled();
+    expect(dbg).toHaveBeenCalledWith('info', expect.any(String));
   });
 
   it('"presence" updates presenceData and the toolbar badge from the parsed user list', () => {
@@ -112,7 +131,7 @@ describe('connectSSE', () => {
     expect(() => latestEventSource().emit('presence', undefined)).not.toThrow();
     // `emit` JSON.stringifies `undefined` to the literal string "undefined", which JSON.parse
     // rejects — exactly the malformed-payload case this guard exists for.
-    expect(window.handleError).toHaveBeenCalledWith('sse/presence', expect.anything());
+    expect(handleError).toHaveBeenCalledWith('sse/presence', expect.anything());
   });
 
   it('"update" applies the patch to bookings, patches cells, adopts the revision, and stamps the time', () => {
@@ -123,7 +142,7 @@ describe('connectSSE', () => {
     });
     expect(window.S.data!.bookings.m1!['2021-01-04']).toEqual({ name: 'anna' });
     expect(window.S.data!.revision).toBe(7);
-    expect(window.stampRef).toHaveBeenCalled();
+    expect(stampRef).toHaveBeenCalled();
   });
 
   it('"update" from someone else queues a remote-change toast', () => {
@@ -133,7 +152,7 @@ describe('connectSSE', () => {
       by: 'bob',
       log: 'Buchung: Bob, 1 Maschine, 2021-01-04 bis 2021-01-04',
     });
-    expect(window.dbg).toHaveBeenCalledWith('remote', expect.stringContaining('bob'));
+    expect(dbg).toHaveBeenCalledWith('remote', expect.stringContaining('bob'));
     expect(document.getElementById('toast')!.textContent).toMatch(/Bob hat 1 Maschine gebucht/);
   });
 
@@ -147,8 +166,8 @@ describe('connectSSE', () => {
     connectSSE();
     await latestEventSource().emit('structural', { by: 'bob' });
     await Promise.resolve(); // let the async listener's readFile() await settle
-    expect(window.readFile).toHaveBeenCalled();
-    expect(window.fillGroupSel).toHaveBeenCalled();
+    expect(readFile).toHaveBeenCalled();
+    expect(fillGroupSel).toHaveBeenCalled();
     expect(notifySpy).toHaveBeenCalled();
     expect(document.getElementById('toast')!.textContent).toMatch(/Maschinenliste geändert/);
   });
@@ -187,7 +206,7 @@ describe('startLiveTimers', () => {
       ([type]) => type === 'focus',
     )?.[1] as () => void;
     focusHandler();
-    expect(window.refreshNow).toHaveBeenCalledWith(true);
+    expect(refreshNow).toHaveBeenCalledWith(true);
   });
 });
 

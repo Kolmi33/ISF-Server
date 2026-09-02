@@ -2,7 +2,9 @@
 // B10a). Faithful port of legacy `toggleFav`/`nextFreePtr`/`gotoDateCenter`/`bookable`/
 // `nextFreeAfter`/`prevFreeBefore`/`jumpToSlot`/`gotoNextFree`/`gotoPrevFree`. The day-scan core
 // (`nextFreeDay`/`prevFreeDay`) already lives in `ui/navigation.ts` — this is the DOM/state
-// wiring around it, called from `ui/grid-interaction.ts` (B2) via the window bridge.
+// wiring around it; `ui/grid-interaction.ts` (B2) calls into these via its injected
+// `GridInteractionHandlers` rather than a direct import — this module imports `selection`/
+// `paintSelection` FROM grid-interaction.ts, so the reverse direct import would cycle.
 //
 // `displayGroup`, `FAVGRP`, and legacy's own `orderedMachines()` are NOT ported here: dead code
 // — their only callers were `render()` and this section, both already superseded by
@@ -23,6 +25,7 @@ import { centerColumn } from './grid-scroll.ts';
 import { selection, paintSelection } from './grid-interaction.ts';
 import { toast } from './toast.ts';
 import { store } from '../store-instance.ts';
+import { machById } from './machine-lookup.ts';
 
 /** Toggle machine `mid`'s favorite status, persist, and repaint. Faithful port of legacy
  *  `toggleFav`. */
@@ -109,7 +112,7 @@ function jumpToSlot(machine: Machine, isoDate: string, isBack: boolean): void {
  * `gotoNextFree`.
  */
 export function gotoNextFree(mid: string): void {
-  const machine = window.machById(mid);
+  const machine = machById(mid);
   if (!machine) return;
   for (const key of Object.keys(nextFreePtr)) {
     if (key !== mid) delete nextFreePtr[key];
@@ -126,7 +129,7 @@ export function gotoNextFree(mid: string): void {
 /** Jump back to machine `mid`'s previous free working day, ending at today. Faithful port of
  *  legacy `gotoPrevFree`. */
 export function gotoPrevFree(mid: string): void {
-  const machine = window.machById(mid);
+  const machine = machById(mid);
   if (!machine || !nextFreePtr[mid]) return;
   const previous = prevFreeBefore(machine, nextFreePtr[mid]);
   if (previous) {

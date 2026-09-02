@@ -3,16 +3,34 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render } from '@testing-library/react';
 import type { AppState } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
+
+// GridBody.tsx imports `nextFreePtr`/`prevFreeBefore` directly from `../favorite-jump.ts`, and
+// Grid.tsx imports `syncJumpControls`/`ensureOverflow` directly from `../grid-scroll.ts` (F8
+// cleanup, ARCHITECTURE_AUDIT.md) rather than reaching through `window.*` — mocked here so
+// this test keeps controlling/observing them as before. `../grid-scroll.ts` keeps its other
+// real exports (`daysPerWeek`, used by `computeGridViewModel`); only these two are replaced.
+vi.mock('../favorite-jump.ts', () => ({
+  nextFreePtr: {} as Record<string, string>,
+  prevFreeBefore: vi.fn().mockReturnValue(null),
+}));
+vi.mock('../grid-scroll.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../grid-scroll.ts')>()),
+  syncJumpControls: vi.fn(),
+  ensureOverflow: vi.fn(),
+}));
+
 import { Grid, render as renderGrid } from './Grid.tsx';
+import { nextFreePtr, prevFreeBefore } from '../favorite-jump.ts';
+import { syncJumpControls, ensureOverflow } from '../grid-scroll.ts';
 
 // A real Monday (TZ pinned to UTC in test/setup.ts, so local date === this UTC date).
 const TODAY = '2021-01-04';
 
 function stubWindowGlobals(): void {
-  window.nextFreePtr = {};
-  window.prevFreeBefore = vi.fn().mockReturnValue(null);
-  window.syncJumpControls = vi.fn();
-  window.ensureOverflow = vi.fn();
+  for (const key of Object.keys(nextFreePtr)) delete nextFreePtr[key];
+  vi.mocked(prevFreeBefore).mockReset().mockReturnValue(null);
+  vi.mocked(syncJumpControls).mockClear();
+  vi.mocked(ensureOverflow).mockClear();
   window.notify = vi.fn();
 }
 
@@ -171,8 +189,8 @@ describe('Grid', () => {
   });
 
   it('shows the "jump back" button once a next-free jump has been made and can be undone', () => {
-    window.nextFreePtr['m-favorite'] = '2021-01-05';
-    window.prevFreeBefore = vi.fn().mockReturnValue(TODAY);
+    nextFreePtr['m-favorite'] = '2021-01-05';
+    vi.mocked(prevFreeBefore).mockReturnValue(TODAY);
     const { container } = renderGridIntoTable();
     expect(container.querySelector('span.nextfree.back[data-nb="m-favorite"]')).not.toBeNull();
   });
@@ -214,8 +232,8 @@ describe('Grid', () => {
 
   it('calls the post-render side effects: real paintSelection (no throw) + the still-bridged syncJumpControls/ensureOverflow', () => {
     expect(() => renderGridIntoTable()).not.toThrow();
-    expect(window.syncJumpControls).toHaveBeenCalled();
-    expect(window.ensureOverflow).toHaveBeenCalled();
+    expect(syncJumpControls).toHaveBeenCalled();
+    expect(ensureOverflow).toHaveBeenCalled();
   });
 });
 

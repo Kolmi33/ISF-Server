@@ -3,7 +3,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
+
+// MyBookingsModal.tsx imports `saveFilters`/`updateMachBtn` directly from
+// `./MachineFilterDropdown.tsx` (F8 cleanup, ARCHITECTURE_AUDIT.md) rather than reaching
+// through `window.saveFilters`/`window.updateMachBtn` — mocked here so this test keeps
+// controlling/observing them as before.
+vi.mock('./MachineFilterDropdown.tsx', () => ({ saveFilters: vi.fn(), updateMachBtn: vi.fn() }));
+
 import { MyBookingsModal, openMyBookings } from './MyBookingsModal.tsx';
+import { saveFilters, updateMachBtn } from './MachineFilterDropdown.tsx';
 
 const TODAY = '2021-01-04'; // a Monday
 
@@ -35,11 +43,8 @@ beforeEach(() => {
   window.mutate = vi.fn();
   window.askConfirm = vi.fn().mockResolvedValue(true);
   window.notify = () => store.notify();
-  window.saveFilters = vi.fn();
-  window.updateMachBtn = vi.fn();
-  window.updateUserChip = vi.fn();
-  window.dbg = vi.fn();
-  window.presenceTick = vi.fn().mockResolvedValue(undefined);
+  vi.mocked(saveFilters).mockClear();
+  vi.mocked(updateMachBtn).mockClear();
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
     cb(0);
     return 0;
@@ -101,8 +106,8 @@ describe('MyBookingsModal', () => {
       screen.getByRole('button', { name: /Nur meine Maschinen/ }).click();
     });
     expect(window.S.machSel).toEqual(new Set(['m1']));
-    expect(window.saveFilters).toHaveBeenCalledOnce();
-    expect(window.updateMachBtn).toHaveBeenCalledOnce();
+    expect(saveFilters).toHaveBeenCalledOnce();
+    expect(updateMachBtn).toHaveBeenCalledOnce();
     expect(notifySpy).toHaveBeenCalledOnce();
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
     expect(document.getElementById('toast')!.textContent).toContain('nur deine 1 Maschine');

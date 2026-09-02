@@ -7,7 +7,28 @@ import {
   paintSelection,
   clearSelection,
   selection,
+  type GridInteractionHandlers,
 } from './grid-interaction.ts';
+import { registerGridRenderTrigger } from './grid-render-bridge.ts';
+
+// `initGridInteraction` now takes its higher-level actions as an injected
+// `GridInteractionHandlers` struct (F8 cleanup, ARCHITECTURE_AUDIT.md) rather than reaching
+// for `window.*` — built once here (module scope, matching the real one-time-at-boot call in
+// `beforeAll` below) and cleared between tests rather than reassigned, since the reference
+// itself is captured once by `initGridInteraction`.
+const handlers: GridInteractionHandlers = {
+  showCtx: vi.fn(),
+  hideCtx: vi.fn(),
+  toggleFav: vi.fn(),
+  gotoPrevFree: vi.fn(),
+  gotoNextFree: vi.fn(),
+  openCellAction: vi.fn(),
+  prependWeek: vi.fn(),
+};
+
+// Simulates the mounted Grid component's render-trigger registration (`Grid.tsx`'s own mount
+// effect, normally) — same one-time-registration shape as `handlers` above.
+const renderTrigger = vi.fn();
 
 /** Minimal grid markup: two machine rows × two dates, plus the group/category header rows
  *  and the `#gridWrap` scroll container the drag-auto-scroll code measures. Faithful to the
@@ -52,15 +73,7 @@ function stubWindowGlobals(): void {
     extraWeeks: 0,
   } as unknown as Partial<AppState>);
   window.S = store.state;
-  window.hideCtx = vi.fn();
-  window.showCtx = vi.fn();
   window.notify = vi.fn();
-  window.render = vi.fn();
-  window.prependWeek = vi.fn();
-  window.toggleFav = vi.fn();
-  window.gotoPrevFree = vi.fn();
-  window.gotoNextFree = vi.fn();
-  window.openCellAction = vi.fn();
 }
 
 function cell(mid: string, date: string): HTMLElement {
@@ -104,7 +117,8 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
   document.elementFromPoint = vi.fn().mockReturnValue(null);
   buildGridDom();
-  initGridInteraction();
+  initGridInteraction(handlers);
+  registerGridRenderTrigger(renderTrigger);
 });
 
 beforeEach(() => {
@@ -148,7 +162,7 @@ describe('paintSelection / clearSelection', () => {
     expect(selection.anchor).toBeNull();
     expect(selection.cells).toEqual([]);
     expect(cell('m1', '2021-01-04').className).not.toContain('sel');
-    expect(window.hideCtx).toHaveBeenCalledOnce();
+    expect(handlers.hideCtx).toHaveBeenCalledOnce();
   });
 });
 
@@ -194,35 +208,35 @@ describe('drag-to-select', () => {
     mouseoverOn(cell('m2', '2021-01-05'));
     mouseupOn(document.body, { clientX: 10, clientY: 20 });
     expect(selection.dragging).toBe(false);
-    expect(window.showCtx).toHaveBeenCalledWith(10, 20);
+    expect(handlers.showCtx).toHaveBeenCalledWith(10, 20);
   });
 
   it('mouseup after a plain click (no drag movement) does not open the context menu', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     mouseupOn(document.body);
-    expect(window.showCtx).not.toHaveBeenCalled();
+    expect(handlers.showCtx).not.toHaveBeenCalled();
   });
 
   it('mouseup while not dragging is a no-op', () => {
     mouseupOn(document.body);
-    expect(window.showCtx).not.toHaveBeenCalled();
+    expect(handlers.showCtx).not.toHaveBeenCalled();
   });
 });
 
 describe('click handling', () => {
   it('clicking a favorite star toggles that machine as a favorite', () => {
     clickOn(document.querySelector('.favstar[data-fav="m1"]')!);
-    expect(window.toggleFav).toHaveBeenCalledWith('m1');
+    expect(handlers.toggleFav).toHaveBeenCalledWith('m1');
   });
 
   it('clicking the "jump back" button goes to the previous free day', () => {
     clickOn(document.querySelector('[data-nb="m2"]')!);
-    expect(window.gotoPrevFree).toHaveBeenCalledWith('m2');
+    expect(handlers.gotoPrevFree).toHaveBeenCalledWith('m2');
   });
 
   it('clicking the "jump to next free" button goes to the next free day', () => {
     clickOn(document.querySelector('[data-nf="m2"]')!);
-    expect(window.gotoNextFree).toHaveBeenCalledWith('m2');
+    expect(handlers.gotoNextFree).toHaveBeenCalledWith('m2');
   });
 
   it('clicking a category header row toggles that category (debounced)', () => {
@@ -251,13 +265,13 @@ describe('click handling', () => {
     mouseoverOn(cell('m2', '2021-01-05'));
     clickOn(cell('m2', '2021-01-05'));
     expect(selection.didDrag).toBe(false);
-    expect(window.openCellAction).not.toHaveBeenCalled();
+    expect(handlers.openCellAction).not.toHaveBeenCalled();
   });
 
   it('a plain click that was not a drag does nothing (selection already happened on mousedown)', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     clickOn(cell('m1', '2021-01-04'));
-    expect(window.openCellAction).not.toHaveBeenCalled();
+    expect(handlers.openCellAction).not.toHaveBeenCalled();
   });
 });
 
@@ -276,7 +290,7 @@ describe('double-click handling', () => {
 
   it('double-clicking a cell opens its booking action', () => {
     dblclickOn(cell('m1', '2021-01-04'));
-    expect(window.openCellAction).toHaveBeenCalledWith('m1', '2021-01-04');
+    expect(handlers.openCellAction).toHaveBeenCalledWith('m1', '2021-01-04');
   });
 });
 
@@ -316,16 +330,16 @@ describe('keyboard navigation', () => {
     mousedownOn(cell('m2', '2021-01-05')); // last column
     keydown('ArrowRight');
     expect(window.S.extraWeeks).toBe(1);
-    expect(window.render).toHaveBeenCalledOnce();
+    expect(renderTrigger).toHaveBeenCalledOnce();
   });
 
   it('moving past the left edge calls prependWeek() to grow backwards', () => {
-    // window.prependWeek is a no-op stub here, so the column index stays -1 and clamps to 0 —
+    // handlers.prependWeek is a no-op stub here, so the column index stays -1 and clamps to 0 —
     // this test only proves the call happens, not the resulting column (that needs a real
     // prependWeek that actually unshifts S.visD, which is still legacy / out of B2's scope).
     mousedownOn(cell('m1', '2021-01-04')); // first column
     keydown('ArrowLeft');
-    expect(window.prependWeek).toHaveBeenCalledOnce();
+    expect(handlers.prependWeek).toHaveBeenCalledOnce();
   });
 
   it('does nothing when the grid has no visible rows/columns yet', () => {
@@ -338,7 +352,7 @@ describe('keyboard navigation', () => {
   it("Enter on a single-cell selection opens that cell's booking action", () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('Enter');
-    expect(window.openCellAction).toHaveBeenCalledWith('m1', '2021-01-04');
+    expect(handlers.openCellAction).toHaveBeenCalledWith('m1', '2021-01-04');
   });
 
   it('Enter on a multi-cell selection opens the context menu instead', () => {
@@ -346,14 +360,14 @@ describe('keyboard navigation', () => {
     mouseoverOn(cell('m2', '2021-01-05'));
     mouseupOn(document.body);
     keydown('Enter');
-    expect(window.showCtx).toHaveBeenCalled();
-    expect(window.openCellAction).not.toHaveBeenCalled();
+    expect(handlers.showCtx).toHaveBeenCalled();
+    expect(handlers.openCellAction).not.toHaveBeenCalled();
   });
 
   it('Enter with nothing focused does nothing', () => {
     keydown('Enter');
-    expect(window.openCellAction).not.toHaveBeenCalled();
-    expect(window.showCtx).not.toHaveBeenCalled();
+    expect(handlers.openCellAction).not.toHaveBeenCalled();
+    expect(handlers.showCtx).not.toHaveBeenCalled();
   });
 
   it('Escape clears the selection', () => {
@@ -422,7 +436,7 @@ describe('drag auto-scroll at the grid edges', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     document.dispatchEvent(new MouseEvent('mousemove', { clientX: 110, clientY: 200 }));
     vi.advanceTimersByTime(60);
-    expect(window.prependWeek).toHaveBeenCalled(); // scrollLeft starts at 0 in jsdom
+    expect(handlers.prependWeek).toHaveBeenCalled(); // scrollLeft starts at 0 in jsdom
 
     document.getElementById('gridWrap')!.scrollLeft = 50;
     document.dispatchEvent(new MouseEvent('mousemove', { clientX: 110, clientY: 200 }));

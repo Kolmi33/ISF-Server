@@ -25,6 +25,8 @@ import { toast, offerUndo } from '../toast.ts';
 import { Icon } from './Icon.tsx';
 import { openBookingForm } from './BookingForm.tsx';
 import { store } from '../../store-instance.ts';
+import { machById } from '../machine-lookup.ts';
+import { openStats } from './StatsModal.tsx';
 
 async function deleteDates(
   machine: Machine,
@@ -129,7 +131,7 @@ function BookingFacts({ machine, date, booking }: BookingFactsProps) {
         <button
           className="btn small"
           title={`Personenstatistik von ${booking.name} öffnen`}
-          onClick={() => window.openStats(booking.name.toLowerCase())}
+          onClick={() => openStats(booking.name.toLowerCase())}
         >
           <Icon name="chart" /> Statistik
         </button>
@@ -239,7 +241,7 @@ export function openBookingDetail(machine: Machine, date: string, booking: Booki
  *  booking form (single cell) otherwise — unless the machine is blocked or unavailable that
  *  day, which just shows why. Faithful port of legacy `openCellAction`. */
 export function openCellAction(mid: string, date: string): void {
-  const machine = window.machById(mid);
+  const machine = machById(mid);
   if (!machine) return;
   const booking = store.get('data')!.bookings[mid]?.[date];
   if (isBlockedOnDate(machine, date) && !booking) {

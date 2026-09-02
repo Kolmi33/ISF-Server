@@ -1,12 +1,17 @@
 // The settings modal (Phase 7 slice B9). Faithful port of legacy `openSettings()`. Every
 // control still reads/writes its exact original localStorage key and calls the same
-// still-legacy globals (applyTheme, connectSSE, refreshNow, applyDebug, dbgOn, centerToday)
-// for the side effects that aren't modal-related — those stay in legacy.js for now.
+// side-effecting functions those keys drove originally (applyTheme, connectSSE, refreshNow,
+// applyDebug, dbgOn, centerToday) — each still its own module, imported directly.
 
 import { Icon } from './Icon.tsx';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { askUserName } from './AskUserNameModal.tsx';
 import { store } from '../../store-instance.ts';
+import { connectSSE, presenceTick } from '../live-connection.ts';
+import { refreshNow } from '../mutate.ts';
+import { applyTheme } from '../theme.ts';
+import { centerToday } from '../grid-scroll.ts';
+import { applyDebug, dbgOn } from '../debug-panel.ts';
 
 function DataSourceRow() {
   return (
@@ -21,8 +26,8 @@ function DataSourceRow() {
       <button
         className="btn"
         onClick={() => {
-          window.connectSSE();
-          window.refreshNow(false);
+          connectSSE();
+          void refreshNow(false);
         }}
       >
         <Icon name="refresh" /> Neu verbinden
@@ -40,7 +45,7 @@ function ThemeRow() {
         defaultValue={theme}
         onChange={(event) => {
           localStorage.setItem('mb_theme', event.target.value);
-          window.applyTheme();
+          applyTheme();
           store.notify();
         }}
       >
@@ -63,7 +68,7 @@ function PresenceRow() {
           defaultChecked={presence}
           onChange={(event) => {
             localStorage.setItem('mb_presence', event.target.checked ? 'on' : 'off');
-            window.presenceTick();
+            void presenceTick();
           }}
         />{' '}
         meinen Namen als „aktiv" teilen
@@ -104,7 +109,7 @@ function WeekendsRow() {
           onChange={(event) => {
             localStorage.setItem('mb_weekends', event.target.checked ? 'on' : 'off');
             store.set({ extraWeeks: 0 });
-            window.centerToday();
+            centerToday();
           }}
         />{' '}
         Samstag &amp; Sonntag anzeigen (grau markiert)
@@ -134,10 +139,10 @@ function DebugRow() {
       <label style={{ minWidth: 'auto' }}>
         <input
           type="checkbox"
-          defaultChecked={window.dbgOn()}
+          defaultChecked={dbgOn()}
           onChange={(event) => {
             localStorage.setItem('mb_debug', event.target.checked ? 'on' : 'off');
-            window.applyDebug();
+            applyDebug();
           }}
         />{' '}
         Debug-Panel anzeigen (protokolliert Schreiben, Updates, Nutzer, Fehler)

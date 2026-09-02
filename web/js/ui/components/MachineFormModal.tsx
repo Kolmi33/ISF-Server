@@ -5,10 +5,9 @@
 // budgets, and all one form conceptually. The actual save/delete reducers already live in
 // `core/booking.ts` (`saveMachine`/`deleteMachine`, Phase 5.1).
 //
-// "Zurück" and a successful save/delete all route to `window.openAdmin()` (bridged from
-// `AdminModal.tsx`, B5) rather than a direct import — the same reasoning as `LogModal.tsx`'s
-// call to it: this avoids a circular import (Admin's "＋"/"Bearbeiten" call
-// `window.openMachineForm` right back).
+// "Zurück" and a successful save/delete all route to `openAdmin()`, a direct import from
+// `AdminModal.tsx` (B5) that closes a real three-way cycle with it and `LogModal.tsx` — see
+// `AdminModal.tsx`'s header comment for why that's safe here.
 
 import { useState } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
@@ -25,6 +24,9 @@ import { openReactModal } from '../modal.tsx';
 import { MachineFormFields } from './MachineFormFields.tsx';
 import { MaintenanceSlotEditor } from './MaintenanceSlotEditor.tsx';
 import { store } from '../../store-instance.ts';
+import { machById } from '../machine-lookup.ts';
+import { fillGroupSel } from './GroupFilterDropdown.tsx';
+import { openAdmin } from './AdminModal.tsx';
 
 interface SaveMachineFormInput {
   mid: string | null;
@@ -47,8 +49,8 @@ async function saveMachineForm({ mid, state }: SaveMachineFormInput): Promise<vo
       : `Maschine angelegt: ${validated.form.name}`,
   );
   if (result && result.abort) return;
-  window.fillGroupSel();
-  window.openAdmin();
+  fillGroupSel();
+  openAdmin();
   toast('Gespeichert ✓');
 }
 
@@ -66,8 +68,8 @@ async function deleteMachineForm(mid: string, machine: Machine): Promise<void> {
     `Maschine gelöscht: ${machine.name}`,
   );
   if (result && result.abort) return;
-  window.fillGroupSel();
-  window.openAdmin();
+  fillGroupSel();
+  openAdmin();
   toast('Maschine gelöscht.');
 }
 
@@ -77,7 +79,7 @@ interface MachineFormModalProps {
 
 export function MachineFormModal({ mid }: MachineFormModalProps) {
   const machines = store.get('data')!.machines;
-  const machine = mid ? (window.machById(mid) ?? null) : null;
+  const machine = mid ? (machById(mid) ?? null) : null;
   const [state, setState] = useState<MachineFormState>(() =>
     initialMachineFormState(machine, machines),
   );
@@ -110,7 +112,7 @@ export function MachineFormModal({ mid }: MachineFormModalProps) {
             <span className="spacer" />
           </>
         )}
-        <button className="btn" onClick={() => window.openAdmin()}>
+        <button className="btn" onClick={() => openAdmin()}>
           Zurück
         </button>
         <button className="btn primary" onClick={() => void saveMachineForm({ mid, state })}>

@@ -6,6 +6,9 @@
 import { useEffect, useRef } from 'react';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { store } from '../../store-instance.ts';
+import { updateUserChip } from '../user-chip.ts';
+import { dbg } from '../debug-panel.ts';
+import { presenceTick } from '../live-connection.ts';
 
 export interface AskUserNameModalProps {
   firstRun: boolean;
@@ -28,11 +31,11 @@ export function AskUserNameModal({ firstRun }: AskUserNameModalProps) {
     // original's single window.notify() after both.
     store.state.user = name;
     localStorage.setItem('mb_user', name);
-    window.updateUserChip();
+    updateUserChip();
     closeReactModal();
     store.notify();
-    window.dbg('user', 'Name gesetzt: ' + name);
-    window.presenceTick();
+    dbg('user', 'Name gesetzt: ' + name);
+    void presenceTick();
   };
 
   return (

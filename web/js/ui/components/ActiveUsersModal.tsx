@@ -8,6 +8,7 @@ import { Icon } from './Icon.tsx';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { activeUserRows, presenceTick, type ActiveUserRow } from '../live-connection.ts';
 import { store } from '../../store-instance.ts';
+import { handleError } from '../debug-panel.ts';
 
 /** Refresh presence, then open the popup with a snapshot of who's active. Faithful port of
  *  legacy `openActiveUsers`. */
@@ -15,7 +16,7 @@ export async function openActiveUsers(): Promise<void> {
   try {
     await presenceTick();
   } catch (error) {
-    window.handleError('presenceTick', error);
+    handleError('presenceTick', error);
   }
   openReactModal(<ActiveUsersModal rows={activeUserRows(Date.now())} />);
 }

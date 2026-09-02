@@ -51,11 +51,12 @@ import { AssistantTree } from './AssistantTree.tsx';
 import { AssistantResults } from './AssistantResults.tsx';
 import { Icon } from './Icon.tsx';
 import { store } from '../../store-instance.ts';
+import { machById } from '../machine-lookup.ts';
 
 const AS_HUES = [210, 150, 275, 32, 344, 190, 95, 258];
 
 function isFreeDevice(id: string, day: string): boolean {
-  const machine = window.machById(id);
+  const machine = machById(id);
   return (
     !!machine &&
     !getBooking(store.get('data')!.bookings, id, day) &&
@@ -222,7 +223,7 @@ function AssistantWorkSection({ assistant }: { assistant: ReturnType<typeof useA
       </div>
       <AssistantTree
         tree={assistant.tree}
-        machineById={(id) => window.machById(id)}
+        machineById={(id) => machById(id)}
         onGroupOnto={assistant.onGroupOnto}
         onJoin={assistant.onJoin}
         onToRoot={assistant.onToRoot}
@@ -277,7 +278,7 @@ export function AssistantModal() {
           tree={searchState.tree}
           isFreeDev={isFreeDevice}
           allIds={searchState.allIds}
-          machineById={(id) => window.machById(id)}
+          machineById={(id) => machById(id)}
         />
       )}
     </>

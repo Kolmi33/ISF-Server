@@ -3,7 +3,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import type { AppState, Booking, Machine } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
+
+// BookingDetailModal.tsx imports `openStats` directly from `./StatsModal.tsx` (F8 cleanup,
+// ARCHITECTURE_AUDIT.md) rather than reaching through `window.openStats` — mocked here so
+// this test keeps observing it as before. `machById` (../machine-lookup.ts) is also a direct
+// import now, but needs no mock — the real one reads the store data set up below.
+vi.mock('./StatsModal.tsx', () => ({ openStats: vi.fn() }));
+
 import { BookingDetailModal, openBookingDetail, openCellAction } from './BookingDetailModal.tsx';
+import { openStats } from './StatsModal.tsx';
 
 const TODAY = '2021-01-06'; // a Wednesday
 
@@ -19,10 +27,9 @@ beforeEach(() => {
   document.body.innerHTML = `<div id="overlay"><div id="modal" tabindex="-1"></div></div><div id="modalReopen"></div><div id="toast"></div>`;
   store.set({ data: { machines: [machine()], bookings: {} } } as unknown as Partial<AppState>);
   window.S = store.state;
-  window.machById = vi.fn((id: string) => window.S.data!.machines.find((m) => m.id === id));
   window.mutate = vi.fn().mockResolvedValue({ n: 1, undo: [] });
   window.askConfirm = vi.fn().mockResolvedValue(true);
-  window.openStats = vi.fn();
+  vi.mocked(openStats).mockClear();
 });
 
 describe('BookingDetailModal', () => {
@@ -53,7 +60,7 @@ describe('BookingDetailModal', () => {
       <BookingDetailModal machine={machine()} date={TODAY} booking={booking({ name: 'Anna' })} />,
     );
     screen.getByRole('button', { name: /Statistik/ }).click();
-    expect(window.openStats).toHaveBeenCalledWith('anna');
+    expect(openStats).toHaveBeenCalledWith('anna');
   });
 
   it('shows neither a series hint nor a run-delete button for a standalone booking', () => {

@@ -3,7 +3,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, act, fireEvent } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
+
+// AllBookingsModal.tsx imports `saveFilters`/`updateMachBtn` directly from
+// `./MachineFilterDropdown.tsx` (F8 cleanup, ARCHITECTURE_AUDIT.md) rather than reaching
+// through `window.saveFilters`/`window.updateMachBtn` — mocked here so this test keeps
+// controlling/observing them as before.
+vi.mock('./MachineFilterDropdown.tsx', () => ({ saveFilters: vi.fn(), updateMachBtn: vi.fn() }));
+
 import { openAllBookings } from './AllBookingsModal.tsx';
+import { saveFilters, updateMachBtn } from './MachineFilterDropdown.tsx';
 
 const TODAY = '2021-01-04'; // a Monday
 
@@ -44,8 +52,8 @@ beforeEach(() => {
   window.S = store.state;
   notifySpy.mockClear();
   window.notify = () => store.notify();
-  window.saveFilters = vi.fn();
-  window.updateMachBtn = vi.fn();
+  vi.mocked(saveFilters).mockClear();
+  vi.mocked(updateMachBtn).mockClear();
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
     cb(0);
     return 0;
@@ -116,8 +124,8 @@ describe('AllBookingsModal', () => {
       screen.getAllByRole('button', { name: 'Im Plan anzeigen' })[0]!.click();
     });
     expect(window.S.machSel).toEqual(new Set(['m1']));
-    expect(window.saveFilters).toHaveBeenCalled();
-    expect(window.updateMachBtn).toHaveBeenCalled();
+    expect(saveFilters).toHaveBeenCalled();
+    expect(updateMachBtn).toHaveBeenCalled();
     expect(notifySpy).toHaveBeenCalled();
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
     expect(document.getElementById('toast')!.textContent).toMatch(/Fräse/);

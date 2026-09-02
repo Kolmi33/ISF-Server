@@ -3,7 +3,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, act, fireEvent } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
+
+// AdminModal.tsx imports `openMachineForm` directly from `./MachineFormModal.tsx` (part of a
+// real 3-way import cycle with LogModal.tsx too — F8 cleanup, ARCHITECTURE_AUDIT.md) rather
+// than reaching through `window.openMachineForm` — mocked here so this test keeps
+// controlling/observing it as before.
+vi.mock('./MachineFormModal.tsx', () => ({ openMachineForm: vi.fn() }));
+
 import { openAdmin } from './AdminModal.tsx';
+import { openMachineForm } from './MachineFormModal.tsx';
 
 function machine(overrides: Partial<Machine> = {}): Machine {
   return { id: 'm1', name: 'Fräse', group: 'Halle 1', ...overrides };
@@ -30,7 +38,7 @@ beforeEach(() => {
   } as unknown as Partial<AppState>);
   window.S = store.state;
   window.mutate = vi.fn();
-  window.openMachineForm = vi.fn();
+  vi.mocked(openMachineForm).mockClear();
 });
 
 describe('AdminModal', () => {
@@ -91,11 +99,11 @@ describe('AdminModal', () => {
     act(() => {
       screen.getByRole('button', { name: '＋ Maschine hinzufügen' }).click();
     });
-    expect(window.openMachineForm).toHaveBeenCalledWith(null);
+    expect(openMachineForm).toHaveBeenCalledWith(null);
     act(() => {
       screen.getAllByRole('button', { name: 'Bearbeiten' })[0]!.click();
     });
-    expect(window.openMachineForm).toHaveBeenCalledWith('m1');
+    expect(openMachineForm).toHaveBeenCalledWith('m1');
   });
 
   const rowNames = () =>

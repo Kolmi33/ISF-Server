@@ -3,7 +3,25 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, act, fireEvent } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
+import { initGridInteraction } from '../grid-interaction.ts';
 import { openAssistant } from './AssistantModal.tsx';
+
+// AssistantResults.tsx's "pin" button ("Termin anzeigen") calls grid-interaction.ts's
+// `clearSelection()`, which hands `hideCtx` off to the injected `GridInteractionHandlers`
+// struct (F8 cleanup, ARCHITECTURE_AUDIT.md) rather than `window.hideCtx` — initialized once
+// here, matching `initGridInteraction`'s real one-time-at-boot contract. The `#grid` element
+// only this one call needs is thrown away immediately after; nothing else in this file drives
+// grid DOM interactions.
+document.body.innerHTML = '<table id="grid"></table>';
+initGridInteraction({
+  showCtx: vi.fn(),
+  hideCtx: vi.fn(),
+  toggleFav: vi.fn(),
+  gotoPrevFree: vi.fn(),
+  gotoNextFree: vi.fn(),
+  openCellAction: vi.fn(),
+  prependWeek: vi.fn(),
+});
 
 const TODAY = '2021-01-04'; // a Monday
 
@@ -52,13 +70,13 @@ beforeEach(() => {
   } as unknown as Partial<AppState>);
   window.S = store.state;
   notifySpy.mockClear();
-  window.machById = (mid: string) => window.S.data!.machines.find((m) => m.id === mid);
+  // machById (../machine-lookup.ts), saveFilters/updateMachBtn (./MachineFilterDropdown.tsx)
+  // are direct imports now (F8 cleanup, ARCHITECTURE_AUDIT.md) — the real implementations run
+  // fine here unmocked: machById reads the store data set up above, and saveFilters/
+  // updateMachBtn's DOM/localStorage side effects are harmless with no #machBtn present.
   window.mutate = vi.fn();
   window.askConfirm = vi.fn().mockResolvedValue(true);
   window.notify = () => store.notify();
-  window.saveFilters = vi.fn();
-  window.updateMachBtn = vi.fn();
-  window.hideCtx = vi.fn();
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
     cb(0);
     return 0;

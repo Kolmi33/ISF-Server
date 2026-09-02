@@ -24,6 +24,7 @@ import {
 } from '../grid.ts';
 import { Icon } from './Icon.tsx';
 import { store } from '../../store-instance.ts';
+import { nextFreePtr, prevFreeBefore } from '../favorite-jump.ts';
 
 const CATEGORY_LABELS: Record<string, string> = {
   maschine: 'Maschinen',
@@ -174,14 +175,14 @@ function GridCell({
 
 /**
  * Whether the "jump back to a previous free day" button shows for `machine` today: only once
- * the user has jumped forward at least once (legacy tracks that per-machine cursor in the
- * still-legacy `nextFreePtr`) and there is somewhere to go back to. Faithful port of `render()`'s
- * `hasBack` calculation.
+ * the user has jumped forward at least once (tracked per-machine in `favorite-jump.ts`'s own
+ * `nextFreePtr`) and there is somewhere to go back to. Faithful port of `render()`'s `hasBack`
+ * calculation.
  */
 function hasBackJumpButton(machine: Machine, today: string): boolean {
-  const lastJumpedTo = window.nextFreePtr[machine.id];
+  const lastJumpedTo = nextFreePtr[machine.id];
   if (!lastJumpedTo) return false;
-  return !!window.prevFreeBefore(machine, lastJumpedTo) || lastJumpedTo !== today;
+  return !!prevFreeBefore(machine, lastJumpedTo) || lastJumpedTo !== today;
 }
 
 /** The row-header's maintenance/defect status badge, shown only when a slot exists. */

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vites
 import type { AppState } from '../../../shared/types.ts';
 import { mondayOfDate } from '../../../shared/dates.ts';
 import { store } from '../store-instance.ts';
+import { registerGridRenderTrigger } from './grid-render-bridge.ts';
 import {
   canStillGrowWindow,
   centerColumn,
@@ -143,13 +144,17 @@ function stubWindowGlobals(): void {
     data: { machines: [], bookings: {} },
   } as unknown as Partial<AppState>);
   window.S = store.state;
-  window.render = vi.fn();
 }
 
 // store.notify is what grid-scroll.ts now calls (directly, or via store.set); spied once here
 // rather than per-test since vi.clearAllMocks() (below) already resets its call history each
 // test without needing to re-wrap it.
 const notifySpy = vi.spyOn(store, 'notify');
+
+// Simulates the mounted Grid component's render-trigger registration (`Grid.tsx`'s own mount
+// effect, normally) — registered once in `beforeAll` below, same "stable reference, call
+// history cleared per test by vi.clearAllMocks()" shape as `notifySpy` above.
+const renderTrigger = vi.fn();
 
 // `prependWeek`'s and the scroll handler's re-entrancy guard (`extendPending`, module-private)
 // is cleared by a real `setTimeout`. Fake timers run for the whole file so that debounce is
@@ -168,6 +173,7 @@ beforeAll(() => {
   buildDom();
   stubWindowGlobals();
   initGridScroll();
+  registerGridRenderTrigger(renderTrigger);
 });
 
 afterAll(() => {
@@ -290,7 +296,7 @@ describe('ensureOverflow', () => {
     Object.defineProperty(wrap, 'clientWidth', { value: 800, configurable: true });
     ensureOverflow();
     expect(window.S.extraWeeks).toBe(1);
-    expect(window.render).toHaveBeenCalledOnce();
+    expect(renderTrigger).toHaveBeenCalledOnce();
   });
 
   it('does nothing once already wider than the viewport', () => {
@@ -298,13 +304,13 @@ describe('ensureOverflow', () => {
     Object.defineProperty(wrap, 'scrollWidth', { value: 1000, configurable: true });
     Object.defineProperty(wrap, 'clientWidth', { value: 800, configurable: true });
     ensureOverflow();
-    expect(window.render).not.toHaveBeenCalled();
+    expect(renderTrigger).not.toHaveBeenCalled();
   });
 
   it('does nothing while the grid is hidden (before the first data load)', () => {
     document.getElementById('gridWrap')!.style.display = 'none';
     ensureOverflow();
-    expect(window.render).not.toHaveBeenCalled();
+    expect(renderTrigger).not.toHaveBeenCalled();
   });
 });
 

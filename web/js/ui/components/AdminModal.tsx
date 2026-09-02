@@ -1,8 +1,9 @@
 // The Admin ("Verwalten") modal (Phase 7 slice B5, 4/4). Faithful port of legacy `openAdmin`.
-// The machine editor it routes to (`openMachineForm`) is still legacy — that's Phase 7 slice
-// B6's own target — so "＋ Maschine hinzufügen" and each row's "Bearbeiten" call
-// `window.openMachineForm` unchanged. The change-log button calls the already-gated `LogModal`
-// directly (both sides are gated, so no window round-trip is needed).
+// AdminModal, MachineFormModal, and LogModal each import directly from the other two — a real
+// three-way import cycle (F8 cleanup, ARCHITECTURE_AUDIT.md), safe here because every use on
+// all three sides is inside an event handler, never at module top level: by the time any of
+// these functions actually runs (a later click), every module involved has already finished
+// evaluating, so the live ES-module bindings are all resolved.
 
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
@@ -13,6 +14,7 @@ import { statusRangeText, daysMaskText, maintenanceKind } from '../machine-text.
 import { filterAdminMachines, type AdminSort } from '../views/admin.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { openLog } from './LogModal.tsx';
+import { openMachineForm } from './MachineFormModal.tsx';
 import { Icon } from './Icon.tsx';
 import { store } from '../../store-instance.ts';
 
@@ -95,7 +97,7 @@ function AdminControls({
   return (
     <>
       <div className="formrow">
-        <button className="btn primary" onClick={() => window.openMachineForm(null)}>
+        <button className="btn primary" onClick={() => openMachineForm(null)}>
           ＋ Maschine hinzufügen
         </button>
         <button className="btn" onClick={openLog}>
@@ -174,7 +176,7 @@ export function AdminModal() {
               key={machine.id}
               machine={machine}
               manual={sort === 'manual'}
-              onEdit={(id) => window.openMachineForm(id)}
+              onEdit={(id) => openMachineForm(id)}
               onMove={(id, dir) => void move(id, dir)}
             />
           ))

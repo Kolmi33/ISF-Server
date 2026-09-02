@@ -23,6 +23,7 @@ import { collapseReactModal } from '../modal.tsx';
 import { openBookingForm } from './BookingForm.tsx';
 import { Icon } from './Icon.tsx';
 import { store } from '../../store-instance.ts';
+import { saveFilters, updateMachBtn } from './MachineFilterDropdown.tsx';
 
 function rangeText(dates: readonly string[]): string {
   return dates.length === 1
@@ -38,8 +39,8 @@ function gotoRun(firstDate: string, allIds: readonly string[]): void {
   // Both writes stay silent — saveFilters()/updateMachBtn()/resetView() run before the one
   // notify, matching the original's single window.notify() after all of this.
   store.state.machSel = new Set(allIds);
-  window.saveFilters();
-  window.updateMachBtn();
+  saveFilters();
+  updateMachBtn();
   store.state.startMonday = mondayOfDate(parseIsoDateString(firstDate));
   resetView();
   store.notify();

@@ -39,7 +39,8 @@ beforeEach(() => {
   } as unknown as Partial<AppState>);
   window.S = store.state;
   notifySpy.mockClear();
-  window.machById = (mid: string) => window.S.data!.machines.find((m) => m.id === mid);
+  // machById (./machine-lookup.ts) is a direct import now (F8 cleanup,
+  // ARCHITECTURE_AUDIT.md) — needs no mock, the real one reads the store data set up above.
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
     cb(0);
     return 0;

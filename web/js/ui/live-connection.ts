@@ -12,11 +12,14 @@
 // now that the popup is `ui/components/ActiveUsersModal.tsx`, that reason is gone.
 
 import { applyUpdate, isForeign, presenceInfo, remoteMessage } from '../net/sse.ts';
-import { API } from '../net/api.ts';
+import { API, readFile } from '../net/api.ts';
 import { patchCells } from './cell-patch.ts';
 import { toast } from './toast.ts';
 import { setPresence } from './user-chip.ts';
 import { store } from '../store-instance.ts';
+import { dbg, handleError } from './debug-panel.ts';
+import { stampRef, refreshNow } from './mutate.ts';
+import { fillGroupSel } from './components/GroupFilterDropdown.tsx';
 
 /** The last known presence timestamp per name, `{name: ms-since-epoch}` — read by
  *  `ui/components/ActiveUsersModal.tsx`'s `activeUserRows`. Mutated in place (not reassigned)
@@ -98,14 +101,14 @@ export function connectSSE(): void {
     API + '/api/stream' + (userName ? '?user=' + encodeURIComponent(userName) : ''),
   );
   eventSource.addEventListener('hello', () => {
-    window.stampRef();
-    window.dbg('info', 'Live-Verbindung steht');
+    stampRef();
+    dbg('info', 'Live-Verbindung steht');
   });
   eventSource.addEventListener('presence', (event) => {
     try {
       applyPresence(JSON.parse(event.data).users);
     } catch (error) {
-      window.handleError('sse/presence', error);
+      handleError('sse/presence', error);
     }
   });
   eventSource.addEventListener('update', (event) => {
@@ -118,9 +121,9 @@ export function connectSSE(): void {
     const { rev, patch } = applyUpdate(data, store.get('data')!.bookings);
     if (rev !== null) store.get('data')!.revision = rev;
     if (patch.length) patchCells(patch);
-    window.stampRef();
+    stampRef();
     if (isForeign(data.by, store.get('user') || '?') && data.log) {
-      window.dbg('remote', data.by + ': ' + data.log);
+      dbg('remote', data.by + ': ' + data.log);
       queueRemoteChange(remoteMessage({ user: data.by, action: data.log }));
     }
   });
@@ -128,11 +131,11 @@ export function connectSSE(): void {
     try {
       // Silent — fillGroupSel() rebuilds from the new data before the one notify fires;
       // store.set() here would notify a beat early, before fillGroupSel() has run.
-      store.state.data = await window.readFile();
-      window.fillGroupSel();
+      store.state.data = await readFile();
+      fillGroupSel();
       store.notify();
     } catch (error) {
-      window.handleError('sse/structural', error);
+      handleError('sse/structural', error);
     }
     let by = '';
     try {
@@ -161,6 +164,6 @@ let liveTimersStarted = false;
 export function startLiveTimers(): void {
   if (liveTimersStarted) return;
   liveTimersStarted = true;
-  window.addEventListener('focus', () => window.refreshNow(true));
+  window.addEventListener('focus', () => void refreshNow(true));
   connectSSE();
 }

@@ -3,7 +3,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import type { AppState } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
+
+// AskUserNameModal.tsx imports `updateUserChip`/`dbg`/`presenceTick` directly (F8 cleanup,
+// ARCHITECTURE_AUDIT.md) rather than reaching through `window.*` — mocked here so this test
+// keeps controlling/observing them as before.
+vi.mock('../user-chip.ts', () => ({ updateUserChip: vi.fn() }));
+vi.mock('../debug-panel.ts', () => ({ dbg: vi.fn() }));
+vi.mock('../live-connection.ts', () => ({ presenceTick: vi.fn().mockResolvedValue(undefined) }));
+
 import { AskUserNameModal, askUserName } from './AskUserNameModal.tsx';
+import { updateUserChip } from '../user-chip.ts';
+import { dbg } from '../debug-panel.ts';
+import { presenceTick } from '../live-connection.ts';
 
 // window.S is kept aliased to store.state so the component (migrated onto the real store) and
 // this test agree; window.notify forwards to store.notify() exactly as app.ts does in
@@ -14,10 +25,10 @@ function stubWindowGlobals(): void {
   store.set({ user: '' } as unknown as Partial<AppState>);
   window.S = store.state;
   notifySpy.mockClear();
-  window.updateUserChip = vi.fn();
   window.notify = () => store.notify();
-  window.dbg = vi.fn();
-  window.presenceTick = vi.fn().mockResolvedValue(undefined);
+  vi.mocked(updateUserChip).mockClear();
+  vi.mocked(dbg).mockClear();
+  vi.mocked(presenceTick).mockClear();
 }
 
 // Every test needs the real #overlay/#modal DOM structure, not just the ones that open the
@@ -42,7 +53,7 @@ describe('AskUserNameModal', () => {
     render(<AskUserNameModal firstRun={false} />);
     screen.getByRole('button', { name: 'Speichern' }).click();
     expect(window.S.user).toBe('');
-    expect(window.updateUserChip).not.toHaveBeenCalled();
+    expect(updateUserChip).not.toHaveBeenCalled();
   });
 
   it('Speichern with a name sets window.S.user, persists it, and notifies', () => {
@@ -52,9 +63,9 @@ describe('AskUserNameModal', () => {
     screen.getByRole('button', { name: 'Speichern' }).click();
     expect(window.S.user).toBe('Kolmanovskyi');
     expect(localStorage.getItem('mb_user')).toBe('Kolmanovskyi');
-    expect(window.updateUserChip).toHaveBeenCalledOnce();
+    expect(updateUserChip).toHaveBeenCalledOnce();
     expect(notifySpy).toHaveBeenCalledOnce();
-    expect(window.presenceTick).toHaveBeenCalledOnce();
+    expect(presenceTick).toHaveBeenCalledOnce();
   });
 });
 

@@ -12,13 +12,33 @@
 //
 // Everything genuinely part of selection/navigation is ported here. Booking actions the
 // selection hands off to (opening the context menu, the single-cell booking action, the
-// next-free jump) are each gated components/modules of their own, called via the `window.*`
-// bridge (unlike `selection`/`paintSelection`/`clearSelection` themselves, which
-// `ui/grid-scroll.ts` and `ui/components/Grid.tsx` import directly).
+// next-free jump, growing the grid) are each gated components/modules of their own — but this
+// module is a dependency-graph "hub" several of them import FROM (`selection`/`paintSelection`/
+// `clearSelection`), so a direct import back into any of them would cycle. `initGridInteraction`
+// takes them as an injected `GridInteractionHandlers` struct instead (F8 cleanup,
+// ARCHITECTURE_AUDIT.md) — app.ts, which already imports every module with no cycle risk of
+// its own, wires the real implementations in once at boot.
 
 import { computeSelCells, clampIndex, type Cell } from './selection.ts';
 import { categoryTap, categoryTapCancel, toggleAllGroupsInCategory } from './category-fold.ts';
 import { store } from '../store-instance.ts';
+import { triggerGridRender } from './grid-render-bridge.ts';
+
+/** Everything this module hands off to a higher-level component/module — injected once at
+ *  boot (`initGridInteraction`) rather than imported directly, since each of these modules
+ *  already imports something from this one (`selection`/`paintSelection`/`clearSelection`),
+ *  which would make the reverse a real import cycle. */
+export interface GridInteractionHandlers {
+  showCtx: (x: number, y: number) => void;
+  hideCtx: () => void;
+  toggleFav: (mid: string) => void;
+  gotoPrevFree: (mid: string) => void;
+  gotoNextFree: (mid: string) => void;
+  openCellAction: (mid: string, date: string) => void;
+  prependWeek: () => void;
+}
+
+let handlers: GridInteractionHandlers | null = null;
 
 /** The current selection: an anchor/focus pair spanning a rectangle, the cells it covers, and
  *  whether a drag is in progress. Faithful port of legacy's module-level `Sel` object. */
@@ -88,7 +108,7 @@ export function clearSelection(): void {
   selection.focus = null;
   selection.cells = [];
   paintSelection();
-  window.hideCtx();
+  handlers!.hideCtx();
 }
 
 // Note: legacy's `refreshCell`/`refreshDot`/`patchCells` (targeted DOM patching after a
@@ -127,7 +147,7 @@ function autoScrollHorizontally(
     return true;
   }
   if (dragPointer!.x < rect.left + machineColumnWidth + DRAG_SCROLL_EDGE_PX) {
-    if (wrap.scrollLeft <= 0) window.prependWeek();
+    if (wrap.scrollLeft <= 0) handlers!.prependWeek();
     else wrap.scrollLeft -= 30;
     return true;
   }
@@ -192,7 +212,7 @@ function handleGridMouseDown(event: MouseEvent): void {
   if (event.button !== 0) return;
   const cell = cellFromEvent(event);
   if (!cell) return;
-  window.hideCtx();
+  handlers!.hideCtx();
   if (event.shiftKey && selection.anchor) {
     // Shift+click: span the selection from the existing anchor to this cell.
     selection.dragging = true;
@@ -227,7 +247,8 @@ function handleDocumentMouseUp(event: MouseEvent): void {
   if (!selection.dragging) return;
   selection.dragging = false;
   stopDragScroll();
-  if (selection.didDrag && selection.cells.length > 1) window.showCtx(event.clientX, event.clientY);
+  if (selection.didDrag && selection.cells.length > 1)
+    handlers!.showCtx(event.clientX, event.clientY);
 }
 
 /** Toggle one group's collapsed state and persist it (mirrors legacy's inline handler for a
@@ -244,17 +265,17 @@ function handleGridClick(event: MouseEvent): void {
   const target = event.target as HTMLElement;
   const favStar = target.closest<HTMLElement>('.favstar');
   if (favStar) {
-    window.toggleFav(favStar.dataset.fav!);
+    handlers!.toggleFav(favStar.dataset.fav!);
     return;
   }
   const backButton = target.closest<HTMLElement>('[data-nb]');
   if (backButton) {
-    window.gotoPrevFree(backButton.dataset.nb!);
+    handlers!.gotoPrevFree(backButton.dataset.nb!);
     return;
   }
   const nextButton = target.closest<HTMLElement>('[data-nf]');
   if (nextButton) {
-    window.gotoNextFree(nextButton.dataset.nf!);
+    handlers!.gotoNextFree(nextButton.dataset.nf!);
     return;
   }
   const groupRow = target.closest<HTMLElement>('tr.grouprow');
@@ -283,7 +304,7 @@ function handleGridDoubleClick(event: MouseEvent): void {
   }
   const cell = cellFromEvent(event);
   if (!cell) return;
-  window.openCellAction(cell.dataset.mid!, cell.dataset.date!);
+  handlers!.openCellAction(cell.dataset.mid!, cell.dataset.date!);
 }
 
 // ---- Keyboard navigation: arrows move, Shift+arrows extend, Enter opens, Escape clears ---
@@ -312,13 +333,13 @@ function moveFocusByArrowKey(key: string, extendSelection: boolean): void {
   let col = store.get('visD').indexOf(selection.focus.date) + colDelta;
   if (col >= store.get('visD').length && store.get('extraWeeks') < MAX_EXTRA_WEEKS_FOR_GROWTH) {
     // Direct field mutation, deliberately NOT store.set() — a store.set() here would notify
-    // (→ the subscribed render()) AND the direct window.render() right below would run too,
+    // (→ the subscribed render()) AND the direct triggerGridRender() right below would run too,
     // double-rendering. Same bypass ensureOverflow's own direct render() call uses.
     store.state.extraWeeks++;
-    window.render();
+    triggerGridRender();
   }
   if (col < 0 && store.get('extraWeeks') < MAX_EXTRA_WEEKS_FOR_GROWTH) {
-    window.prependWeek();
+    handlers!.prependWeek();
     // prependWeek() re-renders synchronously and may replace visD with a new array
     // (a fresh week prepended) — re-read it now rather than reuse an earlier value.
     col = store.get('visD').indexOf(selection.focus.date) + colDelta;
@@ -345,9 +366,9 @@ function handleEnterKey(): void {
   const focus = selection.focus!;
   if (selection.cells.length > 1) {
     const rect = findCellElement(focus.mid, focus.date)?.getBoundingClientRect();
-    window.showCtx(rect?.right ?? 120, rect?.bottom ?? 120);
+    handlers!.showCtx(rect?.right ?? 120, rect?.bottom ?? 120);
   } else {
-    window.openCellAction(focus.mid, focus.date);
+    handlers!.openCellAction(focus.mid, focus.date);
   }
 }
 
@@ -372,11 +393,14 @@ function handleDocumentKeyDown(event: KeyboardEvent): void {
 }
 
 /**
- * Wire up the grid's selection/keyboard-navigation listeners. Called once at boot (app.ts) —
- * mirrors legacy's top-level `gridEl.addEventListener(...)`/`document.addEventListener(...)`
- * calls, which also ran exactly once, at script-load time.
+ * Wire up the grid's selection/keyboard-navigation listeners, and register `injectedHandlers`
+ * for the higher-level actions this module hands off to (see `GridInteractionHandlers` above).
+ * Called once at boot (app.ts) — mirrors legacy's top-level
+ * `gridEl.addEventListener(...)`/`document.addEventListener(...)` calls, which also ran
+ * exactly once, at script-load time.
  */
-export function initGridInteraction(): void {
+export function initGridInteraction(injectedHandlers: GridInteractionHandlers): void {
+  handlers = injectedHandlers;
   const gridElement = document.getElementById('grid')!;
   document.addEventListener('mousemove', (event) => {
     if (selection.dragging) dragPointer = { x: event.clientX, y: event.clientY };

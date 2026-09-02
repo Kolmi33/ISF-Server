@@ -16,7 +16,8 @@ beforeEach(() => {
     data: { machines: [machine()], bookings: {} },
   } as unknown as Partial<AppState>);
   window.S = store.state;
-  window.machById = vi.fn((id: string) => window.S.data!.machines.find((m) => m.id === id));
+  // machById (../machine-lookup.ts) is a direct import now (F8 cleanup,
+  // ARCHITECTURE_AUDIT.md) — needs no mock, the real one reads the store data set up above.
   window.mutate = vi.fn();
 });
 

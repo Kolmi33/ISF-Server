@@ -3,8 +3,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import type { AppState } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
-import { ActiveUsersModal, openActiveUsers } from './ActiveUsersModal.tsx';
 import { presenceData } from '../live-connection.ts';
+
+// ActiveUsersModal.tsx imports `handleError` directly from `../debug-panel.ts` (F8 cleanup,
+// ARCHITECTURE_AUDIT.md) rather than reaching through `window.handleError` — mocked here so
+// this test keeps controlling/observing it as before.
+vi.mock('../debug-panel.ts', () => ({ handleError: vi.fn() }));
+
+import { ActiveUsersModal, openActiveUsers } from './ActiveUsersModal.tsx';
+import { handleError } from '../debug-panel.ts';
 
 beforeEach(() => {
   document.body.innerHTML = `
@@ -13,9 +20,7 @@ beforeEach(() => {
     <span id="lastRef"></span>`;
   store.set({ user: 'anna' } as unknown as Partial<AppState>);
   window.S = store.state;
-  window.handleError = vi.fn();
-  window.stampRef = vi.fn();
-  window.dbg = vi.fn();
+  vi.mocked(handleError).mockClear();
   for (const key of Object.keys(presenceData)) delete presenceData[key];
 });
 
@@ -84,7 +89,7 @@ describe('openActiveUsers', () => {
       },
     );
     await act(() => openActiveUsers());
-    expect(window.handleError).toHaveBeenCalledWith('presenceTick', expect.any(Error));
+    expect(handleError).toHaveBeenCalledWith('presenceTick', expect.any(Error));
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(true);
   });
 });
