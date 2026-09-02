@@ -85,8 +85,8 @@ describe('offerUndo', () => {
     offerUndo(
       'Gebucht.',
       [
-        { mid: 'm1', date: '2021-01-04', prev: null }, // undo: clear it (it was newly created)
-        { mid: 'm1', date: '2021-01-05', prev: { name: 'bob' } }, // undo: restore the old value
+        { machineId: 'm1', date: '2021-01-04', prev: null }, // undo: clear it (it was newly created)
+        { machineId: 'm1', date: '2021-01-05', prev: { name: 'bob' } }, // undo: restore the old value
       ],
       'Buchung',
     );
@@ -120,7 +120,7 @@ describe('offerUndo', () => {
 
     offerUndo(
       'Gebucht.',
-      [{ mid: 'm1', date: '2021-01-04', prev: null }], // undo: this cell was newly created
+      [{ machineId: 'm1', date: '2021-01-04', prev: null }], // undo: this cell was newly created
       'Buchung',
     );
     document.getElementById('undoBtn')!.click();
@@ -128,7 +128,7 @@ describe('offerUndo', () => {
     await Promise.resolve();
 
     expect(capturedResult!.undo).toEqual([
-      { mid: 'm1', date: '2021-01-04', prev: { name: 'anna' } },
+      { machineId: 'm1', date: '2021-01-04', prev: { name: 'anna' } },
     ]);
   });
 
@@ -144,19 +144,19 @@ describe('offerUndo', () => {
 
     offerUndo(
       'Gelöscht.',
-      [{ mid: 'm1', date: '2021-01-04', prev: { name: 'bob' } }], // undo: restore bob's booking
+      [{ machineId: 'm1', date: '2021-01-04', prev: { name: 'bob' } }], // undo: restore bob's booking
       'Löschen',
     );
     document.getElementById('undoBtn')!.click();
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(capturedResult!.undo).toEqual([{ mid: 'm1', date: '2021-01-04', prev: null }]);
+    expect(capturedResult!.undo).toEqual([{ machineId: 'm1', date: '2021-01-04', prev: null }]);
   });
 
   it('shows a confirmation toast once the undo mutate call succeeds', async () => {
     window.mutate = vi.fn().mockResolvedValue({ undo: [] });
-    offerUndo('Gebucht.', [{ mid: 'm1', date: '2021-01-04', prev: null }], 'Buchung');
+    offerUndo('Gebucht.', [{ machineId: 'm1', date: '2021-01-04', prev: null }], 'Buchung');
     document.getElementById('undoBtn')!.click();
     await Promise.resolve();
     await Promise.resolve();
@@ -165,7 +165,7 @@ describe('offerUndo', () => {
 
   it('shows no confirmation when the undo mutate call aborts', async () => {
     window.mutate = vi.fn().mockResolvedValue({ abort: true });
-    offerUndo('Gebucht.', [{ mid: 'm1', date: '2021-01-04', prev: null }], 'Buchung');
+    offerUndo('Gebucht.', [{ machineId: 'm1', date: '2021-01-04', prev: null }], 'Buchung');
     document.getElementById('undoBtn')!.click();
     await Promise.resolve();
     await Promise.resolve();

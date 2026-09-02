@@ -83,10 +83,10 @@ function buildMutateRequestBody(
   const common = { log: logEntry.action, user: store.get('user') || '?' };
   if (result && Array.isArray(result.undo)) {
     const cells = result.undo.map((entry) => ({
-      mid: entry.mid,
+      machineId: entry.machineId,
       day: entry.date,
       prev: entry.prev || null,
-      val: (store.get('data')!.bookings[entry.mid] || {})[entry.date] || null,
+      val: (store.get('data')!.bookings[entry.machineId] || {})[entry.date] || null,
     }));
     return { cells, ...common };
   }

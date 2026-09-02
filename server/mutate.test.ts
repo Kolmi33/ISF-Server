@@ -17,11 +17,16 @@ function addMachine(db: Db, id = 'm1', over: Record<string, string | null> = {})
     m.maint,
   );
 }
-function book(db: Db, mid: string, day: string, name: string): void {
-  db.prepare('INSERT INTO bookings(mid,day,name,ts) VALUES(?,?,?,?)').run(mid, day, name, 't0');
+function book(db: Db, machineId: string, day: string, name: string): void {
+  db.prepare('INSERT INTO bookings(mid,day,name,ts) VALUES(?,?,?,?)').run(
+    machineId,
+    day,
+    name,
+    't0',
+  );
 }
-const bk = (db: Db, mid: string, day: string): BookingRow | undefined =>
-  db.prepare('SELECT * FROM bookings WHERE mid=? AND day=?').get(mid, day) as
+const bk = (db: Db, machineId: string, day: string): BookingRow | undefined =>
+  db.prepare('SELECT * FROM bookings WHERE mid=? AND day=?').get(machineId, day) as
     BookingRow | undefined;
 
 /* ------------------------ structural path ------------------------ */
@@ -112,7 +117,7 @@ describe('applyMutate — cells', () => {
       {
         cells: [
           {
-            mid: 'm1',
+            machineId: 'm1',
             day: '2021-01-04',
             val: { name: 'Alice', note: 'n', gid: 'g', gtitle: 't' },
           },
@@ -135,7 +140,9 @@ describe('applyMutate — cells', () => {
     const db = mem();
     addMachine(db, 'm1');
     applyMutate(db, {
-      cells: [{ mid: 'm1', day: '2021-01-04', val: { name: 'A', ts: '2020-12-31T09:00:00Z' } }],
+      cells: [
+        { machineId: 'm1', day: '2021-01-04', val: { name: 'A', ts: '2020-12-31T09:00:00Z' } },
+      ],
     });
     expect(bk(db, 'm1', '2021-01-04')!.ts).toBe('2020-12-31T09:00:00Z');
   });
@@ -145,10 +152,10 @@ describe('applyMutate — cells', () => {
     addMachine(db, 'm1');
     book(db, 'm1', '2021-01-04', 'Bob');
     const res = applyMutate(db, {
-      cells: [{ mid: 'm1', day: '2021-01-04', val: { name: 'Alice' } }],
+      cells: [{ machineId: 'm1', day: '2021-01-04', val: { name: 'Alice' } }],
     });
     expect(res.applied).toBe(0);
-    expect(res.conflicts).toEqual([{ mid: 'm1', day: '2021-01-04', by: 'Bob' }]);
+    expect(res.conflicts).toEqual([{ machineId: 'm1', day: '2021-01-04', by: 'Bob' }]);
     expect(bk(db, 'm1', '2021-01-04')!.name).toBe('Bob');
   });
 
@@ -156,9 +163,11 @@ describe('applyMutate — cells', () => {
     const db = mem();
     addMachine(db, 'm1', { status: 'wartung' });
     const res = applyMutate(db, {
-      cells: [{ mid: 'm1', day: '2021-01-04', val: { name: 'Alice' } }],
+      cells: [{ machineId: 'm1', day: '2021-01-04', val: { name: 'Alice' } }],
     });
-    expect(res.conflicts).toEqual([{ mid: 'm1', day: '2021-01-04', by: 'gesperrt (wartung)' }]);
+    expect(res.conflicts).toEqual([
+      { machineId: 'm1', day: '2021-01-04', by: 'gesperrt (wartung)' },
+    ]);
   });
 
   // Regression (ARCHITECTURE_AUDIT.md F1): this write path used to check only the legacy
@@ -172,9 +181,11 @@ describe('applyMutate — cells', () => {
       maint: JSON.stringify([{ type: 'defekt', from: '2021-01-04', until: '2021-01-04' }]),
     });
     const res = applyMutate(db, {
-      cells: [{ mid: 'm1', day: '2021-01-04', val: { name: 'Alice' } }],
+      cells: [{ machineId: 'm1', day: '2021-01-04', val: { name: 'Alice' } }],
     });
-    expect(res.conflicts).toEqual([{ mid: 'm1', day: '2021-01-04', by: 'gesperrt (defekt)' }]);
+    expect(res.conflicts).toEqual([
+      { machineId: 'm1', day: '2021-01-04', by: 'gesperrt (defekt)' },
+    ]);
     expect(bk(db, 'm1', '2021-01-04')).toBeUndefined();
   });
 
@@ -182,10 +193,10 @@ describe('applyMutate — cells', () => {
     const db = mem();
     addMachine(db, 'm1', { days: '0111111' }); // Monday off
     const res = applyMutate(db, {
-      cells: [{ mid: 'm1', day: '2021-01-04', val: { name: 'Alice' } }], // a Monday
+      cells: [{ machineId: 'm1', day: '2021-01-04', val: { name: 'Alice' } }], // a Monday
     });
     expect(res.conflicts).toEqual([
-      { mid: 'm1', day: '2021-01-04', by: 'nicht verfügbar (Wochentag)' },
+      { machineId: 'm1', day: '2021-01-04', by: 'nicht verfügbar (Wochentag)' },
     ]);
     expect(bk(db, 'm1', '2021-01-04')).toBeUndefined();
   });
@@ -195,7 +206,7 @@ describe('applyMutate — cells', () => {
     addMachine(db, 'm1');
     book(db, 'm1', '2021-01-04', 'Alice');
     const res = applyMutate(db, {
-      cells: [{ mid: 'm1', day: '2021-01-04', val: { name: 'Alice', note: 'new' } }],
+      cells: [{ machineId: 'm1', day: '2021-01-04', val: { name: 'Alice', note: 'new' } }],
     });
     expect(res.applied).toBe(1);
     expect(bk(db, 'm1', '2021-01-04')!.note).toBe('new');
@@ -206,7 +217,7 @@ describe('applyMutate — cells', () => {
     addMachine(db, 'm1');
     book(db, 'm1', '2021-01-04', 'Alice');
     const res = applyMutate(db, {
-      cells: [{ mid: 'm1', day: '2021-01-04', val: null, prev: { name: 'Alice' } }],
+      cells: [{ machineId: 'm1', day: '2021-01-04', val: null, prev: { name: 'Alice' } }],
     });
     expect(res.applied).toBe(1);
     expect(bk(db, 'm1', '2021-01-04')).toBeUndefined();
@@ -217,10 +228,10 @@ describe('applyMutate — cells', () => {
     addMachine(db, 'm1');
     book(db, 'm1', '2021-01-04', 'Carol'); // now Carol's
     const res = applyMutate(db, {
-      cells: [{ mid: 'm1', day: '2021-01-04', val: null, prev: { name: 'Alice' } }],
+      cells: [{ machineId: 'm1', day: '2021-01-04', val: null, prev: { name: 'Alice' } }],
     });
     expect(res.applied).toBe(0);
-    expect(res.conflicts).toEqual([{ mid: 'm1', day: '2021-01-04', by: 'Carol' }]);
+    expect(res.conflicts).toEqual([{ machineId: 'm1', day: '2021-01-04', by: 'Carol' }]);
     expect(bk(db, 'm1', '2021-01-04')!.name).toBe('Carol');
   });
 
@@ -228,7 +239,11 @@ describe('applyMutate — cells', () => {
     const db = mem();
     addMachine(db, 'm1');
     const spy = vi.fn();
-    const res = applyMutate(db, { cells: [{ mid: 'm1', day: '2021-01-04', val: null }] }, spy);
+    const res = applyMutate(
+      db,
+      { cells: [{ machineId: 'm1', day: '2021-01-04', val: null }] },
+      spy,
+    );
     expect(res.applied).toBe(0);
     expect(spy).not.toHaveBeenCalled(); // no changes → no broadcast
   });
@@ -237,14 +252,17 @@ describe('applyMutate — cells', () => {
     const db = mem();
     addMachine(db, 'm1');
     expect(
-      applyMutate(db, { cells: Array(1001).fill({ mid: 'm1', day: '2021-01-04' }) }).error,
+      applyMutate(db, { cells: Array(1001).fill({ machineId: 'm1', day: '2021-01-04' }) }).error,
     ).toBe('Zu viele Zellen (max. 1000)');
-    expect(applyMutate(db, { cells: [{ mid: 'm1', day: 'bad' }] }).error).toBe('Ungültige Zelle');
-    expect(applyMutate(db, { cells: [{ mid: 'ghost', day: '2021-01-04' }] }).error).toBe(
+    expect(applyMutate(db, { cells: [{ machineId: 'm1', day: 'bad' }] }).error).toBe(
+      'Ungültige Zelle',
+    );
+    expect(applyMutate(db, { cells: [{ machineId: 'ghost', day: '2021-01-04' }] }).error).toBe(
       'Unbekannte Maschine: ghost',
     );
     expect(
-      applyMutate(db, { cells: [{ mid: 'm1', day: '2021-01-04', val: { name: '  ' } }] }).error,
+      applyMutate(db, { cells: [{ machineId: 'm1', day: '2021-01-04', val: { name: '  ' } }] })
+        .error,
     ).toBe('Name fehlt');
   });
 });
@@ -259,7 +277,7 @@ describe('applyMutate — weekend auto-bridging', () => {
     const spy = vi.fn();
     const res = applyMutate(
       db,
-      { cells: [{ mid: 'm1', day: '2021-01-11', val: { name: 'Bob' } }] },
+      { cells: [{ machineId: 'm1', day: '2021-01-11', val: { name: 'Bob' } }] },
       spy,
     );
     expect(res.applied).toBe(1); // only the client's Monday counts as "applied"
@@ -276,7 +294,7 @@ describe('applyMutate — weekend auto-bridging', () => {
     book(db, 'm1', '2021-01-08', 'Alice');
     applyMutate(
       db,
-      { cells: [{ mid: 'm1', day: '2021-01-11', val: { name: 'Bob' } }] },
+      { cells: [{ machineId: 'm1', day: '2021-01-11', val: { name: 'Bob' } }] },
       () => {},
       false,
     );
@@ -294,7 +312,9 @@ describe('applyMutate — dispatch & failure handling', () => {
     const db = mem();
     addMachine(db, 'm1');
     db.exec('DROP TABLE bookings'); // prepare() inside the txn will throw
-    const res = applyMutate(db, { cells: [{ mid: 'm1', day: '2021-01-04', val: { name: 'A' } }] });
+    const res = applyMutate(db, {
+      cells: [{ machineId: 'm1', day: '2021-01-04', val: { name: 'A' } }],
+    });
     expect(res.error).toBe('Speichern fehlgeschlagen');
   });
 
@@ -310,7 +330,7 @@ describe('applyMutate — dispatch & failure handling', () => {
     addMachine(db, 'm1');
     db.exec('DROP TABLE log'); // logAction swallows its own failure
     const res = applyMutate(db, {
-      cells: [{ mid: 'm1', day: '2021-01-04', val: { name: 'A' } }],
+      cells: [{ machineId: 'm1', day: '2021-01-04', val: { name: 'A' } }],
       log: 'note',
     });
     expect(res.ok).toBe(true);

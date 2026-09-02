@@ -21,7 +21,7 @@ export function getBooking(
 }
 
 /**
- * The contiguous run of workdays, centered on `isoDate`, that machine `mid` has booked under
+ * The contiguous run of workdays, centered on `isoDate`, that `machineId` has booked under
  * the same `name` — weekends don't break the run (they're simply skipped over), but a gap of
  * any other kind (a different booker, or a free/blocked day) does. Returned in chronological
  * order, always including `isoDate` itself. Faithful port of legacy `openBookingDetail`'s
@@ -29,11 +29,11 @@ export function getBooking(
  */
 export function findSameNameWorkdayRun(
   bookings: Bookings,
-  mid: string,
+  machineId: string,
   isoDate: string,
   name: string,
 ): string[] {
-  const machineBookings = bookings[mid] || {};
+  const machineBookings = bookings[machineId] || {};
   const run = [isoDate];
 
   let cursor = isoDate;
@@ -63,14 +63,14 @@ export interface BookingGroup {
   dates: string[];
 }
 
-export function findBookingGroup(bookings: Bookings, gid: string): BookingGroup {
+export function findBookingGroup(bookings: Bookings, groupId: string): BookingGroup {
   const machineIds = new Set<string>();
   const dates = new Set<string>();
-  for (const mid of Object.keys(bookings)) {
-    const machineBookings = bookings[mid]!;
+  for (const machineId of Object.keys(bookings)) {
+    const machineBookings = bookings[machineId]!;
     for (const date of Object.keys(machineBookings)) {
-      if (machineBookings[date]?.gid === gid) {
-        machineIds.add(mid);
+      if (machineBookings[date]?.gid === groupId) {
+        machineIds.add(machineId);
         dates.add(date);
       }
     }

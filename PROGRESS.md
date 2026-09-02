@@ -343,17 +343,17 @@ which turns it into a data-shape change:
   the vast majority of the ~46 files.
 
 **Backlog:**
-- [ ] 8.1 Split `core/machines.ts`: the pure predicates it already holds move to
+- [x] 8.1 Split `core/machines.ts`: the pure predicates it already holds move to
   `core/machines-queries.ts` (naming mirrors `booking-queries.ts` exactly); the machine-CRUD
   reducers currently mislabeled inside `booking.ts` (`saveMachine`, `deleteMachine`,
   `moveMachine`, `MachineForm`, and their private helpers) move into a new `core/machines.ts`.
   `booking.ts`'s header comment is trimmed to what it actually still owns. `moveMachine` also
   gets a doc-comment/readability pass in the move (the concrete example that started this phase).
-- [ ] 8.2 Rename `mid`→`machineId`, `gid`→`groupId` across every file the scope boundary above
+- [x] 8.2 Rename `mid`→`machineId`, `gid`→`groupId` across every file the scope boundary above
   clears — one large mechanical commit (a partial rename doesn't type-check, so it can't be
   split further without breaking `HEAD` green). Includes the `data-mid` DOM attribute and the
   wire-shape structs named above, updated in lockstep. Excludes everything the boundary keeps.
-- [ ] 8.3 Rename `findConflicts` → `findBookingConflicts` (core/booking.ts) — states *what* it
+- [x] 8.3 Rename `findConflicts` → `findBookingConflicts` (core/booking.ts) — states *what* it
   finds conflicts in, not just that it finds them.
 - [ ] 8.4 Sweep the remainder for the same pattern: bare `n` (→ `deletedCount`/whatever it counts),
   bare `dir` (→ `direction`), any other function name that doesn't say its domain on its own.

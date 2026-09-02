@@ -8,12 +8,19 @@ function mem(): Db {
   db.prepare('INSERT INTO machines(id,name,grp,sort) VALUES(?,?,?,0)').run('m1', 'M', 'A');
   return db;
 }
-function book(db: Db, mid: string, day: string, name: string): void {
-  db.prepare('INSERT INTO bookings(mid,day,name,ts) VALUES(?,?,?,?)').run(mid, day, name, 't0');
+function book(db: Db, machineId: string, day: string, name: string): void {
+  db.prepare('INSERT INTO bookings(mid,day,name,ts) VALUES(?,?,?,?)').run(
+    machineId,
+    day,
+    name,
+    't0',
+  );
 }
-const days = (db: Db, mid: string): Record<string, string> => {
+const days = (db: Db, machineId: string): Record<string, string> => {
   const out: Record<string, string> = {};
-  for (const r of db.prepare('SELECT day,name FROM bookings WHERE mid=?').all(mid) as unknown as {
+  for (const r of db
+    .prepare('SELECT day,name FROM bookings WHERE mid=?')
+    .all(machineId) as unknown as {
     day: string;
     name: string;
   }[])
@@ -28,8 +35,8 @@ describe('missingBridges (pure)', () => {
 
   it('bridges Sat+Sun of a Fri→Mon span with the Friday name', () => {
     expect(missingBridges(map({ '2021-01-08': 'Alice', '2021-01-11': 'Bob' }))).toEqual([
-      { mid: 'm1', day: '2021-01-09', name: 'Alice' }, // Sat carries Friday's (Alice) name
-      { mid: 'm1', day: '2021-01-10', name: 'Alice' },
+      { machineId: 'm1', day: '2021-01-09', name: 'Alice' }, // Sat carries Friday's (Alice) name
+      { machineId: 'm1', day: '2021-01-10', name: 'Alice' },
     ]);
   });
 
@@ -41,7 +48,7 @@ describe('missingBridges (pure)', () => {
     const r = missingBridges(
       map({ '2021-01-08': 'Alice', '2021-01-09': 'Alice', '2021-01-11': 'Bob' }),
     );
-    expect(r).toEqual([{ mid: 'm1', day: '2021-01-10', name: 'Alice' }]);
+    expect(r).toEqual([{ machineId: 'm1', day: '2021-01-10', name: 'Alice' }]);
   });
 
   it('ignores non-Friday bookings and skips machines with no bookings', () => {
@@ -57,13 +64,13 @@ describe('maintainBridges (in-DB)', () => {
     book(db, 'm1', '2021-01-10', 'KEEP'); // Sun already taken by someone
     book(db, 'm1', '2021-01-11', 'Bob'); // Mon
     const added = maintainBridges(db, ['m1'], 'ts1');
-    expect(added).toEqual([{ mid: 'm1', day: '2021-01-09', name: 'Alice' }]); // only Sat
+    expect(added).toEqual([{ machineId: 'm1', day: '2021-01-09', name: 'Alice' }]); // only Sat
     const d = days(db, 'm1');
     expect(d['2021-01-09']).toBe('Alice');
     expect(d['2021-01-10']).toBe('KEEP'); // untouched
   });
 
-  it('returns [] for empty mids or when nothing is missing', () => {
+  it('returns [] for empty machineIds or when nothing is missing', () => {
     const db = mem();
     expect(maintainBridges(db, [], 'ts')).toEqual([]);
     book(db, 'm1', '2021-01-11', 'Bob'); // Monday only → no span

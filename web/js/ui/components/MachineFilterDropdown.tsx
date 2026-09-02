@@ -122,7 +122,7 @@ function MachineFilterRowView({
   row: MachineFilterRow;
   checked: boolean;
   onToggleOpen: (key: string) => void;
-  onToggleMachine: (mid: string, isChecked: boolean) => void;
+  onToggleMachine: (machineId: string, isChecked: boolean) => void;
 }) {
   if (row.kind === 'category') {
     return (
@@ -153,9 +153,9 @@ function MachineFilterRowView({
 /** The bump-and-persist actions checkbox changes/"Filter löschen" take on `S.machSel`. Split
  *  out from `MachineFilterDropdown` only to stay under the line budget. */
 function useMachineSelectionActions(bumpTick: () => void) {
-  function handleMachineToggle(mid: string, isChecked: boolean): void {
-    if (isChecked) store.get('machSel').add(mid);
-    else store.get('machSel').delete(mid);
+  function handleMachineToggle(machineId: string, isChecked: boolean): void {
+    if (isChecked) store.get('machSel').add(machineId);
+    else store.get('machSel').delete(machineId);
     saveFilters();
     updateMachBtn();
     store.notify();
@@ -181,7 +181,7 @@ function MachineFilterBody({
 }: {
   state: ReturnType<typeof useMachineFilterState>;
   rows: MachineFilterRow[];
-  onToggleMachine: (mid: string, isChecked: boolean) => void;
+  onToggleMachine: (machineId: string, isChecked: boolean) => void;
   onClear: () => void;
 }) {
   return (

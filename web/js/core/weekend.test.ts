@@ -27,13 +27,13 @@ describe('sweepWeekends', () => {
   it('removes an orphaned Saturday and returns its undo record', () => {
     const d = data({ m1: { [SAT]: { name: 'A', ts: 't1' } } });
     expect(sweepWeekends(d, 'm1')).toEqual([
-      { mid: 'm1', date: SAT, prev: { name: 'A', ts: 't1' } },
+      { machineId: 'm1', date: SAT, prev: { name: 'A', ts: 't1' } },
     ]);
     expect(d.bookings.m1?.[SAT]).toBeUndefined(); // mutated in place
   });
   it('removes an orphaned Sunday (missing Friday)', () => {
     const d = data({ m1: { [SUN]: { name: 'A' }, [MON]: { name: 'A' } } });
-    expect(sweepWeekends(d, 'm1')).toEqual([{ mid: 'm1', date: SUN, prev: { name: 'A' } }]);
+    expect(sweepWeekends(d, 'm1')).toEqual([{ machineId: 'm1', date: SUN, prev: { name: 'A' } }]);
     expect(d.bookings.m1?.[SUN]).toBeUndefined();
   });
   it('leaves weekdays untouched', () => {

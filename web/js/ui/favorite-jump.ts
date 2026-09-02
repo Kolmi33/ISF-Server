@@ -27,17 +27,17 @@ import { toast } from './toast.ts';
 import { store } from '../store-instance.ts';
 import { machById } from './machine-lookup.ts';
 
-/** Toggle machine `mid`'s favorite status, persist, and repaint. Faithful port of legacy
+/** Toggle `machineId`'s favorite status, persist, and repaint. Faithful port of legacy
  *  `toggleFav`. */
-export function toggleFav(mid: string): void {
+export function toggleFav(machineId: string): void {
   const favs = store.get('favs');
-  if (favs.has(mid)) favs.delete(mid);
-  else favs.add(mid);
+  if (favs.has(machineId)) favs.delete(machineId);
+  else favs.add(machineId);
   localStorage.setItem('mb_favs', JSON.stringify([...favs]));
   store.notify();
 }
 
-/** mid → the last free day jumped to (reset for every OTHER machine on each new jump). Exposed
+/** machine id → the last free day jumped to (reset for every OTHER machine on each new jump). Exposed
  *  on `window` (via the module bridge) so the React Grid (B1) can read it for the row header's
  *  "back" button. */
 export const nextFreePtr: Record<string, string> = {};
@@ -77,8 +77,8 @@ function jumpToSlot(machine: Machine, isoDate: string, isBack: boolean): void {
     extraWeeks: 4,
   });
   document.getElementById('gridWrap')!.scrollLeft = 0;
-  selection.anchor = { mid: machine.id, date: isoDate };
-  selection.focus = { mid: machine.id, date: isoDate };
+  selection.anchor = { machineId: machine.id, date: isoDate };
+  selection.focus = { machineId: machine.id, date: isoDate };
   paintSelection();
   centerOnDate(isoDate);
 
@@ -107,39 +107,39 @@ function jumpToSlot(machine: Machine, isoDate: string, isBack: boolean): void {
 }
 
 /**
- * Jump forward to machine `mid`'s next free working day (relative to the last jump).
+ * Jump forward to `machineId`'s next free working day (relative to the last jump).
  * Switching machines resets every other machine's pointer. Faithful port of legacy
  * `gotoNextFree`.
  */
-export function gotoNextFree(mid: string): void {
-  const machine = machById(mid);
+export function gotoNextFree(machineId: string): void {
+  const machine = machById(machineId);
   if (!machine) return;
   for (const key of Object.keys(nextFreePtr)) {
-    if (key !== mid) delete nextFreePtr[key];
+    if (key !== machineId) delete nextFreePtr[key];
   }
-  const found = nextFreeAfter(machine, nextFreePtr[mid] || null);
+  const found = nextFreeAfter(machine, nextFreePtr[machineId] || null);
   if (!found) {
     toast(`${machine.name}: kein freier Termin in den nächsten 2 Jahren gefunden.`);
     return;
   }
-  nextFreePtr[mid] = found;
+  nextFreePtr[machineId] = found;
   jumpToSlot(machine, found, false);
 }
 
-/** Jump back to machine `mid`'s previous free working day, ending at today. Faithful port of
+/** Jump back to `machineId`'s previous free working day, ending at today. Faithful port of
  *  legacy `gotoPrevFree`. */
-export function gotoPrevFree(mid: string): void {
-  const machine = machById(mid);
-  if (!machine || !nextFreePtr[mid]) return;
-  const previous = prevFreeBefore(machine, nextFreePtr[mid]);
+export function gotoPrevFree(machineId: string): void {
+  const machine = machById(machineId);
+  if (!machine || !nextFreePtr[machineId]) return;
+  const previous = prevFreeBefore(machine, nextFreePtr[machineId]);
   if (previous) {
-    nextFreePtr[mid] = previous;
+    nextFreePtr[machineId] = previous;
     jumpToSlot(machine, previous, true);
     return;
   }
   const today = todayAsIsoDateString();
-  if (nextFreePtr[mid] !== today) {
-    nextFreePtr[mid] = today;
+  if (nextFreePtr[machineId] !== today) {
+    nextFreePtr[machineId] = today;
     jumpToSlot(machine, today, true);
   } else {
     toast(`${machine.name}: bereits am heutigen Tag.`);

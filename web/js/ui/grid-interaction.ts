@@ -4,7 +4,7 @@
 // This is deliberately NOT a React component. `paintSel()`'s whole reason to exist — legacy's
 // own comment calls it "GEZIELTES ZELL-PATCHING (Performance)" — is to update only the cells
 // whose selection state actually changed, by toggling classes on the exact DOM nodes the React
-// Grid (B1) already renders with a stable `data-mid`/`data-date` contract. Routing selection
+// Grid (B1) already renders with a stable `data-machine-id`/`data-date` contract. Routing selection
 // through React state would mean re-rendering the whole grid on every mouseover during a drag;
 // this module instead reads/writes the DOM directly, exactly as legacy did, and stays a plain
 // gated TypeScript module — the same shape `modal.tsx`'s document-level dismissal listeners
@@ -31,10 +31,10 @@ import { triggerGridRender } from './grid-render-bridge.ts';
 export interface GridInteractionHandlers {
   showCtx: (x: number, y: number) => void;
   hideCtx: () => void;
-  toggleFav: (mid: string) => void;
-  gotoPrevFree: (mid: string) => void;
-  gotoNextFree: (mid: string) => void;
-  openCellAction: (mid: string, date: string) => void;
+  toggleFav: (machineId: string) => void;
+  gotoPrevFree: (machineId: string) => void;
+  gotoNextFree: (machineId: string) => void;
+  openCellAction: (machineId: string, date: string) => void;
   prependWeek: () => void;
 }
 
@@ -61,10 +61,12 @@ export const selection: SelectionState = {
   didDrag: false,
 };
 
-/** The live grid cell for `mid`×`date`, or null if it isn't currently rendered (its week
+/** The live grid cell for `machineId`×`date`, or null if it isn't currently rendered (its week
  *  scrolled out, its machine filtered away). Faithful port of legacy `cellEl`. */
-function findCellElement(mid: string, date: string): HTMLElement | null {
-  return document.querySelector(`td.cell[data-mid="${CSS.escape(mid)}"][data-date="${date}"]`);
+function findCellElement(machineId: string, date: string): HTMLElement | null {
+  return document.querySelector(
+    `td.cell[data-machine-id="${CSS.escape(machineId)}"][data-date="${date}"]`,
+  );
 }
 
 /** Repaint the selection: clears the previous `.sel`/`.kfocus` marks, recomputes the covered
@@ -87,14 +89,14 @@ export function paintSelection(): void {
     store.get('visD'),
   );
   for (const cell of selection.cells) {
-    const el = findCellElement(cell.mid, cell.date);
+    const el = findCellElement(cell.machineId, cell.date);
     if (el) {
       el.classList.add('sel');
       el.setAttribute('aria-selected', 'true');
     }
   }
   if (selection.focus) {
-    const el = findCellElement(selection.focus.mid, selection.focus.date);
+    const el = findCellElement(selection.focus.machineId, selection.focus.date);
     if (el) {
       el.classList.add('kfocus');
       el.setAttribute('tabindex', '0');
@@ -177,10 +179,13 @@ function extendFocusToPointerAfterScroll(rect: DOMRect, machineColumnWidth: numb
   const cellUnderPointer = document.elementFromPoint(x, y)?.closest<HTMLElement>('td.cell');
   if (
     cellUnderPointer &&
-    (cellUnderPointer.dataset.mid !== selection.focus.mid ||
+    (cellUnderPointer.dataset.machineId !== selection.focus.machineId ||
       cellUnderPointer.dataset.date !== selection.focus.date)
   ) {
-    selection.focus = { mid: cellUnderPointer.dataset.mid!, date: cellUnderPointer.dataset.date! };
+    selection.focus = {
+      machineId: cellUnderPointer.dataset.machineId!,
+      date: cellUnderPointer.dataset.date!,
+    };
     selection.didDrag = true;
     paintSelection();
   }
@@ -217,7 +222,7 @@ function handleGridMouseDown(event: MouseEvent): void {
     // Shift+click: span the selection from the existing anchor to this cell.
     selection.dragging = true;
     selection.didDrag = true;
-    selection.focus = { mid: cell.dataset.mid!, date: cell.dataset.date! };
+    selection.focus = { machineId: cell.dataset.machineId!, date: cell.dataset.date! };
     paintSelection();
     event.preventDefault();
     startDragScroll();
@@ -225,7 +230,7 @@ function handleGridMouseDown(event: MouseEvent): void {
   }
   selection.dragging = true;
   selection.didDrag = false;
-  selection.anchor = { mid: cell.dataset.mid!, date: cell.dataset.date! };
+  selection.anchor = { machineId: cell.dataset.machineId!, date: cell.dataset.date! };
   selection.focus = { ...selection.anchor };
   paintSelection();
   event.preventDefault(); // no text selection while dragging
@@ -236,8 +241,11 @@ function handleGridMouseOver(event: MouseEvent): void {
   if (!selection.dragging || !selection.focus) return;
   const cell = cellFromEvent(event);
   if (!cell) return;
-  if (cell.dataset.mid !== selection.focus.mid || cell.dataset.date !== selection.focus.date) {
-    selection.focus = { mid: cell.dataset.mid!, date: cell.dataset.date! };
+  if (
+    cell.dataset.machineId !== selection.focus.machineId ||
+    cell.dataset.date !== selection.focus.date
+  ) {
+    selection.focus = { machineId: cell.dataset.machineId!, date: cell.dataset.date! };
     selection.didDrag = true;
     paintSelection();
   }
@@ -304,7 +312,7 @@ function handleGridDoubleClick(event: MouseEvent): void {
   }
   const cell = cellFromEvent(event);
   if (!cell) return;
-  handlers!.openCellAction(cell.dataset.mid!, cell.dataset.date!);
+  handlers!.openCellAction(cell.dataset.machineId!, cell.dataset.date!);
 }
 
 // ---- Keyboard navigation: arrows move, Shift+arrows extend, Enter opens, Escape clears ---
@@ -325,11 +333,11 @@ const MAX_EXTRA_WEEKS_FOR_GROWTH = 150;
 function moveFocusByArrowKey(key: string, extendSelection: boolean): void {
   const [rowDelta, colDelta] = ARROW_DELTAS[key]!;
   if (!selection.focus) {
-    selection.focus = { mid: store.get('visM')[0]!, date: store.get('visD')[0]! };
+    selection.focus = { machineId: store.get('visM')[0]!, date: store.get('visD')[0]! };
     selection.anchor = { ...selection.focus };
     return;
   }
-  let row = store.get('visM').indexOf(selection.focus.mid) + rowDelta;
+  let row = store.get('visM').indexOf(selection.focus.machineId) + rowDelta;
   let col = store.get('visD').indexOf(selection.focus.date) + colDelta;
   if (col >= store.get('visD').length && store.get('extraWeeks') < MAX_EXTRA_WEEKS_FOR_GROWTH) {
     // Direct field mutation, deliberately NOT store.set() — a store.set() here would notify
@@ -346,7 +354,7 @@ function moveFocusByArrowKey(key: string, extendSelection: boolean): void {
   }
   row = clampIndex(row, store.get('visM').length);
   col = clampIndex(col, store.get('visD').length);
-  selection.focus = { mid: store.get('visM')[row]!, date: store.get('visD')[col]! };
+  selection.focus = { machineId: store.get('visM')[row]!, date: store.get('visD')[col]! };
   if (!extendSelection) selection.anchor = { ...selection.focus };
 }
 
@@ -354,7 +362,7 @@ function handleArrowKey(key: string, extendSelection: boolean): void {
   if (!store.get('visM').length || !store.get('visD').length) return;
   moveFocusByArrowKey(key, extendSelection);
   paintSelection();
-  findCellElement(selection.focus!.mid, selection.focus!.date)?.scrollIntoView({
+  findCellElement(selection.focus!.machineId, selection.focus!.date)?.scrollIntoView({
     block: 'nearest',
     inline: 'nearest',
   });
@@ -365,10 +373,10 @@ function handleArrowKey(key: string, extendSelection: boolean): void {
 function handleEnterKey(): void {
   const focus = selection.focus!;
   if (selection.cells.length > 1) {
-    const rect = findCellElement(focus.mid, focus.date)?.getBoundingClientRect();
+    const rect = findCellElement(focus.machineId, focus.date)?.getBoundingClientRect();
     handlers!.showCtx(rect?.right ?? 120, rect?.bottom ?? 120);
   } else {
-    handlers!.openCellAction(focus.mid, focus.date);
+    handlers!.openCellAction(focus.machineId, focus.date);
   }
 }
 

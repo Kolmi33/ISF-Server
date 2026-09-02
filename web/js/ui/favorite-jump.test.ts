@@ -94,8 +94,8 @@ describe('gotoNextFree', () => {
     expect(nextFreePtr.m1).toBe('2021-01-04'); // today itself is free (no bookings)
     expect(window.S.extraWeeks).toBe(4);
     expect(notifySpy).toHaveBeenCalled();
-    expect(selection.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
-    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(selection.anchor).toEqual({ machineId: 'm1', date: '2021-01-04' });
+    expect(selection.focus).toEqual({ machineId: 'm1', date: '2021-01-04' });
     expect(document.getElementById('toast')!.textContent).toMatch(/Fräse: freier Termin/);
   });
 

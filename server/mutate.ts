@@ -167,10 +167,10 @@ function applyStructural(
 /** Validate the cell list against the current machines; return an error or null. */
 function validateCells(cells: CellDelta[], machineById: Map<string, MachineRow>): string | null {
   for (const cell of cells) {
-    if (!cell || typeof cell.mid !== 'string' || !DAY_RE.test(cell.day || '')) {
+    if (!cell || typeof cell.machineId !== 'string' || !DAY_RE.test(cell.day || '')) {
       return 'Ungültige Zelle';
     }
-    if (!machineById.has(cell.mid)) return 'Unbekannte Maschine: ' + cell.mid;
+    if (!machineById.has(cell.machineId)) return 'Unbekannte Maschine: ' + cell.machineId;
     if (cell.val && !String(cell.val.name || '').trim()) return 'Name fehlt';
   }
   return null;
@@ -191,22 +191,26 @@ function writeCell(
   changes: MutateChange[],
   conflicts: MutateConflict[],
 ): void {
-  const existingBooking = statements.findExistingBooking.get(cell.mid, cell.day) as
+  const existingBooking = statements.findExistingBooking.get(cell.machineId, cell.day) as
     BookingRow | undefined;
   if (cell.val) {
     // set / book — enforce our own block/availability rule + never overwrite a foreign booking
     const name = String(cell.val.name).trim();
     const reason = blockReason(machine, cell.day);
     if (reason) {
-      conflicts.push({ mid: cell.mid, day: cell.day, by: reason });
+      conflicts.push({ machineId: cell.machineId, day: cell.day, by: reason });
       return;
     }
     if (!isDayAvailable(machine, cell.day)) {
-      conflicts.push({ mid: cell.mid, day: cell.day, by: 'nicht verfügbar (Wochentag)' });
+      conflicts.push({
+        machineId: cell.machineId,
+        day: cell.day,
+        by: 'nicht verfügbar (Wochentag)',
+      });
       return;
     }
     if (existingBooking && existingBooking.name !== name) {
-      conflicts.push({ mid: cell.mid, day: cell.day, by: existingBooking.name });
+      conflicts.push({ machineId: cell.machineId, day: cell.day, by: existingBooking.name });
       return;
     }
     const newBooking = {
@@ -217,7 +221,7 @@ function writeCell(
       gtitle: clip(cell.val.gtitle, 200),
     };
     statements.upsertBooking.run(
-      cell.mid,
+      cell.machineId,
       cell.day,
       newBooking.name,
       newBooking.note,
@@ -225,16 +229,16 @@ function writeCell(
       newBooking.gid,
       newBooking.gtitle,
     );
-    changes.push({ mid: cell.mid, day: cell.day, val: bookingOut(newBooking) });
+    changes.push({ machineId: cell.machineId, day: cell.day, val: bookingOut(newBooking) });
   } else {
     // delete — abort the cell if it was taken over by someone else in the meantime
     if (existingBooking && cell.prev && existingBooking.name !== cell.prev.name) {
-      conflicts.push({ mid: cell.mid, day: cell.day, by: existingBooking.name });
+      conflicts.push({ machineId: cell.machineId, day: cell.day, by: existingBooking.name });
       return;
     }
     if (existingBooking) {
-      statements.deleteBooking.run(cell.mid, cell.day);
-      changes.push({ mid: cell.mid, day: cell.day, val: null });
+      statements.deleteBooking.run(cell.machineId, cell.day);
+      changes.push({ machineId: cell.machineId, day: cell.day, val: null });
     }
   }
 }
@@ -242,11 +246,11 @@ function writeCell(
 /** Add server-side weekend bridges for the machines the client just changed (6.3, ADD
  *  direction), appending them to `changes` so they broadcast to every client. */
 function addWeekendBridges(db: Db, changes: MutateChange[]): void {
-  const affectedMachineIds = [...new Set(changes.map((change) => change.mid))];
+  const affectedMachineIds = [...new Set(changes.map((change) => change.machineId))];
   const bridges = maintainBridges(db, affectedMachineIds, new Date().toISOString());
   for (const bridge of bridges) {
     changes.push({
-      mid: bridge.mid,
+      machineId: bridge.machineId,
       day: bridge.day,
       val: bookingOut({ name: bridge.name, ts: null, note: null, gid: null, gtitle: null }),
     });
@@ -282,7 +286,7 @@ function applyCells(
       deleteBooking: db.prepare('DELETE FROM bookings WHERE mid=? AND day=?'),
     };
     for (const cell of cells) {
-      writeCell(cell, machineById.get(cell.mid)!, statements, changes, conflicts);
+      writeCell(cell, machineById.get(cell.machineId)!, statements, changes, conflicts);
     }
     // Must run BEFORE addWeekendBridges below — `applied` counts only the client's own
     // requested changes, and addWeekendBridges appends more entries to `changes`.

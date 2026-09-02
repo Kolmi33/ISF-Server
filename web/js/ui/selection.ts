@@ -8,7 +8,7 @@
 
 /** A single grid cell: a machine id (row) and an ISO date (column). */
 export interface Cell {
-  mid: string;
+  machineId: string;
   date: string;
 }
 
@@ -26,15 +26,15 @@ export function computeSelCells(
   visD: readonly string[],
 ): Cell[] {
   if (!anchor || !focus) return [];
-  const r1 = visM.indexOf(anchor.mid);
-  const r2 = visM.indexOf(focus.mid);
+  const r1 = visM.indexOf(anchor.machineId);
+  const r2 = visM.indexOf(focus.machineId);
   const c1 = visD.indexOf(anchor.date);
   const c2 = visD.indexOf(focus.date);
   if (r1 < 0 || r2 < 0 || c1 < 0 || c2 < 0) return [];
   const cells: Cell[] = [];
   for (let r = Math.min(r1, r2); r <= Math.max(r1, r2); r++)
     for (let c = Math.min(c1, c2); c <= Math.max(c1, c2); c++)
-      cells.push({ mid: visM[r]!, date: visD[c]! });
+      cells.push({ machineId: visM[r]!, date: visD[c]! });
   return cells;
 }
 

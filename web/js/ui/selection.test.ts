@@ -4,7 +4,7 @@ import { computeSelCells, clampIndex, type Cell } from './selection.ts';
 // A small visible grid: 3 machine rows × 3 date columns.
 const visM = ['m1', 'm2', 'm3'];
 const visD = ['2021-01-04', '2021-01-05', '2021-01-06'];
-const cell = (mid: string, date: string): Cell => ({ mid, date });
+const cell = (machineId: string, date: string): Cell => ({ machineId, date });
 
 describe('computeSelCells', () => {
   it('is empty when a corner is missing', () => {

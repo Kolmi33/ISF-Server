@@ -66,7 +66,7 @@ export interface StateOut {
 
 /** One cell in a cell-delta mutate: prev/val are the client's compare-and-set pair. */
 export interface CellDelta {
-  mid: string;
+  machineId: string;
   day: string;
   prev?: { name?: string } | null;
   val?: { name?: string; note?: string; ts?: string; gid?: string; gtitle?: string } | null;
@@ -83,14 +83,14 @@ export interface MutateBody {
 
 /** A day that could not be written (already booked by someone else, or blocked). */
 export interface MutateConflict {
-  mid: string;
+  machineId: string;
   day: string;
   by: string;
 }
 
 /** A cell that changed, broadcast to SSE clients (`val:null` = deleted). */
 export interface MutateChange {
-  mid: string;
+  machineId: string;
   day: string;
   val: BookingOut | null;
 }

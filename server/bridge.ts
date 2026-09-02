@@ -9,12 +9,12 @@
 import type { Db } from './db.js';
 import { parseIsoDateString, formatDateAsIsoString, addDays } from '../shared/dates.js';
 
-/** The minimal booking view the bridge computation needs: mid → day → { name }. */
+/** The minimal booking view the bridge computation needs: machine id → day → { name }. */
 export type BookingMap = Record<string, Record<string, { name: string }>>;
 
 /** A weekend day to insert, carrying the Friday booking's name. */
 export interface Bridge {
-  mid: string;
+  machineId: string;
   day: string;
   name: string;
 }
@@ -41,10 +41,10 @@ export function missingBridges(bookings: BookingMap): Bridge[] {
       if (machineBookings[mondayIsoDate]) {
         // the series runs across the weekend (Monday booked, any person)
         if (!machineBookings[saturdayIsoDate]) {
-          missing.push({ mid: machineId, day: saturdayIsoDate, name });
+          missing.push({ machineId, day: saturdayIsoDate, name });
         }
         if (!machineBookings[sundayIsoDate]) {
-          missing.push({ mid: machineId, day: sundayIsoDate, name });
+          missing.push({ machineId, day: sundayIsoDate, name });
         }
       }
     }
@@ -81,7 +81,7 @@ export function maintainBridges(db: Db, machineIds: readonly string[], ts: strin
   const insertBridge = db.prepare(
     'INSERT INTO bookings(mid,day,name,ts) VALUES(?,?,?,?) ON CONFLICT(mid,day) DO NOTHING',
   );
-  for (const bridge of missing) insertBridge.run(bridge.mid, bridge.day, bridge.name, ts);
+  for (const bridge of missing) insertBridge.run(bridge.machineId, bridge.day, bridge.name, ts);
   return missing;
 }
 
@@ -102,7 +102,7 @@ export function backfillBridges(db: Db): number {
   );
   db.exec('BEGIN');
   try {
-    for (const bridge of missing) insertBridge.run(bridge.mid, bridge.day, bridge.name, ts);
+    for (const bridge of missing) insertBridge.run(bridge.machineId, bridge.day, bridge.name, ts);
     db.exec('COMMIT');
   } catch (error) {
     try {

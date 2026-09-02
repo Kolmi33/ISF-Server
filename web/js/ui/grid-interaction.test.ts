@@ -42,16 +42,16 @@ function buildGridDom(): void {
           <tr class="grouprow" data-group="Halle 1"><td>Halle 1</td></tr>
           <tr>
             <td class="machcol"><span class="favstar" data-fav="m1"></span></td>
-            <td class="cell free" data-mid="m1" data-date="2021-01-04"></td>
-            <td class="cell free" data-mid="m1" data-date="2021-01-05"></td>
+            <td class="cell free" data-machine-id="m1" data-date="2021-01-04"></td>
+            <td class="cell free" data-machine-id="m1" data-date="2021-01-05"></td>
           </tr>
           <tr>
             <td class="machcol">
               <span class="nextfree back" data-nb="m2"></span>
               <span class="nextfree" data-nf="m2"></span>
             </td>
-            <td class="cell free" data-mid="m2" data-date="2021-01-04"></td>
-            <td class="cell free" data-mid="m2" data-date="2021-01-05"></td>
+            <td class="cell free" data-machine-id="m2" data-date="2021-01-04"></td>
+            <td class="cell free" data-machine-id="m2" data-date="2021-01-05"></td>
           </tr>
         </tbody>
       </table>
@@ -76,8 +76,8 @@ function stubWindowGlobals(): void {
   window.notify = vi.fn();
 }
 
-function cell(mid: string, date: string): HTMLElement {
-  return document.querySelector(`td.cell[data-mid="${mid}"][data-date="${date}"]`)!;
+function cell(machineId: string, date: string): HTMLElement {
+  return document.querySelector(`td.cell[data-machine-id="${machineId}"][data-date="${date}"]`)!;
 }
 
 function mousedownOn(el: Element, options: MouseEventInit = {}): void {
@@ -133,8 +133,8 @@ beforeEach(() => {
 
 describe('paintSelection / clearSelection', () => {
   it('paints the anchor↔focus rectangle and gives the focus cell a roving tabindex', () => {
-    selection.anchor = { mid: 'm1', date: '2021-01-04' };
-    selection.focus = { mid: 'm2', date: '2021-01-05' };
+    selection.anchor = { machineId: 'm1', date: '2021-01-04' };
+    selection.focus = { machineId: 'm2', date: '2021-01-05' };
     paintSelection();
     expect(cell('m1', '2021-01-04').className).toContain('sel');
     expect(cell('m1', '2021-01-05').className).toContain('sel');
@@ -145,18 +145,18 @@ describe('paintSelection / clearSelection', () => {
   });
 
   it('clears previous marks before repainting a smaller selection', () => {
-    selection.anchor = { mid: 'm1', date: '2021-01-04' };
-    selection.focus = { mid: 'm2', date: '2021-01-05' };
+    selection.anchor = { machineId: 'm1', date: '2021-01-04' };
+    selection.focus = { machineId: 'm2', date: '2021-01-05' };
     paintSelection();
-    selection.anchor = selection.focus = { mid: 'm1', date: '2021-01-04' };
+    selection.anchor = selection.focus = { machineId: 'm1', date: '2021-01-04' };
     paintSelection();
     expect(cell('m2', '2021-01-05').className).not.toContain('sel');
     expect(cell('m2', '2021-01-05').getAttribute('aria-selected')).toBeNull();
   });
 
   it('clearSelection resets the selection and hides the context menu', () => {
-    selection.anchor = { mid: 'm1', date: '2021-01-04' };
-    selection.focus = { mid: 'm1', date: '2021-01-04' };
+    selection.anchor = { machineId: 'm1', date: '2021-01-04' };
+    selection.focus = { machineId: 'm1', date: '2021-01-04' };
     paintSelection();
     clearSelection();
     expect(selection.anchor).toBeNull();
@@ -169,8 +169,8 @@ describe('paintSelection / clearSelection', () => {
 describe('drag-to-select', () => {
   it('mousedown on a cell starts a new single-cell selection', () => {
     mousedownOn(cell('m1', '2021-01-04'));
-    expect(selection.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
-    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(selection.anchor).toEqual({ machineId: 'm1', date: '2021-01-04' });
+    expect(selection.focus).toEqual({ machineId: 'm1', date: '2021-01-04' });
     expect(selection.dragging).toBe(true);
     expect(selection.didDrag).toBe(false);
     expect(cell('m1', '2021-01-04')).toHaveClass('sel');
@@ -184,7 +184,7 @@ describe('drag-to-select', () => {
   it('mouseover during a drag extends the focus to the hovered cell', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     mouseoverOn(cell('m2', '2021-01-05'));
-    expect(selection.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
+    expect(selection.focus).toEqual({ machineId: 'm2', date: '2021-01-05' });
     expect(selection.didDrag).toBe(true);
     expect(selection.cells).toHaveLength(4); // the full m1..m2 × both-dates rectangle
   });
@@ -198,8 +198,8 @@ describe('drag-to-select', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     mouseupOn(document.body);
     mousedownOn(cell('m2', '2021-01-05'), { shiftKey: true });
-    expect(selection.anchor).toEqual({ mid: 'm1', date: '2021-01-04' }); // unchanged
-    expect(selection.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
+    expect(selection.anchor).toEqual({ machineId: 'm1', date: '2021-01-04' }); // unchanged
+    expect(selection.focus).toEqual({ machineId: 'm2', date: '2021-01-05' });
     expect(selection.didDrag).toBe(true);
   });
 
@@ -297,33 +297,33 @@ describe('double-click handling', () => {
 describe('keyboard navigation', () => {
   it('the first arrow press (nothing focused yet) focuses the first visible cell without moving', () => {
     keydown('ArrowRight');
-    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
-    expect(selection.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(selection.focus).toEqual({ machineId: 'm1', date: '2021-01-04' });
+    expect(selection.anchor).toEqual({ machineId: 'm1', date: '2021-01-04' });
   });
 
   it('ArrowRight/ArrowDown move focus by one column/row and reset the anchor to match', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('ArrowRight');
-    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-05' });
+    expect(selection.focus).toEqual({ machineId: 'm1', date: '2021-01-05' });
     expect(selection.anchor).toEqual(selection.focus);
     keydown('ArrowDown');
-    expect(selection.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
+    expect(selection.focus).toEqual({ machineId: 'm2', date: '2021-01-05' });
   });
 
   it('Shift+Arrow extends the selection without moving the anchor', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('ArrowRight', { shiftKey: true });
-    expect(selection.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
-    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-05' });
+    expect(selection.anchor).toEqual({ machineId: 'm1', date: '2021-01-04' });
+    expect(selection.focus).toEqual({ machineId: 'm1', date: '2021-01-05' });
     expect(selection.cells).toHaveLength(2);
   });
 
   it('clamps at the top/left edge instead of moving past it', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('ArrowLeft');
-    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-04' }); // clamped, unchanged
+    expect(selection.focus).toEqual({ machineId: 'm1', date: '2021-01-04' }); // clamped, unchanged
     keydown('ArrowUp');
-    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
+    expect(selection.focus).toEqual({ machineId: 'm1', date: '2021-01-04' });
   });
 
   it('moving past the right edge grows the grid directly via extraWeeks + render()', () => {
@@ -393,7 +393,7 @@ describe('keyboard navigation', () => {
   it('ignores keys that are not arrows/Enter/Escape', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('a');
-    expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-04' }); // unchanged
+    expect(selection.focus).toEqual({ machineId: 'm1', date: '2021-01-04' }); // unchanged
   });
 });
 
@@ -429,7 +429,7 @@ describe('drag auto-scroll at the grid edges', () => {
     document.dispatchEvent(new MouseEvent('mousemove', { clientX: 490, clientY: 200 }));
     vi.advanceTimersByTime(60);
     expect(document.getElementById('gridWrap')!.scrollLeft).toBeGreaterThan(0);
-    expect(selection.focus).toEqual({ mid: 'm2', date: '2021-01-05' });
+    expect(selection.focus).toEqual({ machineId: 'm2', date: '2021-01-05' });
   });
 
   it('scrolls left, or grows a week when already at the start, near the left edge', () => {

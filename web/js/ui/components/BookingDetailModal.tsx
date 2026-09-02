@@ -240,10 +240,10 @@ export function openBookingDetail(machine: Machine, date: string, booking: Booki
 /** The cell action a click/Enter routes to: the booking detail when the cell is occupied, the
  *  booking form (single cell) otherwise — unless the machine is blocked or unavailable that
  *  day, which just shows why. Faithful port of legacy `openCellAction`. */
-export function openCellAction(mid: string, date: string): void {
-  const machine = machById(mid);
+export function openCellAction(machineId: string, date: string): void {
+  const machine = machById(machineId);
   if (!machine) return;
-  const booking = store.get('data')!.bookings[mid]?.[date];
+  const booking = store.get('data')!.bookings[machineId]?.[date];
   if (isBlockedOnDate(machine, date) && !booking) {
     toast(`${machine.name}: ${maintText(maintenanceSlotAt(machine, date))}`);
     return;
@@ -255,5 +255,5 @@ export function openCellAction(mid: string, date: string): void {
     return;
   }
   if (booking) openBookingDetail(machine, date, booking);
-  else openBookingForm([mid], date, date);
+  else openBookingForm([machineId], date, date);
 }

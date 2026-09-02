@@ -14,7 +14,7 @@ import type { Booking, Bookings } from '../../../shared/types.ts';
 
 /** One booking change carried by an `update` event. */
 export interface SseChange {
-  mid: string;
+  machineId: string;
   day: string;
   /** New booking, or falsy to clear the cell. */
   val?: Booking | null;
@@ -30,7 +30,7 @@ export interface SseUpdate {
 
 /** A repaint instruction for the legacy `patchCells` adapter. */
 export interface CellRef {
-  mid: string;
+  machineId: string;
   date: string;
 }
 
@@ -49,10 +49,10 @@ export interface UpdateResult {
 export function applyUpdate(event: SseUpdate, bookings: Bookings): UpdateResult {
   const patch: CellRef[] = [];
   for (const change of event.changes || []) {
-    const machineBookings = (bookings[change.mid] = bookings[change.mid] || {});
+    const machineBookings = (bookings[change.machineId] = bookings[change.machineId] || {});
     if (change.val) machineBookings[change.day] = change.val;
     else delete machineBookings[change.day];
-    patch.push({ mid: change.mid, date: change.day });
+    patch.push({ machineId: change.machineId, date: change.day });
   }
   return { rev: typeof event.rev === 'number' ? event.rev : null, patch };
 }

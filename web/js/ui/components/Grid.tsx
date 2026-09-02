@@ -3,7 +3,7 @@
 // Legacy's mouse/keyboard/selection handlers (still unported, slice B2) are attached via
 // event delegation on `#grid` and `document`, not on individual cells — so this component
 // only needs to reproduce the exact DOM contract those handlers already depend on (classes,
-// `data-mid`/`data-date`/`data-group`/`data-catgroup` attributes) for selection, jump-to-next-
+// `data-machine-id`/`data-date`/`data-group`/`data-catgroup` attributes) for selection, jump-to-next-
 // free and keyboard navigation to keep working completely unmodified.
 //
 // Store subscription: rather than adding a new subscription mechanism, this component reuses

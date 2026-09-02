@@ -11,18 +11,18 @@ import { parseIsoDateString, formatDateAsIsoString, addDays } from '../../../sha
 
 /** An orphaned weekend day that was removed, with the previous value for undo. */
 export interface WeekendUndo {
-  mid: string;
+  machineId: string;
   date: string;
   prev: { name: string; ts?: string };
 }
 
 /**
- * Remove orphaned Sat/Sun entries for machine `mid`: a weekend day survives only while
+ * Remove orphaned Sat/Sun entries for `machineId`: a weekend day survives only while
  * both the Friday before and the Monday after are booked (by anyone). Mutates
- * `freshServerData.bookings[mid]`; returns the removed entries as undo records.
+ * `freshServerData.bookings[machineId]`; returns the removed entries as undo records.
  */
-export function sweepWeekends(freshServerData: BookingData, mid: string): WeekendUndo[] {
-  const machineBookings = freshServerData.bookings[mid];
+export function sweepWeekends(freshServerData: BookingData, machineId: string): WeekendUndo[] {
+  const machineBookings = freshServerData.bookings[machineId];
   if (!machineBookings) return [];
   const undo: WeekendUndo[] = [];
   for (const [isoDate, previousValue] of Object.entries(machineBookings)) {
@@ -38,7 +38,7 @@ export function sweepWeekends(freshServerData: BookingData, mid: string): Weeken
     // The bridge holds as long as Friday AND Monday are booked (any person).
     const bridgeStillHolds = machineBookings[fridayIsoDate] && machineBookings[mondayIsoDate];
     if (!bridgeStillHolds) {
-      undo.push({ mid, date: isoDate, prev: { ...previousValue } });
+      undo.push({ machineId, date: isoDate, prev: { ...previousValue } });
       delete machineBookings[isoDate];
     }
   }

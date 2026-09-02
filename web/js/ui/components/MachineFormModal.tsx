@@ -30,22 +30,22 @@ import { fillGroupSel } from './GroupFilterDropdown.tsx';
 import { openAdmin } from './AdminModal.tsx';
 
 interface SaveMachineFormInput {
-  mid: string | null;
+  machineId: string | null;
   state: MachineFormState;
 }
 
 /** Validate, then create/update the machine and return to Admin. Faithful port of legacy
  *  `mfSave`. `saveMachine` returns void (not a truthy result) on success — only
  *  `{abort: true}` is truthy — so the success path is unconditional except on that one case. */
-async function saveMachineForm({ mid, state }: SaveMachineFormInput): Promise<void> {
+async function saveMachineForm({ machineId, state }: SaveMachineFormInput): Promise<void> {
   const validated = validateMachineForm(state);
   if ('error' in validated) {
     toast(validated.error);
     return;
   }
   const result = await window.mutate(
-    (fresh) => saveMachine(fresh, mid, validated.form),
-    mid
+    (fresh) => saveMachine(fresh, machineId, validated.form),
+    machineId
       ? `Maschine bearbeitet: ${validated.form.name}`
       : `Maschine angelegt: ${validated.form.name}`,
   );
@@ -57,7 +57,7 @@ async function saveMachineForm({ mid, state }: SaveMachineFormInput): Promise<vo
 
 /** Confirm, then delete the machine (and its bookings) and return to Admin. Faithful port of
  *  legacy `mfDel`. */
-async function deleteMachineForm(mid: string, machine: Machine): Promise<void> {
+async function deleteMachineForm(machineId: string, machine: Machine): Promise<void> {
   const confirmed = await window.askConfirm({
     title: 'Maschine löschen?',
     body: `<b>${escapeHtml(machine.name)}</b> (${escapeHtml(machine.group)}) wird entfernt — <b>inklusive aller zugehörigen Buchungen</b>. Das lässt sich nicht rückgängig machen.`,
@@ -65,7 +65,7 @@ async function deleteMachineForm(mid: string, machine: Machine): Promise<void> {
   });
   if (!confirmed) return;
   const result = await window.mutate(
-    (fresh) => deleteMachine(fresh, mid),
+    (fresh) => deleteMachine(fresh, machineId),
     `Maschine gelöscht: ${machine.name}`,
   );
   if (result && result.abort) return;
@@ -75,12 +75,12 @@ async function deleteMachineForm(mid: string, machine: Machine): Promise<void> {
 }
 
 interface MachineFormModalProps {
-  mid: string | null;
+  machineId: string | null;
 }
 
-export function MachineFormModal({ mid }: MachineFormModalProps) {
+export function MachineFormModal({ machineId }: MachineFormModalProps) {
   const machines = store.get('data')!.machines;
-  const machine = mid ? (machById(mid) ?? null) : null;
+  const machine = machineId ? (machById(machineId) ?? null) : null;
   const [state, setState] = useState<MachineFormState>(() =>
     initialMachineFormState(machine, machines),
   );
@@ -96,7 +96,7 @@ export function MachineFormModal({ mid }: MachineFormModalProps) {
 
   return (
     <>
-      <h2>{mid ? 'Ressource bearbeiten' : 'Neue Ressource'}</h2>
+      <h2>{machineId ? 'Ressource bearbeiten' : 'Neue Ressource'}</h2>
       <MachineFormFields
         state={state}
         onChange={patch}
@@ -105,9 +105,12 @@ export function MachineFormModal({ mid }: MachineFormModalProps) {
       />
       <MaintenanceSlotEditor slots={state.maint} onChange={(maint) => patch({ maint })} />
       <div className="modal-actions">
-        {mid && machine && (
+        {machineId && machine && (
           <>
-            <button className="btn danger" onClick={() => void deleteMachineForm(mid, machine)}>
+            <button
+              className="btn danger"
+              onClick={() => void deleteMachineForm(machineId, machine)}
+            >
               Löschen
             </button>
             <span className="spacer" />
@@ -116,7 +119,7 @@ export function MachineFormModal({ mid }: MachineFormModalProps) {
         <button className="btn" onClick={() => openAdmin()}>
           Zurück
         </button>
-        <button className="btn primary" onClick={() => void saveMachineForm({ mid, state })}>
+        <button className="btn primary" onClick={() => void saveMachineForm({ machineId, state })}>
           Speichern
         </button>
       </div>
@@ -124,8 +127,8 @@ export function MachineFormModal({ mid }: MachineFormModalProps) {
   );
 }
 
-/** Open the machine form: `mid` to edit that machine, `null` for a new one. Faithful port of
- *  legacy `openMachineForm`. */
-export function openMachineForm(mid: string | null): void {
-  openReactModal(<MachineFormModal mid={mid} />);
+/** Open the machine form: `machineId` to edit that machine, `null` for a new one. Faithful port
+ *  of legacy `openMachineForm`. */
+export function openMachineForm(machineId: string | null): void {
+  openReactModal(<MachineFormModal machineId={machineId} />);
 }

@@ -121,8 +121,8 @@ function buildDom(): void {
         </thead>
         <tbody>
           <tr>
-            <td class="cell" data-mid="m1" data-date="2021-01-04"></td>
-            <td class="cell" data-mid="m1" data-date="2021-01-05"></td>
+            <td class="cell" data-machine-id="m1" data-date="2021-01-04"></td>
+            <td class="cell" data-machine-id="m1" data-date="2021-01-05"></td>
           </tr>
         </tbody>
       </table>

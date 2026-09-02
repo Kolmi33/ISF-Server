@@ -25,14 +25,14 @@ import { sweepWeekends } from './weekend.ts';
 
 /** A cell change, with the previous value for undo (`null` = the cell was empty). */
 export interface CellUndo {
-  mid: string;
+  machineId: string;
   date: string;
   prev: Booking | null;
 }
 
 /** A day that could not be booked: already taken, or blocked by maintenance. */
 export interface Conflict {
-  mid: string;
+  machineId: string;
   date: string;
   by: string;
 }
@@ -60,7 +60,7 @@ export interface BookResult {
 }
 
 /** Conflicts against the fresh data: blocked days and already-booked days. */
-function findConflicts(
+function findBookingConflicts(
   freshServerData: BookingData,
   machineIds: readonly string[],
   dates: readonly string[],
@@ -74,12 +74,12 @@ function findConflicts(
       if (!dayAvailable(machine, date)) continue; // unavailable weekdays are silently skipped
       if (isBlockedOnDate(machine, date)) {
         conflicts.push({
-          mid: machineId,
+          machineId,
           date,
           by: `gesperrt (${maintenanceSlotAt(machine, date)?.type || 'Wartung'})`,
         });
       } else if (machineBookings[date]) {
-        conflicts.push({ mid: machineId, date, by: machineBookings[date].name });
+        conflicts.push({ machineId, date, by: machineBookings[date].name });
       }
     }
   }
@@ -102,7 +102,7 @@ function writeMachineCells(
       continue;
     }
     machineBookings[date] = buildCell();
-    undo.push({ mid: machine.id, date, prev: null });
+    undo.push({ machineId: machine.id, date, prev: null });
   }
   return undo;
 }
@@ -147,108 +147,108 @@ function applyBooking(
 }
 
 /**
- * Book `dates` on every machine in `mids`. Conflicts are checked against the fresh
+ * Book `dates` on every machine in `machineIds`. Conflicts are checked against the fresh
  * data first; if any exist and `skipConflicts` is false, aborts with the conflict list
  * (nothing written). Otherwise writes the free cells and returns the count + undo.
  * Faithful port of the `submitBooking` mutate callback.
  */
 export function bookCells(
   freshServerData: BookingData,
-  mids: readonly string[],
+  machineIds: readonly string[],
   dates: readonly string[],
   options: BookOptions,
 ): BookResult {
-  const conflicts = findConflicts(freshServerData, mids, dates);
+  const conflicts = findBookingConflicts(freshServerData, machineIds, dates);
   if (conflicts.length && !options.skipConflicts) return { abort: true, conflicts };
-  return applyBooking(freshServerData, mids, dates, options);
+  return applyBooking(freshServerData, machineIds, dates, options);
 }
 
 /**
- * Delete the given `dates` on machine `mid` that belong to `name`, then sweep any
+ * Delete the given `dates` on `machineId` that belong to `name`, then sweep any
  * weekend bridge days the deletion orphaned. Returns the deleted count + undo records
  * (including the swept weekend days). Faithful port of the booking-detail `del`.
  */
 export function deleteCells(
   freshServerData: BookingData,
-  mid: string,
+  machineId: string,
   name: string,
   dates: readonly string[],
 ): { n: number; undo: CellUndo[] } {
-  const machineBookings = freshServerData.bookings[mid] || {};
+  const machineBookings = freshServerData.bookings[machineId] || {};
   let deletedCount = 0;
   const undo: CellUndo[] = [];
   for (const date of dates) {
     const existingBooking = machineBookings[date];
     if (existingBooking && existingBooking.name === name) {
-      undo.push({ mid, date, prev: { ...existingBooking } });
+      undo.push({ machineId, date, prev: { ...existingBooking } });
       delete machineBookings[date];
       deletedCount++;
     }
   }
-  undo.push(...sweepWeekends(freshServerData, mid)); // remove orphaned Sat/Sun bridge days too
+  undo.push(...sweepWeekends(freshServerData, machineId)); // remove orphaned Sat/Sun bridge days too
   return { n: deletedCount, undo };
 }
 
 /**
  * Delete the current user's OWN cells (case-insensitive name match) among `dates` on
- * machine `mid`, then sweep. Faithful port of the my-bookings `delDates` (which matches
+ * `machineId`, then sweep. Faithful port of the my-bookings `delDates` (which matches
  * `S.user` case-insensitively — distinct from {@link deleteCells}, which matches the
  * clicked cell's exact stored name).
  */
 export function deleteOwnCells(
   freshServerData: BookingData,
-  mid: string,
+  machineId: string,
   user: string,
   dates: readonly string[],
 ): { n: number; undo: CellUndo[] } {
-  const machineBookings = freshServerData.bookings[mid] || {};
+  const machineBookings = freshServerData.bookings[machineId] || {};
   const lowercaseUser = user.toLowerCase();
   let deletedCount = 0;
   const undo: CellUndo[] = [];
   for (const date of dates) {
     const existingBooking = machineBookings[date];
     if (existingBooking && existingBooking.name.toLowerCase() === lowercaseUser) {
-      undo.push({ mid, date, prev: { ...existingBooking } });
+      undo.push({ machineId, date, prev: { ...existingBooking } });
       delete machineBookings[date];
       deletedCount++;
     }
   }
-  undo.push(...sweepWeekends(freshServerData, mid));
+  undo.push(...sweepWeekends(freshServerData, machineId));
   return { n: deletedCount, undo };
 }
 
 /** A cell address (machine + ISO date) for the selection delete. */
 export interface CellRef {
-  mid: string;
+  machineId: string;
   date: string;
 }
 
 /**
  * Delete the exact cells listed (those that still exist — no name check), then sweep
- * each machine in `mids`. Faithful port of the marquee-selection context-menu delete.
+ * each machine in `machineIds`. Faithful port of the marquee-selection context-menu delete.
  */
 export function deleteSelectedCells(
   freshServerData: BookingData,
   cells: readonly CellRef[],
-  mids: readonly string[],
+  machineIds: readonly string[],
 ): { n: number; undo: CellUndo[] } {
   let deletedCount = 0;
   const undo: CellUndo[] = [];
   for (const cellRef of cells) {
-    const machineBookings = freshServerData.bookings[cellRef.mid];
+    const machineBookings = freshServerData.bookings[cellRef.machineId];
     if (!machineBookings) continue;
     const existingBooking = machineBookings[cellRef.date];
     if (!existingBooking) continue;
-    undo.push({ mid: cellRef.mid, date: cellRef.date, prev: { ...existingBooking } });
+    undo.push({ machineId: cellRef.machineId, date: cellRef.date, prev: { ...existingBooking } });
     delete machineBookings[cellRef.date];
     deletedCount++;
   }
-  for (const mid of mids) undo.push(...sweepWeekends(freshServerData, mid));
+  for (const machineId of machineIds) undo.push(...sweepWeekends(freshServerData, machineId));
   return { n: deletedCount, undo };
 }
 
 /**
- * Delete every cell belonging to booking-group `gid` across all machines, then sweep
+ * Delete every cell belonging to booking-group `groupId` across all machines, then sweep
  * the affected machines. Faithful port of the booking-detail "delete whole group".
  */
 export function deleteGroup(
@@ -258,18 +258,19 @@ export function deleteGroup(
   let deletedCount = 0;
   const undo: CellUndo[] = [];
   const affectedMachineIds = new Set<string>();
-  for (const mid of Object.keys(freshServerData.bookings)) {
-    const machineBookings = freshServerData.bookings[mid]!;
+  for (const machineId of Object.keys(freshServerData.bookings)) {
+    const machineBookings = freshServerData.bookings[machineId]!;
     for (const date of Object.keys(machineBookings)) {
       const existingBooking = machineBookings[date];
       if (existingBooking && existingBooking.gid === groupId) {
-        undo.push({ mid, date, prev: { ...existingBooking } });
+        undo.push({ machineId, date, prev: { ...existingBooking } });
         delete machineBookings[date];
         deletedCount++;
-        affectedMachineIds.add(mid);
+        affectedMachineIds.add(machineId);
       }
     }
   }
-  for (const mid of affectedMachineIds) undo.push(...sweepWeekends(freshServerData, mid));
+  for (const machineId of affectedMachineIds)
+    undo.push(...sweepWeekends(freshServerData, machineId));
   return { n: deletedCount, undo };
 }

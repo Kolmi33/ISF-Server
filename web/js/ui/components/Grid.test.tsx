@@ -141,7 +141,7 @@ describe('Grid', () => {
 
   it('renders a booked cell owned by the current user as "mine"', () => {
     const { container } = renderGridIntoTable();
-    const cell = container.querySelector(`td[data-mid="m-mine"][data-date="${TODAY}"]`)!;
+    const cell = container.querySelector(`td[data-machine-id="m-mine"][data-date="${TODAY}"]`)!;
     expect(cell.className).toContain('booked');
     expect(cell.className).toContain('mine');
     expect(cell.textContent).toBe('anna');
@@ -151,7 +151,7 @@ describe('Grid', () => {
 
   it('renders a booked cell owned by someone else without the "mine" class', () => {
     const { container } = renderGridIntoTable();
-    const cell = container.querySelector(`td[data-mid="m-other"][data-date="${TODAY}"]`)!;
+    const cell = container.querySelector(`td[data-machine-id="m-other"][data-date="${TODAY}"]`)!;
     expect(cell.className).toContain('booked');
     expect(cell.className).not.toContain('mine');
     expect(cell.textContent).toBe('bob');
@@ -159,20 +159,20 @@ describe('Grid', () => {
 
   it('renders a blocked cell with the maintenance note as its title', () => {
     const { container } = renderGridIntoTable();
-    const cell = container.querySelector(`td[data-mid="m-blocked"][data-date="${TODAY}"]`)!;
+    const cell = container.querySelector(`td[data-machine-id="m-blocked"][data-date="${TODAY}"]`)!;
     expect(cell.className).toContain('blocked');
     expect(cell.getAttribute('title')).toContain('Achse fest');
   });
 
   it('renders an unavailable cell for a machine closed on that weekday', () => {
     const { container } = renderGridIntoTable();
-    const cell = container.querySelector(`td[data-mid="m-unavail"][data-date="${TODAY}"]`)!;
+    const cell = container.querySelector(`td[data-machine-id="m-unavail"][data-date="${TODAY}"]`)!;
     expect(cell.className).toContain('unavail');
   });
 
   it('renders a free cell for an otherwise-unencumbered machine', () => {
     const { container } = renderGridIntoTable();
-    const cell = container.querySelector(`td[data-mid="m-favorite"][data-date="${TODAY}"]`)!;
+    const cell = container.querySelector(`td[data-machine-id="m-favorite"][data-date="${TODAY}"]`)!;
     expect(cell.className).toContain('free');
   });
 
@@ -245,7 +245,7 @@ describe('render (bridged as window.render)', () => {
   it('re-renders the mounted grid to reflect a fresh window.S mutation', () => {
     const { container } = renderGridIntoTable();
     expect(
-      container.querySelector(`td[data-mid="m-unavail"][data-date="${TODAY}"]`)!.className,
+      container.querySelector(`td[data-machine-id="m-unavail"][data-date="${TODAY}"]`)!.className,
     ).toContain('unavail');
 
     window.S.data!.machines = window.S.data!.machines.map((m) =>
@@ -254,7 +254,7 @@ describe('render (bridged as window.render)', () => {
     act(() => renderGrid());
 
     expect(
-      container.querySelector(`td[data-mid="m-unavail"][data-date="${TODAY}"]`)!.className,
+      container.querySelector(`td[data-machine-id="m-unavail"][data-date="${TODAY}"]`)!.className,
     ).toContain('free');
   });
 });

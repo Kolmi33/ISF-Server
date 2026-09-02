@@ -138,7 +138,7 @@ describe('connectSSE', () => {
     connectSSE();
     latestEventSource().emit('update', {
       rev: 7,
-      changes: [{ mid: 'm1', day: '2021-01-04', val: { name: 'anna' } }],
+      changes: [{ machineId: 'm1', day: '2021-01-04', val: { name: 'anna' } }],
     });
     expect(window.S.data!.bookings.m1!['2021-01-04']).toEqual({ name: 'anna' });
     expect(window.S.data!.revision).toBe(7);

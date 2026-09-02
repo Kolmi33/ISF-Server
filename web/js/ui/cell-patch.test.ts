@@ -16,12 +16,12 @@ function buildDom(): void {
   document.body.innerHTML = `
     <table><tbody><tr>
       <td class="machcol"><span class="dot free"></span></td>
-      <td class="cell free" data-mid="m1" data-date="${TODAY}"></td>
+      <td class="cell free" data-machine-id="m1" data-date="${TODAY}"></td>
     </tr></tbody></table>`;
 }
 
 function cell(): HTMLElement {
-  return document.querySelector(`td.cell[data-mid="m1"][data-date="${TODAY}"]`)!;
+  return document.querySelector(`td.cell[data-machine-id="m1"][data-date="${TODAY}"]`)!;
 }
 
 beforeEach(() => {
@@ -91,13 +91,13 @@ describe('refreshCell', () => {
       document.body.innerHTML = `
         <table><tbody><tr>
           <td class="machcol"><span class="dot free"></span></td>
-          <td class="cell free" data-mid="m1" data-date="${TODAY}"></td>
-          <td class="cell free" data-mid="m1" data-date="${SATURDAY}"></td>
+          <td class="cell free" data-machine-id="m1" data-date="${TODAY}"></td>
+          <td class="cell free" data-machine-id="m1" data-date="${SATURDAY}"></td>
         </tr></tbody></table>`;
     });
 
     function satCell(): HTMLElement {
-      return document.querySelector(`td.cell[data-mid="m1"][data-date="${SATURDAY}"]`)!;
+      return document.querySelector(`td.cell[data-machine-id="m1"][data-date="${SATURDAY}"]`)!;
     }
 
     it('keeps wknd on a free weekend cell', () => {
@@ -170,7 +170,7 @@ describe('patchCells', () => {
   it("patches every named cell and refreshes each affected row's dot", () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
     window.S.visM = ['m1'];
-    patchCells([{ mid: 'm1', date: TODAY }]);
+    patchCells([{ machineId: 'm1', date: TODAY }]);
     expect(cell().className).toContain('booked');
     expect(document.querySelector('.dot')!.className).toBe('dot busy');
   });
@@ -178,7 +178,7 @@ describe('patchCells', () => {
   it("repaints the selection afterward, since patching a cell's className wipes .sel/.kfocus", () => {
     cell().classList.add('sel');
     window.S.visM = ['m1'];
-    patchCells([{ mid: 'm1', date: TODAY }]);
+    patchCells([{ machineId: 'm1', date: TODAY }]);
     // Nothing is actually anchored/focused in this fixture, so the repaint correctly clears
     // the stray .sel left over from before the patch — proving paintSelection() really ran.
     expect(cell().classList.contains('sel')).toBe(false);

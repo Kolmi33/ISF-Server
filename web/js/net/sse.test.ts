@@ -6,21 +6,24 @@ describe('applyUpdate', () => {
   it('sets cells for truthy vals and reports the patch', () => {
     const bookings: Bookings = {};
     const res = applyUpdate(
-      { rev: 24, changes: [{ mid: 'M1', day: '2021-01-11', val: { name: 'anna' } }] },
+      { rev: 24, changes: [{ machineId: 'M1', day: '2021-01-11', val: { name: 'anna' } }] },
       bookings,
     );
     expect(bookings.M1!['2021-01-11']).toEqual({ name: 'anna' });
-    expect(res).toEqual({ rev: 24, patch: [{ mid: 'M1', date: '2021-01-11' }] });
+    expect(res).toEqual({ rev: 24, patch: [{ machineId: 'M1', date: '2021-01-11' }] });
   });
 
   it('deletes cells for falsy vals, leaving other days intact', () => {
     const bookings: Bookings = {
       M1: { '2021-01-11': { name: 'anna' }, '2021-01-12': { name: 'b' } },
     };
-    const res = applyUpdate({ changes: [{ mid: 'M1', day: '2021-01-11', val: null }] }, bookings);
+    const res = applyUpdate(
+      { changes: [{ machineId: 'M1', day: '2021-01-11', val: null }] },
+      bookings,
+    );
     expect(bookings.M1!['2021-01-11']).toBeUndefined();
     expect(bookings.M1!['2021-01-12']).toEqual({ name: 'b' });
-    expect(res.patch).toEqual([{ mid: 'M1', date: '2021-01-11' }]);
+    expect(res.patch).toEqual([{ machineId: 'M1', date: '2021-01-11' }]);
   });
 
   it('creates the machine row on first change and handles multiple changes', () => {
@@ -28,8 +31,8 @@ describe('applyUpdate', () => {
     const res = applyUpdate(
       {
         changes: [
-          { mid: 'M1', day: 'd1', val: { name: 'x' } },
-          { mid: 'M2', day: 'd2', val: { name: 'y' } },
+          { machineId: 'M1', day: 'd1', val: { name: 'x' } },
+          { machineId: 'M2', day: 'd2', val: { name: 'y' } },
         ],
       },
       bookings,

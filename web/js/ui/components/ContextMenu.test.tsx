@@ -52,11 +52,11 @@ beforeEach(() => {
     Promise.resolve(fn(window.S.data)),
   ) as typeof window.mutate;
   window.askConfirm = vi.fn().mockResolvedValue(true);
-  selection.anchor = { mid: 'm1', date: '2021-01-04' };
-  selection.focus = { mid: 'm1', date: '2021-01-05' };
+  selection.anchor = { machineId: 'm1', date: '2021-01-04' };
+  selection.focus = { machineId: 'm1', date: '2021-01-05' };
   selection.cells = [
-    { mid: 'm1', date: '2021-01-04' },
-    { mid: 'm1', date: '2021-01-05' },
+    { machineId: 'm1', date: '2021-01-04' },
+    { machineId: 'm1', date: '2021-01-05' },
   ];
   render(<ContextMenu />, { container: document.getElementById('ctxMenu')! });
 });

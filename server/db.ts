@@ -159,10 +159,10 @@ function seedBookings(db: Db, bookings: Record<string, Record<string, SeedBookin
     'INSERT OR REPLACE INTO bookings(mid,day,name,note,ts,gid,gtitle) VALUES(?,?,?,?,?,?,?)',
   );
   let insertedCount = 0;
-  for (const [mid, machineBookings] of Object.entries(bookings)) {
+  for (const [machineId, machineBookings] of Object.entries(bookings)) {
     for (const [day, booking] of Object.entries(machineBookings)) {
       insertBooking.run(
-        mid,
+        machineId,
         day,
         booking.name,
         orNull(booking.note),

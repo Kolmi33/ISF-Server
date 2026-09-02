@@ -29,7 +29,7 @@ function parsedMaintenanceSlots(machine: MachineRow): MaintenanceSlot[] {
 }
 
 /** The maintenance slot covering `day` (bounds are inclusive; an empty bound is
- *  open-ended), or null if none. Mirrors the client's `core/machines.ts`
+ *  open-ended), or null if none. Mirrors the client's `core/machines-queries.ts`
  *  `maintenanceSlotAt`, over the row's raw JSON rather than the wire's parsed array. */
 function maintenanceSlotAt(machine: MachineRow, day: string): MaintenanceSlot | null {
   for (const slot of parsedMaintenanceSlots(machine)) {
@@ -41,10 +41,10 @@ function maintenanceSlotAt(machine: MachineRow, day: string): MaintenanceSlot | 
 /**
  * Why machine `machine` is blocked on ISO date `day` (a display-ready label), or null if
  * it isn't. Prefers a structured `maint` slot over the legacy single-status fields,
- * matching the client's own preference (`core/machines.ts`'s `maintenanceSlots`) —
+ * matching the client's own preference (`core/machines-queries.ts`'s `maintenanceSlots`) —
  * **this server-side check used to look at the legacy fields only**, so a machine blocked
  * solely via the newer `maint` slots (the only form the machine-edit form has written
- * since `core/booking.ts`'s `saveMachine` started clearing the legacy fields on every
+ * since `core/machines.ts`'s `saveMachine` started clearing the legacy fields on every
  * save) was silently accepted by a write here even though the client itself already
  * refuses to show that cell as bookable (see ARCHITECTURE_AUDIT.md §9, finding F1).
  */
@@ -68,7 +68,7 @@ export function isBlocked(machine: MachineRow, day: string): boolean {
 /**
  * True if the machine is available on the weekday of ISO date `day`, per its `days` mask
  * (Mo..So, '1' = available). A missing or malformed mask means available every day.
- * Faithful port of the client's `core/machines.ts` `dayAvailable` — like `blockReason`
+ * Faithful port of the client's `core/machines-queries.ts` `dayAvailable` — like `blockReason`
  * above, this had no server-side equivalent at all before F1 (a machine closed on a given
  * weekday could still be booked for it via a direct write).
  */

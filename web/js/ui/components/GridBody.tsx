@@ -100,7 +100,7 @@ function BlockedCell({ machine, isoDate, isToday, weekend, dateLabel }: CellAttr
     <td
       className={cellClass('blocked', { today: isToday, weekend })}
       role="gridcell"
-      data-mid={machine.id}
+      data-machine-id={machine.id}
       data-date={isoDate}
       aria-label={`${machine.name}, ${dateLabel}, gesperrt`}
       title={maintText(maintenanceSlotAt(machine, isoDate))}
@@ -118,7 +118,7 @@ function BookedCell({ machine, isoDate, isToday, weekend, dateLabel }: CellAttrs
     <td
       className={cellClass('booked', { mine, today: isToday, weekend })}
       role="gridcell"
-      data-mid={machine.id}
+      data-machine-id={machine.id}
       data-date={isoDate}
       style={{ background: nameColor(booking.name, isDarkTheme()) }}
       aria-label={`${machine.name}, ${dateLabel}, belegt von ${booking.name}`}
@@ -155,7 +155,7 @@ function GridCell({
       <td
         className={cellClass('unavail', { today: isToday, weekend })}
         role="gridcell"
-        data-mid={machine.id}
+        data-machine-id={machine.id}
         data-date={isoDate}
         aria-label={`${machine.name}, ${dateLabel}, nicht verfügbar`}
         title={`an diesem Wochentag nicht verfügbar (verfügbar: ${daysMaskText(machine)})`}
@@ -166,7 +166,7 @@ function GridCell({
     <td
       className={cellClass('free', { today: isToday, weekend })}
       role="gridcell"
-      data-mid={machine.id}
+      data-machine-id={machine.id}
       data-date={isoDate}
       aria-label={`${machine.name}, ${dateLabel}, frei`}
     />

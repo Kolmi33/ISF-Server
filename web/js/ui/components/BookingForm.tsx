@@ -68,8 +68,8 @@ function ConflictList({ conflicts }: { conflicts: readonly Conflict[] }) {
       <b>{conflicts.length} Termin(e) bereits belegt / gesperrt:</b>
       <br />
       {shown.map((conflict, index) => (
-        <span key={`${conflict.mid}-${conflict.date}`}>
-          {index > 0 && <br />}• {machById(conflict.mid)?.name ?? conflict.mid}{' '}
+        <span key={`${conflict.machineId}-${conflict.date}`}>
+          {index > 0 && <br />}• {machById(conflict.machineId)?.name ?? conflict.machineId}{' '}
           {formatDateLong(conflict.date)}: {conflict.by}
         </span>
       ))}

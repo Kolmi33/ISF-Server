@@ -19,7 +19,7 @@ import { store } from '../../store-instance.ts';
 interface MenuInfo {
   x: number;
   y: number;
-  mids: string[];
+  machineIds: string[];
   from: string;
   to: string;
   bookedCells: Cell[];
@@ -40,14 +40,16 @@ export function hideCtx(): void {
 }
 
 function buildMenuInfo(x: number, y: number): MenuInfo {
-  const mids = [...new Set(selection.cells.map((c) => c.mid))];
+  const machineIds = [...new Set(selection.cells.map((c) => c.machineId))];
   const dates = selection.cells.map((c) => c.date).sort();
   const from = dates[0]!;
   const to = dates[dates.length - 1]!;
   const bookings = store.get('data')!.bookings;
-  const bookedCells = selection.cells.filter((c) => getBooking(bookings, c.mid, c.date));
-  const names = [...new Set(bookedCells.map((c) => getBooking(bookings, c.mid, c.date)!.name))];
-  return { x, y, mids, from, to, bookedCells, names };
+  const bookedCells = selection.cells.filter((c) => getBooking(bookings, c.machineId, c.date));
+  const names = [
+    ...new Set(bookedCells.map((c) => getBooking(bookings, c.machineId, c.date)!.name)),
+  ];
+  return { x, y, machineIds, from, to, bookedCells, names };
 }
 
 async function handleDelete(info: MenuInfo): Promise<void> {
@@ -63,8 +65,8 @@ async function handleDelete(info: MenuInfo): Promise<void> {
   const cells = [...selection.cells];
   clearSelection();
   const result = await window.mutate(
-    (fresh) => deleteSelectedCells(fresh, cells, info.mids),
-    `Bereich gelöscht: ${info.mids.length} Maschine(n), ${info.from} bis ${info.to}`,
+    (fresh) => deleteSelectedCells(fresh, cells, info.machineIds),
+    `Bereich gelöscht: ${info.machineIds.length} Maschine(n), ${info.from} bis ${info.to}`,
   );
   if (result && !result.abort) {
     offerUndo(`${result.n} Buchung(en) gelöscht.`, result.undo, 'Bereich löschen');
@@ -117,13 +119,13 @@ function ContextMenuContent({ info }: { info: MenuInfo }) {
   return (
     <>
       <div style={{ padding: '4px 10px', fontSize: '12px', color: 'var(--muted)' }}>
-        {info.mids.length} Maschine(n) · {formatDateLong(info.from)}
+        {info.machineIds.length} Maschine(n) · {formatDateLong(info.from)}
         {info.from !== info.to ? ' – ' + formatDateLong(info.to) : ''}
       </div>
       <button
         onClick={() => {
           hideCtx();
-          openBookingForm(info.mids, info.from, info.to);
+          openBookingForm(info.machineIds, info.from, info.to);
         }}
       >
         <svg className="ic" aria-hidden="true">

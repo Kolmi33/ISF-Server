@@ -31,14 +31,16 @@ describe('bookCells — conflicts', () => {
     const d = data([M()], { m1: { '2021-01-04': { name: 'Bob' } } });
     const res = bookCells(d, ['m1'], ['2021-01-04'], opts());
     expect(res.abort).toBe(true);
-    expect(res.conflicts).toEqual([{ mid: 'm1', date: '2021-01-04', by: 'Bob' }]);
+    expect(res.conflicts).toEqual([{ machineId: 'm1', date: '2021-01-04', by: 'Bob' }]);
     expect(d.bookings.m1!['2021-01-04']!.name).toBe('Bob'); // nothing written
   });
 
   it('reports blocked days as gesperrt with the slot type', () => {
     const d = data([M({ maint: [{ type: 'defekt', from: '2021-01-01', until: '2021-12-31' }] })]);
     const res = bookCells(d, ['m1'], ['2021-01-04'], opts());
-    expect(res.conflicts).toEqual([{ mid: 'm1', date: '2021-01-04', by: 'gesperrt (defekt)' }]);
+    expect(res.conflicts).toEqual([
+      { machineId: 'm1', date: '2021-01-04', by: 'gesperrt (defekt)' },
+    ]);
   });
 
   it('falls back to "Wartung" when the blocking slot has an empty type', () => {
@@ -69,7 +71,7 @@ describe('bookCells — apply', () => {
     const d = data([M()]);
     const res = bookCells(d, ['m1'], ['2021-01-04'], opts({ note: 'hi' }));
     expect(res.count).toBe(1);
-    expect(res.undo).toEqual([{ mid: 'm1', date: '2021-01-04', prev: null }]);
+    expect(res.undo).toEqual([{ machineId: 'm1', date: '2021-01-04', prev: null }]);
     expect(d.bookings.m1!['2021-01-04']).toEqual({ name: 'Alice', note: 'hi', ts: TS });
   });
 
@@ -118,7 +120,7 @@ describe('deleteCells', () => {
     const res = deleteCells(d, 'm1', 'Alice', ['2021-01-04', '2021-01-05']);
     expect(res.n).toBe(1); // only the Alice day
     expect(res.undo).toContainEqual({
-      mid: 'm1',
+      machineId: 'm1',
       date: '2021-01-04',
       prev: { name: 'Alice', ts: TS },
     });
@@ -190,8 +192,8 @@ describe('deleteSelectedCells', () => {
     const res = deleteSelectedCells(
       d,
       [
-        { mid: 'm1', date: '2021-01-04' },
-        { mid: 'm2', date: '2021-01-04' },
+        { machineId: 'm1', date: '2021-01-04' },
+        { machineId: 'm2', date: '2021-01-04' },
       ],
       ['m1', 'm2'],
     );
@@ -205,9 +207,9 @@ describe('deleteSelectedCells', () => {
     const res = deleteSelectedCells(
       d,
       [
-        { mid: 'ghost', date: '2021-01-04' }, // no bucket
-        { mid: 'm1', date: '2021-01-05' }, // no such day
-        { mid: 'm1', date: '2021-01-04' }, // real
+        { machineId: 'ghost', date: '2021-01-04' }, // no bucket
+        { machineId: 'm1', date: '2021-01-05' }, // no such day
+        { machineId: 'm1', date: '2021-01-04' }, // real
       ],
       ['m1'],
     );

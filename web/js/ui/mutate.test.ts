@@ -75,11 +75,11 @@ describe('mutate — optimistic apply + logging', () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     const fn = vi.fn((fresh) => {
       fresh.bookings.m1 = { '2021-01-04': booking() };
-      return { n: 1, undo: [{ mid: 'm1', date: '2021-01-04', prev: null }] };
+      return { n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] };
     });
     const result = await mutate(fn, 'Gebucht: Anna');
     expect(window.S.data!.bookings.m1!['2021-01-04']).toEqual(booking());
-    expect(result).toEqual({ n: 1, undo: [{ mid: 'm1', date: '2021-01-04', prev: null }] });
+    expect(result).toEqual({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] });
     expect(window.S.data!.log[0]).toMatchObject({ user: 'anna', action: 'Gebucht: Anna' });
   });
 
@@ -119,7 +119,7 @@ describe('mutate — optimistic apply + logging', () => {
     machById('m1'); // builds the cache
     window.S.data!.machines.push({ id: 'new-machine', name: 'Neu', group: 'Halle 1' }); // in place
     await mutate(
-      () => ({ n: 1, undo: [{ mid: 'm1', date: '2021-01-04', prev: null }] }),
+      () => ({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
       'Gebucht',
     );
     expect(machById('new-machine')).toBeUndefined(); // cache correctly left alone
@@ -128,14 +128,17 @@ describe('mutate — optimistic apply + logging', () => {
   it('a small undo list patches cells instead of a full notify()', async () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     document.body.innerHTML += '<table id="grid"><tbody></tbody></table>';
-    await mutate(() => ({ n: 1, undo: [{ mid: 'm1', date: '2021-01-04', prev: null }] }), 'x');
+    await mutate(
+      () => ({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
+      'x',
+    );
     expect(notifySpy).not.toHaveBeenCalled();
   });
 
   it('an undo list over 500 falls back to a full notify()', async () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     const undo = Array.from({ length: 501 }, (_, i) => ({
-      mid: 'm1',
+      machineId: 'm1',
       date: String(i),
       prev: null,
     }));
@@ -165,14 +168,14 @@ describe('mutate — persist (background)', () => {
     const fetchSpy = fetchReturning({ rev: 7 });
     vi.stubGlobal('fetch', fetchSpy);
     await mutate(
-      () => ({ n: 1, undo: [{ mid: 'm1', date: '2021-01-04', prev: null }] }),
+      () => ({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
       'Gebucht',
     );
     await vi.waitFor(() => expect(window.S.data!.revision).toBe(7));
     const [, init] = fetchSpy.mock.calls[0]!;
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body.cells).toEqual([
-      { mid: 'm1', day: '2021-01-04', prev: null, val: booking({ name: 'anna' }) },
+      { machineId: 'm1', day: '2021-01-04', prev: null, val: booking({ name: 'anna' }) },
     ]);
     expect(body.log).toBe('Gebucht');
     expect(body.user).toBe('anna');
@@ -192,9 +195,12 @@ describe('mutate — persist (background)', () => {
   it('on a partial conflict: shows the collision banner and refreshes from the server', async () => {
     vi.stubGlobal(
       'fetch',
-      fetchReturning({ rev: 9, conflicts: [{ mid: 'm1', date: 'x', by: 'bob' }] }),
+      fetchReturning({ rev: 9, conflicts: [{ machineId: 'm1', date: 'x', by: 'bob' }] }),
     );
-    await mutate(() => ({ n: 1, undo: [{ mid: 'm1', date: '2021-01-04', prev: null }] }), 'x');
+    await mutate(
+      () => ({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
+      'x',
+    );
     await vi.waitFor(() =>
       expect(document.getElementById('collBanner')!.classList.contains('show')).toBe(true),
     );
@@ -204,7 +210,10 @@ describe('mutate — persist (background)', () => {
 
   it('on a server error response: toasts, and refreshes from the server', async () => {
     vi.stubGlobal('fetch', fetchReturning({ error: 'db locked' }));
-    await mutate(() => ({ n: 1, undo: [{ mid: 'm1', date: '2021-01-04', prev: null }] }), 'x');
+    await mutate(
+      () => ({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
+      'x',
+    );
     await vi.waitFor(() =>
       expect(document.getElementById('toast')!.textContent).toContain('Speichern fehlgeschlagen'),
     );
@@ -222,7 +231,10 @@ describe('mutate — persist (background)', () => {
           json: () => Promise.resolve(serverData()),
         }),
     );
-    await mutate(() => ({ n: 1, undo: [{ mid: 'm1', date: '2021-01-04', prev: null }] }), 'x');
+    await mutate(
+      () => ({ n: 1, undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
+      'x',
+    );
     await vi.waitFor(() =>
       expect(document.getElementById('toast')!.textContent).toContain('Speichern fehlgeschlagen'),
     );

@@ -17,8 +17,10 @@ import { paintSelection } from './grid-interaction.ts';
 import { machById } from './machine-lookup.ts';
 import { store } from '../store-instance.ts';
 
-function findCellElement(mid: string, date: string): HTMLElement | null {
-  return document.querySelector(`td.cell[data-mid="${CSS.escape(mid)}"][data-date="${date}"]`);
+function findCellElement(machineId: string, date: string): HTMLElement | null {
+  return document.querySelector(
+    `td.cell[data-machine-id="${CSS.escape(machineId)}"][data-date="${date}"]`,
+  );
 }
 
 function isDarkTheme(): boolean {
@@ -32,14 +34,14 @@ function isDarkTheme(): boolean {
  *  sets, so a weekend cell lost its weekend styling on the next targeted patch until the next
  *  full repaint. `patchCells` repaints `.sel`/`.kfocus` right after this, since the `className`
  *  assignments below wipe them. */
-export function refreshCell(mid: string, date: string): void {
-  const el = findCellElement(mid, date);
+export function refreshCell(machineId: string, date: string): void {
+  const el = findCellElement(machineId, date);
   if (!el) return; // e.g. a weekend column that isn't shown
-  const machine = machById(mid);
+  const machine = machById(machineId);
   if (!machine) return;
   const isToday = date === todayAsIsoDateString();
   const weekend = isWeekend(parseIsoDateString(date));
-  const booking = getBooking(store.get('data')!.bookings, mid, date);
+  const booking = getBooking(store.get('data')!.bookings, machineId, date);
   const state = classifyCell(isBlockedOnDate(machine, date), booking, dayAvailable(machine, date));
   if (state === 'blocked') {
     el.className = cellClass('blocked', { today: isToday, weekend });
@@ -72,17 +74,17 @@ export function refreshCell(mid: string, date: string): void {
  *  legacy `refreshDot` (the `.statdot` maintenance icon is static — only `.dot` is patched;
  *  a row with an active maintenance slot has no `.dot` element at all, matching legacy calling
  *  `classifyDot(null, …)` — a blocked state never arises here). */
-export function refreshDot(mid: string): void {
-  const anyCellInRow = findCellElement(mid, store.get('visD')[0] ?? '');
+export function refreshDot(machineId: string): void {
+  const anyCellInRow = findCellElement(machineId, store.get('visD')[0] ?? '');
   if (!anyCellInRow) return;
   const row = anyCellInRow.closest('tr');
   if (!row) return;
   const dot = row.querySelector<HTMLElement>('.dot');
   if (!dot) return;
-  const machine = machById(mid);
+  const machine = machById(machineId);
   if (!machine) return;
   const today = todayAsIsoDateString();
-  const todaysBooking = getBooking(store.get('data')!.bookings, mid, today);
+  const todaysBooking = getBooking(store.get('data')!.bookings, machineId, today);
   const state = classifyDot(null, todaysBooking, dayAvailable(machine, today));
   if (state === 'busy') {
     dot.className = 'dot busy';
@@ -99,11 +101,11 @@ export function refreshDot(mid: string): void {
 /** Patch every cell an undo-entries list names, refresh their rows' today-dots, then restore
  *  the selection/focus marks (the classNames patched above just wiped them). Faithful port of
  *  legacy `patchCells`, imported directly by `ui/mutate.ts`'s optimistic-apply path. */
-export function patchCells(entries: readonly { mid: string; date: string }[]): void {
+export function patchCells(entries: readonly { machineId: string; date: string }[]): void {
   const machineIds = new Set<string>();
   for (const entry of entries) {
-    refreshCell(entry.mid, entry.date);
-    machineIds.add(entry.mid);
+    refreshCell(entry.machineId, entry.date);
+    machineIds.add(entry.machineId);
   }
   machineIds.forEach(refreshDot);
   paintSelection();

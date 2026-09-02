@@ -76,7 +76,7 @@ describe('BookingForm', () => {
   it('shows the conflict list and a force-book button instead of closing, on conflict', async () => {
     window.mutate = vi
       .fn()
-      .mockResolvedValueOnce({ conflicts: [{ mid: 'm1', date: '2021-01-04', by: 'bob' }] });
+      .mockResolvedValueOnce({ conflicts: [{ machineId: 'm1', date: '2021-01-04', by: 'bob' }] });
     act(() => openBookingForm(['m1'], '2021-01-04', '2021-01-04'));
     await act(async () => {
       screen.getByRole('button', { name: 'Buchen' }).click();
@@ -94,7 +94,7 @@ describe('BookingForm', () => {
 
   it('caps the shown conflict list at 15, with an ellipsis for the rest', async () => {
     const manyConflicts = Array.from({ length: 20 }, (_, i) => ({
-      mid: 'm1',
+      machineId: 'm1',
       date: `2021-01-${String(i + 1).padStart(2, '0')}`,
       by: 'bob',
     }));
