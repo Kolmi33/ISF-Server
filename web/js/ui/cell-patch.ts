@@ -14,6 +14,7 @@ import { maintText } from './machine-text.ts';
 import { dayAvailable, isBlockedOnDate, maintenanceSlotAt } from '../core/machines.ts';
 import { isWeekend, parseIsoDateString, todayAsIsoDateString } from '../../../shared/dates.ts';
 import { paintSelection } from './grid-interaction.ts';
+import { store } from '../store-instance.ts';
 
 function findCellElement(mid: string, date: string): HTMLElement | null {
   return document.querySelector(`td.cell[data-mid="${CSS.escape(mid)}"][data-date="${date}"]`);
@@ -37,7 +38,7 @@ export function refreshCell(mid: string, date: string): void {
   if (!machine) return;
   const isToday = date === todayAsIsoDateString();
   const weekend = isWeekend(parseIsoDateString(date));
-  const booking = getBooking(window.S.data!.bookings, mid, date);
+  const booking = getBooking(store.get('data')!.bookings, mid, date);
   const state = classifyCell(isBlockedOnDate(machine, date), booking, dayAvailable(machine, date));
   if (state === 'blocked') {
     el.className = cellClass('blocked', { today: isToday, weekend });
@@ -46,7 +47,7 @@ export function refreshCell(mid: string, date: string): void {
     el.textContent = booking?.name ?? '';
   } else if (state === 'booked') {
     el.className = cellClass('booked', {
-      mine: isMine(window.S.user, booking!.name),
+      mine: isMine(store.get('user'), booking!.name),
       today: isToday,
       weekend,
     });
@@ -71,7 +72,7 @@ export function refreshCell(mid: string, date: string): void {
  *  a row with an active maintenance slot has no `.dot` element at all, matching legacy calling
  *  `classifyDot(null, …)` — a blocked state never arises here). */
 export function refreshDot(mid: string): void {
-  const anyCellInRow = findCellElement(mid, window.S.visD[0] ?? '');
+  const anyCellInRow = findCellElement(mid, store.get('visD')[0] ?? '');
   if (!anyCellInRow) return;
   const row = anyCellInRow.closest('tr');
   if (!row) return;
@@ -80,7 +81,7 @@ export function refreshDot(mid: string): void {
   const machine = window.machById(mid);
   if (!machine) return;
   const today = todayAsIsoDateString();
-  const todaysBooking = getBooking(window.S.data!.bookings, mid, today);
+  const todaysBooking = getBooking(store.get('data')!.bookings, mid, today);
   const state = classifyDot(null, todaysBooking, dayAvailable(machine, today));
   if (state === 'busy') {
     dot.className = 'dot busy';

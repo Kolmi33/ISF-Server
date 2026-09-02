@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AppState, Machine } from '../../../shared/types.ts';
+import { store } from '../store-instance.ts';
 import {
   toggleCategory,
   toggleAllGroupsInCategory,
@@ -12,8 +13,12 @@ function machine(overrides: Partial<Machine> = {}): Machine {
   return { id: 'm1', name: 'M1', group: 'Halle 1', ...overrides };
 }
 
+// category-fold.ts now reads/writes state via the real `store` singleton — spied once here
+// (call history cleared per test below) rather than relying on a mocked window.notify.
+const notifySpy = vi.spyOn(store, 'notify');
+
 beforeEach(() => {
-  window.S = {
+  store.set({
     cats: new Set(['maschine', 'messtechnik']),
     collapsed: new Set(),
     data: {
@@ -24,8 +29,9 @@ beforeEach(() => {
       ],
       bookings: {},
     },
-  } as unknown as AppState;
-  window.notify = vi.fn();
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
+  notifySpy.mockClear();
   localStorage.clear();
 });
 
@@ -34,7 +40,7 @@ describe('toggleCategory', () => {
     toggleCategory('maschine');
     expect(window.S.cats.has('maschine')).toBe(false);
     expect(JSON.parse(localStorage.getItem('mb_cats')!)).toEqual(['messtechnik']);
-    expect(window.notify).toHaveBeenCalledTimes(1);
+    expect(notifySpy).toHaveBeenCalledTimes(1);
   });
 
   it('adds a currently-hidden category back', () => {
@@ -53,7 +59,7 @@ describe('toggleAllGroupsInCategory', () => {
     expect(window.S.collapsed.has('Halle 1')).toBe(false);
     expect(window.S.collapsed.has('Halle 2')).toBe(false);
     expect(JSON.parse(localStorage.getItem('mb_collapsed')!)).toEqual([]);
-    expect(window.notify).toHaveBeenCalled();
+    expect(notifySpy).toHaveBeenCalled();
   });
 
   it('collapses every group in the category when all are already open', () => {
@@ -80,7 +86,7 @@ describe('categoryTap / categoryTapCancel', () => {
     categoryTapCancel();
     vi.advanceTimersByTime(300);
     expect(window.S.cats.has('maschine')).toBe(true); // never toggled
-    expect(window.notify).not.toHaveBeenCalled();
+    expect(notifySpy).not.toHaveBeenCalled();
   });
 
   it('a second tap before the delay resets the debounce (only one toggle fires)', () => {
@@ -91,6 +97,6 @@ describe('categoryTap / categoryTapCancel', () => {
     expect(window.S.cats.has('maschine')).toBe(true); // still pending
     vi.advanceTimersByTime(120);
     expect(window.S.cats.has('maschine')).toBe(false);
-    expect(window.notify).toHaveBeenCalledTimes(1);
+    expect(notifySpy).toHaveBeenCalledTimes(1);
   });
 });

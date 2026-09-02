@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest';
 import type { AppState } from '../../../shared/types.ts';
+import { store } from '../store-instance.ts';
 import {
   initGridInteraction,
   paintSelection,
@@ -38,14 +39,19 @@ function buildGridDom(): void {
 }
 
 function stubWindowGlobals(): void {
-  window.S = {
+  // grid-interaction.ts now reads state via the real `store` singleton, not window.S
+  // directly — store.set merges these onto that same shared object, and window.S is kept
+  // aliased to it (as app.ts does in production) so every existing window.S.* assertion
+  // below keeps working unchanged.
+  store.set({
     visM: ['m1', 'm2'],
     visD: ['2021-01-04', '2021-01-05'],
     collapsed: new Set(),
     cats: new Set(['maschine', 'messtechnik']),
     data: { machines: [], bookings: {} },
     extraWeeks: 0,
-  } as unknown as AppState;
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
   window.hideCtx = vi.fn();
   window.showCtx = vi.fn();
   window.notify = vi.fn();
@@ -229,13 +235,15 @@ describe('click handling', () => {
   });
 
   it('clicking a group header row toggles and persists its collapsed state', () => {
+    const notifySpy = vi.spyOn(store, 'notify');
     clickOn(document.querySelector('tr[data-group="Halle 1"] td')!);
     expect(window.S.collapsed.has('Halle 1')).toBe(true);
     expect(JSON.parse(localStorage.getItem('mb_collapsed')!)).toEqual(['Halle 1']);
-    expect(window.notify).toHaveBeenCalledOnce();
+    expect(notifySpy).toHaveBeenCalledOnce();
 
     clickOn(document.querySelector('tr[data-group="Halle 1"] td')!);
     expect(window.S.collapsed.has('Halle 1')).toBe(false);
+    notifySpy.mockRestore();
   });
 
   it('a plain click that ends a drag just clears didDrag, without any other action', () => {

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AppState, Booking, ServerData } from '../../../shared/types.ts';
+import { store } from '../store-instance.ts';
 import { mutate, refreshNow, stampRef } from './mutate.ts';
 
 function serverData(overrides: Partial<ServerData> = {}): ServerData {
@@ -22,17 +23,23 @@ function fetchReturning(json: unknown, ok = true): ReturnType<typeof vi.fn> {
   return vi.fn().mockResolvedValue({ ok, status: 500, json: () => Promise.resolve(json) });
 }
 
+// mutate.ts now reads/writes state via the real `store` singleton — spied once here (its
+// call history is cleared per test in beforeEach below) rather than relying on a mocked
+// window.notify, which nothing calls anymore.
+const notifySpy = vi.spyOn(store, 'notify');
+
 beforeEach(() => {
   document.body.innerHTML =
     '<span id="lastRef"></span><div id="toast"></div><div id="collBanner"></div>';
-  window.S = {
+  store.set({
     data: serverData(),
     readOnly: false,
     user: 'anna',
     visM: [],
     visD: [],
-  } as unknown as AppState;
-  window.notify = vi.fn();
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
+  notifySpy.mockClear();
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -56,7 +63,7 @@ describe('mutate — abort', () => {
     const result = await mutate(() => ({ abort: true, conflicts: [] }), 'test action');
     expect(result).toEqual({ abort: true, conflicts: [] });
     expect(window.S.data!.log.length).toBe(before);
-    expect(window.notify).not.toHaveBeenCalled();
+    expect(notifySpy).not.toHaveBeenCalled();
     await Promise.resolve(); // let any stray microtask settle
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -90,14 +97,14 @@ describe('mutate — optimistic apply + logging', () => {
   it('notify()s directly for a structural change (no undo array)', async () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     await mutate(() => ({ abort: false }), 'Maschine verschoben');
-    expect(window.notify).toHaveBeenCalledOnce();
+    expect(notifySpy).toHaveBeenCalledOnce();
   });
 
   it('a small undo list patches cells instead of a full notify()', async () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     document.body.innerHTML += '<table id="grid"><tbody></tbody></table>';
     await mutate(() => ({ n: 1, undo: [{ mid: 'm1', date: '2021-01-04', prev: null }] }), 'x');
-    expect(window.notify).not.toHaveBeenCalled();
+    expect(notifySpy).not.toHaveBeenCalled();
   });
 
   it('an undo list over 500 falls back to a full notify()', async () => {
@@ -108,7 +115,7 @@ describe('mutate — optimistic apply + logging', () => {
       prev: null,
     }));
     await mutate(() => ({ n: 501, undo }), 'x');
-    expect(window.notify).toHaveBeenCalledOnce();
+    expect(notifySpy).toHaveBeenCalledOnce();
   });
 
   it('returns before persist (the background fetch) settles', async () => {
@@ -203,7 +210,7 @@ describe('refreshNow', () => {
     vi.stubGlobal('fetch', fetchReturning(serverData({ rev: 42 } as unknown as ServerData)));
     await refreshNow(false);
     expect(window.S.data!.revision).toBe(42);
-    expect(window.notify).toHaveBeenCalledOnce();
+    expect(notifySpy).toHaveBeenCalledOnce();
     expect(document.getElementById('lastRef')!.textContent).not.toBe('');
     expect(document.getElementById('toast')!.textContent).toBe('Aktualisiert ✓');
   });

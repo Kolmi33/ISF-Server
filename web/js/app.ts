@@ -20,7 +20,6 @@
 // architectural decision, not a mechanical cleanup — tracked, not done here.
 
 import type { AppState } from '../../shared/types.ts';
-import { mondayOfDate } from '../../shared/dates.ts';
 import * as api from './net/api.ts';
 import * as gridInteraction from './ui/grid-interaction.ts';
 import * as gridScroll from './ui/grid-scroll.ts';
@@ -55,7 +54,7 @@ import { errorMessage } from './ui/debug-panel.ts';
 import { escapeHtml } from './ui/escape-html.ts';
 import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
-import { createStore } from './state.ts';
+import { store } from './store-instance.ts';
 import type { BookingData, Machine, ServerData } from '../../shared/types.ts';
 import type { MutateResult } from './ui/mutate.ts';
 
@@ -207,37 +206,10 @@ Object.assign(window, theme);
 Object.assign(window, debugPanel);
 Object.assign(window, mutateModule);
 
-// Build the initial runtime state from device-local prefs (localStorage) + this week's
-// Monday. This is the impure hydration `createStore` deliberately does NOT do (D3, E4);
-// the store owns the object, and `window.S` bridges the same reference (most modules
-// still read/write state via `window.S.<field>` directly rather than through the store —
-// a known, separately-tracked issue, ARCHITECTURE_AUDIT.md §7/F9). Faithful to the
-// former `const S = {…}` at the top of the pre-Phase-2 monolith.
-function jsonSet(key: string, defaultJson: string): Set<string> {
-  return new Set<string>(JSON.parse(localStorage.getItem(key) || defaultJson));
-}
-
-function hydrateState(): AppState {
-  return {
-    data: null,
-    readOnly: false,
-    user: localStorage.getItem('mb_user') || '',
-    startMonday: mondayOfDate(new Date()),
-    weeks: 2,
-    extraWeeks: 0,
-    machSel: jsonSet('mb_machsel', '[]'),
-    groupsSel: jsonSet('mb_groupssel', '[]'),
-    cats: jsonSet('mb_cats', '["maschine","messtechnik"]'),
-    collapsed: jsonSet('mb_collapsed', '[]'),
-    person: localStorage.getItem('mb_person') || '',
-    personOnly: localStorage.getItem('mb_persononly') === 'on',
-    favs: jsonSet('mb_favs', '[]'),
-    visM: [],
-    visD: [],
-  };
-}
-
-const store = createStore(hydrateState());
+// `store` (imported above from `./store-instance.ts`) already holds the hydrated state —
+// `window.S` bridges the same object reference for the pieces that haven't migrated to
+// importing `store` directly yet (mostly React components — a separate, later decision,
+// ARCHITECTURE_AUDIT.md §7/F9).
 window.S = store.state;
 
 // The store drives repaints: the Grid's `render()` subscribes here, and the data-load/SSE
@@ -245,7 +217,7 @@ window.S = store.state;
 // through the store (SSE/refresh → store change → notify → render). The guard preserves the
 // original invariant that the grid never renders before the first data load.
 store.subscribe(() => {
-  if (window.S.data) window.render();
+  if (store.get('data')) window.render();
 });
 window.notify = () => {
   store.notify();
@@ -289,7 +261,7 @@ columnResize.initColumnResize();
 theme.applyTheme();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
   theme.applyTheme();
-  if (window.S.data) window.notify();
+  if (store.get('data')) store.notify();
 });
 if (localStorage.getItem('mb_compact') === 'on') document.body.classList.add('compact');
 
@@ -335,9 +307,9 @@ function startUI(): void {
   document.getElementById('gridWrap')!.style.display = 'block';
   groupFilterDropdown.fillGroupSel();
   machineFilterDropdown.updateMachBtn(); // show the persisted filter in the toolbar
-  if (!window.S.user && !window.S.readOnly) askUserNameModal.askUserName(true);
+  if (!store.get('user') && !store.get('readOnly')) askUserNameModal.askUserName(true);
   userChip.updateUserChip();
-  window.notify();
+  store.notify();
   gridScroll.prependWeek(); // one week of past scroll buffer to the left
   gridScroll.centerToday();
   mutateModule.stampRef();
@@ -345,12 +317,12 @@ function startUI(): void {
   debugPanel.dbg(
     'info',
     'App gestartet — ' +
-      (window.S.data!.machines ? window.S.data!.machines.length : 0) +
+      (store.get('data')!.machines ? store.get('data')!.machines.length : 0) +
       ' Maschinen geladen' +
-      (window.S.readOnly ? ' (Nur-Lese-Modus)' : ''),
+      (store.get('readOnly') ? ' (Nur-Lese-Modus)' : ''),
   );
   // Auto-refresh + presence (registered exactly once, even if read-only mode is later lifted).
-  if (!window.S.readOnly) liveConnection.startLiveTimers();
+  if (!store.get('readOnly')) liveConnection.startLiveTimers();
 }
 
 /**
@@ -362,7 +334,10 @@ function startUI(): void {
 async function init(): Promise<void> {
   document.getElementById('startScreen')!.style.display = 'none';
   try {
-    window.S.data = await api.readFile();
+    // Silent — startUI() (called below on success) does its own DOM setup first and
+    // notifies once, at its current spot; notifying here too would render the grid a beat
+    // early, while the toolbar/gridWrap are still hidden (display:none).
+    store.state.data = await api.readFile();
   } catch (error) {
     document.getElementById('startScreen')!.style.display = '';
     document.getElementById('startMsg')!.innerHTML =

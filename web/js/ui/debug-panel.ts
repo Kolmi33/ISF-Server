@@ -5,6 +5,7 @@
 // `initCollisionBanner`, B8).
 
 import { escapeHtml } from './escape-html.ts';
+import { store } from '../store-instance.ts';
 
 /** Whether the debug panel is currently switched on for this device. Faithful port of legacy
  *  `dbgOn`. */
@@ -38,7 +39,7 @@ export function dbg(kind: string, msg: string): void {
  *  Faithful port of legacy `applyDebug`. */
 export function applyDebug(): void {
   document.getElementById('dbgPanel')?.classList.toggle('open', dbgOn());
-  if (dbgOn()) dbg('info', 'Debug-Modus aktiv — Nutzer: ' + (window.S.user || '?'));
+  if (dbgOn()) dbg('info', 'Debug-Modus aktiv — Nutzer: ' + (store.get('user') || '?'));
 }
 
 /** `err.message` when present and truthy, else `String(err)` — legacy's own

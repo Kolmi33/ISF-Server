@@ -501,12 +501,14 @@ structural improvement, and it is prioritized accordingly.
 
 **Status (2026-09-02): F1, F2, F3, F4, F5, F6, and F7 (minimal) are done**, each as its own
 verified commit (full gate green + a rebuilt-image browser smoke after F5 and after F2's
-later extension). F8 and F9 remain open by design — both need a separate, deliberate
-decision, not a mechanical fix. See the individual write-ups below for what actually
-shipped in each case; they're kept in the original (pre-implementation) tense as the
-record of what was proposed, with the outcome noted inline where it's worth flagging
+later extension). **F9 is partially done** — a bounded first slice, by explicit user
+choice; the remaining 18 React components stay on `window.S` until a separate decision on
+the target pattern for them. F8 remains fully open by design — needs a separate,
+deliberate decision, not a mechanical fix. See the individual write-ups below for what
+actually shipped in each case; they're kept in the original (pre-implementation) tense as
+the record of what was proposed, with the outcome noted inline where it's worth flagging
 (F2 went beyond its original minimal proposal to the full cross-boundary merge; F7
-shipped only its minimal option).
+shipped only its minimal option; F9 shipped its smallest slice, not the full migration).
 
 Every item below was verified against real call sites in this pass (grep for every actual
 `window.<name>`/import/usage site, not filenames or assumptions), per the request. Each is
@@ -823,6 +825,46 @@ SAFE, for exactly the reason this was originally left as a P2 "needs its own dec
 7. **Dependencies/call sites affected:** effectively the whole frontend.
 8. **Tests:** would need updating across most `ui/*.test.ts`/`*.test.tsx` files that
    currently seed `window.S` directly; not scoped here.
+
+**Update (2026-09-02): a bounded first slice is done, by explicit choice.** Asked directly
+whether to tackle this, the user picked "bounded first slice" over "everything now" or
+"just stop the bleeding": migrate only the 11 plain `.ts` orchestration files (99 of the
+~162 `window.S` sites), leaving the 18 React components (63 sites) — and the real "should
+components get a `useAppState()` hook, or keep reaching through `window.S`" design
+question — for a separate, later decision.
+
+What shipped: `web/js/store-instance.ts` (new) — the store singleton + hydration, moved
+out of `app.ts` so any plain `.ts` module can `import { store }` directly. All 11 files
+(`app.ts`, `grid-interaction.ts`, `grid-scroll.ts`, `mutate.ts`, `category-fold.ts`,
+`favorite-jump.ts`, `live-connection.ts`, `cell-patch.ts`, `machine-lookup.ts`,
+`user-chip.ts`, `debug-panel.ts`) now read via `store.get()` and write via `store.set()`
+— **except** where the current code deliberately mutates a field silently and defers a
+single explicit notify to later (several real cases: `ensureOverflow`'s bypass-the-store
+direct-render pattern; `resetView`, which every caller notifies after; `jumpToMonth`/the
+`btnToday` handler, which write `startMonday` then call `resetView()` then notify once).
+Those sites use `store.state.field = value` (direct mutation, no auto-notify) specifically
+to avoid double-notifying — collapsing them into `store.set()` would have rendered twice
+per action, or once with the grid still hidden. Getting this right required reading each
+call site's actual notify timing, not a mechanical find-replace.
+
+A real cross-file trap surfaced during verification: 3 component tests
+(`Grid.test.tsx`, `MyBookingsModal.test.tsx`, `AllBookingsModal.test.tsx`) call into the
+now-migrated functions but had stubbed `window.S` as a plain object disconnected from the
+real `store` singleton — in production `app.ts`'s `window.S = store.state` keeps them the
+same object always, but these tests never went through that bridge. Fixed by aliasing
+`window.S = store.state` in each affected test's setup (matching production exactly) and,
+where a test counted `window.notify` calls, wiring `window.notify = () => store.notify()`
+too (also matching production) with a `vi.spyOn(store, 'notify')` as the single source of
+truth for "was a repaint triggered" — since migrated code now calls `store.notify()`
+directly, a disconnected `window.notify` mock silently missed those calls.
+
+Verified: full gate green (789 tests — 62 files, up from 787 for the net effect of the new
+`store-instance.ts`/its test plus the fixture fixes); a `docker compose up -d --build`
+succeeded and `/api/health`+`/api/state` round-tripped correctly against existing data
+(`rev` unchanged, 245 machines). A real-browser smoke could not be completed this pass
+(Playwright's browser download was network-blocked in this environment) — relied instead
+on the gate's notify-call-count assertions, which verify the exact behavior-preservation
+concern (timing/count of repaints) more precisely than a screenshot would.
 
 ### F10 — `orderedMachines`/`displayGroup` in `ui/grid.ts` (optional)
 

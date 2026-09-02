@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render } from '@testing-library/react';
 import type { AppState } from '../../../../shared/types.ts';
+import { store } from '../../store-instance.ts';
 import { Grid, render as renderGrid } from './Grid.tsx';
 
 // A real Monday (TZ pinned to UTC in test/setup.ts, so local date === this UTC date).
@@ -79,7 +80,11 @@ beforeEach(() => {
   localStorage.clear();
   document.documentElement.removeAttribute('data-theme');
   stubWindowGlobals();
-  window.S = buildAppState();
+  // Grid.tsx exercises category-fold.ts (toggleCategory/toggleAllGroupsInCategory), which now
+  // reads/writes state via the real `store` singleton, not a disconnected window.S object —
+  // window.S is kept aliased to the same object so both sides agree.
+  store.set(buildAppState());
+  window.S = store.state;
 });
 
 afterEach(() => {

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AppState, Machine } from '../../../shared/types.ts';
+import { store } from '../store-instance.ts';
 import { refreshCell, refreshDot, patchCells } from './cell-patch.ts';
 
 const TODAY = '2021-01-04'; // a real Monday
@@ -28,11 +29,12 @@ beforeEach(() => {
   vi.setSystemTime(new Date(`${TODAY}T12:00:00Z`));
   document.documentElement.removeAttribute('data-theme');
   buildDom();
-  window.S = {
+  store.set({
     data: { machines: [machine()], bookings: {} },
     user: 'anna',
     visD: [TODAY],
-  } as unknown as AppState;
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
   window.machById = vi.fn((id: string) => window.S.data!.machines.find((m) => m.id === id));
   window.paintSel = vi.fn();
   window.hideCtx = vi.fn();

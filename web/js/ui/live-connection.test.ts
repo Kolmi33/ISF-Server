@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AppState } from '../../../shared/types.ts';
+import { store } from '../store-instance.ts';
 import {
   activeUserRows,
   connectSSE,
@@ -38,24 +39,29 @@ function latestEventSource(): MockEventSource {
   return MockEventSource.instances[MockEventSource.instances.length - 1]!;
 }
 
+// live-connection.ts now reads/writes state via the real `store` singleton — spied once
+// here (call history cleared per test below) rather than relying on a mocked window.notify.
+const notifySpy = vi.spyOn(store, 'notify');
+
 beforeEach(() => {
   MockEventSource.instances = [];
   vi.stubGlobal('EventSource', MockEventSource);
   localStorage.clear();
   document.body.innerHTML = '<span id="lastRef"></span><div id="toast"></div>';
-  window.S = {
+  store.set({
     user: 'anna',
     data: { machines: [], bookings: {} },
     visD: [],
     visM: [],
-  } as unknown as AppState;
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
+  notifySpy.mockClear();
   window.stampRef = vi.fn();
   window.dbg = vi.fn();
   window.handleError = vi.fn();
   for (const key of Object.keys(presenceData)) delete presenceData[key];
   window.readFile = vi.fn().mockResolvedValue({ machines: [], bookings: {} });
   window.fillGroupSel = vi.fn();
-  window.notify = vi.fn();
   window.refreshNow = vi.fn().mockResolvedValue(undefined);
 });
 
@@ -143,7 +149,7 @@ describe('connectSSE', () => {
     await Promise.resolve(); // let the async listener's readFile() await settle
     expect(window.readFile).toHaveBeenCalled();
     expect(window.fillGroupSel).toHaveBeenCalled();
-    expect(window.notify).toHaveBeenCalled();
+    expect(notifySpy).toHaveBeenCalled();
     expect(document.getElementById('toast')!.textContent).toMatch(/Maschinenliste geändert/);
   });
 

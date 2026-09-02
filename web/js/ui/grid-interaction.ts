@@ -18,6 +18,7 @@
 
 import { computeSelCells, clampIndex, type Cell } from './selection.ts';
 import { categoryTap, categoryTapCancel, toggleAllGroupsInCategory } from './category-fold.ts';
+import { store } from '../store-instance.ts';
 
 /** The current selection: an anchor/focus pair spanning a rectangle, the cells it covers, and
  *  whether a drag is in progress. Faithful port of legacy's module-level `Sel` object. */
@@ -47,7 +48,7 @@ function findCellElement(mid: string, date: string): HTMLElement | null {
 }
 
 /** Repaint the selection: clears the previous `.sel`/`.kfocus` marks, recomputes the covered
- *  cells from the current anchor/focus against `window.S`'s visible rows/columns, and marks
+ *  cells from the current anchor/focus against the store's visible rows/columns, and marks
  *  them. The focus cell also gets a roving `tabindex` so keyboard nav has somewhere to land.
  *  Faithful port of legacy `paintSel`. */
 export function paintSelection(): void {
@@ -62,8 +63,8 @@ export function paintSelection(): void {
   selection.cells = computeSelCells(
     selection.anchor,
     selection.focus,
-    window.S.visM,
-    window.S.visD,
+    store.get('visM'),
+    store.get('visD'),
   );
   for (const cell of selection.cells) {
     const el = findCellElement(cell.mid, cell.date);
@@ -232,10 +233,11 @@ function handleDocumentMouseUp(event: MouseEvent): void {
 /** Toggle one group's collapsed state and persist it (mirrors legacy's inline handler for a
  *  clicked group-header row that isn't a category header). */
 function toggleGroupCollapse(group: string): void {
-  if (window.S.collapsed.has(group)) window.S.collapsed.delete(group);
-  else window.S.collapsed.add(group);
-  localStorage.setItem('mb_collapsed', JSON.stringify([...window.S.collapsed]));
-  window.notify();
+  const collapsed = store.get('collapsed');
+  if (collapsed.has(group)) collapsed.delete(group);
+  else collapsed.add(group);
+  localStorage.setItem('mb_collapsed', JSON.stringify([...collapsed]));
+  store.notify();
 }
 
 function handleGridClick(event: MouseEvent): void {
@@ -302,28 +304,33 @@ const MAX_EXTRA_WEEKS_FOR_GROWTH = 150;
 function moveFocusByArrowKey(key: string, extendSelection: boolean): void {
   const [rowDelta, colDelta] = ARROW_DELTAS[key]!;
   if (!selection.focus) {
-    selection.focus = { mid: window.S.visM[0]!, date: window.S.visD[0]! };
+    selection.focus = { mid: store.get('visM')[0]!, date: store.get('visD')[0]! };
     selection.anchor = { ...selection.focus };
     return;
   }
-  let row = window.S.visM.indexOf(selection.focus.mid) + rowDelta;
-  let col = window.S.visD.indexOf(selection.focus.date) + colDelta;
-  if (col >= window.S.visD.length && window.S.extraWeeks < MAX_EXTRA_WEEKS_FOR_GROWTH) {
-    window.S.extraWeeks++;
+  let row = store.get('visM').indexOf(selection.focus.mid) + rowDelta;
+  let col = store.get('visD').indexOf(selection.focus.date) + colDelta;
+  if (col >= store.get('visD').length && store.get('extraWeeks') < MAX_EXTRA_WEEKS_FOR_GROWTH) {
+    // Direct field mutation, deliberately NOT store.set() — a store.set() here would notify
+    // (→ the subscribed render()) AND the direct window.render() right below would run too,
+    // double-rendering. Same bypass ensureOverflow's own direct render() call uses.
+    store.state.extraWeeks++;
     window.render();
   }
-  if (col < 0 && window.S.extraWeeks < MAX_EXTRA_WEEKS_FOR_GROWTH) {
+  if (col < 0 && store.get('extraWeeks') < MAX_EXTRA_WEEKS_FOR_GROWTH) {
     window.prependWeek();
-    col = window.S.visD.indexOf(selection.focus.date) + colDelta;
+    // prependWeek() re-renders synchronously and may replace visD with a new array
+    // (a fresh week prepended) — re-read it now rather than reuse an earlier value.
+    col = store.get('visD').indexOf(selection.focus.date) + colDelta;
   }
-  row = clampIndex(row, window.S.visM.length);
-  col = clampIndex(col, window.S.visD.length);
-  selection.focus = { mid: window.S.visM[row]!, date: window.S.visD[col]! };
+  row = clampIndex(row, store.get('visM').length);
+  col = clampIndex(col, store.get('visD').length);
+  selection.focus = { mid: store.get('visM')[row]!, date: store.get('visD')[col]! };
   if (!extendSelection) selection.anchor = { ...selection.focus };
 }
 
 function handleArrowKey(key: string, extendSelection: boolean): void {
-  if (!window.S.visM.length || !window.S.visD.length) return;
+  if (!store.get('visM').length || !store.get('visD').length) return;
   moveFocusByArrowKey(key, extendSelection);
   paintSelection();
   findCellElement(selection.focus!.mid, selection.focus!.date)?.scrollIntoView({

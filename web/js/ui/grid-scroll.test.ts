@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import type { AppState } from '../../../shared/types.ts';
 import { mondayOfDate } from '../../../shared/dates.ts';
+import { store } from '../store-instance.ts';
 import {
   canStillGrowWindow,
   centerColumn,
@@ -133,14 +134,22 @@ function buildDom(): void {
 }
 
 function stubWindowGlobals(): void {
-  window.S = {
+  // grid-scroll.ts now reads/writes state via the real `store` singleton — store.set merges
+  // onto that same shared object, and window.S is kept aliased to it (as app.ts does in
+  // production) so every existing window.S.* read/write below keeps working unchanged.
+  store.set({
     startMonday: new Date('2021-01-04T00:00:00Z'),
     extraWeeks: 0,
     data: { machines: [], bookings: {} },
-  } as unknown as AppState;
-  window.notify = vi.fn();
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
   window.render = vi.fn();
 }
+
+// store.notify is what grid-scroll.ts now calls (directly, or via store.set); spied once here
+// rather than per-test since vi.clearAllMocks() (below) already resets its call history each
+// test without needing to re-wrap it.
+const notifySpy = vi.spyOn(store, 'notify');
 
 // `prependWeek`'s and the scroll handler's re-entrancy guard (`extendPending`, module-private)
 // is cleared by a real `setTimeout`. Fake timers run for the whole file so that debounce is
@@ -179,7 +188,7 @@ describe('prependWeek', () => {
     prependWeek();
     expect(window.S.startMonday.toISOString().slice(0, 10)).toBe('2020-12-28');
     expect(window.S.extraWeeks).toBe(1);
-    expect(window.notify).toHaveBeenCalledOnce();
+    expect(notifySpy).toHaveBeenCalledOnce();
   });
 
   it('is re-entrancy-guarded: a second call within the debounce window is a no-op', () => {
@@ -208,7 +217,7 @@ describe('handleGridWrapScroll (via a real scroll event)', () => {
     wrap.scrollLeft = 900; // 900+800 > 1000-250
     fireScroll();
     expect(window.S.extraWeeks).toBe(1);
-    expect(window.notify).toHaveBeenCalledOnce();
+    expect(notifySpy).toHaveBeenCalledOnce();
   });
 
   it('shifts the window forward instead of growing once past the week-window cap', () => {
@@ -238,21 +247,21 @@ describe('handleGridWrapScroll (via a real scroll event)', () => {
     Object.defineProperty(wrap, 'clientWidth', { value: 800, configurable: true });
     wrap.scrollLeft = 500;
     fireScroll();
-    expect(window.notify).not.toHaveBeenCalled();
+    expect(notifySpy).not.toHaveBeenCalled();
   });
 
   it('ignores growth for a short window after a programmatic scroll (no snap-back)', () => {
     centerColumn('2021-01-04'); // sets lastProgrammaticScrollAt = now
     document.getElementById('gridWrap')!.scrollLeft = 50; // would otherwise prepend
     fireScroll();
-    expect(window.notify).not.toHaveBeenCalled();
+    expect(notifySpy).not.toHaveBeenCalled();
   });
 
   it('stops growing once the absolute 150-extra-week ceiling is reached', () => {
     window.S.extraWeeks = 150;
     document.getElementById('gridWrap')!.scrollLeft = 50;
     fireScroll();
-    expect(window.notify).not.toHaveBeenCalled();
+    expect(notifySpy).not.toHaveBeenCalled();
   });
 });
 
@@ -270,7 +279,7 @@ describe('the wheel listener at the left edge', () => {
     document
       .getElementById('gridWrap')!
       .dispatchEvent(new WheelEvent('wheel', { deltaX: -10, deltaY: 0 }));
-    expect(window.notify).not.toHaveBeenCalled();
+    expect(notifySpy).not.toHaveBeenCalled();
   });
 });
 
@@ -348,7 +357,7 @@ describe('the month/year jump controls (change event)', () => {
     document.getElementById('jumpMonth')!.dispatchEvent(new Event('change'));
     expect(window.S.startMonday.toISOString().slice(0, 10)).toBe('2021-01-25');
     expect(window.S.extraWeeks).toBe(1); // resetView() zeroes it, then prependWeek() grows it back
-    expect(window.notify).toHaveBeenCalled();
+    expect(notifySpy).toHaveBeenCalled();
   });
 
   it('treats a four-digit year as-is rather than as a two-digit offset from 2000', () => {
@@ -377,19 +386,19 @@ describe('the Heute/◀/▶ toolbar buttons', () => {
   it('Heute resets the view and jumps to the current week', () => {
     document.getElementById('btnToday')!.click();
     expect(window.S.extraWeeks).toBe(1); // resetView() zeroes it, then prependWeek() grows it back
-    expect(window.notify).toHaveBeenCalled();
+    expect(notifySpy).toHaveBeenCalled();
   });
 
   it('◀ moves startMonday back a week', () => {
     document.getElementById('btnPrev')!.click();
     expect(window.S.startMonday.toISOString().slice(0, 10)).toBe('2020-12-28');
-    expect(window.notify).toHaveBeenCalledOnce();
+    expect(notifySpy).toHaveBeenCalledOnce();
   });
 
   it('▶ moves startMonday forward a week', () => {
     document.getElementById('btnNext')!.click();
     expect(window.S.startMonday.toISOString().slice(0, 10)).toBe('2021-01-11');
-    expect(window.notify).toHaveBeenCalledOnce();
+    expect(notifySpy).toHaveBeenCalledOnce();
   });
 });
 

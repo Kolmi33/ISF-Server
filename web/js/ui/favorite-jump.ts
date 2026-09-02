@@ -22,14 +22,16 @@ import { nextFreeDay, prevFreeDay, type FreeDay } from './navigation.ts';
 import { centerColumn } from './grid-scroll.ts';
 import { selection, paintSelection } from './grid-interaction.ts';
 import { toast } from './toast.ts';
+import { store } from '../store-instance.ts';
 
 /** Toggle machine `mid`'s favorite status, persist, and repaint. Faithful port of legacy
  *  `toggleFav`. */
 export function toggleFav(mid: string): void {
-  if (window.S.favs.has(mid)) window.S.favs.delete(mid);
-  else window.S.favs.add(mid);
-  localStorage.setItem('mb_favs', JSON.stringify([...window.S.favs]));
-  window.notify();
+  const favs = store.get('favs');
+  if (favs.has(mid)) favs.delete(mid);
+  else favs.add(mid);
+  localStorage.setItem('mb_favs', JSON.stringify([...favs]));
+  store.notify();
 }
 
 /** mid → the last free day jumped to (reset for every OTHER machine on each new jump). Exposed
@@ -44,7 +46,7 @@ function centerOnDate(isoDate: string): void {
 /** Is `machine` bookable on `isoDate`: not booked, not blocked, and available that weekday. */
 function isFreeFor(machine: Machine): FreeDay {
   return (isoDate) =>
-    !getBooking(window.S.data!.bookings, machine.id, isoDate) &&
+    !getBooking(store.get('data')!.bookings, machine.id, isoDate) &&
     !isBlockedOnDate(machine, isoDate) &&
     dayAvailable(machine, isoDate);
 }
@@ -67,16 +69,17 @@ export function prevFreeBefore(machine: Machine, fromIso: string): string | null
  * this point ("dauerhaft frei"). Faithful port of legacy `jumpToSlot`.
  */
 function jumpToSlot(machine: Machine, isoDate: string, isBack: boolean): void {
-  window.S.startMonday = addDays(mondayOfDate(parseIsoDateString(isoDate)), -14);
-  window.S.extraWeeks = 4;
+  store.set({
+    startMonday: addDays(mondayOfDate(parseIsoDateString(isoDate)), -14),
+    extraWeeks: 4,
+  });
   document.getElementById('gridWrap')!.scrollLeft = 0;
-  window.notify();
   selection.anchor = { mid: machine.id, date: isoDate };
   selection.focus = { mid: machine.id, date: isoDate };
   paintSelection();
   centerOnDate(isoDate);
 
-  const machineBookings = window.S.data!.bookings[machine.id] || {};
+  const machineBookings = store.get('data')!.bookings[machine.id] || {};
   const today = todayAsIsoDateString();
   const lastBookedDate =
     Object.keys(machineBookings)

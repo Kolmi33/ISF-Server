@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AppState } from '../../../shared/types.ts';
+import { store } from '../store-instance.ts';
 import { dbgOn, dbg, applyDebug, handleError, initDebugPanel } from './debug-panel.ts';
 
 beforeEach(() => {
@@ -9,7 +10,8 @@ beforeEach(() => {
       <button id="dbgClear"></button><button id="dbgClose"></button>
     </div>`;
   localStorage.clear();
-  window.S = { user: 'anna' } as unknown as AppState;
+  store.set({ user: 'anna' } as unknown as Partial<AppState>);
+  window.S = store.state;
 });
 
 describe('dbgOn', () => {

@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
+import { store } from '../../store-instance.ts';
 import { MyBookingsModal, openMyBookings } from './MyBookingsModal.tsx';
 
 const TODAY = '2021-01-04'; // a Monday
@@ -10,10 +11,16 @@ function machine(overrides: Partial<Machine> = {}): Machine {
   return { id: 'm1', name: 'Fräse', group: 'Halle 1', ...overrides };
 }
 
+// This component calls both its own (still window-bridged) window.notify() AND
+// ui/grid-scroll.ts's prependWeek() (migrated — calls store.notify() directly). Wiring
+// window.notify to forward to store.notify(), exactly as app.ts does in production, means
+// notifySpy sees every repaint trigger regardless of which path fired it.
+const notifySpy = vi.spyOn(store, 'notify');
+
 beforeEach(() => {
   vi.useFakeTimers();
   document.body.innerHTML = `<div id="overlay"><div id="modal" tabindex="-1"></div></div><div id="modalReopen"></div><div id="toast"></div><div id="gridWrap"></div>`;
-  window.S = {
+  store.set({
     user: 'anna',
     data: { machines: [machine()], bookings: {} },
     favs: new Set(),
@@ -22,10 +29,12 @@ beforeEach(() => {
     machSel: new Set(),
     startMonday: new Date(`${TODAY}T00:00:00Z`),
     extraWeeks: 0,
-  } as unknown as AppState;
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
+  notifySpy.mockClear();
   window.mutate = vi.fn();
   window.askConfirm = vi.fn().mockResolvedValue(true);
-  window.notify = vi.fn();
+  window.notify = () => store.notify();
   window.saveFilters = vi.fn();
   window.updateMachBtn = vi.fn();
   window.updateUserChip = vi.fn();
@@ -94,7 +103,7 @@ describe('MyBookingsModal', () => {
     expect(window.S.machSel).toEqual(new Set(['m1']));
     expect(window.saveFilters).toHaveBeenCalledOnce();
     expect(window.updateMachBtn).toHaveBeenCalledOnce();
-    expect(window.notify).toHaveBeenCalledOnce();
+    expect(notifySpy).toHaveBeenCalledOnce();
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
     expect(document.getElementById('toast')!.textContent).toContain('nur deine 1 Maschine');
   });
@@ -110,7 +119,7 @@ describe('MyBookingsModal', () => {
     expect(window.S.collapsed.has('Halle 1')).toBe(false);
     // Once from gotoRun itself, once more from inside prependWeek() (also called here, as
     // legacy's own resetView(); notify(); prependWeek(); gotoDate(iso); sequence does).
-    expect(window.notify).toHaveBeenCalledTimes(2);
+    expect(notifySpy).toHaveBeenCalledTimes(2);
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
   });
 

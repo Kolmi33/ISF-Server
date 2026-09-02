@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { AppState, Machine, ServerData } from '../../../shared/types.ts';
+import { store } from '../store-instance.ts';
 import { machById } from './machine-lookup.ts';
 
 function machine(overrides: Partial<Machine> = {}): Machine {
@@ -12,7 +13,8 @@ function serverData(machines: Machine[]): ServerData {
 }
 
 beforeEach(() => {
-  window.S = { data: null } as unknown as AppState;
+  store.set({ data: null } as unknown as Partial<AppState>);
+  window.S = store.state;
 });
 
 describe('machById', () => {

@@ -8,6 +8,7 @@
 // `ui/live-connection.ts`'s `applyPresence`, gated alongside it in Phase 7 slice B10d.
 
 import { escapeHtml } from './escape-html.ts';
+import { store } from '../store-instance.ts';
 
 let presenceLabel = { text: '–', title: 'Gerade aktive Nutzer' };
 
@@ -29,5 +30,5 @@ export function updateUserChip(): void {
   if (!chip) return;
   chip.innerHTML =
     `<span id="presBadge" title="${escapeHtml(presenceLabel.title)}">${escapeHtml(presenceLabel.text)}</span>` +
-    `<svg class="ic" aria-hidden="true"><use href="#i-user"/></svg> ${escapeHtml(window.S.user || 'Name?')}`;
+    `<svg class="ic" aria-hidden="true"><use href="#i-user"/></svg> ${escapeHtml(store.get('user') || 'Name?')}`;
 }

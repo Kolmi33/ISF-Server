@@ -10,38 +10,43 @@
 // remaining callers anywhere — confirmed dead and deleted outright, not ported.
 
 import { categoryOf } from '../core/machines.ts';
+import { store } from '../store-instance.ts';
 
 /** Toggle whether `category`'s rows are shown in the grid at all. Faithful port of legacy
  *  `toggleCat`. */
 export function toggleCategory(category: string): void {
-  if (window.S.cats.has(category)) window.S.cats.delete(category);
-  else window.S.cats.add(category);
-  localStorage.setItem('mb_cats', JSON.stringify([...window.S.cats]));
-  window.notify();
+  const cats = store.get('cats');
+  if (cats.has(category)) cats.delete(category);
+  else cats.add(category);
+  localStorage.setItem('mb_cats', JSON.stringify([...cats]));
+  store.notify();
 }
 
 /** Expand or collapse every group within `category` at once (a double-click on its header/
  *  toggle button): all-open → all-closed, otherwise all-open (and the category itself opened).
  *  Faithful port of legacy `toggleAllGroupsInCat`. */
 export function toggleAllGroupsInCategory(category: string): void {
-  if (!window.S.cats.has(category)) {
-    window.S.cats.add(category);
-    localStorage.setItem('mb_cats', JSON.stringify([...window.S.cats]));
+  const cats = store.get('cats');
+  if (!cats.has(category)) {
+    cats.add(category);
+    localStorage.setItem('mb_cats', JSON.stringify([...cats]));
   }
   const groups = [
     ...new Set(
-      window.S.data!.machines.filter((machine) => categoryOf(machine) === category).map(
-        (machine) => machine.group,
-      ),
+      store
+        .get('data')!
+        .machines.filter((machine) => categoryOf(machine) === category)
+        .map((machine) => machine.group),
     ),
   ];
-  const allOpen = groups.every((group) => !window.S.collapsed.has(group));
+  const collapsed = store.get('collapsed');
+  const allOpen = groups.every((group) => !collapsed.has(group));
   for (const group of groups) {
-    if (allOpen) window.S.collapsed.add(group);
-    else window.S.collapsed.delete(group);
+    if (allOpen) collapsed.add(group);
+    else collapsed.delete(group);
   }
-  localStorage.setItem('mb_collapsed', JSON.stringify([...window.S.collapsed]));
-  window.notify();
+  localStorage.setItem('mb_collapsed', JSON.stringify([...collapsed]));
+  store.notify();
 }
 
 let categoryTapTimer: ReturnType<typeof setTimeout> | null = null;

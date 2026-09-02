@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AppState, Machine } from '../../../shared/types.ts';
+import { store } from '../store-instance.ts';
 import { selection } from './grid-interaction.ts';
 import {
   toggleFav,
@@ -17,6 +18,10 @@ function machine(overrides: Partial<Machine> = {}): Machine {
   return { id: 'm1', name: 'Fräse', group: 'Halle 1', ...overrides };
 }
 
+// favorite-jump.ts now reads/writes state via the real `store` singleton — spied once here
+// (call history cleared per test below) rather than relying on a mocked window.notify.
+const notifySpy = vi.spyOn(store, 'notify');
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(`${TODAY}T12:00:00Z`));
@@ -24,15 +29,16 @@ beforeEach(() => {
   for (const key of Object.keys(nextFreePtr)) delete nextFreePtr[key];
   selection.anchor = null;
   selection.focus = null;
-  window.S = {
+  store.set({
     favs: new Set<string>(),
     data: { machines: [machine()], bookings: {} },
     visM: [],
     visD: [],
     extraWeeks: 0,
     startMonday: new Date(`${TODAY}T00:00:00Z`),
-  } as unknown as AppState;
-  window.notify = vi.fn();
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
+  notifySpy.mockClear();
   window.machById = (mid: string) => window.S.data!.machines.find((m) => m.id === mid);
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
     cb(0);
@@ -49,12 +55,12 @@ describe('toggleFav', () => {
     toggleFav('m1');
     expect(window.S.favs.has('m1')).toBe(true);
     expect(JSON.parse(localStorage.getItem('mb_favs')!)).toEqual(['m1']);
-    expect(window.notify).toHaveBeenCalledTimes(1);
+    expect(notifySpy).toHaveBeenCalledTimes(1);
 
     toggleFav('m1');
     expect(window.S.favs.has('m1')).toBe(false);
     expect(JSON.parse(localStorage.getItem('mb_favs')!)).toEqual([]);
-    expect(window.notify).toHaveBeenCalledTimes(2);
+    expect(notifySpy).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -79,14 +85,14 @@ describe('nextFreeAfter / prevFreeBefore', () => {
 describe('gotoNextFree', () => {
   it('no-ops for an unknown machine id', () => {
     gotoNextFree('missing');
-    expect(window.notify).not.toHaveBeenCalled();
+    expect(notifySpy).not.toHaveBeenCalled();
   });
 
   it('jumps to the next free day, rebuilds the window centered 2 weeks before it, and selects the cell', () => {
     gotoNextFree('m1');
     expect(nextFreePtr.m1).toBe('2021-01-04'); // today itself is free (no bookings)
     expect(window.S.extraWeeks).toBe(4);
-    expect(window.notify).toHaveBeenCalled();
+    expect(notifySpy).toHaveBeenCalled();
     expect(selection.anchor).toEqual({ mid: 'm1', date: '2021-01-04' });
     expect(selection.focus).toEqual({ mid: 'm1', date: '2021-01-04' });
     expect(document.getElementById('toast')!.textContent).toMatch(/Fräse: freier Termin/);
@@ -128,7 +134,7 @@ describe('gotoPrevFree', () => {
   it('no-ops for an unknown machine id, or when there is no forward pointer yet', () => {
     gotoPrevFree('missing');
     gotoPrevFree('m1');
-    expect(window.notify).not.toHaveBeenCalled();
+    expect(notifySpy).not.toHaveBeenCalled();
   });
 
   it('steps back to the previous free day', () => {

@@ -5,12 +5,14 @@
 // converted to direct imports: it has dozens of call sites across already-gated components.
 
 import type { Machine } from '../../../shared/types.ts';
+import { store } from '../store-instance.ts';
 
 let cache: Map<string, Machine> | null = null;
 let cachedMachines: readonly Machine[] | null | undefined;
 
 export function machById(id: string): Machine | undefined {
-  const currentMachines = window.S.data && window.S.data.machines;
+  const data = store.get('data');
+  const currentMachines = data && data.machines;
   if (!cache || cachedMachines !== currentMachines) {
     cachedMachines = currentMachines;
     cache = new Map((currentMachines || []).map((machine) => [machine.id, machine]));

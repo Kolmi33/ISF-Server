@@ -16,6 +16,7 @@ import { API } from '../net/api.ts';
 import { patchCells } from './cell-patch.ts';
 import { toast } from './toast.ts';
 import { setPresence } from './user-chip.ts';
+import { store } from '../store-instance.ts';
 
 /** The last known presence timestamp per name, `{name: ms-since-epoch}` — read by
  *  `ui/components/ActiveUsersModal.tsx`'s `activeUserRows`. Mutated in place (not reassigned)
@@ -92,7 +93,7 @@ export function connectSSE(): void {
   // "Anwesenheit teilen" off → connect without a name, so this browser doesn't appear in
   // others' presence lists.
   const sharePresence = localStorage.getItem('mb_presence') !== 'off';
-  const userName = sharePresence ? window.S.user || '' : '';
+  const userName = sharePresence ? store.get('user') || '' : '';
   eventSource = new EventSource(
     API + '/api/stream' + (userName ? '?user=' + encodeURIComponent(userName) : ''),
   );
@@ -114,20 +115,22 @@ export function connectSSE(): void {
     } catch {
       return;
     }
-    const { rev, patch } = applyUpdate(data, window.S.data!.bookings);
-    if (rev !== null) window.S.data!.revision = rev;
+    const { rev, patch } = applyUpdate(data, store.get('data')!.bookings);
+    if (rev !== null) store.get('data')!.revision = rev;
     if (patch.length) patchCells(patch);
     window.stampRef();
-    if (isForeign(data.by, window.S.user || '?') && data.log) {
+    if (isForeign(data.by, store.get('user') || '?') && data.log) {
       window.dbg('remote', data.by + ': ' + data.log);
       queueRemoteChange(remoteMessage({ user: data.by, action: data.log }));
     }
   });
   eventSource.addEventListener('structural', async (event) => {
     try {
-      window.S.data = await window.readFile();
+      // Silent — fillGroupSel() rebuilds from the new data before the one notify fires;
+      // store.set() here would notify a beat early, before fillGroupSel() has run.
+      store.state.data = await window.readFile();
       window.fillGroupSel();
-      window.notify();
+      store.notify();
     } catch (error) {
       window.handleError('sse/structural', error);
     }
@@ -137,7 +140,7 @@ export function connectSSE(): void {
     } catch {
       /* no author info */
     }
-    if (isForeign(by, window.S.user || '?')) toast(by + ' hat die Maschinenliste geändert.');
+    if (isForeign(by, store.get('user') || '?')) toast(by + ' hat die Maschinenliste geändert.');
   });
   eventSource.onerror = () => {
     const lastRefEl = document.getElementById('lastRef');

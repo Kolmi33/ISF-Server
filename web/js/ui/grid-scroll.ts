@@ -15,6 +15,7 @@ import {
   todayAsIsoDateString,
 } from '../../../shared/dates.ts';
 import { selection } from './grid-interaction.ts';
+import { store } from '../store-instance.ts';
 
 const DAYS_PER_WEEK_WITH_WEEKENDS = 7;
 const DAYS_PER_WEEK_WITHOUT_WEEKENDS = 5;
@@ -136,9 +137,10 @@ export function prependWeek(): void {
   const wrap = gridWrapElement();
   const scrollLeftBefore = wrap.scrollLeft;
   const scrollWidthBefore = wrap.scrollWidth;
-  window.S.startMonday = addDays(window.S.startMonday, -7);
-  if (canStillGrowWindow(window.S.extraWeeks, selection.dragging)) window.S.extraWeeks++;
-  window.notify();
+  const grownExtraWeeks = canStillGrowWindow(store.get('extraWeeks'), selection.dragging)
+    ? store.get('extraWeeks') + 1
+    : store.get('extraWeeks');
+  store.set({ startMonday: addDays(store.get('startMonday'), -7), extraWeeks: grownExtraWeeks });
   const grew = wrap.scrollWidth - scrollWidthBefore;
   wrap.scrollLeft = scrollLeftBefore + (grew > 0 ? grew : measuredWeekWidth());
   lastProgrammaticScrollAt = performance.now();
@@ -150,19 +152,17 @@ export function prependWeek(): void {
 function handleGridWrapScroll(): void {
   const wrap = gridWrapElement();
   scheduleJumpControlsSync();
-  if (extendPending || window.S.extraWeeks >= ABSOLUTE_MAX_EXTRA_WEEKS) return;
+  if (extendPending || store.get('extraWeeks') >= ABSOLUTE_MAX_EXTRA_WEEKS) return;
   if (performance.now() - lastProgrammaticScrollAt < 350) return; // ignore our own recent scroll
 
   if (isNearRightEdge(wrap.scrollLeft, wrap.clientWidth, wrap.scrollWidth)) {
     extendPending = true;
     const scrollLeftBefore = wrap.scrollLeft;
-    if (canStillGrowWindow(window.S.extraWeeks, selection.dragging)) {
-      window.S.extraWeeks++;
-      window.notify();
+    if (canStillGrowWindow(store.get('extraWeeks'), selection.dragging)) {
+      store.set({ extraWeeks: store.get('extraWeeks') + 1 });
       wrap.scrollLeft = scrollLeftBefore;
     } else {
-      window.S.startMonday = addDays(window.S.startMonday, 7);
-      window.notify();
+      store.set({ startMonday: addDays(store.get('startMonday'), 7) });
       wrap.scrollLeft = Math.max(0, scrollLeftBefore - measuredWeekWidth());
     }
     setTimeout(() => {
@@ -194,8 +194,10 @@ function handleGridWrapWheel(event: WheelEvent): void {
 export function ensureOverflow(): void {
   const wrap = gridWrapElement();
   if (wrap.style.display === 'none') return;
-  if (needsOverflowGrowth(window.S.extraWeeks, wrap.scrollWidth, wrap.clientWidth)) {
-    window.S.extraWeeks++;
+  if (needsOverflowGrowth(store.get('extraWeeks'), wrap.scrollWidth, wrap.clientWidth)) {
+    // Direct field mutation, deliberately NOT store.set() — bypasses the store's notify
+    // exactly as legacy's own comment calls out; window.render() below repaints directly.
+    store.state.extraWeeks++;
     window.render();
   }
 }
@@ -238,7 +240,7 @@ export function gotoDate(isoDate: string): void {
  *  port of legacy `syncJumpControls`; bridged as `window.syncJumpControls`, called from the
  *  React Grid's (B1) post-render effect. */
 export function syncJumpControls(): void {
-  const midWeek = addDays(window.S.startMonday, 3);
+  const midWeek = addDays(store.get('startMonday'), 3);
   const monthSelect = document.getElementById('jumpMonth') as HTMLSelectElement | null;
   const yearInput = document.getElementById('jumpYear') as HTMLInputElement | null;
   if (monthSelect) monthSelect.value = String(midWeek.getUTCMonth());
@@ -282,7 +284,7 @@ function scheduleJumpControlsSync(): void {
  *  still-legacy "jump to this result" actions in the assistant/stats/my-bookings views).
  *  Faithful port of legacy `resetView`. */
 export function resetView(): void {
-  window.S.extraWeeks = 0;
+  store.state.extraWeeks = 0; // silent — every caller notifies once, after its own related writes
   gridWrapElement().scrollLeft = 0;
 }
 
@@ -299,10 +301,12 @@ function jumpToMonth(): void {
       ? enteredYear
       : 2000 + enteredYear;
   const month = parseInt(monthSelect.value) || 0;
-  window.S.startMonday = mondayOfDate(new Date(Date.UTC(year, month, 1)));
-  const firstOfMonth = formatDateAsIsoString(window.S.startMonday);
+  // Silent, like resetView below — one notify covers both writes, matching the original's
+  // single window.notify() after both this assignment and resetView's own field reset.
+  store.state.startMonday = mondayOfDate(new Date(Date.UTC(year, month, 1)));
+  const firstOfMonth = formatDateAsIsoString(store.get('startMonday'));
   resetView();
-  window.notify();
+  store.notify();
   prependWeek();
   gotoDate(firstOfMonth);
 }
@@ -319,18 +323,17 @@ export function initGridScroll(): void {
   document.getElementById('jumpMonth')!.addEventListener('change', jumpToMonth);
   document.getElementById('jumpYear')!.addEventListener('change', jumpToMonth);
   document.getElementById('btnToday')!.addEventListener('click', () => {
-    window.S.startMonday = mondayOfDate(new Date());
+    // Silent, like resetView below — one notify covers both writes.
+    store.state.startMonday = mondayOfDate(new Date());
     resetView();
-    window.notify();
+    store.notify();
     prependWeek();
     centerToday();
   });
   document.getElementById('btnPrev')!.addEventListener('click', () => {
-    window.S.startMonday = addDays(window.S.startMonday, -7);
-    window.notify();
+    store.set({ startMonday: addDays(store.get('startMonday'), -7) });
   });
   document.getElementById('btnNext')!.addEventListener('click', () => {
-    window.S.startMonday = addDays(window.S.startMonday, 7);
-    window.notify();
+    store.set({ startMonday: addDays(store.get('startMonday'), 7) });
   });
 }

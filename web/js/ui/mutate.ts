@@ -23,6 +23,7 @@ import type { BookingData } from '../../../shared/types.ts';
 import type { CellUndo, Conflict } from '../core/booking.ts';
 import { apiPost, readFile } from '../net/api.ts';
 import { patchCells } from './cell-patch.ts';
+import { store } from '../store-instance.ts';
 import { toast } from './toast.ts';
 import { showCollisionBanner } from './collision-banner.ts';
 import { dbg, errorMessage } from './debug-panel.ts';
@@ -46,8 +47,7 @@ export function stampRef(): void {
  *  legacy `refreshNow`. */
 export async function refreshNow(silent: boolean): Promise<void> {
   try {
-    window.S.data = await readFile();
-    window.notify();
+    store.set({ data: await readFile() });
     stampRef();
     if (!silent) toast('Aktualisiert ✓');
   } catch (error) {
@@ -70,17 +70,17 @@ function buildMutateRequestBody(
   logEntry: { action: string },
   result: MutateResult | null,
 ): Record<string, unknown> {
-  const common = { log: logEntry.action, user: window.S.user || '?' };
+  const common = { log: logEntry.action, user: store.get('user') || '?' };
   if (result && Array.isArray(result.undo)) {
     const cells = result.undo.map((entry) => ({
       mid: entry.mid,
       day: entry.date,
       prev: entry.prev || null,
-      val: (window.S.data!.bookings[entry.mid] || {})[entry.date] || null,
+      val: (store.get('data')!.bookings[entry.mid] || {})[entry.date] || null,
     }));
     return { cells, ...common };
   }
-  return { machines: window.S.data!.machines, groups: window.S.data!.groups, ...common };
+  return { machines: store.get('data')!.machines, groups: store.get('data')!.groups, ...common };
 }
 
 /** Handle the parsed `/api/mutate` response: adopt the new revision, and either flag a
@@ -90,7 +90,7 @@ async function handleMutateResponse(
   logEntry: { action: string },
   out: MutateApiResponse,
 ): Promise<void> {
-  if (typeof out.rev === 'number') window.S.data!.revision = out.rev;
+  if (typeof out.rev === 'number') store.get('data')!.revision = out.rev;
   if (out.conflicts && out.conflicts.length) {
     showCollisionBanner();
     dbg('err', 'Teilkonflikt: ' + out.conflicts.length + ' Termin(e) waren bereits belegt');
@@ -135,22 +135,27 @@ export async function mutate(
   fn: (fresh: BookingData) => unknown,
   logAction: string,
 ): Promise<MutateResult | null> {
-  if (window.S.readOnly) {
+  if (store.get('readOnly')) {
     toast('Nur-Lese-Modus – Buchen nicht möglich.');
     return null;
   }
-  const result = fn(window.S.data!) as MutateResult | null;
+  const result = fn(store.get('data')!) as MutateResult | null;
   if (result && result.abort) return result; // conflict/cancel: S.data unchanged
 
-  const logEntry = { ts: new Date().toISOString(), user: window.S.user || '?', action: logAction };
-  window.S.data!.log = window.S.data!.log || [];
-  window.S.data!.log.unshift(logEntry);
-  if (window.S.data!.log.length > 500) window.S.data!.log.length = 500;
+  const logEntry = {
+    ts: new Date().toISOString(),
+    user: store.get('user') || '?',
+    action: logAction,
+  };
+  const data = store.get('data')!;
+  data.log = data.log || [];
+  data.log.unshift(logEntry);
+  if (data.log.length > 500) data.log.length = 500;
 
   if (result && result.undo && result.undo.length && result.undo.length <= 500) {
     patchCells(result.undo);
   } else {
-    window.notify();
+    store.notify();
   }
   void persist(logEntry, result); // file work in the background
   return result;

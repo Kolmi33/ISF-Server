@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { AppState } from '../../../shared/types.ts';
+import { store } from '../store-instance.ts';
 import { setPresence, updateUserChip } from './user-chip.ts';
 
 beforeEach(() => {
   document.body.innerHTML = '<button id="userChip"></button>';
-  window.S = { user: 'anna' } as unknown as AppState;
+  store.set({ user: 'anna' } as unknown as Partial<AppState>);
+  window.S = store.state;
 });
 
 describe('updateUserChip', () => {
