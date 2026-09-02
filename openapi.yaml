@@ -1,0 +1,604 @@
+openapi: 3.0.3
+info:
+  title: Maschinenplan REST API
+  description: >-
+    Read/write REST surface over the machine plan's shared data (Phase 9). This sits ALONGSIDE
+    the live grid's own `/api/state` / `/api/mutate` / `/api/stream` sync protocol, unversioned
+    and unauthenticated exactly as before — this file documents only the newer `/api/v1/*`
+    surface, meant for external tooling/scripts/admin use that wants single-resource semantics
+    instead of the grid's own full-state sync. See PROGRESS.md's Phase 9 entries for the design
+    reasoning behind each endpoint.
+
+    **Authentication**: none. `/api/v1/*` runs on the same trusted network as the rest of the
+    app and has no user table — see PROGRESS.md's 9g entry for the deliberate decision not to add
+    one yet, and the concrete shape to add if that ever changes.
+  version: '1.0'
+servers:
+  - url: /api/v1
+
+tags:
+  - name: machines
+  - name: bookings
+  - name: activity
+
+paths:
+  /machines:
+    get:
+      tags: [machines]
+      summary: List machines
+      description: >-
+        `?category=`, `?group=`, `?status=` filter (exact-match, combinable); `?sort=name` sorts
+        by name with German collation, otherwise the DB's own manual-sort order is kept.
+      parameters:
+        - $ref: '#/components/parameters/category'
+        - $ref: '#/components/parameters/group'
+        - $ref: '#/components/parameters/status'
+        - name: sort
+          in: query
+          schema: { type: string, enum: [name] }
+      responses:
+        '200':
+          description: The (possibly filtered) machine list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Machine' }
+    post:
+      tags: [machines]
+      summary: Create a machine
+      description: >-
+        Only `name` is required; a URL-safe id is generated from it (umlaut/ß-aware slug,
+        de-duplicated with a `-2`, `-3`, … suffix on collision). Inserted right after the last
+        existing machine of the same group.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineWrite' }
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Machine' } }
+        '400': { $ref: '#/components/responses/Validation' }
+
+  /machines/{id}:
+    parameters:
+      - $ref: '#/components/parameters/machineId'
+    get:
+      tags: [machines]
+      summary: Get one machine
+      responses:
+        '200':
+          description: The machine.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Machine' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [machines]
+      summary: Replace a machine's editable fields
+      description: >-
+        Full replace (same all-at-once semantics as the machine-edit form's save, not a partial
+        patch) — every editable field not given resets to its default, and the legacy single-
+        status fields (`status`/`statusFrom`/`statusUntil`) are always cleared, matching the
+        client's own save behavior.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineWrite' }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/Machine' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [machines]
+      summary: Delete a machine (and all of its bookings)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserLog' }
+      responses:
+        '204': { description: Deleted. }
+        '400':
+          description: >-
+            Validation failure — including deleting the last remaining machine (this app
+            requires at least one to exist).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /machines/{id}/move:
+    parameters:
+      - $ref: '#/components/parameters/machineId'
+    post:
+      tags: [machines]
+      summary: Move a machine up or down within its own group
+      description: >-
+        Swaps the machine with its immediate neighbour (machines of one group are stored
+        contiguously). Cannot cross into a different group or run off either end of the list.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/UserLog'
+                - type: object
+                  required: [direction]
+                  properties:
+                    direction: { type: string, enum: [up, down] }
+      responses:
+        '200':
+          description: Moved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      movedId: { type: string }
+                      direction: { type: string, enum: [up, down] }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: >-
+            The move isn't possible right now (already first/last in its group, or the
+            neighbouring position belongs to a different group) — not a malformed request.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /machines/{id}/bookings:
+    parameters:
+      - $ref: '#/components/parameters/machineId'
+    get:
+      tags: [bookings]
+      summary: List a machine's bookings in a date range
+      description: Both `from` and `to` are required (no unbounded "every booking ever" fetch).
+      parameters:
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: Bookings in range, sorted by date (empty array if none).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/BookingEntry' }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /machines/{id}/bookings/{date}:
+    parameters:
+      - $ref: '#/components/parameters/machineId'
+      - $ref: '#/components/parameters/date'
+    get:
+      tags: [bookings]
+      summary: Get one cell's booking
+      description: 404 when the cell is free — there is no booking resource at that address yet.
+      responses:
+        '200':
+          description: The booking. Carries an `ETag` header for use with `If-Match` on a write.
+          headers:
+            ETag:
+              { schema: { type: string }, description: 'Opaque CAS token, e.g. `"Anna:2026-…"`.' }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/BookingEntry' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [bookings]
+      summary: Book (or overwrite) a cell
+      description: >-
+        Goes through the same cell-delta write path the live grid itself uses: blocked-day
+        checks and "never overwrite a foreign booking under a different name" still apply
+        regardless of `If-Match`. An `If-Match` header, when given, must equal the cell's current
+        `ETag` or the write is refused with 412 before it's attempted; omitted, the PUT is
+        unconditional.
+      parameters:
+        - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/UserLog'
+                - type: object
+                  required: [name]
+                  properties:
+                    name: { type: string }
+                    note: { type: string }
+      responses:
+        '200':
+          description: Updated an existing booking.
+          headers: { ETag: { schema: { type: string } } }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/BookingEntry' } }
+        '201':
+          description: Created a new booking.
+          headers: { ETag: { schema: { type: string } } }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { data: { $ref: '#/components/schemas/BookingEntry' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: The cell is already booked by someone else under a different name.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      tags: [bookings]
+      summary: Delete a cell's booking
+      description: >-
+        Same `If-Match` precondition as PUT; unconditional (deletes whoever is there) when the
+        header is absent.
+      parameters:
+        - $ref: '#/components/parameters/ifMatch'
+      responses:
+        '204': { description: Deleted. }
+        '404':
+          description: Unknown machine, or the cell was already free (nothing to delete).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+
+  /bookings:
+    get:
+      tags: [bookings]
+      summary: Find every cell sharing a booking-group id
+      description: >-
+        Not a general booking search — the one existing use case (a multi-cell/titled booking's
+        own detail view). `groupId` is required.
+      parameters:
+        - name: groupId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Every cell in the group, across machines (empty array if none match).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/GroupedBooking' }
+        '400': { $ref: '#/components/responses/Validation' }
+
+  /bookings/batch:
+    post:
+      tags: [bookings]
+      summary: Book several cells in one write
+      description: >-
+        One `applyMutate` call for the whole batch (one transaction, one revision bump, one
+        broadcast). An unknown machine id anywhere in the batch fails the whole request (400);
+        a cell already booked by someone else under a different name is a per-cell conflict
+        (207), not a request failure.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/UserLog'
+                - type: object
+                  required: [cells]
+                  properties:
+                    cells:
+                      type: array
+                      minItems: 1
+                      items:
+                        type: object
+                        required: [machineId, date, name]
+                        properties:
+                          machineId: { type: string }
+                          date: { type: string, format: date }
+                          name: { type: string }
+                          note: { type: string }
+      responses:
+        '200':
+          description: Every cell applied cleanly.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BatchBookResult' }
+        '207':
+          description: Some cells conflicted; `data.conflicts` names them.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BatchBookResult' }
+        '400': { $ref: '#/components/responses/Validation' }
+
+  /bookings/batch-delete:
+    post:
+      tags: [bookings]
+      summary: Delete several cells in one write
+      description: >-
+        Unconditional (no per-cell `If-Match` — use the single-cell DELETE for that). Deleting an
+        already-free cell is a silent no-op, not an error; `data.applied` reports how many of the
+        requested cells actually had something to delete.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/UserLog'
+                - type: object
+                  required: [cells]
+                  properties:
+                    cells:
+                      type: array
+                      minItems: 1
+                      items:
+                        type: object
+                        required: [machineId, date]
+                        properties:
+                          machineId: { type: string }
+                          date: { type: string, format: date }
+      responses:
+        '200':
+          description: Processed (see `data.applied`).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties: { applied: { type: integer } }
+        '400': { $ref: '#/components/responses/Validation' }
+
+  /activity:
+    get:
+      tags: [activity]
+      summary: List the activity log, newest first
+      description: >-
+        Cursor-paginated on the log's own autoincrement `id` (the one genuinely unbounded,
+        append-only collection in the app) — `?cursor=` is the previous page's last-seen id.
+      parameters:
+        - name: limit
+          in: query
+          description: Default 50, max 200 (clamped, not rejected, when over).
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          description: The previous page's `meta.nextCursor`.
+          schema: { type: integer }
+        - name: user
+          in: query
+          schema: { type: string }
+        - name: since
+          in: query
+          description: ISO timestamp; only entries at or after it.
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: >-
+            A page of entries. `meta.nextCursor` is present only when a next page actually exists.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/ActivityEntry' }
+                  meta:
+                    type: object
+                    properties: { nextCursor: { type: integer } }
+        '400': { $ref: '#/components/responses/Validation' }
+
+components:
+  parameters:
+    machineId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    date:
+      name: date
+      in: path
+      required: true
+      schema: { type: string, format: date }
+    from:
+      name: from
+      in: query
+      required: true
+      schema: { type: string, format: date }
+    to:
+      name: to
+      in: query
+      required: true
+      schema: { type: string, format: date }
+    category:
+      name: category
+      in: query
+      schema: { type: string, enum: [maschine, messtechnik] }
+    group:
+      name: group
+      in: query
+      schema: { type: string }
+    status:
+      name: status
+      in: query
+      schema: { type: string, enum: [ok, wartung, defekt] }
+    ifMatch:
+      name: If-Match
+      in: header
+      description: >-
+        A previously-fetched `ETag`. When given, the write is refused with 412 unless it still
+        matches the cell's current state; omitted, the write is unconditional.
+      schema: { type: string }
+
+  responses:
+    Validation:
+      description: The request itself is malformed.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: The referenced resource doesn't exist.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    PreconditionFailed:
+      description: A given `If-Match` no longer matches the resource's current state.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      required: [error, code]
+      properties:
+        error: { type: string, description: Human-readable message (German). }
+        code:
+          type: string
+          enum: [VALIDATION, NOT_FOUND, CONFLICT, PRECONDITION_FAILED, INTERNAL]
+        details: {}
+
+    UserLog:
+      type: object
+      description: >-
+        Every write accepts these two optional passthrough fields, exactly like `/api/mutate`
+        does. `log` defaults to an auto-generated message tagged `(REST)` when omitted, so
+        `GET /activity` stays informative regardless of who's writing.
+      properties:
+        user: { type: string, description: 'Free-form display name — there is no login.' }
+        log: { type: string }
+
+    Machine:
+      type: object
+      required: [id, name, group, status, statusNote, info]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        group: { type: string, nullable: true }
+        status: { type: string, enum: [ok, wartung, defekt] }
+        statusNote: { type: string }
+        info: { type: string }
+        cat: { type: string, enum: [messtechnik] }
+        statusFrom: { type: string, format: date }
+        statusUntil: { type: string, format: date }
+        redu: { type: string, description: Redundancy marker — a label only. }
+        days: { type: string, description: "7-char Mo..So availability mask, '1' = available." }
+        maint:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [wartung, defekt] }
+              from: { type: string, format: date }
+              until: { type: string, format: date }
+              note: { type: string }
+
+    MachineWrite:
+      type: object
+      description: The create/update request body — only `name` is required.
+      allOf:
+        - $ref: '#/components/schemas/UserLog'
+        - type: object
+          required: [name]
+          properties:
+            name: { type: string }
+            group: { type: string }
+            cat: { type: string, enum: [messtechnik] }
+            info: { type: string }
+            redu: { type: string }
+            days: { type: string }
+            maint:
+              type: array
+              items:
+                type: object
+                properties:
+                  type: { type: string, enum: [wartung, defekt] }
+                  from: { type: string, format: date }
+                  until: { type: string, format: date }
+                  note: { type: string }
+
+    BookingEntry:
+      type: object
+      required: [date, name, ts]
+      properties:
+        date: { type: string, format: date }
+        name: { type: string }
+        ts: { type: string, format: date-time, nullable: true }
+        note: { type: string }
+        gid: { type: string, description: Booking-group id (shared by a multi-cell booking). }
+        gtitle: { type: string }
+
+    GroupedBooking:
+      allOf:
+        - $ref: '#/components/schemas/BookingEntry'
+        - type: object
+          required: [machineId]
+          properties: { machineId: { type: string } }
+
+    BatchBookResult:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            applied: { type: integer }
+            conflicts:
+              type: array
+              items:
+                type: object
+                properties:
+                  machineId: { type: string }
+                  day: { type: string, format: date }
+                  by:
+                    {
+                      type: string,
+                      description: 'Who already holds the cell, or the block reason.',
+                    }
+
+    ActivityEntry:
+      type: object
+      required: [id, ts, user, action]
+      properties:
+        id: { type: integer }
+        ts: { type: string, format: date-time }
+        user: { type: string }
+        action: { type: string }

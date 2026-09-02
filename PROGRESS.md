@@ -392,7 +392,7 @@ which turns it into a data-shape change:
   lockstep client+server) — scope it properly if it's ever picked up. **Phase 8 (naming &
   structure clarity) is now complete.**
 
-**Phase 9 — REST API (user-requested design, full plan discussed 2026-09-02/03)**
+**Phase 9 — REST API (user-requested design, full plan discussed 2026-09-02/03) — COMPLETE**
 A genuine `/api/v1/*` REST surface alongside the existing `/api/state`/`/api/mutate`/`/api/stream`
 trio, NOT replacing it — that trio is the live grid's own sync protocol (batch CAS writes, full-
 state reads, SSE push) and stays exactly as-is; REST is for external tooling/scripts/admin use
@@ -529,7 +529,15 @@ re-derived here — this backlog is the executable summary.
   preemptively. When `API_BEARER_TOKEN` is unset (every deployment today), the check is skipped
   entirely — so adding it later is opt-in infrastructure, not a breaking change forced onto the
   current deployment.
-- [ ] 9h Hand-written `openapi.yaml` — documentation only, no new dependency
+- [x] 9h Hand-written `openapi.yaml` (repo root, alongside `ARCHITECTURE.md`/`PROGRESS.md`) —
+  documentation only, no new runtime or dev dependency (`js-yaml`/`@apidevtools/swagger-cli` were
+  used ad hoc via `npx` just to validate the file while writing it, never added to `package.json`).
+  Covers all 9 `/api/v1/*` paths (14 operations: the 6 reads from 9a–9d plus the 8 writes from
+  9e/9f) with request/response schemas, the shared `{data}`/`{error,code,details?}` envelope, the
+  `If-Match`/`ETag` CAS headers, and the 9g auth decision noted in the doc's own description.
+  Validated two ways: `js-yaml` parses it (catches YAML syntax mistakes — an unquoted flow-style
+  description containing a comma broke the parse and was fixed), and `@apidevtools/swagger-cli
+  validate` confirms it's schema-valid OpenAPI 3.0, not just parseable YAML.
 
 ## Done log (newest first)
 - **2026-09-02 — Code-review fixes**: undo's CAS-check bug and `machById`'s stale-cache bug
