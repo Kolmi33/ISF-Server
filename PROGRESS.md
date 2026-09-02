@@ -406,8 +406,24 @@ re-derived here — this backlog is the executable summary.
   envelope, `ApiErrorCode` = VALIDATION/NOT_FOUND/CONFLICT/PRECONDITION_FAILED/INTERNAL). Not
   wired into `server.ts` at all yet — that starts in 9b. `npm run verify` green, 818/818 tests,
   100% coverage on both new modules (21 new tests).
-- [ ] 9b `GET /api/v1/machines`, `GET /api/v1/machines/:id` — read-only, wired into `server.ts`'s
-  dispatch for the first time.
+- [x] 9b `GET /api/v1/machines` (filters: `?category=`, `?group=`, `?status=`, combinable;
+  `?sort=name`, German collation; otherwise DB order) and `GET /api/v1/machines/:id` (404
+  `NOT_FOUND` naming the id) — `server/api-machines.ts`, reusing `model.ts`'s existing
+  `machineOut` wire mapper (a REST machine is the exact `/api/state` shape, not a parallel
+  contract). Wired into `server.ts`'s dispatch via `findRoute`/`apiV1Routes`, extracted into a
+  `tryApiV1` helper to stay under the complexity budget once the branch count grew.
+  **Real gap found and fixed**: the new files used `.ts` import extensions (correct for
+  vitest, which `npm run check`'s tsconfig also tolerates) instead of the `.js` extensions
+  `tsconfig.server.json`'s stricter Node-ESM resolution requires (matching every existing
+  `server/*.ts` file's own imports) — `npm run verify` doesn't run `build:server`, so this
+  passed the gate clean and only surfaced when the production Docker image was actually built
+  for the smoke test. Fixed; confirmed live afterward against a throwaway container with real
+  seed data: `GET /api/v1/machines` → 245 machines, `GET /api/v1/machines/:id` → 200 for a real
+  id / 404 `{code: "NOT_FOUND"}` for a bogus one, `?category=messtechnik` → 150, and the legacy
+  `/api/state` still 200s unchanged. **Worth remembering**: `npm run verify` alone doesn't prove
+  a server change actually builds for production — run `docker compose build` (or the full
+  smoke pattern above) before considering a server-side slice done, not just `npm run check`.
+  `npm run verify` green: 827/827 tests (9 new), 100% coverage on `api-machines.ts`.
 - [ ] 9c `GET /api/v1/machines/:id/bookings[/:date]`, `GET /api/v1/bookings?groupId=`
 - [ ] 9d `GET /api/v1/activity` (the `log` table, cursor-paginated on its `id`)
 - [ ] 9e `POST/PUT/DELETE /api/v1/machines`, `POST /api/v1/machines/:id/move` — through

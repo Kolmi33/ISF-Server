@@ -37,11 +37,14 @@ export function matchRoute(pattern: string, pathname: string): RouteMatch | null
   return { params };
 }
 
-/** One registered endpoint: an HTTP method, a `:param` pattern, and the handler that serves it. */
+/** One registered endpoint: an HTTP method, a `:param` pattern, and the handler that serves it.
+ *  `url` is the full parsed request URL (so a handler can read `url.searchParams` for filter/
+ *  sort/pagination query params) — deliberately the standard web `URL`, not a Node-specific or
+ *  DB-specific type, so this module stays usable without pulling in either. */
 export interface ApiRoute {
   method: string;
   pattern: string;
-  handler: (params: Record<string, string>) => ApiResponse | Promise<ApiResponse>;
+  handler: (params: Record<string, string>, url: URL) => ApiResponse | Promise<ApiResponse>;
 }
 
 /** What a route handler returns — mirrors `server.ts`'s own `send(res, status, body)` shape, so

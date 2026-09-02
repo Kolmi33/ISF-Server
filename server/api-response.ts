@@ -7,7 +7,7 @@
 // `errorMessage(response.error)`-style display keeps working unmodified; `code` is new, for
 // programmatic `/api/v1/*` consumers to branch on without parsing prose.
 
-import type { ApiResponse } from './api-router.ts';
+import type { ApiResponse } from './api-router.js';
 
 /** The closed set of machine-readable error codes `/api/v1/*` responses use. Deliberately small —
  *  add to this list only when a genuinely distinct client-handling case shows up, not per-endpoint. */

@@ -13,6 +13,8 @@ import { getState } from './model.js';
 import { applyMutate } from './mutate.js';
 import { formatDateAsIsoString } from '../shared/dates.js';
 import type { MutateBody } from './types.js';
+import { findRoute, type ApiRoute } from './api-router.js';
+import { listMachines, getMachine } from './api-machines.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '3000');
@@ -26,6 +28,19 @@ const PUBLIC_DIR = join(currentDirectory, '..', 'public');
 const BUNDLED_JSON = join(currentDirectory, '..', 'buchungen.json'); // shipped in the image (Dockerfile copies it)
 
 const db = openDb(DB_PATH);
+
+// ---------- REST API (Phase 9) — a second entrance onto the same data, not a second write
+// engine: read-only for now (9b), alongside the existing /api/state, /api/mutate, /api/stream
+// trio the live grid itself uses (see PROGRESS.md's Phase 9 plan for why the two don't merge).
+const apiV1Routes: ApiRoute[] = [
+  { method: 'GET', pattern: '/api/v1/machines', handler: (_params, url) => listMachines(db, url) },
+  {
+    method: 'GET',
+    pattern: '/api/v1/machines/:id',
+    handler: (params) => getMachine(db, params.id!),
+  },
+];
+
 // First-run seed: DB empty? Import from the volume (/data/buchungen.json), else from the
 // image-bundled buchungen.json (no docker cp needed).
 try {
@@ -195,6 +210,29 @@ async function serveStatic(res: ServerResponse, urlPath: string): Promise<void> 
   }
 }
 
+async function handleMutatePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const body = await readBody(req);
+  if (body === null) return send(res, 400, { error: 'Ungültige oder zu große Anfrage' });
+  const result = applyMutate(db, body, broadcast, WEEKEND_BRIDGE);
+  return send(res, result.error ? 400 : 200, result);
+}
+
+/** Try the `/api/v1/*` route table; returns whether it handled the request (and already sent
+ *  the response), so the caller falls through to static-file serving when it didn't. Split out
+ *  purely to keep the main request handler under the complexity budget. */
+async function tryApiV1(
+  res: ServerResponse,
+  method: string,
+  urlPath: string,
+  url: URL,
+): Promise<boolean> {
+  const match = findRoute(apiV1Routes, method, urlPath);
+  if (!match) return false;
+  const response = await match.route.handler(match.params, url);
+  send(res, response.status, response.body);
+  return true;
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://x');
   const urlPath = url.pathname;
@@ -208,12 +246,8 @@ const server = createServer(async (req, res) => {
     }
     if (urlPath === '/api/state') return send(res, 200, getState(db));
     if (urlPath === '/api/stream') return openStream(req, res, url);
-    if (req.method === 'POST' && urlPath === '/api/mutate') {
-      const body = await readBody(req);
-      if (body === null) return send(res, 400, { error: 'Ungültige oder zu große Anfrage' });
-      const result = applyMutate(db, body, broadcast, WEEKEND_BRIDGE);
-      return send(res, result.error ? 400 : 200, result);
-    }
+    if (req.method === 'POST' && urlPath === '/api/mutate') return handleMutatePost(req, res);
+    if (await tryApiV1(res, req.method || 'GET', urlPath, url)) return;
     return serveStatic(res, urlPath);
   } catch (error) {
     console.error(error);
