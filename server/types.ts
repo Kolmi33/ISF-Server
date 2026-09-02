@@ -31,6 +31,15 @@ export interface BookingRow {
   gtitle: string | null;
 }
 
+/** A row of the `log` table (activity log — `id` is the autoincrement, also the REST
+ *  activity endpoint's pagination cursor). */
+export interface LogRow {
+  id: number;
+  ts: string | null;
+  user: string | null;
+  action: string | null;
+}
+
 /** A machine as emitted on the wire (`group`, not the SQL column `grp`). */
 export interface MachineOut {
   id: string;

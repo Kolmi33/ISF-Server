@@ -15,9 +15,17 @@ export type ApiErrorCode =
   'VALIDATION' | 'NOT_FOUND' | 'CONFLICT' | 'PRECONDITION_FAILED' | 'INTERNAL';
 
 /** A successful `/api/v1/*` response: `data` under its own key, `status` defaulting to 200 (pass
- *  201/204/etc. explicitly for create/delete). */
-export function apiSuccess(data: unknown, status = 200): ApiResponse {
-  return { status, body: { data } };
+ *  201/204/etc. explicitly for create/delete). `meta` is included only when given (e.g. a
+ *  cursor-pagination `{nextCursor}`) — omitted entirely, not present as an explicit
+ *  `undefined`, matching `apiError`'s `details`. */
+export function apiSuccess(
+  data: unknown,
+  status = 200,
+  meta?: Record<string, unknown>,
+): ApiResponse {
+  const body: { data: unknown; meta?: Record<string, unknown> } = { data };
+  if (meta !== undefined) body.meta = meta;
+  return { status, body };
 }
 
 /** An error `/api/v1/*` response. `details` is included only when given — never present as an

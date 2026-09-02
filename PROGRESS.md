@@ -438,7 +438,29 @@ re-derived here — this backlog is the executable summary.
   real cells sharing a `gid` via `/api/mutate`, then all three endpoints returned exactly the
   expected data/errors (400s, 404s, the range list, the single cell, the cross-machine group
   list). `npm run verify` green: 839/839 tests (12 new), 100% coverage on `api-bookings.ts`.
-- [ ] 9d `GET /api/v1/activity` (the `log` table, cursor-paginated on its `id`)
+- [x] 9d `GET /api/v1/activity` — `server/api-activity.ts`. The `log` table is the one genuinely
+  unbounded, append-only collection in the app (unlike `machines`, a few hundred rows, or one
+  machine's bookings, naturally bounded by a date range), so cursor pagination on its own
+  autoincrement `id` is the fit, not offset/limit: `?cursor=` is the previous page's last-seen
+  `id` (strictly older, since ordering is `id DESC`), `?limit=` (default 50, max 200, clamped
+  not rejected), `?user=` and `?since=` (ISO-string `ts >=`) filters, combinable. Fetches
+  `limit + 1` rows to detect "more pages" without a second COUNT query; `meta.nextCursor` is
+  present only when there actually is a next page (omitted entirely otherwise, not `null`) —
+  needed extending `apiSuccess(data, status, meta?)` with that third optional parameter in
+  `api-response.ts`, same omit-when-absent convention as `apiError`'s `details`. New `LogRow`
+  type in `server/types.ts` alongside `MachineRow`/`BookingRow`. `npm run build:server` checked
+  directly before the docker build (still following the 9b lesson) — clean on the first try.
+  Verified live against a throwaway container: the fresh container's own first-run import log
+  entry, then 5 more generated via real `/api/mutate` bookings — default listing came back
+  newest-first (6 entries, import last); `?user=smoketester` filtered to the 5; `?limit=2` paged
+  correctly across two calls following `nextCursor` (entries 6,5 then 4,3, no overlap); `?since=`
+  returned exactly the entries at/after the given timestamp; non-numeric `?limit=`/`?cursor=`
+  both 400 `VALIDATION`; the 9b/9c endpoints re-checked unaffected. `npm run verify` green:
+  850/850 tests (11 new — 9 for `listActivity`, 2 for `apiSuccess`'s `meta`), 100%
+  statement/function/line coverage on `api-activity.ts` (branch coverage 88.88%: the
+  `activityOut` mapper's `row.ts/user/action || ''` null-fallbacks are unreachable in practice —
+  every writer already supplies real values — left as defensive rather than chased for 100%,
+  since the schema technically allows null and `verify`'s aggregate 90/85 floor was already met).
 - [ ] 9e `POST/PUT/DELETE /api/v1/machines`, `POST /api/v1/machines/:id/move` — through
   `core/machines.ts`'s existing reducers + a shared structural-write transaction helper
 - [ ] 9f `PUT/DELETE /api/v1/machines/:id/bookings/:date` (ETag/If-Match CAS -> 412 on mismatch),

@@ -17,6 +17,18 @@ describe('apiSuccess', () => {
   it('wraps null (e.g. a successful DELETE with no body)', () => {
     expect(apiSuccess(null, 204)).toEqual({ status: 204, body: { data: null } });
   });
+
+  it('omits meta entirely when not given, rather than setting it to undefined', () => {
+    const { body } = apiSuccess([1, 2, 3]);
+    expect('meta' in (body as Record<string, unknown>)).toBe(false);
+  });
+
+  it('includes meta when given (e.g. a pagination cursor)', () => {
+    expect(apiSuccess([1, 2, 3], 200, { nextCursor: 42 })).toEqual({
+      status: 200,
+      body: { data: [1, 2, 3], meta: { nextCursor: 42 } },
+    });
+  });
 });
 
 describe('apiError', () => {
