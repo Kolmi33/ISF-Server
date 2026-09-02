@@ -499,16 +499,17 @@ structural improvement, and it is prioritized accordingly.
 
 ## 10. Prioritized, actionable refactoring plan
 
-**Status (2026-09-02): F1, F2, F3, F4, F5, F6, and F7 (minimal) are done**, each as its own
-verified commit (full gate green + a rebuilt-image browser smoke after F5 and after F2's
-later extension). **F9 is partially done** — a bounded first slice, by explicit user
-choice; the remaining 18 React components stay on `window.S` until a separate decision on
-the target pattern for them. F8 remains fully open by design — needs a separate,
-deliberate decision, not a mechanical fix. See the individual write-ups below for what
-actually shipped in each case; they're kept in the original (pre-implementation) tense as
-the record of what was proposed, with the outcome noted inline where it's worth flagging
-(F2 went beyond its original minimal proposal to the full cross-boundary merge; F7
-shipped only its minimal option; F9 shipped its smallest slice, not the full migration).
+**Status (2026-09-02): F1, F2, F3, F4, F5, F6, F7 (minimal), and F9 are done**, each as its
+own verified commit (full gate green + a rebuilt-image browser smoke after F5 and after
+F2's later extension). F9 landed in three slices — the bounded first slice (11 plain `.ts`
+files), then two component batches (18 React components, 63 sites) — each its own commit,
+each gate-verified. F8 remains fully open by design — needs a separate, deliberate
+decision, not a mechanical fix. See the individual write-ups below for what actually
+shipped in each case; they're kept in the original (pre-implementation) tense as the
+record of what was proposed, with the outcome noted inline where it's worth flagging (F2
+went beyond its original minimal proposal to the full cross-boundary merge; F7 shipped
+only its minimal option; F9 shipped in slices but ultimately covers every `window.S` site
+in the app's own modules).
 
 Every item below was verified against real call sites in this pass (grep for every actual
 `window.<name>`/import/usage site, not filenames or assumptions), per the request. Each is
@@ -826,13 +827,16 @@ SAFE, for exactly the reason this was originally left as a P2 "needs its own dec
 8. **Tests:** would need updating across most `ui/*.test.ts`/`*.test.tsx` files that
    currently seed `window.S` directly; not scoped here.
 
-**Update (2026-09-02): a bounded first slice is done, by explicit choice.** Asked directly
-whether to tackle this, the user picked "bounded first slice" over "everything now" or
-"just stop the bleeding": migrate only the 11 plain `.ts` orchestration files (99 of the
-~162 `window.S` sites), leaving the 18 React components (63 sites) — and the real "should
-components get a `useAppState()` hook, or keep reaching through `window.S`" design
-question — for a separate, later decision.
+**Update (2026-09-02): DONE, shipped in three slices.** Asked directly whether to tackle
+this, the user first picked "bounded first slice" over "everything now" or "just stop the
+bleeding" — then, once that slice landed clean, asked to continue with the rest of the
+components in two further batches, deliberately choosing the plain `store.get()`/`set()`/
+`notify()` API over a `useSyncExternalStore` reactive hook (confirmed via grep that no
+component currently subscribes reactively to the store — only `app.ts`'s single
+`store.subscribe()` exists, driving the Grid's `render()` — so a hook would add machinery
+nothing yet needs).
 
+**Slice 1** — the 11 plain `.ts` orchestration files (99 of the ~162 `window.S` sites).
 What shipped: `web/js/store-instance.ts` (new) — the store singleton + hydration, moved
 out of `app.ts` so any plain `.ts` module can `import { store }` directly. All 11 files
 (`app.ts`, `grid-interaction.ts`, `grid-scroll.ts`, `mutate.ts`, `category-fold.ts`,
@@ -847,24 +851,45 @@ to avoid double-notifying — collapsing them into `store.set()` would have rend
 per action, or once with the grid still hidden. Getting this right required reading each
 call site's actual notify timing, not a mechanical find-replace.
 
-A real cross-file trap surfaced during verification: 3 component tests
-(`Grid.test.tsx`, `MyBookingsModal.test.tsx`, `AllBookingsModal.test.tsx`) call into the
-now-migrated functions but had stubbed `window.S` as a plain object disconnected from the
-real `store` singleton — in production `app.ts`'s `window.S = store.state` keeps them the
-same object always, but these tests never went through that bridge. Fixed by aliasing
-`window.S = store.state` in each affected test's setup (matching production exactly) and,
-where a test counted `window.notify` calls, wiring `window.notify = () => store.notify()`
-too (also matching production) with a `vi.spyOn(store, 'notify')` as the single source of
-truth for "was a repaint triggered" — since migrated code now calls `store.notify()`
-directly, a disconnected `window.notify` mock silently missed those calls.
+**Slices 2 and 3** — the 18 React components (63 sites), in two batches (Grid/GridBody/
+MyBookingsModal/the two filter dropdowns first; the remaining 13 modal/menu components
+second). Same per-site notify-timing analysis as slice 1: `AllBookingsModal`'s `goto`,
+`AssistantResults`' `gotoRun`, and `MyBookingsModal`'s own `gotoRun` all write two fields
+silently (`machSel`, `startMonday`) because `saveFilters()`/`updateMachBtn()`/`resetView()`
+run before the one eventual notify; `AskUserNameModal`'s save is the same shape for one
+field; `Grid.tsx`'s `computeGridViewModel` writes `visD`/`visM` silently for a second
+reason beyond timing — they're a side effect of render other code reads later, and must
+not risk re-triggering a render via the store subscription while already mid-render.
+Every other site across both batches was a pure read (the large majority) or a
+write-immediately-followed-by-notify that collapses cleanly into one `store.set()` call
+(e.g. `SettingsModal`'s weekends toggle).
 
-Verified: full gate green (789 tests — 62 files, up from 787 for the net effect of the new
-`store-instance.ts`/its test plus the fixture fixes); a `docker compose up -d --build`
-succeeded and `/api/health`+`/api/state` round-tripped correctly against existing data
-(`rev` unchanged, 245 machines). A real-browser smoke could not be completed this pass
-(Playwright's browser download was network-blocked in this environment) — relied instead
-on the gate's notify-call-count assertions, which verify the exact behavior-preservation
-concern (timing/count of repaints) more precisely than a screenshot would.
+A real cross-file trap surfaced during verification (first in slice 1, then recurred for
+every newly-migrated component in slices 2–3): a component test calling into now-migrated
+functions but stubbing `window.S` as a plain object disconnected from the real `store`
+singleton — in production `app.ts`'s `window.S = store.state` keeps them the same object
+always, but a test that builds its own `window.S = {...}` never goes through that bridge.
+Fixed by aliasing `window.S = store.state` in each affected test's setup (matching
+production exactly) and, where a test counted `window.notify` calls, wiring
+`window.notify = () => store.notify()` too (also matching production) with a
+`vi.spyOn(store, 'notify')` as the single source of truth for "was a repaint triggered" —
+since migrated code now calls `store.notify()` directly, a disconnected `window.notify`
+mock silently missed those calls. By the end of slice 3 this pattern had touched every
+component test file that seeds `window.S`.
+
+Verified: full gate green after every slice (789 tests, 62 files, stable across all three);
+slice 1 additionally verified with a `docker compose up -d --build` + `/api/health`/
+`/api/state` round-trip against existing data (`rev` unchanged, 245 machines). A
+real-browser smoke could not be completed this pass (Playwright's browser download was
+network-blocked in this environment) — relied instead on the gate's notify-call-count
+assertions, which verify the exact behavior-preservation concern (timing/count of
+repaints) more precisely than a screenshot would.
+
+`window.S` itself is not deleted — it stays as the read bridge other still-legacy globals
+(`window.machById`, `window.mutate`, `window.saveFilters`, etc., none of which are part of
+this app's own module graph) rely on. What's done is that every `.ts`/`.tsx` module *this
+app owns* now goes through `store.get()`/`store.set()`/`store.notify()` instead of reaching
+through the bridge directly.
 
 ### F10 — `orderedMachines`/`displayGroup` in `ui/grid.ts` (optional)
 
@@ -896,7 +921,8 @@ cleanup to do first," not "most important."
 | **Fix first (bug, not ranked with the refactors)** | **F1** | **DONE** — `server/model.ts` gained `blockReason`/`isDayAvailable`; `server/mutate.ts`'s `writeCell` now checks both. New tests in `model.test.ts`/`mutate.test.ts` cover the maint-slot and days-mask cases end to end. |
 | **P0 — obvious, safe improvements** | F2, F3, F4, F5 | **DONE**, four separate commits. F5 (the `app.ts` bridge prune) was additionally verified with a rebuilt production image + browser smoke (grid renders, zero console errors), since `app.ts` is coverage-excluded by design. |
 | **P1 — important architectural improvements** | F6, F7 (minimal) | **DONE.** F6: `getBooking` moved to `core/booking-queries.ts`, 6 call sites repointed. F7-minimal: `server/types-contract.test.ts` added — a compile-time field-name check between `shared/types.ts` and `server/types.ts`, verified to actually fail (not vacuous) by a throwaway sanity break before committing. |
-| **P2 — worthwhile but larger refactors** | F7 (full merge version), F8, F9 | **Open, by design.** Each needs a real decision (how much to merge, which integration pattern, how far to push a store migration) that shouldn't be made as a side effect of cleanup. |
+| **P2 — worthwhile but larger refactors** | F9 | **DONE**, in three commits (bounded first slice, then two component batches) — see the F9 write-up above. |
+| **P2 — worthwhile but larger refactors** | F7 (full merge version), F8 | **Open, by design.** Each needs a real decision (how much to merge, which integration pattern) that shouldn't be made as a side effect of cleanup. |
 | **P3 — optional / aesthetic** | F10 | Checked, not worth doing. |
 
 A `formatTimestamp` consolidation (a triplicated `new Date(x).toLocaleString('de-DE')`
