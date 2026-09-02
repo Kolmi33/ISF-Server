@@ -14,6 +14,7 @@ import { filterAdminMachines, type AdminSort } from '../views/admin.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { openLog } from './LogModal.tsx';
 import { Icon } from './Icon.tsx';
+import { store } from '../../store-instance.ts';
 
 const SORT_OPTIONS: ReadonlyArray<{ value: AdminSort; label: string }> = [
   { value: 'manual', label: 'Standard (manuell)' },
@@ -152,7 +153,7 @@ export function AdminModal() {
     forceRerender((tick) => tick + 1);
   }
 
-  const rows = filterAdminMachines(window.S.data!.machines, sort, search);
+  const rows = filterAdminMachines(store.get('data')!.machines, sort, search);
 
   return (
     <>

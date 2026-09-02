@@ -8,15 +8,12 @@ import type { LogEntry } from '../../../../shared/types.ts';
 import { formatTimestamp } from '../../../../shared/dates.ts';
 import { Icon } from './Icon.tsx';
 import { closeReactModal, openReactModal } from '../modal.tsx';
+import { store } from '../../store-instance.ts';
 
-/**
- * Open the change-log modal with a snapshot of the current log. Faithful port of legacy
- * `openLog()`. Reads `window.S` directly (not a `store` import) because `state.ts` only
- * exports the `createStore` factory — the one live instance is a module-local in `app.ts`,
- * bridged onto `window.S` as the plain state object. Matches how legacy.js itself reads it.
- */
+/** Open the change-log modal with a snapshot of the current log. Faithful port of legacy
+ *  `openLog()`. */
 export function openLog(): void {
-  openReactModal(<LogModal entries={window.S.data?.log || []} />);
+  openReactModal(<LogModal entries={store.get('data')?.log || []} />);
 }
 
 export interface LogModalProps {

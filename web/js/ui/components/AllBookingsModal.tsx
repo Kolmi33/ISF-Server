@@ -25,6 +25,7 @@ import { closeReactModal, openReactModal } from '../modal.tsx';
 import { toast } from '../toast.ts';
 import { Icon } from './Icon.tsx';
 import { GroupOptions } from './GroupOptions.tsx';
+import { store } from '../../store-instance.ts';
 
 const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'termin', label: 'Termin der Buchung' },
@@ -40,12 +41,14 @@ const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
  *  `[data-goto]` handler. */
 function goto(run: AllRun): void {
   closeReactModal();
-  window.S.machSel = new Set([run.m.id]);
+  // Both writes stay silent — saveFilters()/updateMachBtn()/resetView() run before the one
+  // notify, matching the original's single window.notify() after all of this.
+  store.state.machSel = new Set([run.m.id]);
   window.saveFilters();
   window.updateMachBtn();
-  window.S.startMonday = mondayOfDate(parseIsoDateString(run.dates[0]!));
+  store.state.startMonday = mondayOfDate(parseIsoDateString(run.dates[0]!));
   resetView();
-  window.notify();
+  store.notify();
   prependWeek();
   gotoDate(run.dates[0]!);
   toast(`Plan gefiltert auf „${run.m.name}".`, undefined, 4000);
@@ -146,8 +149,8 @@ function AllBookingsRow({ run }: { run: AllRun }) {
 export function AllBookingsModal() {
   const [runsAll] = useState<readonly AllRun[]>(() =>
     computeAllRuns(
-      orderedMachines(window.S.data!.machines, window.S.favs),
-      window.S.data!.bookings,
+      orderedMachines(store.get('data')!.machines, store.get('favs')),
+      store.get('data')!.bookings,
       todayAsIsoDateString(),
     ),
   );
@@ -165,7 +168,7 @@ export function AllBookingsModal() {
     setFilter((prev) => ({ ...prev, ...patch }));
   }
 
-  const groupOptions = groupsByCategory(window.S.data!.machines);
+  const groupOptions = groupsByCategory(store.get('data')!.machines);
   const rows = filterAllRuns(runsAll, filter);
 
   return (

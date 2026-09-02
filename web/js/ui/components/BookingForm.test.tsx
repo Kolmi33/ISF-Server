@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
+import { store } from '../../store-instance.ts';
 import { BookingForm, openBookingForm } from './BookingForm.tsx';
 
 function machine(overrides: Partial<Machine> = {}): Machine {
@@ -10,7 +11,11 @@ function machine(overrides: Partial<Machine> = {}): Machine {
 
 beforeEach(() => {
   document.body.innerHTML = `<div id="overlay"><div id="modal" tabindex="-1"></div></div><div id="modalReopen"></div><div id="toast"></div>`;
-  window.S = { user: 'anna', data: { machines: [machine()], bookings: {} } } as unknown as AppState;
+  store.set({
+    user: 'anna',
+    data: { machines: [machine()], bookings: {} },
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
   window.machById = vi.fn((id: string) => window.S.data!.machines.find((m) => m.id === id));
   window.mutate = vi.fn();
 });

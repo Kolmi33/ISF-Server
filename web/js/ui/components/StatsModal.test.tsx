@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, act, fireEvent } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
+import { store } from '../../store-instance.ts';
 import { openStats } from './StatsModal.tsx';
 
 const TODAY = '2021-06-15'; // mid-year, so the default "Jan 1..today" range covers early January
@@ -15,7 +16,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date(`${TODAY}T12:00:00Z`));
   document.body.innerHTML =
     '<div id="overlay"><div id="modal" tabindex="-1"></div></div><div id="modalReopen"></div><div id="toast"></div>';
-  window.S = {
+  store.set({
     user: 'anna',
     data: {
       machines: [
@@ -28,7 +29,8 @@ beforeEach(() => {
       },
     },
     favs: new Set(),
-  } as unknown as AppState;
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
 });
 
 afterEach(() => {

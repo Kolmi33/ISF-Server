@@ -1,11 +1,11 @@
 // The "what's your name?" modal (Phase 7 slice B9). Faithful port of legacy `askUserName()`.
 // Not sticky even on first run — the original never passed `{sticky:true}` here either, so
 // Escape/outside-click still dismiss it (only the Cancel *button* is hidden on first run,
-// not dismissal itself). Mutates `window.S.user` directly, matching how every other legacy
-// write to `S` works — there is no store-level "set user" action to route through yet.
+// not dismissal itself).
 
 import { useEffect, useRef } from 'react';
 import { closeReactModal, openReactModal } from '../modal.tsx';
+import { store } from '../../store-instance.ts';
 
 export interface AskUserNameModalProps {
   firstRun: boolean;
@@ -24,11 +24,13 @@ export function AskUserNameModal({ firstRun }: AskUserNameModalProps) {
       inputRef.current?.focus();
       return;
     }
-    window.S.user = name;
+    // Silent — updateUserChip()/closeReactModal() run before the one notify, matching the
+    // original's single window.notify() after both.
+    store.state.user = name;
     localStorage.setItem('mb_user', name);
     window.updateUserChip();
     closeReactModal();
-    window.notify();
+    store.notify();
     window.dbg('user', 'Name gesetzt: ' + name);
     window.presenceTick();
   };
@@ -41,7 +43,7 @@ export function AskUserNameModal({ firstRun }: AskUserNameModalProps) {
         <input
           type="text"
           ref={inputRef}
-          defaultValue={window.S.user}
+          defaultValue={store.get('user')}
           placeholder="Nachname"
           onKeyDown={(event) => {
             if (event.key === 'Enter') save();

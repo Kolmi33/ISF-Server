@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
+import type { AppState } from '../../../../shared/types.ts';
+import { store } from '../../store-instance.ts';
 import { LogModal, openLog } from './LogModal.tsx';
 
 describe('LogModal', () => {
@@ -35,13 +37,14 @@ describe('openLog', () => {
     document.body.innerHTML = `
       <div id="overlay"><div id="modal" tabindex="-1"></div></div>
       <div id="modalReopen"></div>`;
-    window.S = {
+    store.set({
       data: { log: [{ ts: '2021-01-04T10:00:00.000Z', user: 'A', action: 'B' }] },
-    } as never;
+    } as unknown as Partial<AppState>);
+    window.S = store.state;
     window.openAdmin = vi.fn();
   });
 
-  it('opens with a snapshot of window.S.data.log', () => {
+  it('opens with a snapshot of the log', () => {
     act(() => openLog());
     expect(screen.getByText('letzte 1')).toBeInTheDocument();
   });

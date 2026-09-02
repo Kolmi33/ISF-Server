@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import type { AppState, Booking, Machine } from '../../../../shared/types.ts';
 import { selection } from '../grid-interaction.ts';
+import { store } from '../../store-instance.ts';
 import { ContextMenu, showCtx, hideCtx } from './ContextMenu.tsx';
 
 function machine(overrides: Partial<Machine> = {}): Machine {
@@ -20,12 +21,13 @@ beforeEach(() => {
     <div id="toast"></div>
     <div id="overlay"><div id="modal" tabindex="-1"></div></div>
     <div id="modalReopen"></div>`;
-  window.S = {
+  store.set({
     data: { machines: [machine()], bookings: {} },
     user: 'anna',
     visM: [],
     visD: [],
-  } as unknown as AppState;
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
   window.machById = (id: string) => window.S.data!.machines.find((m) => m.id === id);
   window.mutate = vi.fn((fn: (fresh: unknown) => unknown) =>
     Promise.resolve(fn(window.S.data)),

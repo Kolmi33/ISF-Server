@@ -24,6 +24,7 @@ import { closeReactModal, openReactModal } from '../modal.tsx';
 import { toast, offerUndo } from '../toast.ts';
 import { Icon } from './Icon.tsx';
 import { openBookingForm } from './BookingForm.tsx';
+import { store } from '../../store-instance.ts';
 
 async function deleteDates(
   machine: Machine,
@@ -195,8 +196,8 @@ interface BookingDetailModalProps {
 }
 
 export function BookingDetailModal({ machine, date, booking }: BookingDetailModalProps) {
-  const run = findSameNameWorkdayRun(window.S.data!.bookings, machine.id, date, booking.name);
-  const group = booking.gid ? findBookingGroup(window.S.data!.bookings, booking.gid) : null;
+  const run = findSameNameWorkdayRun(store.get('data')!.bookings, machine.id, date, booking.name);
+  const group = booking.gid ? findBookingGroup(store.get('data')!.bookings, booking.gid) : null;
   const groupWorkdays = group ? group.dates.filter((d) => !isWeekend(parseIsoDateString(d))) : [];
 
   return (
@@ -240,7 +241,7 @@ export function openBookingDetail(machine: Machine, date: string, booking: Booki
 export function openCellAction(mid: string, date: string): void {
   const machine = window.machById(mid);
   if (!machine) return;
-  const booking = window.S.data!.bookings[mid]?.[date];
+  const booking = store.get('data')!.bookings[mid]?.[date];
   if (isBlockedOnDate(machine, date) && !booking) {
     toast(`${machine.name}: ${maintText(maintenanceSlotAt(machine, date))}`);
     return;

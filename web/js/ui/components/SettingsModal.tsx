@@ -6,6 +6,7 @@
 import { Icon } from './Icon.tsx';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { askUserName } from './AskUserNameModal.tsx';
+import { store } from '../../store-instance.ts';
 
 function DataSourceRow() {
   return (
@@ -40,7 +41,7 @@ function ThemeRow() {
         onChange={(event) => {
           localStorage.setItem('mb_theme', event.target.value);
           window.applyTheme();
-          window.notify();
+          store.notify();
         }}
       >
         <option value="auto">Wie System</option>
@@ -102,8 +103,7 @@ function WeekendsRow() {
           defaultChecked={weekends}
           onChange={(event) => {
             localStorage.setItem('mb_weekends', event.target.checked ? 'on' : 'off');
-            window.S.extraWeeks = 0;
-            window.notify();
+            store.set({ extraWeeks: 0 });
             window.centerToday();
           }}
         />{' '}
@@ -118,7 +118,7 @@ function NameRow() {
     <div className="formrow">
       <label>Name</label>
       <div style={{ flex: 1 }}>
-        <b>{window.S.user || '–'}</b>
+        <b>{store.get('user') || '–'}</b>
       </div>
       <button className="btn" onClick={() => askUserName(false)}>
         <Icon name="user" /> Ändern…

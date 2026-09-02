@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, act, fireEvent } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
+import { store } from '../../store-instance.ts';
 import { openAssistant } from './AssistantModal.tsx';
 
 const TODAY = '2021-01-04'; // a Monday
@@ -16,12 +17,17 @@ function dataTransferStub() {
   return { setData: vi.fn(), effectAllowed: '', dropEffect: '' };
 }
 
+// window.S is kept aliased to store.state so the component (migrated onto the real store) and
+// this test agree; window.notify forwards to store.notify() exactly as app.ts does in
+// production, so notifySpy sees every repaint trigger.
+const notifySpy = vi.spyOn(store, 'notify');
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(`${TODAY}T12:00:00Z`));
   document.body.innerHTML =
     '<div id="overlay"><div id="modal" tabindex="-1"></div></div><div id="modalReopen"></div><div id="toast"></div><div id="gridWrap"></div>';
-  window.S = {
+  store.set({
     user: 'anna',
     data: {
       machines: [
@@ -43,11 +49,13 @@ beforeEach(() => {
     machSel: new Set(),
     startMonday: new Date(`${TODAY}T00:00:00Z`),
     extraWeeks: 0,
-  } as unknown as AppState;
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
+  notifySpy.mockClear();
   window.machById = (mid: string) => window.S.data!.machines.find((m) => m.id === mid);
   window.mutate = vi.fn();
   window.askConfirm = vi.fn().mockResolvedValue(true);
-  window.notify = vi.fn();
+  window.notify = () => store.notify();
   window.saveFilters = vi.fn();
   window.updateMachBtn = vi.fn();
   window.hideCtx = vi.fn();

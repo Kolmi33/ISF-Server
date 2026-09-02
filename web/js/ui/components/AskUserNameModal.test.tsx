@@ -1,12 +1,21 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
+import type { AppState } from '../../../../shared/types.ts';
+import { store } from '../../store-instance.ts';
 import { AskUserNameModal, askUserName } from './AskUserNameModal.tsx';
 
+// window.S is kept aliased to store.state so the component (migrated onto the real store) and
+// this test agree; window.notify forwards to store.notify() exactly as app.ts does in
+// production, so notifySpy sees every repaint trigger.
+const notifySpy = vi.spyOn(store, 'notify');
+
 function stubWindowGlobals(): void {
-  window.S = { user: '' } as never;
+  store.set({ user: '' } as unknown as Partial<AppState>);
+  window.S = store.state;
+  notifySpy.mockClear();
   window.updateUserChip = vi.fn();
-  window.notify = vi.fn();
+  window.notify = () => store.notify();
   window.dbg = vi.fn();
   window.presenceTick = vi.fn().mockResolvedValue(undefined);
 }
@@ -44,7 +53,7 @@ describe('AskUserNameModal', () => {
     expect(window.S.user).toBe('Kolmanovskyi');
     expect(localStorage.getItem('mb_user')).toBe('Kolmanovskyi');
     expect(window.updateUserChip).toHaveBeenCalledOnce();
-    expect(window.notify).toHaveBeenCalledOnce();
+    expect(notifySpy).toHaveBeenCalledOnce();
     expect(window.presenceTick).toHaveBeenCalledOnce();
   });
 });

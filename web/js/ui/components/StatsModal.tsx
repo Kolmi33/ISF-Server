@@ -21,11 +21,12 @@ import { Icon } from './Icon.tsx';
 import { StatsRangeRow, StatsModeRow, StatsFilterRow, type StatsMode } from './StatsControls.tsx';
 import { ResourcesOverview, MaintenanceOverview, PersonsOverview } from './StatsOverviews.tsx';
 import { MachineDrilldown, PersonDrilldown } from './StatsDrilldown.tsx';
+import { store } from '../../store-instance.ts';
 
 function computeAgg(from: string, to: string): Stats {
   return computeStats(
-    orderedMachines(window.S.data!.machines, window.S.favs),
-    window.S.data!.bookings,
+    orderedMachines(store.get('data')!.machines, store.get('favs')),
+    store.get('data')!.bookings,
     from,
     to,
   );

@@ -1,16 +1,25 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import type { AppState } from '../../../../shared/types.ts';
+import { store } from '../../store-instance.ts';
 import { SettingsModal } from './SettingsModal.tsx';
+
+// window.S is kept aliased to store.state so the component (migrated onto the real store) and
+// this test agree; window.notify forwards to store.notify() exactly as app.ts does in
+// production, so notifySpy sees every repaint trigger.
+const notifySpy = vi.spyOn(store, 'notify');
 
 beforeEach(() => {
   localStorage.clear();
   document.body.className = '';
-  window.S = { user: 'Kolmanovskyi', extraWeeks: 3 } as never;
+  store.set({ user: 'Kolmanovskyi', extraWeeks: 3 } as unknown as Partial<AppState>);
+  window.S = store.state;
+  notifySpy.mockClear();
   window.connectSSE = vi.fn();
   window.refreshNow = vi.fn().mockResolvedValue(undefined);
   window.applyTheme = vi.fn();
-  window.notify = vi.fn();
+  window.notify = () => store.notify();
   window.presenceTick = vi.fn().mockResolvedValue(undefined);
   window.centerToday = vi.fn();
   window.applyDebug = vi.fn();
@@ -32,7 +41,7 @@ describe('SettingsModal', () => {
     select.dispatchEvent(new Event('change', { bubbles: true }));
     expect(localStorage.getItem('mb_theme')).toBe('dark');
     expect(window.applyTheme).toHaveBeenCalledOnce();
-    expect(window.notify).toHaveBeenCalledOnce();
+    expect(notifySpy).toHaveBeenCalledOnce();
   });
 
   it('toggling presence persists mb_presence (as on/off, not true/false) and reconnects', () => {
@@ -50,7 +59,7 @@ describe('SettingsModal', () => {
     screen.getByLabelText(/Samstag/).click();
     expect(localStorage.getItem('mb_weekends')).toBe('on');
     expect(window.S.extraWeeks).toBe(0);
-    expect(window.notify).toHaveBeenCalledOnce();
+    expect(notifySpy).toHaveBeenCalledOnce();
     expect(window.centerToday).toHaveBeenCalledOnce();
   });
 

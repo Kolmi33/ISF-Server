@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import type { AppState } from '../../../../shared/types.ts';
+import { store } from '../../store-instance.ts';
 import { ActiveUsersModal, openActiveUsers } from './ActiveUsersModal.tsx';
 import { presenceData } from '../live-connection.ts';
 
@@ -10,7 +11,8 @@ beforeEach(() => {
     <div id="overlay"><div id="modal" tabindex="-1"></div></div>
     <div id="modalReopen"></div>
     <span id="lastRef"></span>`;
-  window.S = { user: 'anna' } as unknown as AppState;
+  store.set({ user: 'anna' } as unknown as Partial<AppState>);
+  window.S = store.state;
   window.handleError = vi.fn();
   window.stampRef = vi.fn();
   window.dbg = vi.fn();

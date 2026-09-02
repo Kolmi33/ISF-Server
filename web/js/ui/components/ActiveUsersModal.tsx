@@ -7,6 +7,7 @@
 import { Icon } from './Icon.tsx';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { activeUserRows, presenceTick, type ActiveUserRow } from '../live-connection.ts';
+import { store } from '../../store-instance.ts';
 
 /** Refresh presence, then open the popup with a snapshot of who's active. Faithful port of
  *  legacy `openActiveUsers`. */
@@ -24,7 +25,7 @@ export interface ActiveUsersModalProps {
 }
 
 function UserRow({ row }: { row: ActiveUserRow }) {
-  const isMe = row.name.toLowerCase() === (window.S.user || '').toLowerCase();
+  const isMe = row.name.toLowerCase() === (store.get('user') || '').toLowerCase();
   return (
     <div className="mybk">
       <div>

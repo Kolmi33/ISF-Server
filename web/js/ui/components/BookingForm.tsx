@@ -17,6 +17,7 @@ import { getAllDaysInRange, formatDateLong } from '../../../../shared/dates.ts';
 import { bookCells, type Conflict } from '../../core/booking.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { toast, offerUndo } from '../toast.ts';
+import { store } from '../../store-instance.ts';
 
 const MAX_CELLS_PER_BOOKING = 500;
 const MAX_CONFLICTS_SHOWN = 15;
@@ -195,7 +196,7 @@ async function submitBooking(input: SubmitBookingInput): Promise<readonly Confli
 
 export function BookingForm({ machineIds, from, to }: BookingFormProps) {
   const machines = machineIds.map((id) => window.machById(id)).filter((m): m is Machine => !!m);
-  const [name, setName] = useState(window.S.user);
+  const [name, setName] = useState(store.get('user'));
   const [fromDate, setFromDate] = useState(from);
   const [toDate, setToDate] = useState(to);
   const [note, setNote] = useState('');

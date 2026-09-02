@@ -22,6 +22,7 @@ import { gotoDate, prependWeek, resetView } from '../grid-scroll.ts';
 import { collapseReactModal } from '../modal.tsx';
 import { openBookingForm } from './BookingForm.tsx';
 import { Icon } from './Icon.tsx';
+import { store } from '../../store-instance.ts';
 
 function rangeText(dates: readonly string[]): string {
   return dates.length === 1
@@ -34,12 +35,14 @@ function rangeText(dates: readonly string[]): string {
  *  Faithful port of legacy's `data-show` handler. */
 function gotoRun(firstDate: string, allIds: readonly string[]): void {
   collapseReactModal();
-  window.S.machSel = new Set(allIds);
+  // Both writes stay silent — saveFilters()/updateMachBtn()/resetView() run before the one
+  // notify, matching the original's single window.notify() after all of this.
+  store.state.machSel = new Set(allIds);
   window.saveFilters();
   window.updateMachBtn();
-  window.S.startMonday = mondayOfDate(parseIsoDateString(firstDate));
+  store.state.startMonday = mondayOfDate(parseIsoDateString(firstDate));
   resetView();
-  window.notify();
+  store.notify();
   prependWeek();
   clearSelection();
   gotoDate(firstDate);

@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import type { AppState, Booking, Machine } from '../../../../shared/types.ts';
+import { store } from '../../store-instance.ts';
 import { BookingDetailModal, openBookingDetail, openCellAction } from './BookingDetailModal.tsx';
 
 const TODAY = '2021-01-06'; // a Wednesday
@@ -16,7 +17,8 @@ function booking(overrides: Partial<Booking> = {}): Booking {
 
 beforeEach(() => {
   document.body.innerHTML = `<div id="overlay"><div id="modal" tabindex="-1"></div></div><div id="modalReopen"></div><div id="toast"></div>`;
-  window.S = { data: { machines: [machine()], bookings: {} } } as unknown as AppState;
+  store.set({ data: { machines: [machine()], bookings: {} } } as unknown as Partial<AppState>);
+  window.S = store.state;
   window.machById = vi.fn((id: string) => window.S.data!.machines.find((m) => m.id === id));
   window.mutate = vi.fn().mockResolvedValue({ n: 1, undo: [] });
   window.askConfirm = vi.fn().mockResolvedValue(true);

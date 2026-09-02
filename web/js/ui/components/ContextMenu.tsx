@@ -12,6 +12,7 @@ import { offerUndo } from '../toast.ts';
 import { deleteSelectedCells } from '../../core/booking.ts';
 import { escapeHtml } from '../escape-html.ts';
 import type { Cell } from '../selection.ts';
+import { store } from '../../store-instance.ts';
 
 interface MenuInfo {
   x: number;
@@ -41,7 +42,7 @@ function buildMenuInfo(x: number, y: number): MenuInfo {
   const dates = selection.cells.map((c) => c.date).sort();
   const from = dates[0]!;
   const to = dates[dates.length - 1]!;
-  const bookings = window.S.data!.bookings;
+  const bookings = store.get('data')!.bookings;
   const bookedCells = selection.cells.filter((c) => getBooking(bookings, c.mid, c.date));
   const names = [...new Set(bookedCells.map((c) => getBooking(bookings, c.mid, c.date)!.name))];
   return { x, y, mids, from, to, bookedCells, names };

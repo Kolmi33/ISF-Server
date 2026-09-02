@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, act, fireEvent } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
+import { store } from '../../store-instance.ts';
 import { openAdmin } from './AdminModal.tsx';
 
 function machine(overrides: Partial<Machine> = {}): Machine {
@@ -12,7 +13,7 @@ beforeEach(() => {
   localStorage.clear();
   document.body.innerHTML =
     '<div id="overlay"><div id="modal" tabindex="-1"></div></div><div id="modalReopen"></div><div id="toast"></div>';
-  window.S = {
+  store.set({
     data: {
       machines: [
         machine({ id: 'm1', name: 'Fräse', group: 'Halle 1' }),
@@ -26,7 +27,8 @@ beforeEach(() => {
       ],
       log: [],
     },
-  } as unknown as AppState;
+  } as unknown as Partial<AppState>);
+  window.S = store.state;
   window.mutate = vi.fn();
   window.openMachineForm = vi.fn();
 });

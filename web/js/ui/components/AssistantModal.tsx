@@ -50,6 +50,7 @@ import { AssistantChecklist } from './AssistantChecklist.tsx';
 import { AssistantTree } from './AssistantTree.tsx';
 import { AssistantResults } from './AssistantResults.tsx';
 import { Icon } from './Icon.tsx';
+import { store } from '../../store-instance.ts';
 
 const AS_HUES = [210, 150, 275, 32, 344, 190, 95, 258];
 
@@ -57,7 +58,7 @@ function isFreeDevice(id: string, day: string): boolean {
   const machine = window.machById(id);
   return (
     !!machine &&
-    !getBooking(window.S.data!.bookings, id, day) &&
+    !getBooking(store.get('data')!.bookings, id, day) &&
     !isBlockedOnDate(machine, day) &&
     dayAvailable(machine, day)
   );
@@ -236,7 +237,7 @@ function AssistantWorkSection({ assistant }: { assistant: ReturnType<typeof useA
 
 export function AssistantModal() {
   const assistant = useAssistantTree();
-  const machines = orderedMachines(window.S.data!.machines, window.S.favs);
+  const machines = orderedMachines(store.get('data')!.machines, store.get('favs'));
   const [from, setFrom] = useState(todayAsIsoDateString);
   const [to, setTo] = useState(() =>
     formatDateAsIsoString(addDays(parseIsoDateString(todayAsIsoDateString()), 56)),
@@ -256,7 +257,7 @@ export function AssistantModal() {
       </h2>
       <AssistantChecklist
         machines={machines}
-        favoriteIds={window.S.favs}
+        favoriteIds={store.get('favs')}
         addedIds={assistant.addedIds}
         onToggle={assistant.toggleDevice}
       />

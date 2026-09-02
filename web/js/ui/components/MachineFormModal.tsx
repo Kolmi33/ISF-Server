@@ -24,6 +24,7 @@ import { toast } from '../toast.ts';
 import { openReactModal } from '../modal.tsx';
 import { MachineFormFields } from './MachineFormFields.tsx';
 import { MaintenanceSlotEditor } from './MaintenanceSlotEditor.tsx';
+import { store } from '../../store-instance.ts';
 
 interface SaveMachineFormInput {
   mid: string | null;
@@ -75,7 +76,7 @@ interface MachineFormModalProps {
 }
 
 export function MachineFormModal({ mid }: MachineFormModalProps) {
-  const machines = window.S.data!.machines;
+  const machines = store.get('data')!.machines;
   const machine = mid ? (window.machById(mid) ?? null) : null;
   const [state, setState] = useState<MachineFormState>(() =>
     initialMachineFormState(machine, machines),
