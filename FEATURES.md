@@ -80,7 +80,7 @@ covered by an automated test.
 - [x] Debug panel (`localStorage mb_debug=on`)
 
 ## Data & migrations
-- [ ] Client-side data validation (`validateData`) — covered by `net/api.test.ts`'s automated unit tests; not separately re-verified against the running app this pass
+- [x] Client-side data validation (`validateData`) — logic-tested, and confirmed live by mocking malformed `/api/state` responses (missing `machines`, missing `bookings`, a non-object body): each fails boot gracefully to the "Verbindung zum Server fehlgeschlagen" screen rather than crashing blank, while a structurally valid payload boots normally (control case)
 
 ~~Weekend migration (`migrateWeekends`) / Messtechnik migration (`migrateMesstechnik`)~~ —
 removed as dead code in Phase 2.3 (`PROGRESS.md`'s Known Bugs → Fixed, "`migrating` bug"):
@@ -95,4 +95,4 @@ Assistant below).
 - [x] `/api/health`, `/api/state`, `/api/stream`, `POST /api/mutate`
 - [ ] Daily rotating backups (keep last 30) via `VACUUM INTO`
 - [x] Graceful shutdown closes the DB cleanly (`docker stop` exited in ~1s — well under the SIGKILL grace period — and the volume's data was intact and readable when remounted into a fresh container afterward)
-- [ ] Static file serving with path-traversal guard
+- [x] Static file serving with path-traversal guard — probed live with plain `..`, percent-encoded (`%2e%2e`, double-encoded), encoded-slash (`..%2f`), and backslash (`..%5c`) variants: plain `..` is neutralized by URL dot-segment normalization before it reaches the app (harmless 404), the encoded-slash/backslash variants that survive normalization are explicitly rejected by the `filePath.includes('..')` guard (400 `bad path`); no variant ever returned file content outside `public/`
