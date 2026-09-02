@@ -71,8 +71,20 @@ function applyWriteFields(machine: MachineOut, body: MachineWriteBody): void {
   else delete machine.cat;
 }
 
+/** A short, deterministic hex digest of `input` (djb2 variant) — mirrors `core/machines.ts`'s
+ *  `shortHash`, the id fallback for a name with no Latin-alphanumeric content to slug from. */
+function shortHash(input: string): string {
+  let hash = 5381;
+  for (let index = 0; index < input.length; index++) {
+    hash = (hash * 33) ^ input.charCodeAt(index);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0').slice(0, 6);
+}
+
 /** Lowercase German umlaut/ß-aware slug, mirroring `core/machines.ts`'s `slugify` — the id a
- *  newly created machine gets, since a REST create body never supplies its own id. */
+ *  newly created machine gets, since a REST create body never supplies its own id. A name with
+ *  no Latin-alphanumeric content (non-Latin script, or pure punctuation) falls back to a short
+ *  hash of the name (`m_8f2a1c`) instead of a single id every such machine would collide into. */
 function slugify(name: string): string {
   const transliterated = name
     .toLowerCase()
@@ -84,7 +96,7 @@ function slugify(name: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 40);
-  return slug || 'maschine';
+  return slug || `m_${shortHash(name)}`;
 }
 
 function findUniqueMachineId(machines: readonly MachineOut[], baseSlug: string): string {

@@ -69,8 +69,9 @@ describe('createMachine', () => {
       },
       vi.fn(),
     );
-    expect((res.body as { data: { id: string } }).data.id).toBe('maschine');
-    const row = db.prepare('SELECT * FROM machines WHERE id=?').get('maschine') as {
+    const id = (res.body as { data: { id: string } }).data.id;
+    expect(id).toMatch(/^m_[0-9a-f]{6}$/);
+    const row = db.prepare('SELECT * FROM machines WHERE id=?').get(id) as {
       redu: string;
       days: string;
       cat: string;

@@ -52,19 +52,16 @@ export function categoryOf(machine: Machine | null | undefined): MachineCategory
   return machine && machine.cat === 'messtechnik' ? 'messtechnik' : 'maschine';
 }
 
-/** The two categories, in display order, with their German label and sprite icon. Faithful
- *  port of legacy's `CATS`/`catLabel`/`catIco`. Shared by the grid's category toggle buttons
- *  (B1) and the Statistik category filter (B5). */
+/** The two categories, in display order, with their German label and sprite icon. Shared by
+ *  the grid's category toggle buttons (B1) and the Statistik category filter (B5). */
 export const CATEGORIES: ReadonlyArray<{ id: MachineCategory; label: string; icon: string }> = [
   { id: 'maschine', label: 'Maschinen', icon: 'factory' },
   { id: 'messtechnik', label: 'Messtechnik', icon: 'gauge' },
 ];
 
 /** One category's distinct group names (first-seen order), for the "Bereich" filter's
- *  `<optgroup>` structure. A category with no groups is omitted entirely (legacy renders an
- *  empty `<optgroup>`, which shows nothing — omitting it is the same net result). Faithful
- *  port of the `CATS.map(...)`/`groupList()`/`groupCat()` expression in legacy
- *  `openAllBookings`. */
+ *  `<optgroup>` structure. A category with no groups is omitted entirely — an empty
+ *  `<optgroup>` would render nothing anyway, so leaving it out is the same net result. */
 export function groupsByCategory(machines: readonly Machine[]): CategoryGroups[] {
   const result: CategoryGroups[] = [];
   for (const { id: category } of CATEGORIES) {
@@ -160,9 +157,27 @@ function applyFormFieldsToMachine(machine: Machine, form: MachineForm): void {
 }
 
 /**
- * Derive a URL-safe machine id base from a name: lowercase, German umlauts/ß spelled
- * out (so "Prüfgerät" -> "pruefgeraet"), everything else that isn't a-z0-9 collapsed
- * to a single hyphen, and leading/trailing hyphens trimmed.
+ * A short, deterministic hex digest of `input` (djb2 variant) — not a cryptographic hash, just
+ * enough spread that two different names essentially never collide, and the same name always
+ * maps to the same fallback id (`findUniqueMachineId` still appends `-2`/`-3`/… on the rare
+ * collision, exactly as it does for a readable slug). `>>> 0` forces an unsigned 32-bit value
+ * before hex-encoding so the result is always 8 hex digits regardless of sign, then trimmed to 6.
+ */
+function shortHash(input: string): string {
+  let hash = 5381;
+  for (let index = 0; index < input.length; index++) {
+    hash = (hash * 33) ^ input.charCodeAt(index);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0').slice(0, 6);
+}
+
+/**
+ * Derive a URL-safe machine id base from a name: lowercase, German umlauts/ß spelled out (so
+ * "Prüfgerät" -> "pruefgeraet"), everything else that isn't a-z0-9 collapsed to a single hyphen,
+ * leading/trailing hyphens trimmed. A name with no Latin-alphanumeric content at all to slug from
+ * (a non-Latin script such as Cyrillic/CJK, or e.g. pure punctuation) falls back to a short hash
+ * of the original name (`m_8f2a1c`) rather than a single generic id every such machine would
+ * otherwise collide into — readable id when the name allows it, a stable unique one when it can't.
  */
 function slugify(name: string): string {
   const transliterated = name
@@ -175,7 +190,7 @@ function slugify(name: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 40);
-  return slug || 'maschine';
+  return slug || `m_${shortHash(name)}`;
 }
 
 /** A unique machine id starting from `baseSlug`, appending `-2`, `-3`, … until free. */
@@ -204,10 +219,10 @@ function findGroupInsertionIndex(machines: readonly Machine[], group: string): n
 }
 
 /**
- * Save the machine form: when `machineId` is set, apply the fields onto that machine (abort
- * if it vanished from the fresh data); otherwise create a new machine — a unique
- * slugged id, inserted after the last machine of the same group. Faithful port of the
- * `mfSave` mutate callback (returns nothing on success, `{abort:true}` on failure).
+ * Saves the machine form: with `machineId` set, applies the fields onto that machine (aborting
+ * if it's since vanished from the fresh data); otherwise creates a new machine — a unique
+ * slugged id, inserted right after the last machine of the same group. Returns nothing on
+ * success; only a failed edit (the machine is gone) returns `{abort: true}`.
  */
 export function saveMachine(
   freshServerData: BookingData,
@@ -232,8 +247,8 @@ export function saveMachine(
 }
 
 /**
- * Remove machine `machineId` and all its bookings. Faithful port of the `mfDel` mutate
- * callback (`{abort:true}` if the machine is already gone).
+ * Removes machine `machineId` and all of its bookings. Returns `{abort: true}` instead if the
+ * machine is already gone (deleted from elsewhere since the caller last read the data).
  */
 export function deleteMachine(
   freshServerData: BookingData,
@@ -248,15 +263,14 @@ export function deleteMachine(
 }
 
 /**
- * Move the machine `machineId` one step up or down within its own group, by swapping it with
- * its immediate neighbour in the machines array (machines are already stored grouped —
- * consecutive `group` values — so a group's members are already adjacent in the array; swapping
- * array neighbours IS moving within the group).
+ * Reorders machine `machineId` one step within its own group, by swapping it with its immediate
+ * neighbour (machines of one group are already stored contiguously, so swapping array
+ * neighbours IS moving within the group). `direction` is -1 to move up (earlier in the array) or
+ * +1 to move down (later).
  *
- * `direction` is -1 to move up (earlier in the array) or +1 to move down (later). Aborts
- * without changing anything when the move would leave the group: running off either end of
+ * Aborts without changing anything if the move would leave the group: running off either end of
  * the array, or landing on a machine from a different group — reordering across a group
- * boundary isn't allowed. Faithful port of the admin `moveById`.
+ * boundary isn't allowed.
  */
 export function moveMachine(
   freshServerData: BookingData,

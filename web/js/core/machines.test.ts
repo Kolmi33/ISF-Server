@@ -215,10 +215,27 @@ describe('saveMachine — create', () => {
     expect(d.machines.some((m) => m.id === 'fraese-3')).toBe(true);
   });
 
-  it('falls back to "maschine" for a name with no slug-able characters', () => {
+  it('falls back to a short hash id for a name with no slug-able characters', () => {
     const d = data([]);
     saveMachine(d, null, form({ name: '!!!' }));
-    expect(d.machines[0]!.id).toBe('maschine');
+    expect(d.machines[0]!.id).toMatch(/^m_[0-9a-f]{6}$/);
+  });
+
+  it('falls back to the same hash id for a non-Latin-script name, deterministically', () => {
+    const first = data([]);
+    saveMachine(first, null, form({ name: 'Фрезерный станок' }));
+    const second = data([]);
+    saveMachine(second, null, form({ name: 'Фрезерный станок' }));
+    expect(first.machines[0]!.id).toMatch(/^m_[0-9a-f]{6}$/);
+    expect(first.machines[0]!.id).toBe(second.machines[0]!.id); // same name -> same fallback id
+  });
+
+  it('gives different non-Latin names different hash ids', () => {
+    const cyrillic = data([]);
+    saveMachine(cyrillic, null, form({ name: 'Фрезерный станок' }));
+    const cjk = data([]);
+    saveMachine(cjk, null, form({ name: '五轴铣床' }));
+    expect(cyrillic.machines[0]!.id).not.toBe(cjk.machines[0]!.id);
   });
 
   it('appends at the end when no machine shares the group', () => {
