@@ -1,10 +1,20 @@
-// The grid view layer (Phase 4.1). Starts with the per-cell decision that was duplicated
-// between the full renderer `render()` and the targeted `refreshCell()` in legacy: which of
-// the four states a cell is in, whether a booking is the current user's, and the resulting
-// CSS class stem. These are pure functions of their inputs (DOM-free, unit-tested to 100%),
-// so both callers share one source of truth. The HTML/attribute assembly and the DOM writes
-// stay in the legacy adapter for now (E3/E5); they legitimately differ per caller (the full
-// render carries aria/data attributes and richer titles that the patch path does not).
+// =======================================================================================
+// GRID VIEW LOGIC MODULE (web/js/ui/grid.ts)
+// =======================================================================================
+//
+// Pure grid view-layer logic, shared between the full render and the targeted cell patch.
+// This module provides:
+// 1. Cell/dot classification: which of the possible states a cell (or a row's today-dot)
+//    is in, and the resulting CSS class stem.
+// 2. Row ordering: favorites first, then everyone else grouped by category.
+// 3. `buildGridRows`: the flat, fold/filter-aware row list the grid body renders from.
+//
+// Key Principles:
+// - PURE FUNCTIONS OF THEIR INPUTS: DOM-free and unit-tested to 100%, so the full render and
+//   the targeted cell patch (`ui/cell-patch.ts`) share exactly one source of truth for "what
+//   state is this cell in" instead of two copies that could drift apart.
+//
+// =======================================================================================
 
 import type { Booking, Machine, MachineCategory } from '../../../shared/types.ts';
 import { addDays, formatDateAsIsoString } from '../../../shared/dates.ts';
@@ -14,8 +24,10 @@ import { getMachineCategory, getMaintenanceSlotAtDate } from '../core/machines.t
 export type CellState = 'blocked' | 'booked' | 'unavail' | 'free';
 
 /**
- * Classify a cell. Priority (faithful to legacy): a maintenance/defect block wins, then a
- * booking, then day-unavailability, else free. The impure inputs are injected (E4).
+ * Classifies a cell, checked in priority order: a maintenance/defect block wins over
+ * everything (even an existing booking underneath it), then a booking, then
+ * day-unavailability, else free. The impure inputs (`blocked`/`booking`/`available`) are
+ * computed by the caller and passed in, so this stays a pure decision function.
  */
 export function classifyCell(
   blocked: boolean,
@@ -41,9 +53,8 @@ export interface CellClassOpts {
 }
 
 /**
- * The cell's CSS class stem, e.g. `cell booked mine today`. `mine` applies only to 'booked';
- * `weekend` is added by the full render but not by the patch path — pass it accordingly to
- * preserve that asymmetry (see ARCHITECTURE §15).
+ * Builds the cell's CSS class stem, e.g. `cell booked mine today`. `mine` only ever applies
+ * to the `'booked'` state — passing it alongside any other state is simply ignored.
  */
 export function cellClass(state: CellState, opts: CellClassOpts = {}): string {
   let c = 'cell ' + state;
@@ -57,11 +68,12 @@ export function cellClass(state: CellState, opts: CellClassOpts = {}): string {
 export type DotState = 'defekt' | 'maint' | 'busy' | 'unavail' | 'free';
 
 /**
- * Classify the today-dot. Priority (faithful to legacy): an active maintenance/defect slot wins
- * (a `defekt` type → 'defekt', any other → 'maint'; both render as the static `statdot`), then a
- * booking → 'busy', then day-unavailability → 'unavail', else 'free'. `maintType` is the type of
- * the slot active today, or null/undefined when none (the patch path passes null — a row with a
- * maintenance slot shows a `statdot`, not a `dot`, so `refreshDot` never runs on it).
+ * Classifies the today-dot, checked in priority order: an active maintenance/defect slot
+ * wins (a `defekt` type → 'defekt', any other → 'maint'; both render as the static
+ * `statdot`), then a booking → 'busy', then day-unavailability → 'unavail', else 'free'.
+ * `maintType` is the type of the slot active today, or null/undefined when none — the
+ * patch path always passes null, since a row with an active maintenance slot shows a
+ * `statdot` instead of a `dot`, so `refreshDot` never even runs on it.
  */
 export function classifyDot(
   maintType: string | null | undefined,
@@ -83,9 +95,10 @@ export function displayGroup(machine: Machine, favoriteIds: ReadonlySet<string>)
 }
 
 /**
- * The grid's row order: favorited machines first (in their original relative order), then
- * everyone else with Maschinen before Messtechnik (a stable sort, so ties keep their
- * existing order). Faithful port of legacy `orderedMachines`.
+ * Orders machines for grid display: favorited machines first (in their original relative
+ * order), then everyone else with Maschinen before Messtechnik (a stable sort, so ties —
+ * two machines in the same category — keep their existing relative order rather than
+ * being shuffled).
  */
 export function orderedMachines(
   machines: readonly Machine[],
@@ -101,11 +114,8 @@ export function orderedMachines(
   return favorites.concat(everyoneElse);
 }
 
-/**
- * The grid's visible date columns, grouped into weeks: `weekCount` weeks of `daysPerWeek`
- * days each (5 for Mon–Fri, 7 for Mon–Sun), starting at `startMonday`. Faithful port of
- * legacy `visibleDates`.
- */
+/** Builds the grid's visible date columns, grouped into weeks: `weekCount` weeks of
+ *  `daysPerWeek` days each (5 for Mon–Fri, 7 for Mon–Sun), starting at `startMonday`. */
 export function visibleWeeks(
   startMonday: Date,
   weekCount: number,
@@ -123,9 +133,10 @@ export function visibleWeeks(
 }
 
 /**
- * A deterministic background color for a booking, hashed from the booker's name so the same
- * person always gets the same color. `isDarkTheme` is injected (E4) rather than read from
- * `document.documentElement.dataset.theme` directly. Faithful port of legacy `nameColor`.
+ * Computes a deterministic background color for a booking, hashed from the booker's name so
+ * the same person always gets the same color across every cell and every render.
+ * `isDarkTheme` is injected rather than read from the DOM directly, so this stays a pure
+ * function of its inputs.
  */
 export function nameColor(name: string, isDarkTheme: boolean): string {
   let hash = 0;

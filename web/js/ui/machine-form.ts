@@ -1,9 +1,19 @@
-// The machine form's state shape, defaults, and validation (Phase 7 slice B6) — pure over
-// `core/machines`; no DOM. The form chrome (`ui/components/MachineFormModal.tsx` + its split-
-// out `MachineFormFields.tsx`/`MaintenanceSlotEditor.tsx`) just renders this and calls
-// `validateMachineForm` before mutating. The actual save/delete reducers (slug/id generation,
-// group insertion, field application) already live in `core/machines.ts` (`saveMachine`/
-// `deleteMachine`, Phase 5.1) — this module only prepares their `MachineForm` input.
+// =======================================================================================
+// MACHINE FORM MODULE (web/js/ui/machine-form.ts)
+// =======================================================================================
+//
+// The machine form's state shape, defaults, and validation — pure over `core/machines`; no
+// DOM. The form chrome (`ui/components/MachineFormModal.tsx` + its split-out
+// `MachineFormFields.tsx`/`MaintenanceSlotEditor.tsx`) just renders this and calls
+// `validateMachineForm` before mutating.
+//
+// Key Principles:
+// - THIS MODULE ONLY PREPARES THE INPUT: the actual save/delete reducers (slug/id
+//   generation, group insertion, field application) already live in `core/machines.ts`
+//   (`saveMachine`/`deleteMachine`) — this module's job ends at producing a valid
+//   `MachineForm` for them to consume.
+//
+// =======================================================================================
 
 import type { Machine, MaintSlot } from '../../../shared/types.ts';
 import type { MachineForm } from '../core/machines.ts';
@@ -43,9 +53,9 @@ export interface MachineFormState {
 }
 
 /**
- * The form's starting state: an existing machine's fields, or — for a new one — legacy's own
- * default group, `groupList()[0]`. A `Set` built by mapping machines to their `group` always
- * inserts the first machine's group first, so that default is simply `machines[0].group`.
+ * Builds the form's starting state: an existing machine's fields, or — for a new machine —
+ * the first machine's group as a reasonable default (a brand-new machine most likely
+ * belongs with the ones already showing, rather than starting on an arbitrary empty group).
  */
 export function initialMachineFormState(
   machine: Machine | null,
@@ -69,9 +79,14 @@ export function initialMachineFormState(
 export type ValidatedMachineForm = { form: MachineForm } | { error: string };
 
 /**
- * Normalize and validate the form state into a `MachineForm`, or the first validation error, in
- * legacy's own check order: maintenance ranges, then name/group, then the day mask. Faithful
- * port of the validation in legacy `mfSave`.
+ * Normalizes and validates the form state into a `MachineForm`, or returns the first
+ * validation error.
+ *
+ * How it works, checked in this order: maintenance date ranges (each `from` must not be
+ * after its own `until`), then name/group both being non-empty, then the weekday mask
+ * having at least one available day. A day mask of all 1s normalizes to `null`
+ * ("available every day", the same meaning, but without storing a redundant all-available
+ * mask).
  */
 export function validateMachineForm(state: MachineFormState): ValidatedMachineForm {
   const maint: MaintSlot[] = state.maint.map((slot) => ({

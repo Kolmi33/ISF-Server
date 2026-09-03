@@ -1,12 +1,22 @@
-// The toolbar "Filtern ▾" resource-filter dropdown (Phase 7 slice B10e). Faithful port of
-// legacy `fillMachSel`'s row structure and visibility rules — the pure, testable half; the
-// DOM/React half is `ui/components/MachineFilterDropdown.tsx`. Same collapsible-tree shape as
-// `ui/assistant-checklist.ts` (B7) — favorites (flat, no groups) then Maschinen/Messtechnik,
-// each split into groups, deliberately duplicated rather than shared (the two features evolve
-// independently and this one has an extra knob, below) — plus one addition: legacy's own
-// `mfShow` toggle, which hides an entire category's section from the list altogether,
-// independent of fold state. Legacy's own comment is explicit that this affects ONLY the
-// dropdown's own list, never the grid (that's `ui/category-fold.ts`, a separate feature).
+// =======================================================================================
+// MACHINE FILTER DROPDOWN MODULE (web/js/ui/machine-filter.ts)
+// =======================================================================================
+//
+// The toolbar "Filtern ▾" resource-filter dropdown's row structure and visibility rules —
+// the pure, testable half; the DOM/React half is `ui/components/MachineFilterDropdown.tsx`.
+//
+// Key Principles:
+// - SAME TREE SHAPE AS THE ASSISTANT CHECKLIST, DELIBERATELY DUPLICATED: favorites (flat,
+//   no groups) then Maschinen/Messtechnik, each split into groups — the same shape
+//   `ui/assistant-checklist.ts` builds, kept as a separate implementation rather than a
+//   shared one because the two features evolve independently and this one has an extra
+//   knob the checklist doesn't (`shownCategories`, below).
+// - A CATEGORY-HIDE TOGGLE, INDEPENDENT OF FOLD STATE: `shownCategories` controls whether a
+//   whole category's section appears in the dropdown's list AT ALL, separate from whether
+//   it's expanded or collapsed. This affects ONLY the dropdown's own list, never the grid
+//   itself — hiding the grid's own rows is `ui/category-fold.ts`, a separate feature.
+//
+// =======================================================================================
 
 import type { Machine, MachineCategory } from '../../../shared/types.ts';
 import { CATEGORIES, getMachineCategory } from '../core/machines.ts';
@@ -22,11 +32,11 @@ export type MachineFilterRow =
 export interface MachineFilterOptions {
   favoriteIds: ReadonlySet<string>;
   searchQuery: string;
-  /** Folded-open category/group keys — `'fav'`, a `MachineCategory`, or `'<category>::<group>'`.
-   *  Legacy's `mfOpenCat`/`mfOpenGrp`, merged into one set since their keys never collide. */
+  /** Folded-open category/group keys — `'fav'`, a `MachineCategory`, or `'<category>::<group>'`,
+   *  merged into one set since the two kinds of key never collide. */
   openKeys: ReadonlySet<string>;
-  /** Which categories' sections appear in the list at all, independent of `openKeys` —
-   *  legacy's `mfShow`. Favorites are always shown regardless. */
+  /** Which categories' sections appear in the list at all, independent of `openKeys`.
+   *  Favorites are always shown regardless. */
   shownCategories: ReadonlySet<MachineCategory>;
 }
 
@@ -106,10 +116,9 @@ function pushNonFavoriteRows(
 }
 
 /**
- * The dropdown's rows, in legacy's exact display order: favorites (flat, no groups), then
+ * Builds the dropdown's full row list, in display order: favorites (flat, no groups), then
  * Maschinen before Messtechnik, each split into groups. `machines` is expected pre-ordered
- * (favorites first) — pass `orderedMachines()`'s (`ui/grid.ts`) result. Faithful port of
- * `fillMachSel`'s combined structure + visibility.
+ * (favorites first) — pass `orderedMachines()`'s (`ui/grid.ts`) result.
  */
 export function buildMachineFilterRows(
   machines: readonly Machine[],

@@ -1,22 +1,30 @@
+// =======================================================================================
+// GRID RENDER BRIDGE MODULE (web/js/ui/grid-render-bridge.ts)
+// =======================================================================================
+//
 // Lets imperative, non-React modules (`grid-scroll.ts`, `grid-interaction.ts`) trigger a
-// repaint of the mounted `Grid` component without importing it directly (F8 cleanup,
-// ARCHITECTURE_AUDIT.md). `Grid.tsx` already imports both of those modules itself
-// (`daysPerWeek`/`paintSelection`) — a reverse direct import for the render trigger would be a
-// genuine two-way cycle in both directions, not just an unwired convenience. This tiny module
-// breaks that: `Grid.tsx` registers its force-update trigger here once, on mount; everyone
-// else calls `triggerGridRender()`. Same shape as `Grid.tsx`'s own (still-local)
-// `windowRenderTrigger` ref, just factored out so it has no dependents of its own.
+// repaint of the mounted `Grid` component without importing it directly.
+//
+// Key Principles:
+// - BREAKS A GENUINE IMPORT CYCLE: `Grid.tsx` already imports both of those modules itself
+//   (for `daysPerWeek`/`paintSelection`); a reverse direct import for the render trigger
+//   would be a real two-way cycle, not just an unwired convenience. This tiny module breaks
+//   that: `Grid.tsx` registers its force-update trigger here once, on mount, and everyone
+//   else calls `triggerGridRender()` instead of importing `Grid.tsx` at all.
+//
+// =======================================================================================
 
 let renderTrigger: (() => void) | null = null;
 
-/** Registered by the mounted `Grid` component (Phase 7 slice B1) — cleared again on unmount,
- *  though `Grid` mounts once at boot and never unmounts in practice. */
+/** Registers the mounted `Grid` component's force-update function — cleared again on
+ *  unmount, though `Grid` mounts once at boot and never unmounts in practice. */
 export function registerGridRenderTrigger(trigger: (() => void) | null): void {
   renderTrigger = trigger;
 }
 
-/** Request a repaint of the mounted `Grid`. A no-op before `Grid` has mounted — never happens
- *  in practice, since `Grid` mounts at boot before any of this module's callers can run. */
+/** Requests a repaint of the mounted `Grid`. A no-op before `Grid` has mounted — never
+ *  happens in practice, since `Grid` mounts at boot before any of this module's callers
+ *  can possibly run. */
 export function triggerGridRender(): void {
   renderTrigger?.();
 }

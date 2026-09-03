@@ -1,15 +1,23 @@
-// The live server connection (Phase 7 slice B8): the EventSource lifecycle (presence, cell
-// updates, structural reloads) and the remote-change toast queue. Faithful port of legacy
-// `connectSSE`/`presenceTick`/`startLiveTimers`/`queueRemote`/`runRemoteQ`. The pure
-// event-payload logic (`applyUpdate`/`isForeign`/`remoteMessage`/`presenceInfo`) already lives
-// in `net/sse.ts` — this module is the DOM/EventSource adapter, kept a plain module rather
-// than a React component (there's no rendered UI of its own to componentize; see
-// `ui/user-chip.ts`'s header comment for the same judgment call on the presence badge). Lives
-// under `ui/`, not `net/`, because it touches the DOM/toast (`net/` must not depend on `ui/`).
+// =======================================================================================
+// LIVE CONNECTION MODULE (web/js/ui/live-connection.ts)
+// =======================================================================================
 //
-// `applyPresence` (Phase 7 slice B10d) moved here too, once ported: it owns `presenceData`,
-// which used to stay in legacy only because the still-unported active-users popup read it —
-// now that the popup is `ui/components/ActiveUsersModal.tsx`, that reason is gone.
+// The live server connection: the EventSource lifecycle (presence, cell updates,
+// structural reloads) and the remote-change toast queue.
+// This module:
+// 1. Owns the SSE `EventSource` connection and its event handlers.
+// 2. Tracks presence (`presenceData`) and formats it for the toolbar badge/popup.
+// 3. Queues and drains remote-change toast notifications, one at a time.
+//
+// Key Principles:
+// - DOM ADAPTER OVER A PURE CORE: the pure event-payload logic
+//   (`applyUpdate`/`isForeign`/`remoteMessage`/`presenceInfo`) lives in `net/sse.ts`; this
+//   module is the DOM/EventSource plumbing around it, kept a plain module rather than a
+//   React component since there's no rendered UI of its own to componentize.
+// - LIVES UNDER ui/, NOT net/: this module touches the DOM/toast directly, and `net/` must
+//   never depend on `ui/` — the layering only works one direction.
+//
+// =======================================================================================
 
 import { applyUpdate, isForeign, presenceInfo, remoteMessage } from '../net/sse.ts';
 import { API, readFile } from '../net/api.ts';
@@ -23,12 +31,12 @@ import { fillGroupSel } from './components/GroupFilterDropdown.tsx';
 
 /** The last known presence timestamp per name, `{name: ms-since-epoch}` — read by
  *  `ui/components/ActiveUsersModal.tsx`'s `activeUserRows`. Mutated in place (not reassigned)
- *  so importers always see the live object. Faithful port of legacy's module-level
- *  `presenceData`. */
+ *  so importers always see the live object. */
 export const presenceData: Record<string, number> = {};
 
-/** Refresh `presenceData` and the toolbar badge from a `presence` SSE event's user list.
- *  Faithful port of legacy `applyPresence`. */
+/** Refreshes `presenceData` and the toolbar badge from a `presence` SSE event's user list —
+ *  replaces the whole map rather than merging, since the event always carries the complete
+ *  current user list, not a delta. */
 function applyPresence(users: readonly (string | null | undefined)[] | undefined): void {
   const info = presenceInfo(users);
   const now = Date.now();
@@ -43,8 +51,9 @@ export interface ActiveUserRow {
   ago: number;
 }
 
-/** Everyone in `presenceData` seen within the last 180s, sorted most-recently-seen first.
- *  Faithful port of legacy `openActiveUsers`'s row-building. `now` is injected (E4) so this
+/** Lists everyone in `presenceData` seen within the last 180s, sorted most-recently-seen
+ *  first — a presence entry older than that is treated as stale (that browser tab likely
+ *  closed without a clean disconnect) and left out entirely. `now` is injected so this
  *  stays a pure function of its input. */
 export function activeUserRows(now: number): ActiveUserRow[] {
   return Object.entries(presenceData)
@@ -56,8 +65,9 @@ export function activeUserRows(now: number): ActiveUserRow[] {
 let remoteQueue: string[] = [];
 let remoteQueueRunning = false;
 
-/** Drain the remote-change queue one toast at a time (~2.6s each), pausing while an undo toast
- *  is showing. Faithful port of legacy `runRemoteQ`. */
+/** Drains the remote-change queue one toast at a time (~2.6s each), pausing while an undo
+ *  toast is showing — a remote notice should never steal the screen from, or get raced by,
+ *  an undo action the local user might still want to click. */
 function runRemoteQueue(): void {
   if (!remoteQueue.length) {
     remoteQueueRunning = false;
@@ -73,8 +83,8 @@ function runRemoteQueue(): void {
   setTimeout(runRemoteQueue, 2800);
 }
 
-/** Queue a remote-change toast; capped at 8 deep (drops the oldest first). Faithful port of
- *  legacy `queueRemote`. */
+/** Queues a remote-change toast; capped at 8 deep, dropping the oldest first — a burst of
+ *  colleague activity shouldn't leave a huge backlog of toasts to slowly drain through. */
 export function queueRemoteChange(message: string): void {
   remoteQueue.push(message);
   if (remoteQueue.length > 8) remoteQueue = remoteQueue.slice(-8);
@@ -84,8 +94,9 @@ export function queueRemoteChange(message: string): void {
 let eventSource: EventSource | null = null;
 
 /**
- * (Re)connect the live SSE stream: presence, cell updates, and structural (machine-list)
- * changes. Closes any existing connection first. Faithful port of legacy `connectSSE`.
+ * (Re)connects the live SSE stream: presence, cell updates, and structural (machine-list)
+ * changes. Closes any existing connection first, so calling this again (e.g. after a name
+ * change) never leaves two connections open at once.
  */
 export function connectSSE(): void {
   try {
@@ -151,16 +162,16 @@ export function connectSSE(): void {
   };
 }
 
-/** Reconnect with a possibly-new user name (e.g. after a name change). Faithful port of legacy
- *  `presenceTick`. */
+/** Reconnects with a possibly-new user name — called after a name change, so the new name
+ *  takes effect in presence immediately rather than waiting for the next natural reconnect. */
 export async function presenceTick(): Promise<void> {
   connectSSE();
 }
 
 let liveTimersStarted = false;
 
-/** Start the focus-triggered silent refresh and the live SSE connection. Idempotent — a second
- *  call no-ops. Faithful port of legacy `startLiveTimers`. */
+/** Starts the focus-triggered silent refresh and the live SSE connection. Idempotent — a
+ *  second call is a no-op, so callers don't need to track whether they've already started it. */
 export function startLiveTimers(): void {
   if (liveTimersStarted) return;
   liveTimersStarted = true;
