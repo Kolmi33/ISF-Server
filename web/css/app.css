@@ -443,11 +443,18 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 /* Scoped under .mybookings rather than edited directly on .abfilters/.mybk/.chip — those base
    classes are shared with AllBookingsModal, whose own look isn't part of this pass. Higher
    selector specificity here (two classes) wins over the shared single-class rules above. */
-.mybookings .abfilters{background:var(--hover);border-radius:8px;padding:10px 10px 8px;margin:8px 0 10px}
+/* Ghost layout (user request, replacing an earlier shaded card that didn't land well): no
+   background at all — the inputs/selects already carry their own border (global input/select
+   rule), which is enough structure on its own without a filled box around the whole row. */
+.mybookings .abfilters{margin:8px 0 10px}
 .mybookings .abfilters .fld>label{text-transform:none;font-size:12px}
 .mybookings .abfilters input,.mybookings .abfilters select{min-height:36px}
 .mybookings .mybk{padding:12px 10px;align-items:center}
 .mybookings .abmach b{font-size:15px;font-weight:700}
+/* Color-coded pill badge marking runs in the same multi-machine booking group (user request,
+   replacing an earlier left-border accent) — same pill shape as .aspill, background set
+   per-instance from the group's own color (GroupBadge, MyBookingsModal.tsx). */
+.mybookings .grouppill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;color:var(--text);vertical-align:middle}
 /* One horizontal row of standardized icon buttons (pin / expand / delete) — replaces the old
    stacked column + separate wide "Serie löschen" button (user request). */
 .mybookings .mybk-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto}

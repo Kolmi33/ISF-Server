@@ -145,7 +145,9 @@ describe('MyBookingsModal', () => {
     // Each machine's own row independently detects and shows the group hint — one per row,
     // hence two matches, not one shared hint for the whole group.
     expect(screen.getAllByText(/Teil einer Buchungsgruppe/)).toHaveLength(2);
-    expect(screen.getByText('Projekt X')).toBeInTheDocument(); // only m1's day carries a title
+    // "Projekt X" appears twice, both on m1's own row: once in the hint's <b>, once in its
+    // pill badge (GroupBadge) — m2's day carries no gtitle, so its own hint/badge don't repeat it.
+    expect(screen.getAllByText('Projekt X')).toHaveLength(2);
     expect(screen.getAllByText(/2 Maschinen/)).toHaveLength(2);
   });
 
@@ -158,36 +160,46 @@ describe('MyBookingsModal', () => {
     expect(screen.queryByText(/Teil einer Buchungsgruppe/)).not.toBeInTheDocument();
   });
 
-  // What: runs sharing the same multi-machine booking group get a faint, non-transparent
-  // colored left-border accent (not just the text hint) — user request: "a faint coloured
-  // marking for the same booking groups", not just the info that it's part of one. Both rows
-  // in the same group get the exact same color, so the marking actually reads as "same group"
-  // at a glance rather than two unrelated colors.
+  // What: runs sharing the same multi-machine booking group get a matching color-coded pill
+  // badge next to the machine name (not just the text hint) — user request: a prominent,
+  // color-coded pill badge to show related rows belong together, replacing an earlier
+  // left-border accent that read as an unwanted stray line. Both rows in the same group get
+  // the exact same color, so the badge actually reads as "same group" at a glance. The badge
+  // shows the group's own title when one was given, standing in for a generic "Gruppe" label.
   // How: seeds the same 2-machine group as the hint test above and reads each row's own
-  // `.mybk` inline border-left color.
-  it('gives runs in the same multi-machine group a matching colored border accent', () => {
+  // `.grouppill` background color and text.
+  it('gives runs in the same multi-machine group a matching colored pill badge', () => {
     window.S.data!.machines = [machine(), machine({ id: 'm2', name: 'Presse' })];
     window.S.data!.bookings = {
       m1: { [TODAY]: { name: 'anna', gid: 'g1', gtitle: 'Projekt X' } },
       m2: { [TODAY]: { name: 'anna', gid: 'g1' } },
     };
     render(<MyBookingsModal />);
-    const rows = [...document.querySelectorAll<HTMLElement>('.resultlist > div > .mybk')];
-    expect(rows).toHaveLength(2);
-    const colors = rows.map((row) => row.style.borderLeftColor);
-    expect(colors[0]).not.toBe('transparent');
-    expect(colors[0]).toBe(colors[1]); // same group id -> same color on both rows
+    const pills = [...document.querySelectorAll<HTMLElement>('.grouppill')];
+    expect(pills).toHaveLength(2);
+    expect(pills[0]!.textContent).toBe('Projekt X');
+    expect(pills[0]!.style.backgroundColor).not.toBe('');
+    expect(pills[0]!.style.backgroundColor).toBe(pills[1]!.style.backgroundColor); // same group -> same color
   });
 
-  // What: a plain (ungrouped) run's border-left accent stays transparent — the border-left
-  // itself is always set (so grouped and ungrouped rows keep identical padding/alignment),
-  // just invisible when there's no real group to mark.
-  // How: books one ordinary single-machine run and checks its border-left color.
-  it('leaves the border-left accent transparent for a plain, ungrouped run', () => {
+  // What: a group with no title falls back to a generic "Gruppe" pill label, still colored.
+  // How: seeds a 2-machine group with no gtitle and checks the pill's fallback text.
+  it('falls back to a generic "Gruppe" pill label when the group has no title', () => {
+    window.S.data!.machines = [machine(), machine({ id: 'm2', name: 'Presse' })];
+    window.S.data!.bookings = {
+      m1: { [TODAY]: { name: 'anna', gid: 'g1' } },
+      m2: { [TODAY]: { name: 'anna', gid: 'g1' } },
+    };
+    render(<MyBookingsModal />);
+    expect(document.querySelector('.grouppill')!.textContent).toBe('Gruppe');
+  });
+
+  // What: a plain (ungrouped) run shows no pill badge at all.
+  // How: books one ordinary single-machine run and checks no `.grouppill` renders.
+  it('shows no pill badge for a plain, ungrouped run', () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
     render(<MyBookingsModal />);
-    const row = document.querySelector<HTMLElement>('.resultlist > div > .mybk')!;
-    expect(row.style.borderLeftColor).toBe('transparent');
+    expect(document.querySelector('.grouppill')).toBeNull();
   });
 
   // What: the three per-row actions (jump-to-plan, expand, delete) are standardized icon

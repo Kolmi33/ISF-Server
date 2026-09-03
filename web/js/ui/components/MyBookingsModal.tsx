@@ -116,21 +116,33 @@ interface RunRowProps {
 /** This run's booking group, but only when it actually spans more than one machine — looked up
  *  live (current bookings, not the frozen run). A group of exactly one machine (a titled
  *  single-machine booking) isn't treated as a "real" group by either caller below: it's
- *  visually indistinguishable from a plain run anyway, so neither the hint nor the color
- *  accent would say/show anything useful. Shared by `GroupHint` and `groupAccentColor` so both
- *  agree on exactly which runs count as grouped. */
+ *  visually indistinguishable from a plain run anyway, so neither the badge nor the hint would
+ *  say/show anything useful. Shared by `GroupBadge` and `GroupHint` so both agree on exactly
+ *  which runs count as grouped. */
 function multiMachineGroup(run: LiveRun): { machineIds: Set<string> } | undefined {
   if (!run.groupId) return undefined;
   const group = findBookingGroup(store.get('data')!.bookings, run.groupId);
   return group.machineIds.size > 1 ? group : undefined;
 }
 
-/** A faint, deterministic left-border accent marking runs that share the same multi-machine
- *  booking group — reuses `grid.ts`'s `nameColor` hash (the same mechanism the grid itself uses
- *  to color-code booker names) keyed on the group id, so every run in the same group always
- *  gets the same color and ungrouped runs get none. */
-function groupAccentColor(run: LiveRun): string | undefined {
-  return multiMachineGroup(run) ? nameColor(run.groupId!, isDarkTheme()) : undefined;
+/** A color-coded pill badge marking runs that share the same multi-machine booking group,
+ *  sitting right next to the machine name — replaces an earlier left-border accent that read
+ *  as an unwanted "vertical line" (user request). Reuses `grid.ts`'s `nameColor` hash (the same
+ *  mechanism the grid itself uses to color-code booker names) keyed on the group id, so every
+ *  run in the same group always gets the same color; the group's own title stands in for a
+ *  generic "Gruppe" label when one was given at booking time. */
+function GroupBadge({ run }: { run: LiveRun }) {
+  const group = multiMachineGroup(run);
+  if (!group) return null;
+  return (
+    <span
+      className="grouppill"
+      style={{ background: nameColor(run.groupId!, isDarkTheme()) }}
+      title={`Teil einer Buchungsgruppe — ${group.machineIds.size} Maschinen`}
+    >
+      {run.groupTitle || 'Gruppe'}
+    </span>
+  );
 }
 
 /** Shows "Teil einer Buchungsgruppe" when this run belongs to a real (multi-machine) booking
@@ -164,7 +176,7 @@ function RunCardBody({ run, isSeries }: { run: LiveRun; isSeries: boolean }) {
   return (
     <div style={{ minWidth: 0 }}>
       <div className="abmach">
-        <b>{run.machine.name}</b>{' '}
+        <b>{run.machine.name}</b> <GroupBadge run={run} />{' '}
         <span className="hint" style={{ margin: 0 }}>
           · {run.machine.group}
         </span>
@@ -205,15 +217,12 @@ function RunHead({ run, isExpanded, onToggleExpand, onDeleteDates }: RunRowProps
 
   // The action icons sit in one horizontal row on the right (user request — they used to
   // stack vertically), all sharing one standardized circular icon-button shape/border. A run
-  // that's part of a real (multi-machine) booking group gets a faint colored left-border
-  // accent — every run's border-left is set (transparent when ungrouped) so grouped and
-  // ungrouped cards still line up with identical padding.
+  // that's part of a real (multi-machine) booking group is marked by `GroupBadge` (a
+  // color-coded pill next to the machine name) rather than a border accent — an earlier
+  // left-border version read as an unwanted stray line (user request).
   const deleteLabel = isSeries ? 'Serie löschen' : 'Löschen';
   return (
-    <div
-      className="mybk"
-      style={{ borderLeft: `4px solid ${groupAccentColor(run) ?? 'transparent'}` }}
-    >
+    <div className="mybk">
       <RunCardBody run={run} isSeries={isSeries} />
       <div className="mybk-actions">
         <button
