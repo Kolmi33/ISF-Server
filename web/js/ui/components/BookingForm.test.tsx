@@ -22,6 +22,10 @@ beforeEach(() => {
 });
 
 describe('BookingForm', () => {
+  // What: the form lists which machine(s) it's booking and defaults its name/date fields
+  // from the current user and the given props.
+  // How: renders with one machine and a date range and checks the machine name, the
+  // logged-in user's name, and both dates all appear as field values.
   it('lists the machine(s) and defaults name/dates from props and the current user', () => {
     render(<BookingForm machineIds={['m1']} from="2021-01-04" to="2021-01-05" />);
     expect(screen.getByText('Fräse')).toBeInTheDocument();
@@ -30,6 +34,10 @@ describe('BookingForm', () => {
     expect(screen.getByDisplayValue('2021-01-05')).toBeInTheDocument();
   });
 
+  // What: submitting with an empty name is rejected client-side — no write is attempted, and
+  // the user is toasted about the missing name.
+  // How: clears the name field, clicks Buchen, and checks mutate was never called and the
+  // toast names the problem.
   it('rejects an empty name without calling mutate', async () => {
     render(<BookingForm machineIds={['m1']} from="2021-01-04" to="2021-01-04" />);
     fireEvent.change(screen.getByDisplayValue('anna'), { target: { value: '' } });
@@ -40,6 +48,8 @@ describe('BookingForm', () => {
     expect(document.getElementById('toast')!.textContent).toContain('Namen eingeben');
   });
 
+  // What: submitting with `from` after `to` (an inverted range) is rejected client-side.
+  // How: opens the form with from/to swapped, clicks Buchen, and checks the rejection.
   it('rejects an inverted date range', async () => {
     render(<BookingForm machineIds={['m1']} from="2021-01-05" to="2021-01-04" />);
     await act(async () => {
@@ -49,6 +59,9 @@ describe('BookingForm', () => {
     expect(document.getElementById('toast')!.textContent).toContain('gültigen Zeitraum');
   });
 
+  // What: a range so large it would create an excessive number of cells is rejected
+  // client-side before ever attempting the write.
+  // How: opens the form with a 2-year range, clicks Buchen, and checks the rejection.
   it('rejects a range that would create too many cells', async () => {
     render(<BookingForm machineIds={['m1']} from="2021-01-01" to="2023-01-01" />);
     await act(async () => {
@@ -58,6 +71,12 @@ describe('BookingForm', () => {
     expect(document.getElementById('toast')!.textContent).toContain('zu groß');
   });
 
+  // What: a successful book covers every day in the range, weekends included (the form
+  // itself doesn't skip them — that's the weekend-bridge sweep's job elsewhere), logs a
+  // message naming the date range, and closes the modal on success.
+  // How: opens the form over a Sat+Sun range, submits, and checks the reducer passed to
+  // mutate actually books both days when applied, the log message names the range, and the
+  // overlay closed.
   it('books every day in range including weekends, and closes on success', async () => {
     window.mutate = vi.fn().mockResolvedValue({ count: 2, undo: [] });
     act(() => openBookingForm(['m1'], '2021-01-09', '2021-01-10')); // Sat, Sun
@@ -73,6 +92,12 @@ describe('BookingForm', () => {
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false); // closed
   });
 
+  // What: when the write reports conflicts, the form stays open and shows the conflict list
+  // plus a "book only the free ones" fallback button, instead of closing as if it succeeded.
+  // Clicking that fallback button retries with a normal book call.
+  // How: stubs mutate to return one conflict, submits, checks the conflict text/name appear
+  // and the modal stayed open, then clicks the fallback button and checks mutate was called
+  // again for the retry.
   it('shows the conflict list and a force-book button instead of closing, on conflict', async () => {
     window.mutate = vi
       .fn()
@@ -92,6 +117,10 @@ describe('BookingForm', () => {
     expect(window.mutate).toHaveBeenCalledOnce();
   });
 
+  // What: the conflict list itself is capped at 15 shown entries even when there are more,
+  // with an ellipsis marking the truncation, while the header count still shows the real total.
+  // How: stubs mutate to return 20 conflicts, submits, and checks both the "20" total in the
+  // header and the presence of the truncation ellipsis.
   it('caps the shown conflict list at 15, with an ellipsis for the rest', async () => {
     const manyConflicts = Array.from({ length: 20 }, (_, i) => ({
       machineId: 'm1',
@@ -107,6 +136,8 @@ describe('BookingForm', () => {
     expect(screen.getByText('…')).toBeInTheDocument();
   });
 
+  // What: "Abbrechen" (cancel) closes the form without attempting any write.
+  // How: opens the form, clicks Abbrechen, and checks mutate was never called and the overlay closed.
   it('Abbrechen closes without booking', () => {
     act(() => openBookingForm(['m1'], '2021-01-04', '2021-01-04'));
     act(() => {
@@ -118,6 +149,9 @@ describe('BookingForm', () => {
 });
 
 describe('openBookingForm', () => {
+  // What: the booking form is a "sticky" modal — Escape doesn't dismiss it, unlike most
+  // other modals, since accidentally losing an in-progress booking would be disruptive.
+  // How: opens the form, fires Escape, and checks the overlay is still open.
   it('opens the form as a sticky modal (Escape does not dismiss it)', () => {
     act(() => openBookingForm(['m1'], '2021-01-04', '2021-01-04'));
     act(() => {
