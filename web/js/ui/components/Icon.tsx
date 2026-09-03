@@ -1,6 +1,10 @@
-// A named icon from the inline SVG sprite defined at the top of index.html. React
-// equivalent of legacy.js's `ic(name)` string helper (`'<svg class="ic" ...><use href="#i-
-// '+name+'"/></svg>'`) — same markup, same sprite, just JSX instead of a template string.
+// =======================================================================================
+// ICON COMPONENT (web/js/ui/components/Icon.tsx)
+// =======================================================================================
+//
+// A named icon from the inline SVG sprite defined at the top of `index.html`.
+//
+// =======================================================================================
 
 export interface IconProps {
   name: string;

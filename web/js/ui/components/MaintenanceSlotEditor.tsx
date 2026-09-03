@@ -1,6 +1,12 @@
-// The machine form's dynamic maintenance/downtime slot list (Phase 7 slice B6): add, edit, and
-// remove rows. Split out of `MachineFormModal.tsx` purely to stay under the file-length/
-// function-length budgets; part of the same form conceptually.
+// =======================================================================================
+// MAINTENANCE SLOT EDITOR COMPONENT (web/js/ui/components/MaintenanceSlotEditor.tsx)
+// =======================================================================================
+//
+// The machine form's dynamic maintenance/downtime slot list: add, edit, and remove rows.
+// Split out of `MachineFormModal.tsx` purely to stay under the file-length/function-length
+// budgets — part of the same form conceptually.
+//
+// =======================================================================================
 
 import type { MaintSlotDraft } from '../machine-form.ts';
 
@@ -65,9 +71,9 @@ interface MaintenanceSlotEditorProps {
   onChange: (next: MaintSlotDraft[]) => void;
 }
 
-/** The "Wartung / Ausfallzeiten" section: the slot list (or a hint when empty) plus the "add"
- *  button. Rows are keyed by index — they have no identity beyond position; add always appends,
- *  remove always splices by index, matching legacy's own `data-mt="${i}"` indexing. */
+/** The "Wartung / Ausfallzeiten" section: the slot list (or a hint when empty) plus the
+ *  "add" button. Rows are keyed by index — they have no identity beyond their position;
+ *  add always appends, remove always splices by index. */
 export function MaintenanceSlotEditor({ slots, onChange }: MaintenanceSlotEditorProps) {
   function updateSlot(index: number, patch: Partial<MaintSlotDraft>): void {
     onChange(slots.map((slot, i) => (i === index ? { ...slot, ...patch } : slot)));

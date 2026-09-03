@@ -1,8 +1,17 @@
-// The change-log modal (Phase 7 slice B9). Faithful JSX port of legacy `openLog()` — a
-// snapshot of `S.data.log` at open time (not a live subscription; the original didn't
-// update while the modal was open either). "Zurück" calls `openAdmin()`, a direct import from
-// `AdminModal.tsx` (which imports back from here for its own "Änderungsprotokoll" button) —
-// see `AdminModal.tsx`'s header comment for why that cycle is safe.
+// =======================================================================================
+// LOG MODAL COMPONENT (web/js/ui/components/LogModal.tsx)
+// =======================================================================================
+//
+// The change-log modal.
+//
+// Key Principles:
+// - A SNAPSHOT, NOT A LIVE VIEW: shows the log as it was at open time, not a live
+//   subscription — a later write elsewhere doesn't update this modal while it's open.
+// - A SAFE IMPORT CYCLE: "Zurück" calls `openAdmin()`, a direct import from
+//   `AdminModal.tsx` (which imports back from here for its own "Änderungsprotokoll"
+//   button) — see `AdminModal.tsx`'s header comment for why that three-way cycle is safe.
+//
+// =======================================================================================
 
 import type { LogEntry } from '../../../../shared/types.ts';
 import { formatTimestamp } from '../../../../shared/dates.ts';
@@ -11,8 +20,7 @@ import { closeReactModal, openReactModal } from '../modal.tsx';
 import { store } from '../../store-instance.ts';
 import { openAdmin } from './AdminModal.tsx';
 
-/** Open the change-log modal with a snapshot of the current log. Faithful port of legacy
- *  `openLog()`. */
+/** Opens the change-log modal with a snapshot of the current log. */
 export function openLog(): void {
   openReactModal(<LogModal entries={store.get('data')?.log || []} />);
 }

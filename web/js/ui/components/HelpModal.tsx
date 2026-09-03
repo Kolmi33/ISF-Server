@@ -1,13 +1,17 @@
-// The legend/help modal (Phase 7 slice B9). Static content, no state — a faithful JSX port
-// of legacy `openHelp()`'s template string (E1: exact German copy, unchanged), split into
-// one small component per section to stay under the 60-line function budget. The only real
-// behavior is the close button, which now calls the real React modal bridge instead of the
-// inline `onclick="closeModal()"` attribute the original used.
+// =======================================================================================
+// HELP MODAL COMPONENT (web/js/ui/components/HelpModal.tsx)
+// =======================================================================================
+//
+// The legend/help modal: static German reference copy explaining the grid's colors,
+// mouse/keyboard shortcuts, booking rules, the Assistant, and the admin/data model — split
+// into one small component per section to stay under the function-length budget.
+//
+// =======================================================================================
 
 import { Icon } from './Icon.tsx';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 
-/** Open the legend/help modal. Faithful port of legacy `openHelp()`. */
+/** Opens the legend/help modal. */
 export function openHelp(): void {
   openReactModal(<HelpModal />);
 }

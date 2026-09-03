@@ -1,12 +1,17 @@
-// The stats modal's two drilldown views (Phase 7 slice B5) — split out of StatsModal.tsx purely
-// to stay under the file-length budget; part of the same modal conceptually. Faithful port of
-// legacy `renderStats`'s `mode==='m' && selM` and `mode==='p' && selP` branches.
+// =======================================================================================
+// STATS DRILLDOWN COMPONENT (web/js/ui/components/StatsDrilldown.tsx)
+// =======================================================================================
+//
+// The stats modal's two drilldown views: one machine's booking breakdown by person, and
+// one person's breakdown by machine. Split out of `StatsModal.tsx` purely to stay under
+// the file-length budget — part of the same modal conceptually.
+//
+// =======================================================================================
 
 import type { StatsMachineRow, StatsPerson } from '../views/stats.ts';
 import { Icon } from './Icon.tsx';
 
-/** A single result row's horizontal bar, sized to `percent` (0–100). Faithful port of legacy
- *  `bar(p)`. */
+/** A single result row's horizontal bar, sized to `percent` (0–100). */
 export function StatBar({ percent }: { percent: number }) {
   return (
     <div className="statbar">
