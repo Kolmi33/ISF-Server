@@ -55,10 +55,24 @@ export interface CellClassOpts {
   today?: boolean;
   /** Marks Saturday and Sunday columns. */
   weekend?: boolean;
-  /** This booked cell merges into its left/right neighbor's same-name run — drops that side's
-   *  border so the two visually join into one continuous bar (`weekBookingBarSegments`). */
+  /** This booked cell merges into its left/right/upper/lower neighbor's same-name block —
+   *  drops that side's border so the two visually join into one continuous block
+   *  (`computeBookingBlocks`). */
   mergeLeft?: boolean;
   mergeRight?: boolean;
+  mergeUp?: boolean;
+  mergeDown?: boolean;
+}
+
+/** The merge-* modifier classes (booked cells only) — split out of `cellClass` purely to stay
+ *  under the function-complexity budget. */
+function mergeModifierClasses(opts: CellClassOpts): string {
+  let c = '';
+  if (opts.mergeLeft) c += ' merge-left';
+  if (opts.mergeRight) c += ' merge-right';
+  if (opts.mergeUp) c += ' merge-up';
+  if (opts.mergeDown) c += ' merge-down';
+  return c;
 }
 
 /**
@@ -66,63 +80,156 @@ export interface CellClassOpts {
  */
 export function cellClass(state: CellState, opts: CellClassOpts = {}): string {
   let c = 'cell ' + state;
-  if (state === 'booked' && opts.mine) c += ' mine';
+  if (state === 'booked') {
+    if (opts.mine) c += ' mine';
+    c += mergeModifierClasses(opts);
+  }
   if (opts.today) c += ' today';
   if (opts.weekend) c += ' wknd';
-  if (state === 'booked' && opts.mergeLeft) c += ' merge-left';
-  if (state === 'booked' && opts.mergeRight) c += ' merge-right';
   return c;
 }
 
-/** One booked cell's position within the continuous "bar" of same-name bookings it's part of
- *  (`weekBookingBarSegments`). */
-export interface BookingBarSegment {
-  /** This cell visually merges with the previous day (same run) — drop the seam between them. */
+/** One booked cell's position within the rectangular "block" of same-name bookings it's part
+ *  of (`computeBookingBlocks`) — which neighbor directions it visually merges into, and
+ *  whether it's the block's one cell that prints the booker's name. */
+export interface BookingBlockSegment {
+  /** This cell visually merges with its left/right/upper/lower neighbor (same block) — drop
+   *  the seam on that side so the two cells visually join. */
   continuesLeft: boolean;
-  /** This cell visually merges with the next day (same run) — drop the seam between them. */
   continuesRight: boolean;
-  /** This is the one cell in its run that prints the booker's name (centered in the bar). */
+  continuesUp: boolean;
+  continuesDown: boolean;
+  /** This is the one cell in its block that prints the booker's name (centered in the block). */
   showName: boolean;
 }
 
+/** One row's per-day run membership within a displayed week: `null` for an unbooked day, else
+ *  the [start,end] column range and name of the run that day belongs to. Two cells (even in
+ *  different rows) belong to the same run only when this whole triple matches exactly. */
+type DayRun = { start: number; end: number; name: string } | null;
+
+/** Computes each row's own per-day horizontal runs for one displayed week — the same
+ *  same-name/calendar-adjacency grouping `computeBookingBlocks` merges vertically afterward,
+ *  computed once per row up front so the vertical pass can compare rows by simple equality. */
+function rowRunsForWeek(
+  week: readonly string[],
+  nameAt: (isoDate: string) => string | null,
+): DayRun[] {
+  const runs: DayRun[] = new Array(week.length).fill(null);
+  let index = 0;
+  while (index < week.length) {
+    const name = nameAt(week[index]!);
+    if (name === null) {
+      index++;
+      continue;
+    }
+    let end = index;
+    while (end + 1 < week.length && nameAt(week[end + 1]!) === name) end++;
+    for (let day = index; day <= end; day++) runs[day] = { start: index, end, name };
+    index = end + 1;
+  }
+  return runs;
+}
+
+const sameDayRun = (a: DayRun, b: DayRun): boolean =>
+  !!a && !!b && a.start === b.start && a.end === b.end && a.name === b.name;
+
 /**
- * Computes, for every day of one displayed week, its position within the "booking bar" it's
- * part of — the maximal run of calendar-consecutive days in this same week booked under the
- * exact same name. Consolidates what would otherwise be N identically-colored, individually
- * bordered, individually-labeled cells into a single continuous bar: a day continuing a run
- * into its left/right neighbor drops that border (so the two cells visually merge), and only
- * the run's middle day is marked to show the name — printed once, centered in the bar,
- * instead of once per day.
+ * Computes, for one displayed week and an ordered list of currently-visible machine rows, the
+ * rectangular "block" each booked cell belongs to — consolidating what would otherwise be many
+ * individually-bordered, individually-labeled cells into one continuous colored block, both
+ * across days (a multi-day booking) AND across machines (several adjacent rows booked
+ * together, e.g. by the Assistant or a group booking): a cell continuing a block into a
+ * neighbor drops the border on that side, and only the block's one center cell — centered
+ * both horizontally and vertically — prints the booker's name.
+ *
+ * The vertical merge is driven purely by an exact match (same name, same calendar day range),
+ * same as the horizontal one — not by a booking-group id: two machines happening to be booked
+ * by the same person for the same days already read as one visual block, group or not. A row
+ * that breaks the match (a different name, no booking, or a differently-shaped run) — "someone
+ * else's machine in between" — splits the block there; each side becomes its own independent
+ * block with its own centered name, never one shared name spanning the gap.
  *
  * Deliberately scoped to one displayed week, not the longer workday-skipping run
  * `core/bookings.ts`'s `findSameNameWorkdayRun` computes for the "delete whole series" flow:
  * weeks are separated by their own "gap" column in the grid (`GridBody.tsx`'s `MachineRow`),
- * so a bar can never visually continue past that gap anyway, and comparing by calendar day
- * here (not workday-skip) means a shown weekend cell merges into its visible neighbors
- * exactly like any other day, matching what's actually drawn next to it.
+ * so a block can never visually continue past that gap anyway, and comparing by calendar day
+ * here (not workday-skip) means a shown weekend cell merges into its visible neighbors exactly
+ * like any other day, matching what's actually drawn next to it.
  */
-export function weekBookingBarSegments(
+/** One discovered rectangle: the row/day index ranges (inclusive) it spans. */
+interface Block {
+  rowStart: number;
+  rowEnd: number;
+  dayStart: number;
+  dayEnd: number;
+}
+
+/** Discovers every maximal rectangle across `rowRuns`: scanning top-to-bottom, left-to-right,
+ *  a run not yet claimed by an earlier discovery starts a new block, extended downward through
+ *  every immediately-following row sharing that exact same run shape. Split out of
+ *  `computeBookingBlocks` purely to stay under the function-complexity budget. */
+function discoverBookingBlocks(rowCount: number, week: readonly string[], rowRuns: DayRun[][]) {
+  const blockAt = new Map<string, Block>(); // keyed by `${rowIndex}|${dayIndex}`
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+    for (let dayIndex = 0; dayIndex < week.length; dayIndex++) {
+      const run = rowRuns[rowIndex]![dayIndex];
+      if (!run || run.start !== dayIndex || blockAt.has(`${rowIndex}|${dayIndex}`)) continue;
+      let rowEnd = rowIndex;
+      while (rowEnd + 1 < rowCount && sameDayRun(rowRuns[rowEnd + 1]![dayIndex]!, run)) {
+        rowEnd++;
+      }
+      const block: Block = { rowStart: rowIndex, rowEnd, dayStart: run.start, dayEnd: run.end };
+      for (let r = rowIndex; r <= rowEnd; r++) {
+        for (let d = run.start; d <= run.end; d++) blockAt.set(`${r}|${d}`, block);
+      }
+    }
+  }
+  return blockAt;
+}
+
+/** Turns one cell's discovered block (or lack of one) into its final segment — the merge
+ *  flags toward each neighbor still inside the same block, and whether it's that block's one
+ *  geometric center cell. Split out of `computeBookingBlocks` purely to stay under the
+ *  function-complexity budget. */
+function segmentFor(
+  rowIndex: number,
+  dayIndex: number,
+  block: Block | undefined,
+): BookingBlockSegment {
+  if (!block) {
+    return {
+      continuesLeft: false,
+      continuesRight: false,
+      continuesUp: false,
+      continuesDown: false,
+      showName: false,
+    };
+  }
+  const centerRow = block.rowStart + Math.floor((block.rowEnd - block.rowStart) / 2);
+  const centerDay = block.dayStart + Math.floor((block.dayEnd - block.dayStart) / 2);
+  return {
+    continuesLeft: dayIndex > block.dayStart,
+    continuesRight: dayIndex < block.dayEnd,
+    continuesUp: rowIndex > block.rowStart,
+    continuesDown: rowIndex < block.rowEnd,
+    showName: rowIndex === centerRow && dayIndex === centerDay,
+  };
+}
+
+export function computeBookingBlocks(
   week: readonly string[],
-  nameAt: (isoDate: string) => string | null,
-): Map<string, BookingBarSegment> {
-  const segments = new Map<string, BookingBarSegment>();
-  let index = 0;
-  while (index < week.length) {
-    const runStart = index;
-    const name = nameAt(week[runStart]!);
-    let runEnd = runStart;
-    while (runEnd + 1 < week.length && name !== null && nameAt(week[runEnd + 1]!) === name) {
-      runEnd++;
+  rows: readonly { machineId: string; nameAt: (isoDate: string) => string | null }[],
+): Map<string, BookingBlockSegment> {
+  const rowRuns = rows.map(({ nameAt }) => rowRunsForWeek(week, nameAt));
+  const blockAt = discoverBookingBlocks(rows.length, week, rowRuns);
+
+  const segments = new Map<string, BookingBlockSegment>();
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+    for (let dayIndex = 0; dayIndex < week.length; dayIndex++) {
+      const key = `${rows[rowIndex]!.machineId}|${week[dayIndex]}`;
+      segments.set(key, segmentFor(rowIndex, dayIndex, blockAt.get(`${rowIndex}|${dayIndex}`)));
     }
-    const middle = runStart + Math.floor((runEnd - runStart) / 2);
-    for (let i = runStart; i <= runEnd; i++) {
-      segments.set(week[i]!, {
-        continuesLeft: name !== null && i > runStart,
-        continuesRight: name !== null && i < runEnd,
-        showName: name !== null && i === middle,
-      });
-    }
-    index = runEnd + 1;
   }
   return segments;
 }

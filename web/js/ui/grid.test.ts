@@ -12,7 +12,7 @@ import {
   nameColor,
   maintenanceKindToday,
   buildGridRows,
-  weekBookingBarSegments,
+  computeBookingBlocks,
   FAVORITES_GROUP_LABEL,
   type GridRow,
 } from './grid.ts';
@@ -96,11 +96,13 @@ describe('cellClass', () => {
   // What: the merge-left/merge-right modifiers, like mine, only apply to booked cells — a
   // free/blocked/unavail cell never has a booking run to merge into.
   // How: checks both on 'booked' add their classes, but both on 'free' have no effect.
-  it('adds merge-left/merge-right only for booked cells', () => {
-    expect(cellClass('booked', { mergeLeft: true, mergeRight: true })).toBe(
-      'cell booked merge-left merge-right',
-    );
-    expect(cellClass('free', { mergeLeft: true, mergeRight: true })).toBe('cell free');
+  it('adds merge-left/merge-right/merge-up/merge-down only for booked cells', () => {
+    expect(
+      cellClass('booked', { mergeLeft: true, mergeRight: true, mergeUp: true, mergeDown: true }),
+    ).toBe('cell booked merge-left merge-right merge-up merge-down');
+    expect(
+      cellClass('free', { mergeLeft: true, mergeRight: true, mergeUp: true, mergeDown: true }),
+    ).toBe('cell free');
   });
 });
 
@@ -361,68 +363,81 @@ describe('buildGridRows', () => {
   });
 });
 
-describe('weekBookingBarSegments', () => {
+describe('computeBookingBlocks', () => {
   const week = ['2021-01-04', '2021-01-05', '2021-01-06', '2021-01-07', '2021-01-08'];
+  const FALSE_SEGMENT = {
+    continuesLeft: false,
+    continuesRight: false,
+    continuesUp: false,
+    continuesDown: false,
+    showName: false,
+  };
 
-  // What: an unbooked day never continues in either direction and never shows a name.
+  /** One row of a single-machine, always-null-name test — the horizontal-only cases below
+   *  don't need a second row to prove nothing merges vertically by accident. */
+  const oneRow = (nameAt: (isoDate: string) => string | null) => [{ machineId: 'm1', nameAt }];
+  const key = (isoDate: string) => `m1|${isoDate}`;
+
+  // What: an unbooked day never continues in any direction and never shows a name.
   // How: a week with no bookings at all — checks every day's segment is all-false.
   it('is all-false for a day with no booking', () => {
-    const segments = weekBookingBarSegments(week, () => null);
-    for (const date of week) {
-      expect(segments.get(date)).toEqual({
-        continuesLeft: false,
-        continuesRight: false,
-        showName: false,
-      });
-    }
+    const segments = computeBookingBlocks(
+      week,
+      oneRow(() => null),
+    );
+    for (const isoDate of week) expect(segments.get(key(isoDate))).toEqual(FALSE_SEGMENT);
   });
 
   // What: a single isolated booked day (different names on both sides, or no neighbor at all)
-  // neither continues left nor right, but does show its own name — a run of exactly one day
-  // is still its own run, with itself as the midpoint.
+  // continues in no direction, but does show its own name — a 1×1 block is still its own
+  // block, with itself as the center.
   // How: books only the middle day of the week under 'anna', leaving every other day free.
-  it('a lone booked day shows its name but continues neither direction', () => {
-    const nameAt = (date: string) => (date === '2021-01-06' ? 'anna' : null);
-    const segment = weekBookingBarSegments(week, nameAt).get('2021-01-06');
-    expect(segment).toEqual({ continuesLeft: false, continuesRight: false, showName: true });
+  it('a lone booked day shows its name but continues in no direction', () => {
+    const nameAt = (isoDate: string) => (isoDate === '2021-01-06' ? 'anna' : null);
+    expect(computeBookingBlocks(week, oneRow(nameAt)).get(key('2021-01-06'))).toEqual({
+      ...FALSE_SEGMENT,
+      showName: true,
+    });
   });
 
-  // What: a run of several consecutive same-name days merges into one bar — every interior
-  // day continues both directions, the two ends continue only inward, and only the
-  // (floor-rounded) middle day is marked to show the name, so it's printed once, not per day.
-  // How: books all 5 days under 'anna' and checks each day's segment individually.
-  it('merges a full-week run into one bar, naming only its middle day', () => {
-    const segments = weekBookingBarSegments(week, () => 'anna');
-    expect(segments.get('2021-01-04')).toEqual({
-      continuesLeft: false,
+  // What: a run of several consecutive same-name days merges into one horizontal block —
+  // every interior day continues both directions, the two ends continue only inward, and
+  // only the (floor-rounded) middle day is marked to show the name.
+  // How: books all 5 days under 'anna' (one machine row) and checks each day's segment.
+  it('merges a full-week run into one horizontal block, naming only its middle day', () => {
+    const segments = computeBookingBlocks(
+      week,
+      oneRow(() => 'anna'),
+    );
+    expect(segments.get(key('2021-01-04'))).toEqual({
+      ...FALSE_SEGMENT,
       continuesRight: true,
-      showName: false,
     });
-    expect(segments.get('2021-01-05')).toEqual({
+    expect(segments.get(key('2021-01-05'))).toEqual({
+      ...FALSE_SEGMENT,
       continuesLeft: true,
       continuesRight: true,
-      showName: false,
     });
-    expect(segments.get('2021-01-06')).toEqual({
+    expect(segments.get(key('2021-01-06'))).toEqual({
       // floor((4-0)/2) = 2 → index 2, the exact middle of 5 days
+      ...FALSE_SEGMENT,
       continuesLeft: true,
       continuesRight: true,
       showName: true,
     });
-    expect(segments.get('2021-01-07')).toEqual({
+    expect(segments.get(key('2021-01-07'))).toEqual({
+      ...FALSE_SEGMENT,
       continuesLeft: true,
       continuesRight: true,
-      showName: false,
     });
-    expect(segments.get('2021-01-08')).toEqual({
+    expect(segments.get(key('2021-01-08'))).toEqual({
+      ...FALSE_SEGMENT,
       continuesLeft: true,
-      continuesRight: false,
-      showName: false,
     });
   });
 
   // What: a name change or a free-day gap both break a run — the day after either one starts
-  // a fresh run of its own, not a continuation.
+  // a fresh block of its own, not a continuation.
   // How: books days 1–2 as 'anna', day 3 free, days 4–5 as 'bob' — checks the run boundaries
   // land exactly where the name/gap changes.
   it('breaks the run on a name change or a free-day gap', () => {
@@ -433,23 +448,93 @@ describe('weekBookingBarSegments', () => {
       '2021-01-07': 'bob',
       '2021-01-08': 'bob',
     };
-    const segments = weekBookingBarSegments(week, (date) => names[date] ?? null);
-    expect(segments.get('2021-01-05')).toMatchObject({ continuesRight: false });
-    expect(segments.get('2021-01-06')).toEqual({
-      continuesLeft: false,
-      continuesRight: false,
-      showName: false,
-    });
-    expect(segments.get('2021-01-07')).toMatchObject({ continuesLeft: false });
+    const segments = computeBookingBlocks(
+      week,
+      oneRow((isoDate) => names[isoDate] ?? null),
+    );
+    expect(segments.get(key('2021-01-05'))).toMatchObject({ continuesRight: false });
+    expect(segments.get(key('2021-01-06'))).toEqual(FALSE_SEGMENT);
+    expect(segments.get(key('2021-01-07'))).toMatchObject({ continuesLeft: false });
   });
 
   // What: two consecutive days booked by two DIFFERENT people never merge, even though
-  // they're adjacent and both booked — only a matching name continues a bar.
+  // they're adjacent and both booked — only a matching name continues a block.
   // How: books day 1 as 'anna' and day 2 as 'bob' and checks neither continues toward the other.
   it('does not merge adjacent days booked by different people', () => {
     const names: Record<string, string> = { '2021-01-04': 'anna', '2021-01-05': 'bob' };
-    const segments = weekBookingBarSegments(week.slice(0, 2), (date) => names[date] ?? null);
-    expect(segments.get('2021-01-04')).toMatchObject({ continuesRight: false });
-    expect(segments.get('2021-01-05')).toMatchObject({ continuesLeft: false });
+    const segments = computeBookingBlocks(
+      week.slice(0, 2),
+      oneRow((isoDate) => names[isoDate] ?? null),
+    );
+    expect(segments.get(key('2021-01-04'))).toMatchObject({ continuesRight: false });
+    expect(segments.get(key('2021-01-05'))).toMatchObject({ continuesLeft: false });
+  });
+
+  // What: two ADJACENT machine rows booked by the same person for the exact same day range
+  // merge vertically into one rectangular block — every cell in it continues toward every
+  // neighbor still inside the rectangle, and only its one geometric center cell (the middle
+  // row, middle day) shows the name; every other cell in the block, including the middle day
+  // of the OTHER row, stays blank.
+  // How: books m1 and m2 both solid across all 5 days as 'anna' and checks the corner/edge/
+  // center cells across both rows.
+  it('merges two adjacent machine rows with an identical run into one 2×5 block', () => {
+    const rows = [
+      { machineId: 'm1', nameAt: () => 'anna' },
+      { machineId: 'm2', nameAt: () => 'anna' },
+    ];
+    const segments = computeBookingBlocks(week, rows);
+    // Row 0 (m1) is the block's top edge: continues down, and right/left same as before.
+    expect(segments.get('m1|2021-01-04')).toEqual({
+      ...FALSE_SEGMENT,
+      continuesRight: true,
+      continuesDown: true,
+    });
+    // Row 1 (m2) is the block's bottom edge: continues up instead of down.
+    expect(segments.get('m2|2021-01-04')).toEqual({
+      ...FALSE_SEGMENT,
+      continuesRight: true,
+      continuesUp: true,
+    });
+    // The center of a 2-row block is floor((1-0)/2) = row 0 (m1) — so only m1's middle day
+    // shows the name; m2's middle day is inside the same block but not its center.
+    expect(segments.get('m1|2021-01-06')).toMatchObject({ showName: true });
+    expect(segments.get('m2|2021-01-06')).toMatchObject({ showName: false, continuesUp: true });
+  });
+
+  // What: "if someone has a booking in between of the machine list" — a row that breaks the
+  // vertical match (a different name, here) splits what would otherwise be one tall block
+  // into two independent ones, each with its own centered name — never one name spanning the
+  // gap, and never silently merging through the interruption.
+  // How: books m1 and m3 as 'anna' across the same days, with m2 in between booked by 'bob'
+  // instead, and checks m1's and m3's blocks are each their own 1-row block (their own single
+  // day, i.e. their own row, shows the name), not part of one shared block.
+  it('splits into two independent blocks (top and bottom) around a differently-booked row in between', () => {
+    const rows = [
+      { machineId: 'm1', nameAt: () => 'anna' },
+      { machineId: 'm2', nameAt: () => 'bob' },
+      { machineId: 'm3', nameAt: () => 'anna' },
+    ];
+    const segments = computeBookingBlocks(week, rows);
+    expect(segments.get('m1|2021-01-04')).toMatchObject({ continuesDown: false });
+    expect(segments.get('m3|2021-01-04')).toMatchObject({ continuesUp: false });
+    // Each machine's own row is a 1-row block, so its own (horizontal) middle day shows the
+    // name independently — "the top and the bottom one".
+    expect(segments.get('m1|2021-01-06')).toMatchObject({ showName: true });
+    expect(segments.get('m3|2021-01-06')).toMatchObject({ showName: true });
+  });
+
+  // What: two adjacent rows booked by the same person but over DIFFERENT day ranges don't
+  // merge vertically — an identical run shape (same start/end day, not just an overlapping
+  // one) is required, since a partial overlap isn't a genuine rectangle.
+  // How: books m1 across days 1–3 and m2 across days 2–4 (both 'anna', overlapping but not
+  // identical) and checks neither row reports continuing toward the other.
+  it('does not merge rows whose runs overlap but are not identical in shape', () => {
+    const rows = [
+      { machineId: 'm1', nameAt: (isoDate: string) => (isoDate <= '2021-01-06' ? 'anna' : null) },
+      { machineId: 'm2', nameAt: (isoDate: string) => (isoDate >= '2021-01-05' ? 'anna' : null) },
+    ];
+    const segments = computeBookingBlocks(week, rows);
+    expect(segments.get('m1|2021-01-05')).toMatchObject({ continuesDown: false });
+    expect(segments.get('m2|2021-01-05')).toMatchObject({ continuesUp: false });
   });
 });

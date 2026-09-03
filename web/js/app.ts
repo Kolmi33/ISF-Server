@@ -120,7 +120,10 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
   if (store.get('data')) store.notify();
 });
 if (localStorage.getItem('mb_compact') === 'on') document.body.classList.add('compact');
-if (localStorage.getItem('mb_softgrid') === 'on') document.body.classList.add('softgrid');
+{
+  const storedGridlineWidth = parseInt(localStorage.getItem('mb_gridline_width') || '', 10);
+  if (Number.isFinite(storedGridlineWidth)) settingsModal.applyGridlineWidth(storedGridlineWidth);
+}
 
 /**
  * Wires toolbar buttons to open their respective modal dialogs.

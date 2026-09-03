@@ -11,12 +11,13 @@
   --dot-free:#2f9e44; --dot-busy:#e03131;
   --wknd:#e9ebef; --wkndhead:#dfe2e8; --wkndtint:rgba(110,116,128,.13);
   --star:#d4a017;
-  /* Raster-Linienfarbe der Buchungstabelle — eigenes Token statt --border, damit die
-     „Raster abschwächen"-Einstellung (SettingsModal.tsx, body.softgrid) nur die Zellgitter
-     aufhellt, ohne Rahmen andernorts (Modals, Buttons, …) mit zu beeinflussen. */
+  /* Raster-Linienfarbe/-stärke der Buchungstabelle — eigene Tokens statt --border, damit die
+     Einstellung (SettingsModal.tsx, ein Schieberegler in Pixeln) nur das Zellgitter betrifft,
+     nicht Rahmen andernorts (Modals, Buttons, …). --gridline-width ist themeunabhängig (reine
+     Nutzerpräferenz), deshalb nur einmal hier gesetzt, nicht im dark-Block unten wiederholt. */
   --gridline: var(--border);
+  --gridline-width: 1px;
 }
-body.softgrid{--gridline:#eef0f3}
 html[data-theme="dark"]{
   --bg:#15171a; --panel:#1e2126; --border:#3a3f46; --text:#e8eaed; --muted:#9aa0a6;
   --accent:#5b96e3; --accent-light:#263a52; --danger:#e07b6e; --warn:#d9a441;
@@ -32,7 +33,6 @@ html[data-theme="dark"]{
   --wknd:#242830; --wkndhead:#1b1e23; --wkndtint:rgba(150,160,180,.10);
   --gridline: var(--border);
 }
-html[data-theme="dark"] body.softgrid{--gridline:#282c33}
 body.compact td.cell{height:22px;padding:1px 4px;font-size:12px}
 body.compact td.machcol{padding-top:1px;padding-bottom:1px;font-size:12px}
 *{box-sizing:border-box}
@@ -107,9 +107,15 @@ td.cell.booked.dim{opacity:.28;filter:grayscale(.8)}
 /* ---------- Grid ---------- */
 #gridWrap{flex:1;overflow:auto;position:relative}
 table{border-collapse:separate;border-spacing:0;min-width:100%}
-th,td{border-right:1px solid var(--gridline);border-bottom:1px solid var(--gridline);padding:0;font-size:13px}
+th,td{border-right:var(--gridline-width) solid var(--gridline);border-bottom:var(--gridline-width) solid var(--gridline);padding:0;font-size:13px}
 thead th{background:var(--headbg);position:sticky;top:0;z-index:20;padding:4px 6px;font-weight:600;text-align:center;min-width:96px}
 thead th.machcol{left:0;z-index:25;text-align:left;min-width:var(--machw);max-width:var(--machw);padding-left:12px}
+/* "KW X" pinned to the left edge (right after the sticky machine column) while its own week's
+   columns are still scrolled through horizontally — same sticky-header pattern as the group
+   rows below (tr.grouprow), just on the horizontal axis instead of vertical. Once a week's
+   whole column span has scrolled past, its <th> naturally stops sticking (bound by its own
+   box) and the next week's KW header takes over the pinned spot. */
+thead th.kwhead{position:sticky;left:var(--machw);z-index:22}
 thead th.gap{min-width:8px;background:var(--bg);border-bottom:none}
 #colResize{position:absolute;top:0;right:-4px;bottom:0;width:8px;cursor:col-resize;z-index:27}
 #colResize:hover{background:var(--accent-light)}
@@ -163,20 +169,57 @@ tr.grouprow.catrow td:first-child{position:sticky;left:0;top:auto;z-index:15}
   background:var(--panel);color:var(--danger);font-weight:600;border-radius:7px;padding:5px 11px;min-height:30px}
 .clearbtn:hover{background:var(--dangerbg);border-color:var(--danger)}
 .clearbtn .ic{width:14px;height:14px}
-td.cell{min-width:96px;max-width:150px;height:30px;cursor:pointer;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 4px;background:var(--cellbg)}
+/* Every cell composes its box-shadow from named layers (weekend tint, the four "mine" accent
+   edges) declared as custom properties, each defaulting to an inert zero-size transparent
+   shadow here on the base rule. More specific rules below only ever override ONE named layer's
+   variable, never the box-shadow property itself — box-shadow doesn't merge across separate
+   declarations (the more specific one simply replaces the whole list), so composing it exactly
+   once, from variables every other rule can individually override, is what lets independent
+   visual effects (a weekend tint, an accent trace) coexist on the same cell without one
+   silently clobbering the other. */
+td.cell{
+  min-width:96px;max-width:150px;height:30px;cursor:pointer;text-align:center;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;padding:2px 4px;background:var(--cellbg);
+  --wknd-tint: 0 0 0 0 transparent;
+  --mine-top: 0 0 0 0 transparent;
+  --mine-bottom: 0 0 0 0 transparent;
+  --mine-left: 0 0 0 0 transparent;
+  --mine-right: 0 0 0 0 transparent;
+  box-shadow: inset var(--wknd-tint), inset var(--mine-top), inset var(--mine-bottom),
+    inset var(--mine-left), inset var(--mine-right);
+}
 td.cell.free:hover{background:var(--free-hover)}
 td.cell.today{background:var(--today)}
 td.cell.booked{font-weight:500}
-/* Mehrtägige Buchungen als eine durchgehende Leiste statt einzeln umrandeter Boxen: eine Zelle,
-   die sich mit ihrer Nachbarzelle im selben Namen fortsetzt (`weekBookingBarSegments`), verliert
-   ihre eigene rechte Trennlinie — die beiden verschmelzen optisch (gleiche Hintergrundfarbe
-   ohnehin schon). Nur das jeweils äußere Ende einer Leiste (kein `merge-*` in diese Richtung)
-   bekommt abgerundete Ecken; eine einzelne Tagesbuchung (beides fehlt) wird dadurch zur kleinen
-   Pille statt einer harten Box. */
+/* Buchungen (auch über mehrere Tage UND mehrere Maschinen hinweg) als ein durchgehender,
+   zusammenhängender Block statt einzeln umrandeter Boxen: eine Zelle, die sich mit einer
+   Nachbarzelle im selben Namen fortsetzt (`computeBookingBlocks`), verliert die eigene
+   Trennlinie zu dieser Seite hin — die beiden verschmelzen optisch (gleiche Hintergrundfarbe
+   ohnehin schon, da namensbasiert). Nur die jeweils äußere Kante eines Blocks (kein `merge-*`
+   in diese Richtung) bekommt eine abgerundete Ecke; eine einzelne Tagesbuchung (kein `merge-*`
+   in irgendeine Richtung) wird dadurch zur kleinen Pille statt einer harten Box. */
 td.cell.booked.merge-right{border-right:none}
-td.cell.booked:not(.merge-left){border-top-left-radius:4px;border-bottom-left-radius:4px}
-td.cell.booked:not(.merge-right){border-top-right-radius:4px;border-bottom-right-radius:4px}
-td.cell.mine{outline:2px solid var(--accent);outline-offset:-2px}
+td.cell.booked.merge-down{border-bottom:none}
+td.cell.booked:not(.merge-left):not(.merge-up){border-top-left-radius:4px}
+td.cell.booked:not(.merge-right):not(.merge-up){border-top-right-radius:4px}
+td.cell.booked:not(.merge-left):not(.merge-down){border-bottom-left-radius:4px}
+td.cell.booked:not(.merge-right):not(.merge-down){border-bottom-right-radius:4px}
+/* The "mine" accent used to be a plain `outline`, which (having no per-side control) drew a
+   full rectangle around every individual day of a merged block — exactly the "blue box around
+   each day" the user reported. Four separately-overridable box-shadow layers (declared on the
+   base td.cell rule above), one per edge, let each side turn off independently: a merge-* in a
+   given direction blanks that one edge's layer, so only the whole block's true outer boundary
+   ever gets traced, regardless of how many days or machines it spans. */
+td.cell.mine{
+  --mine-top: 2px 0 0 0 var(--accent);
+  --mine-bottom: -2px 0 0 0 var(--accent);
+  --mine-left: 2px 0 0 0 var(--accent);
+  --mine-right: -2px 0 0 0 var(--accent);
+}
+td.cell.mine.merge-left{--mine-left: 0 0 0 0 transparent}
+td.cell.mine.merge-right{--mine-right: 0 0 0 0 transparent}
+td.cell.mine.merge-up{--mine-top: 0 0 0 0 transparent}
+td.cell.mine.merge-down{--mine-bottom: 0 0 0 0 transparent}
 td.cell.blocked{background:repeating-linear-gradient(45deg,var(--blocked1),var(--blocked1) 6px,var(--blocked2) 6px,var(--blocked2) 12px);cursor:not-allowed;color:var(--muted)}
 td.cell.unavail{background:var(--blocked1);cursor:not-allowed;color:var(--muted);opacity:.6}
 th.today{background:var(--todayhead)}
@@ -184,7 +227,7 @@ th.today{background:var(--todayhead)}
 thead th.wknd{background:var(--wkndhead)}
 td.cell.free.wknd{background:var(--wknd)}
 td.cell.free.wknd:hover{background:var(--free-hover)}
-td.cell.booked.wknd, td.cell.blocked.wknd{box-shadow:inset 0 0 0 999px var(--wkndtint)}
+td.cell.booked.wknd, td.cell.blocked.wknd{--wknd-tint: 0 0 0 999px var(--wkndtint)}
 th.today.wknd{background:var(--todayhead)} /* heute schlägt Wochenende */
 td.cell.today.wknd{background:var(--today)}
 #grid{user-select:none}

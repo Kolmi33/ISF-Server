@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import type { AppState } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
 
@@ -34,6 +34,7 @@ const notifySpy = vi.spyOn(store, 'notify');
 beforeEach(() => {
   localStorage.clear();
   document.body.className = '';
+  document.documentElement.style.removeProperty('--gridline-width');
   store.set({ user: 'Kolmanovskyi', extraWeeks: 3 } as unknown as Partial<AppState>);
   window.S = store.state;
   notifySpy.mockClear();
@@ -112,16 +113,29 @@ describe('SettingsModal', () => {
     expect(document.body.classList.contains('compact')).toBe(true);
   });
 
-  // What: softening the grid lines, like compact mode, is applied by toggling a CSS class
-  // directly on the body — a pure styling change, independent of the always-on booking-bar
-  // consolidation (no store write needed either).
-  // How: clicks the "Rasterlinien abschwächen" checkbox and checks both the persisted setting
-  // and the body's class list.
-  it('toggling grid-line softening adds/removes the body class directly', () => {
+  // What: the grid-line slider defaults to 1px (matching the grid's un-configured look) when
+  // nothing is stored yet, and dragging it writes the pixel width straight to both the
+  // `--gridline-width` CSS variable (live) and localStorage (persisted) — no store write, a
+  // pure styling change like compact mode.
+  // How: checks the slider's initial value, then sets it to 0 and checks the CSS variable and
+  // the persisted setting both updated, and the "aus" (off) label appears at 0.
+  it('the grid-line slider defaults to 1px and applies live + persists on change', () => {
     render(<SettingsModal />);
-    screen.getByLabelText(/Rasterlinien abschwächen/).click();
-    expect(localStorage.getItem('mb_softgrid')).toBe('on');
-    expect(document.body.classList.contains('softgrid')).toBe(true);
+    const slider = screen.getByLabelText('Rasterlinien-Stärke') as HTMLInputElement;
+    expect(slider.value).toBe('1');
+    fireEvent.change(slider, { target: { value: '0' } });
+    expect(localStorage.getItem('mb_gridline_width')).toBe('0');
+    expect(document.documentElement.style.getPropertyValue('--gridline-width')).toBe('0px');
+    expect(screen.getByText('aus')).toBeInTheDocument();
+  });
+
+  // What: a previously-persisted width restores as the slider's value on the next open,
+  // matching every other persisted setting in this modal.
+  // How: pre-seeds localStorage with a width, renders, and checks the slider picks it up.
+  it('restores a persisted grid-line width on open', () => {
+    localStorage.setItem('mb_gridline_width', '3');
+    render(<SettingsModal />);
+    expect((screen.getByLabelText('Rasterlinien-Stärke') as HTMLInputElement).value).toBe('3');
   });
 
   // What: the settings modal displays the currently logged-in user's name.

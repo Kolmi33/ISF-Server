@@ -27,8 +27,7 @@ import {
   isMine,
   maintenanceKindToday,
   nameColor,
-  weekBookingBarSegments,
-  type BookingBarSegment,
+  type BookingBlockSegment,
   type GridRow,
 } from '../grid.ts';
 import { Icon } from './Icon.tsx';
@@ -121,10 +120,12 @@ function BlockedCell({ machine, isoDate, isToday, weekend, dateLabel }: CellAttr
 }
 
 /** One data cell, already classified as booked (and not blocked). `segment` is this cell's
- *  position within its consolidated multi-day booking bar (`weekBookingBarSegments`,
- *  computed once per week by `MachineRow`): a cell that continues into its neighbor drops
- *  that border so the two visually merge, and only the bar's one "showName" cell prints the
- *  booker's name — everywhere else in the same run stays just the shared background color. */
+ *  position within its consolidated 2D booking block (`computeBookingBlocks`, computed once
+ *  per render across the whole visible grid by `Grid.tsx`, not per row): a cell that
+ *  continues into a neighbor (in any of the four directions) drops the border on that side so
+ *  the two visually merge, and only the block's one "showName" cell — centered both across
+ *  its days and across its machines — prints the booker's name; everywhere else in the same
+ *  block stays just the shared background color. */
 function BookedCell({
   machine,
   isoDate,
@@ -132,7 +133,7 @@ function BookedCell({
   weekend,
   dateLabel,
   segment,
-}: CellAttrs & { segment: BookingBarSegment }) {
+}: CellAttrs & { segment: BookingBlockSegment }) {
   const booking = getBooking(store.get('data')!.bookings, machine.id, isoDate)!;
   const mine = isMine(store.get('user'), booking.name);
   return (
@@ -143,6 +144,8 @@ function BookedCell({
         weekend,
         mergeLeft: segment.continuesLeft,
         mergeRight: segment.continuesRight,
+        mergeUp: segment.continuesUp,
+        mergeDown: segment.continuesDown,
       })}
       role="gridcell"
       data-machine-id={machine.id}
@@ -165,7 +168,7 @@ function GridCell({
   today,
   dateLabel,
   segment,
-}: Omit<CellAttrs, 'isToday' | 'weekend'> & { today: string; segment: BookingBarSegment }) {
+}: Omit<CellAttrs, 'isToday' | 'weekend'> & { today: string; segment: BookingBlockSegment }) {
   const isToday = isoDate === today;
   const weekend = isWeekend(parseIsoDateString(isoDate));
   const booking = getBooking(store.get('data')!.bookings, machine.id, isoDate);
@@ -298,58 +301,57 @@ function MachineRow({
   weeks,
   today,
   dateLabels,
+  bookingBlocks,
 }: {
   machine: Machine;
   weeks: string[][];
   today: string;
   dateLabels: ReadonlyMap<string, string>;
+  bookingBlocks: ReadonlyMap<string, BookingBlockSegment>;
 }) {
-  // Booking-bar segmentation is computed once per displayed week (not per cell) — each week
-  // is its own independent "row" of the merge since a week's own "gap" column already breaks
-  // any bar visually, so there's nothing to carry over from one week to the next.
-  const bookings = store.get('data')!.bookings;
-  const nameAt = (isoDate: string) => getBooking(bookings, machine.id, isoDate)?.name ?? null;
-
   return (
     <tr role="row">
       <MachineRowHeaderCell machine={machine} today={today} />
-      {weeks.map((week, weekIndex) => {
-        const barSegments = weekBookingBarSegments(week, nameAt);
-        return (
-          <Fragment key={week[0]}>
-            {weekIndex > 0 && <td className="gap" aria-hidden="true" />}
-            {week.map((isoDate) => (
-              <GridCell
-                machine={machine}
-                isoDate={isoDate}
-                today={today}
-                dateLabel={dateLabels.get(isoDate)!}
-                segment={barSegments.get(isoDate)!}
-                key={isoDate}
-              />
-            ))}
-          </Fragment>
-        );
-      })}
+      {weeks.map((week, weekIndex) => (
+        <Fragment key={week[0]}>
+          {weekIndex > 0 && <td className="gap" aria-hidden="true" />}
+          {week.map((isoDate) => (
+            <GridCell
+              machine={machine}
+              isoDate={isoDate}
+              today={today}
+              dateLabel={dateLabels.get(isoDate)!}
+              segment={bookingBlocks.get(`${machine.id}|${isoDate}`)!}
+              key={isoDate}
+            />
+          ))}
+        </Fragment>
+      ))}
     </tr>
   );
 }
 
 /** One row of the grid body: a category header, a group header, or a machine's data row —
  *  driven entirely by the pure `buildGridRows` (`ui/grid.ts`), which decides the row list
- *  and its order; this component just renders whichever kind of row it's handed. */
+ *  and its order; this component just renders whichever kind of row it's handed.
+ *  `bookingBlocks` is `Grid.tsx`'s one grid-wide computation (`computeBookingBlocks`) of every
+ *  booked cell's position within its consolidated 2D block — passed straight through to
+ *  whichever machine row needs it, since the vertical part of that merge needs every row's
+ *  data at once and so can't be computed independently by each row on its own. */
 export function GridBodyRow({
   row,
   columnCount,
   weeks,
   today,
   dateLabels,
+  bookingBlocks,
 }: {
   row: GridRow;
   columnCount: number;
   weeks: string[][];
   today: string;
   dateLabels: ReadonlyMap<string, string>;
+  bookingBlocks: ReadonlyMap<string, BookingBlockSegment>;
 }) {
   if (row.kind === 'category') {
     return (
@@ -380,5 +382,13 @@ export function GridBodyRow({
       </tr>
     );
   }
-  return <MachineRow machine={row.machine} weeks={weeks} today={today} dateLabels={dateLabels} />;
+  return (
+    <MachineRow
+      machine={row.machine}
+      weeks={weeks}
+      today={today}
+      dateLabels={dateLabels}
+      bookingBlocks={bookingBlocks}
+    />
+  );
 }

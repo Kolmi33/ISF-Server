@@ -2,13 +2,14 @@
 // SETTINGS MODAL COMPONENT (web/js/ui/components/SettingsModal.tsx)
 // =======================================================================================
 //
-// The settings modal: theme, presence sharing, compact rows, grid-line softening, weekend
-// display, name, and the debug panel toggle. Each control reads/writes its own `localStorage` key directly
-// and calls straight into the module that actually owns that behavior
-// (`applyTheme`/`connectSSE`/`refreshNow`/`applyDebug`/`dbgOn`/`centerToday`).
+// The settings modal: theme, presence sharing, compact rows, a grid-line thickness slider,
+// weekend display, name, and the debug panel toggle. Each control reads/writes its own
+// `localStorage` key directly and calls straight into the module that actually owns that
+// behavior (`applyTheme`/`connectSSE`/`refreshNow`/`applyDebug`/`dbgOn`/`centerToday`).
 //
 // =======================================================================================
 
+import { useState } from 'react';
 import { Icon } from './Icon.tsx';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { askUserName } from './AskUserNameModal.tsx';
@@ -103,26 +104,50 @@ function CompactRow() {
   );
 }
 
-/** Toggles `body.softgrid`, which swaps the grid's cell border color (`--gridline`) to a much
- *  lighter grey (`app.css`) so the colored booking blocks read as the visual focal point
- *  instead of the cell grid itself. Purely a color preference — every cell stays exactly
- *  where and what it was; nothing about the grid's layout or interaction changes. */
+/** The grid's cell border width in pixels, 0 (invisible) to `GRIDLINE_WIDTH_MAX` (bold) — a
+ *  slider, not a threshold: {@link applyGridlineWidth} writes it straight to the `--gridline-width`
+ *  CSS custom property (`app.css`), which `th`/`td`'s own border-width already reads from, so no
+ *  class toggling or extra CSS state is needed the way `body.compact` needs a class. Every cell
+ *  stays exactly where and what it was; only the line between cells changes. */
+const GRIDLINE_WIDTH_DEFAULT = 1;
+const GRIDLINE_WIDTH_MAX = 4;
+
+function readGridlineWidth(): number {
+  const stored = parseInt(localStorage.getItem('mb_gridline_width') || '', 10);
+  return Number.isFinite(stored)
+    ? Math.min(Math.max(stored, 0), GRIDLINE_WIDTH_MAX)
+    : GRIDLINE_WIDTH_DEFAULT;
+}
+
+/** Applies a gridline width both live (the CSS variable) and persisted (`localStorage`) — the
+ *  one function both `GridLinesRow`'s live slider and `app.ts`'s boot-time restore call, so
+ *  the two can never drift out of sync on what "applying" actually means. */
+export function applyGridlineWidth(px: number): void {
+  document.documentElement.style.setProperty('--gridline-width', `${px}px`);
+}
+
 function GridLinesRow() {
-  const softGrid = localStorage.getItem('mb_softgrid') === 'on';
+  const [width, setWidth] = useState(readGridlineWidth);
   return (
     <div className="formrow">
       <label>Raster</label>
-      <label style={{ minWidth: 'auto' }}>
-        <input
-          type="checkbox"
-          defaultChecked={softGrid}
-          onChange={(event) => {
-            localStorage.setItem('mb_softgrid', event.target.checked ? 'on' : 'off');
-            document.body.classList.toggle('softgrid', event.target.checked);
-          }}
-        />{' '}
-        Rasterlinien abschwächen (Buchungsblöcke stärker betonen)
-      </label>
+      <input
+        type="range"
+        min={0}
+        max={GRIDLINE_WIDTH_MAX}
+        step={1}
+        value={width}
+        aria-label="Rasterlinien-Stärke"
+        onChange={(event) => {
+          const px = parseInt(event.target.value, 10);
+          setWidth(px);
+          localStorage.setItem('mb_gridline_width', String(px));
+          applyGridlineWidth(px);
+        }}
+      />
+      <span className="hint" style={{ margin: 0, minWidth: '3.5em' }}>
+        {width === 0 ? 'aus' : `${width}px`}
+      </span>
     </div>
   );
 }

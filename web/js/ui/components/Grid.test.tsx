@@ -138,6 +138,18 @@ describe('Grid', () => {
     expect(todayHeader).not.toBeNull();
   });
 
+  // What: the "KW X" header carries its own pinning class (app.css sticks it to the left edge,
+  // right after the machine column, while its week is being scrolled through) — otherwise it
+  // would scroll away with its columns and there'd be no visible way to tell which week is
+  // currently in view once scrolled past the very first column.
+  // How: renders and checks the KW header cell has the "kwhead" class.
+  it('gives the "KW X" header its own pinning class', () => {
+    const { container } = renderGridIntoTable();
+    const kwHeader = container.querySelector('thead tr:first-child th.kwhead');
+    expect(kwHeader).not.toBeNull();
+    expect(kwHeader!.textContent).toContain('KW 1');
+  });
+
   // What: both category rows (one per category present) and group rows (one per group)
   // render as their own distinct table rows.
   // How: renders (two categories, at least one group) and checks each expected row exists.
@@ -202,6 +214,57 @@ describe('Grid', () => {
     expect(tue.className).toContain('merge-right');
     expect(wed.className).toContain('merge-left');
     expect(wed.className).not.toContain('merge-right');
+  });
+
+  // What: two machine rows that sit genuinely adjacent in the rendered table (same group, no
+  // header row between them — the fixture's "m-mine" and "m-other", both in "Halle 1") and
+  // are booked by the same person for the exact same days merge vertically too, into one 2D
+  // block: the seam between the two rows drops, and only the block's one geometric center
+  // cell — not each row's own middle day — prints the name.
+  // How: books both machines solid across the same three days under 'carla' and checks the
+  // merge-up/merge-down classes on both rows plus which single cell shows the name.
+  it('merges two adjacent machine rows into one 2D block, naming only its center cell', () => {
+    const days = { '2021-01-04': { name: 'carla' }, '2021-01-05': { name: 'carla' } };
+    window.S.data!.bookings['m-mine'] = days;
+    window.S.data!.bookings['m-other'] = days;
+    const { container } = renderGridIntoTable();
+    const cellFor = (machineId: string, date: string) =>
+      container.querySelector(`td[data-machine-id="${machineId}"][data-date="${date}"]`)!;
+
+    // Row 0 (m-mine) is the block's top edge: merges down into m-other, not up.
+    expect(cellFor('m-mine', '2021-01-04').className).toContain('merge-down');
+    expect(cellFor('m-mine', '2021-01-04').className).not.toContain('merge-up');
+    // Row 1 (m-other) is the block's bottom edge: merges up into m-mine, not down.
+    expect(cellFor('m-other', '2021-01-04').className).toContain('merge-up');
+    expect(cellFor('m-other', '2021-01-04').className).not.toContain('merge-down');
+
+    // A 2-row × 2-day block centers on row 0 (floor((1-0)/2)), day 0 (floor((1-0)/2)) —
+    // m-mine's own first day is the one cell that shows the name; every other cell (including
+    // m-other's own same day) stays blank.
+    expect(cellFor('m-mine', '2021-01-04').textContent).toBe('carla');
+    expect(cellFor('m-other', '2021-01-04').textContent).toBe('');
+    expect(cellFor('m-mine', '2021-01-05').textContent).toBe('');
+    expect(cellFor('m-other', '2021-01-05').textContent).toBe('');
+  });
+
+  // What: a category/group header sitting between two machine rows genuinely breaks their
+  // visual adjacency — two machines separated by one never merge, even booked identically,
+  // since there really is a header row between their <tr>s in the rendered table.
+  // How: books "m-other" and "m-unavail" (separated by the "Halle 2" group header in the
+  // fixture's rendered order) identically and checks neither reports merging toward the other.
+  it('does not merge two machine rows separated by a category/group header', () => {
+    const day = { [TODAY]: { name: 'carla' } };
+    window.S.data!.bookings['m-other'] = day;
+    window.S.data!.bookings['m-unavail'] = day;
+    const { container } = renderGridIntoTable();
+    const cellFor = (machineId: string) =>
+      container.querySelector(`td[data-machine-id="${machineId}"][data-date="${TODAY}"]`)!;
+
+    expect(cellFor('m-other').className).not.toContain('merge-down');
+    expect(cellFor('m-unavail').className).not.toContain('merge-up');
+    // Each row is its own independent 1-cell block, so each shows its own name.
+    expect(cellFor('m-other').textContent).toBe('carla');
+    expect(cellFor('m-unavail').textContent).toBe('carla');
   });
 
   // What: a cell blocked by an active maintenance slot renders as "blocked" with the slot's

@@ -32,8 +32,15 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../../shared/dates.ts';
-import { buildGridRows, visibleWeeks, type GridRow } from '../grid.ts';
+import {
+  buildGridRows,
+  computeBookingBlocks,
+  visibleWeeks,
+  type BookingBlockSegment,
+  type GridRow,
+} from '../grid.ts';
 import { daysPerWeek, syncJumpControls, ensureOverflow } from '../grid-scroll.ts';
+import { getBooking } from '../../core/bookings.ts';
 import { CATEGORIES } from '../../core/machines.ts';
 import { categoryTap, categoryTapCancel, toggleAllGroupsInCategory } from '../category-fold.ts';
 import { paintSelection } from '../grid-interaction.ts';
@@ -86,7 +93,7 @@ function GridHeaderRows({ weeks, columnsPerWeek }: { weeks: string[][]; columnsP
         {weeks.map((week, weekIndex) => (
           <Fragment key={week[0]}>
             {weekIndex > 0 && <th className="gap" rowSpan={2} aria-hidden="true" />}
-            <th colSpan={columnsPerWeek} role="columnheader">
+            <th className="kwhead" colSpan={columnsPerWeek} role="columnheader">
               KW {getIsoWeekNumber(parseIsoDateString(week[0]!))}
             </th>
           </Fragment>
@@ -116,6 +123,43 @@ interface GridViewModel {
   columnCount: number;
   dateLabels: ReadonlyMap<string, string>;
   rows: ReturnType<typeof buildGridRows>;
+  bookingBlocks: ReadonlyMap<string, BookingBlockSegment>;
+}
+
+/** Runs `computeBookingBlocks` (`ui/grid.ts`) once per displayed week across the grid's full
+ *  row sequence — including category/group HEADER rows, given a `nameAt` that always returns
+ *  `null` — merging the per-week results into one lookup keyed by `${machineId}|${isoDate}`.
+ *  Header rows must stay in this list rather than being filtered out first: a category or
+ *  group header sitting between two machine rows genuinely breaks their visual adjacency (the
+ *  same way a differently-booked row does), so two machines in different groups must never
+ *  merge just because they'd be "adjacent" once headers are stripped out. A machine hidden by
+ *  an active filter, by contrast, correctly closes the gap — `buildGridRows` (`ui/grid.ts`)
+ *  simply omits its row entirely, no header takes its place, so its neighbors truly are
+ *  adjacent in the rendered table and are free to merge.
+ *
+ * Computed once per render at this top level (not once per row) since the vertical merge
+ * needs every row's data at once, not just its own. Split out of `computeGridViewModel`
+ * purely to stay under the function-length budget. */
+function computeBookingBlocksForWeeks(
+  weeks: readonly string[][],
+  gridRows: readonly GridRow[],
+): Map<string, BookingBlockSegment> {
+  const bookings = store.get('data')!.bookings;
+  const rows = gridRows.map(
+    (row, index) =>
+      row.kind === 'machine'
+        ? {
+            machineId: row.machine.id,
+            nameAt: (isoDate: string) =>
+              getBooking(bookings, row.machine.id, isoDate)?.name ?? null,
+          }
+        : { machineId: `__header_${index}__`, nameAt: () => null }, // never looked up; just a break
+  );
+  const combined = new Map<string, BookingBlockSegment>();
+  for (const week of weeks) {
+    for (const [key, segment] of computeBookingBlocks(week, rows)) combined.set(key, segment);
+  }
+  return combined;
 }
 
 /**
@@ -150,6 +194,7 @@ function computeGridViewModel(): GridViewModel {
 
   return {
     today: todayAsIsoDateString(),
+    bookingBlocks: computeBookingBlocksForWeeks(weeks, rows),
     weeks,
     columnsPerWeek,
     columnCount: weeks.length * columnsPerWeek + (weeks.length - 1), // day + gap columns
@@ -197,7 +242,8 @@ export function Grid() {
 
   if (!store.get('data')) return null; // nothing to render before the initial load completes
 
-  const { today, weeks, columnsPerWeek, columnCount, dateLabels, rows } = computeGridViewModel();
+  const { today, weeks, columnsPerWeek, columnCount, dateLabels, rows, bookingBlocks } =
+    computeGridViewModel();
 
   return (
     <>
@@ -212,6 +258,7 @@ export function Grid() {
             weeks={weeks}
             today={today}
             dateLabels={dateLabels}
+            bookingBlocks={bookingBlocks}
             key={gridRowKey(row, index)}
           />
         ))}
