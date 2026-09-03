@@ -22,11 +22,12 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../../shared/dates.ts';
-import { groupsByCategory, type CategoryGroups } from '../../core/machines.ts';
+import { CATEGORIES, groupsByCategory, type CategoryGroups } from '../../core/machines.ts';
 import { orderedMachines } from '../grid.ts';
 import {
   computeAllRuns,
   filterAllRuns,
+  CATEGORY_FILTER_PREFIX,
   type AllRun,
   type AllBookingsFilter,
 } from '../views/all-bookings.ts';
@@ -96,6 +97,11 @@ function AllBookingsFilters({ filter, groupOptions, onChange }: AllBookingsFilte
         <label>Bereich</label>
         <select value={filter.group} onChange={onInput('group')}>
           <option value="">Alle</option>
+          {groupOptions.map(({ category }) => (
+            <option key={`cat:${category}`} value={`${CATEGORY_FILTER_PREFIX}${category}`}>
+              {CATEGORIES.find((c) => c.id === category)?.label ?? category} (alle Bereiche)
+            </option>
+          ))}
           <GroupOptions groupOptions={groupOptions} />
         </select>
       </div>

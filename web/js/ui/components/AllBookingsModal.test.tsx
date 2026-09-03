@@ -122,6 +122,30 @@ describe('AllBookingsModal', () => {
     ]);
   });
 
+  // What: the "Bereich" select also offers a whole-category option per category (above the
+  // per-group optgroups), letting the list be filtered to e.g. every Maschinen machine at
+  // once instead of just one department group.
+  // How: opens the modal, checks both category-wide options are present with the expected
+  // labels/values, selects "Messtechnik (alle Bereiche)", and checks the list narrows to just
+  // that category's machine even though its own group ("Labor") was never picked explicitly.
+  it('offers a whole-category option in "Bereich", filtering across all its groups', () => {
+    act(() => openAllBookings());
+    window.S.data!.bookings.m3 = { '2021-01-06': { name: 'carol' } };
+    act(() => openAllBookings()); // re-open so the frozen run list picks up the new booking
+
+    const options = [...groupSelect().options].map((o) => ({ value: o.value, text: o.text }));
+    expect(options).toContainEqual({ value: 'cat:maschine', text: 'Maschinen (alle Bereiche)' });
+    expect(options).toContainEqual({
+      value: 'cat:messtechnik',
+      text: 'Messtechnik (alle Bereiche)',
+    });
+
+    fireEvent.change(groupSelect(), { target: { value: 'cat:messtechnik' } });
+    expect(screen.getByText('Messgerät')).toBeInTheDocument();
+    expect(screen.queryByText('Fräse')).not.toBeInTheDocument();
+    expect(screen.queryByText('Presse')).not.toBeInTheDocument();
+  });
+
   // What: the chosen sort order survives across closing and re-opening the modal — persisted,
   // not just transient component state.
   // How: changes the sort dropdown, checks it persisted, closes and re-opens the modal, and

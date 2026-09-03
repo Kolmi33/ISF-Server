@@ -97,6 +97,25 @@ describe('filterAllRuns', () => {
     expect(ids(filterAllRuns(all, { ...base, group: 'Labor' }))).toEqual(['Bob']);
   });
 
+  // What: a `group` value of the form `cat:<id>` selects an entire top-level category (every
+  // group within it) instead of one exact department group — the "Bereich" dropdown's whole-
+  // category options (`AllBookingsModal.tsx`) encode their value this way.
+  // How: gives Beta the messtechnik category (Alpha/Gamma default to maschine) and checks
+  // `cat:messtechnik` finds only Beta while `cat:maschine` finds the other two, regardless of
+  // their differing groups (Halle vs. Labor).
+  it('filters by whole category via a "cat:" prefixed group value', () => {
+    const mAlpha = mach('a', 'Alpha', 'Halle');
+    const mBeta: Machine = { ...mach('b', 'Beta', 'Labor'), cat: 'messtechnik' };
+    const mGamma = mach('c', 'Gamma', 'Halle');
+    const runs: AllRun[] = [
+      { ...A, machine: mAlpha },
+      { ...B, machine: mBeta },
+      { ...C, machine: mGamma },
+    ];
+    expect(ids(filterAllRuns(runs, { ...base, group: 'cat:messtechnik' }))).toEqual(['Bob']);
+    expect(ids(filterAllRuns(runs, { ...base, group: 'cat:maschine' }))).toEqual(['Anna', 'Carla']);
+  });
+
   // What: the date-window filter keeps a run when it OVERLAPS [from, to] — a run only needs
   // its last date >= from, or its first date <= to, not both bounds fully inside the window.
   // How: checks a late `from` still catches a run whose last date reaches that far, and an
