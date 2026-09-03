@@ -13,7 +13,9 @@ import {
   maintenanceKindToday,
   buildGridRows,
   computeBookingBlocks,
+  mineAccentLayers,
   FAVORITES_GROUP_LABEL,
+  type BookingBlockSegment,
   type GridRow,
 } from './grid.ts';
 
@@ -536,5 +538,58 @@ describe('computeBookingBlocks', () => {
     const segments = computeBookingBlocks(week, rows);
     expect(segments.get('m1|2021-01-05')).toMatchObject({ continuesDown: false });
     expect(segments.get('m2|2021-01-05')).toMatchObject({ continuesUp: false });
+  });
+});
+
+describe('mineAccentLayers', () => {
+  const segment = (over: Partial<BookingBlockSegment> = {}): BookingBlockSegment => ({
+    continuesLeft: false,
+    continuesRight: false,
+    continuesUp: false,
+    continuesDown: false,
+    showName: false,
+    ...over,
+  });
+  const NO_ACCENT = '0 0 0 0 transparent';
+
+  // What: a 1×1 block (no continuation in any direction) gets the accent on all four edges —
+  // it IS its own outer boundary on every side.
+  // How: an all-false segment; every --mine-* layer should be a real accent, none inert.
+  it('accents all four edges of an isolated block', () => {
+    const layers = mineAccentLayers(segment());
+    expect(layers['--mine-top']).not.toBe(NO_ACCENT);
+    expect(layers['--mine-bottom']).not.toBe(NO_ACCENT);
+    expect(layers['--mine-left']).not.toBe(NO_ACCENT);
+    expect(layers['--mine-right']).not.toBe(NO_ACCENT);
+  });
+
+  // What: an edge that continues into a same-block neighbor is an interior edge, not the
+  // block's outer boundary, and must stay blank — otherwise the accent would trace every
+  // cell's own rectangle instead of the merged block's outer edge exactly once.
+  // How: a segment continuing in every direction — every --mine-* layer should be inert.
+  it('leaves every edge blank when the block continues in that direction', () => {
+    const layers = mineAccentLayers(
+      segment({
+        continuesLeft: true,
+        continuesRight: true,
+        continuesUp: true,
+        continuesDown: true,
+      }),
+    );
+    expect(layers['--mine-top']).toBe(NO_ACCENT);
+    expect(layers['--mine-bottom']).toBe(NO_ACCENT);
+    expect(layers['--mine-left']).toBe(NO_ACCENT);
+    expect(layers['--mine-right']).toBe(NO_ACCENT);
+  });
+
+  // What: a block that's merged in only SOME directions (e.g. the left end of a horizontal
+  // run) shows the accent only on its true outer edges, blank on the side it continues.
+  // How: a segment continuing only right — left/top/bottom stay accented, right goes blank.
+  it('mixes accented and blank edges for a partial (multi-cell) block', () => {
+    const layers = mineAccentLayers(segment({ continuesRight: true }));
+    expect(layers['--mine-right']).toBe(NO_ACCENT);
+    expect(layers['--mine-left']).not.toBe(NO_ACCENT);
+    expect(layers['--mine-top']).not.toBe(NO_ACCENT);
+    expect(layers['--mine-bottom']).not.toBe(NO_ACCENT);
   });
 });

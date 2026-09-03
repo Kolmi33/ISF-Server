@@ -174,6 +174,23 @@ describe('Grid', () => {
     expect(cell.getAttribute('title')).toContain('Projekt X');
   });
 
+  // What: the "mine" accent is set as inline style (not a CSS class), since only inline style
+  // is guaranteed to win over the cascade — this proves the wiring end-to-end, not just the
+  // pure mineAccentLayers function in isolation. A lone 1-day "mine" booking is its own outer
+  // boundary on every side, so all four --mine-* layers should carry a real accent value.
+  // How: renders the fixture's "m-mine" cell and reads its inline --mine-* custom properties.
+  it('sets the "mine" accent as an inline style on every edge of an isolated booking', () => {
+    const { container } = renderGridIntoTable();
+    const cell = container.querySelector<HTMLElement>(
+      `td[data-machine-id="m-mine"][data-date="${TODAY}"]`,
+    )!;
+    for (const side of ['top', 'bottom', 'left', 'right']) {
+      const value = cell.style.getPropertyValue(`--mine-${side}`);
+      expect(value).not.toBe('');
+      expect(value).not.toContain('transparent');
+    }
+  });
+
   // What: a cell booked by someone else than the current user shows "booked" but never "mine".
   // How: renders the fixture's "m-other" cell (booked by 'bob', not the logged-in 'anna') and
   // checks the class and text.

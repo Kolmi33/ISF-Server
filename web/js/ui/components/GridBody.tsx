@@ -9,7 +9,7 @@
 //
 // =======================================================================================
 
-import { Fragment } from 'react';
+import { Fragment, type CSSProperties } from 'react';
 import type { Booking, Machine } from '../../../../shared/types.ts';
 import { isWeekend, parseIsoDateString } from '../../../../shared/dates.ts';
 import {
@@ -26,6 +26,7 @@ import {
   classifyDot,
   isMine,
   maintenanceKindToday,
+  mineAccentLayers,
   nameColor,
   type BookingBlockSegment,
   type GridRow,
@@ -136,6 +137,12 @@ function BookedCell({
 }: CellAttrs & { segment: BookingBlockSegment }) {
   const booking = getBooking(store.get('data')!.bookings, machine.id, isoDate)!;
   const mine = isMine(store.get('user'), booking.name);
+  // The "mine" accent is set here as inline style, not via a CSS class: only an element's own
+  // inline style is guaranteed to win over every class-based rule, which a plain CSS-cascade
+  // approach turned out not to be in practice (see app.css's comment on td.cell). `mine` is
+  // still passed into cellClass below as a semantic marker (e.g. for non-visual/test hooks).
+  const style: Record<string, string> = { background: nameColor(booking.name, isDarkTheme()) };
+  if (mine) Object.assign(style, mineAccentLayers(segment));
   return (
     <td
       className={cellClass('booked', {
@@ -150,7 +157,7 @@ function BookedCell({
       role="gridcell"
       data-machine-id={machine.id}
       data-date={isoDate}
-      style={{ background: nameColor(booking.name, isDarkTheme()) }}
+      style={style as CSSProperties}
       aria-label={`${machine.name}, ${dateLabel}, belegt von ${booking.name}`}
       title={bookedCellTitle(booking)}
     >

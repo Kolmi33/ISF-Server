@@ -103,6 +103,32 @@ export interface BookingBlockSegment {
   showName: boolean;
 }
 
+/** An inert, effectively-invisible box-shadow layer value — used as the "this edge has no
+ *  accent" placeholder below (as opposed to CSS `none`, which isn't valid as one item inside a
+ *  comma-separated multi-shadow list). */
+const NO_ACCENT = '0 0 0 0 transparent';
+
+/**
+ * The four `--mine-top`/`--mine-bottom`/`--mine-left`/`--mine-right` box-shadow layer values
+ * (app.css's `td.cell` base rule composes all four, plus the weekend tint, into one
+ * `box-shadow`) for a booked cell belonging to the current user — set directly as inline
+ * style by the caller (`GridBody.tsx`'s `BookedCell`), not via CSS classes: only an element's
+ * own inline style is guaranteed to win over every class-based rule regardless of what other
+ * classes it carries, which a plain `.mine.merge-*` class cascade turned out not to reliably
+ * be in practice. Each edge shows the thin accent border only when this cell is that whole
+ * block's true outer edge in that direction (`!segment.continuesX`) — an interior edge
+ * (merging into a same-block neighbor) stays blank, so the accent traces the merged block's
+ * outer boundary exactly once, never once per day/machine inside it.
+ */
+export function mineAccentLayers(segment: BookingBlockSegment): Record<string, string> {
+  return {
+    '--mine-top': segment.continuesUp ? NO_ACCENT : '0 1px 0 0 var(--accent)',
+    '--mine-bottom': segment.continuesDown ? NO_ACCENT : '0 -1px 0 0 var(--accent)',
+    '--mine-left': segment.continuesLeft ? NO_ACCENT : '1px 0 0 0 var(--accent)',
+    '--mine-right': segment.continuesRight ? NO_ACCENT : '-1px 0 0 0 var(--accent)',
+  };
+}
+
 /** One row's per-day run membership within a displayed week: `null` for an unbooked day, else
  *  the [start,end] column range and name of the run that day belongs to. Two cells (even in
  *  different rows) belong to the same run only when this whole triple matches exactly. */
