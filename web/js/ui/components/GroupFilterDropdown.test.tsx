@@ -106,6 +106,8 @@ describe('GroupFilterDropdown', () => {
     expect(notifySpy).toHaveBeenCalled();
   });
 
+  // What: clicking anywhere outside the open dropdown closes it — standard dropdown behavior.
+  // How: opens the dropdown, mousedowns an unrelated element, and checks the open class is gone.
   it('an outside click closes the dropdown', () => {
     document.body.innerHTML += '<div id="elsewhere"></div>';
     openDropdown();
@@ -113,6 +115,11 @@ describe('GroupFilterDropdown', () => {
     expect(document.getElementById('groupDrop')!.classList.contains('open')).toBe(false);
   });
 
+  // What: fillGroupSel recomputes the dropdown's group list from the current machine data —
+  // a group added after the component mounted (e.g. via a new machine) shows up once
+  // fillGroupSel is called, without needing a full remount.
+  // How: opens the dropdown, adds a machine in a brand-new group and calls fillGroupSel(),
+  // and checks the new group's checkbox now exists.
   it('fillGroupSel recomputes the group list — a newly-added group appears on next open', () => {
     openDropdown();
     act(() => {
@@ -122,6 +129,10 @@ describe('GroupFilterDropdown', () => {
     expect(screen.getByRole('checkbox', { name: 'Halle 3' })).toBeInTheDocument();
   });
 
+  // What: fillGroupSel is called unconditionally by MachineFormModal/live-connection.ts (they
+  // have no way to know whether a dropdown instance is currently mounted), so it must survive
+  // being called after the dropdown itself has unmounted, rather than throwing.
+  // How: unmounts the rendered dropdown and checks calling fillGroupSel() afterward doesn't throw.
   it('fillGroupSel is a no-op (not a throw) after the dropdown unmounts', () => {
     // MachineFormModal/live-connection.ts call this unconditionally — must survive the
     // (unlikely) case that no instance is currently mounted to receive it.

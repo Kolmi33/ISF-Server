@@ -62,11 +62,18 @@ beforeEach(() => {
 });
 
 describe('ContextMenu', () => {
+  // What: before showCtx() is called, the menu renders nothing and stays hidden.
+  // How: renders the component fresh and checks the container has no children and isn't
+  // displayed as block.
   it('renders nothing, and #ctxMenu stays hidden, until shown', () => {
     expect(document.getElementById('ctxMenu')!.style.display).not.toBe('block');
     expect(document.getElementById('ctxMenu')!.children.length).toBe(0);
   });
 
+  // What: with a selection that has no bookings in it, the menu shows the machine/date-range
+  // summary and a "Buchen…" (book) action, but no delete option — there's nothing to delete.
+  // How: shows the menu over the default (unbooked) selection and checks the summary text,
+  // the absence of a delete button, and the presence of the book action.
   it('shows the machine count and date range, with no delete button when nothing is booked', () => {
     act(() => showCtx(100, 100));
     expect(document.getElementById('ctxMenu')!.style.display).toBe('block');
@@ -75,6 +82,10 @@ describe('ContextMenu', () => {
     expect(screen.getByText(/Buchen…/)).toBeInTheDocument();
   });
 
+  // What: when the selected range has at least one booking, a delete option appears, naming
+  // the count and the affected booker(s) in its hover title.
+  // How: books one cell in the selection, shows the menu, and checks the delete button's text
+  // and title.
   it('shows a delete button naming the affected bookers when the range has bookings', () => {
     window.S.data!.bookings = { m1: { '2021-01-04': booking({ name: 'anna' }) } };
     act(() => showCtx(100, 100));
@@ -82,6 +93,8 @@ describe('ContextMenu', () => {
     expect(del).toHaveTextContent('1 Buchung(en) löschen');
   });
 
+  // What: hideCtx() hides an already-shown menu.
+  // How: shows then hides the menu and checks it's no longer displayed and has no children.
   it('hideCtx hides the menu again', () => {
     act(() => showCtx(100, 100));
     act(() => hideCtx());
@@ -89,6 +102,10 @@ describe('ContextMenu', () => {
     expect(document.getElementById('ctxMenu')!.children.length).toBe(0);
   });
 
+  // What: the "Abbrechen" (cancel) button hides the menu AND clears the underlying grid
+  // selection, not just the menu's own visibility.
+  // How: shows the menu, clicks Abbrechen, and checks both the menu is hidden and the
+  // selection state (cells/anchor) reset.
   it('"Abbrechen" hides the menu and clears the selection', () => {
     act(() => showCtx(100, 100));
     fireEvent.click(screen.getByText('Abbrechen'));
@@ -97,6 +114,10 @@ describe('ContextMenu', () => {
     expect(selection.anchor).toBeNull();
   });
 
+  // What: a mousedown outside the menu dismisses it (standard dropdown/menu dismiss
+  // behavior), while a mousedown on the menu itself does not.
+  // How: shows the menu, mousedowns inside it (checks it stays open), then mousedowns
+  // elsewhere on the page (checks it closed).
   it('an outside mousedown dismisses the menu; a click inside it does not', () => {
     act(() => showCtx(100, 100));
     fireEvent.mouseDown(document.getElementById('ctxMenu')!);
@@ -106,6 +127,10 @@ describe('ContextMenu', () => {
     expect(document.getElementById('ctxMenu')!.style.display).toBe('none');
   });
 
+  // What: the "Buchen…" (book) action hides the context menu and opens the booking form,
+  // pre-filled with the range that was under the context menu.
+  // How: shows the menu, clicks "Buchen…", and checks the menu closed and the booking form's
+  // heading appears.
   it('"Buchen…" hides the menu and opens the booking form pre-picked for the range', async () => {
     act(() => showCtx(100, 100));
     fireEvent.click(screen.getByText(/Buchen…/));
@@ -113,6 +138,12 @@ describe('ContextMenu', () => {
     expect(await screen.findByRole('heading', { name: 'Buchen' })).toBeInTheDocument();
   });
 
+  // What: clicking delete confirms with the user first, then actually deletes the booked
+  // cells through window.mutate, clears the grid selection, closes the menu, and confirms via
+  // a toast (which also offers undo, though undo itself isn't directly asserted here).
+  // How: books two cells, shows the menu, clicks delete, and checks the confirm dialog's
+  // title, that the bookings are actually gone, the selection cleared, the menu closed, and
+  // the toast names the deleted count.
   it('deleting confirms, deletes the booked cells via mutate, clears selection, and offers undo', async () => {
     window.S.data!.bookings = {
       m1: {
@@ -136,6 +167,11 @@ describe('ContextMenu', () => {
     expect(document.getElementById('toast')!.textContent).toMatch(/2 Buchung\(en\) gelöscht\./);
   });
 
+  // What: a booker name containing HTML-special characters is escaped before it's embedded
+  // into the confirm dialog's HTML body — the dialog's body is built as an HTML string, so an
+  // unescaped name would inject markup.
+  // How: books a cell under a name containing an HTML tag, triggers delete, and checks the
+  // confirm call's body contains the escaped entity form, never the raw tag.
   it("escapes a booker name before it reaches the confirm dialog's HTML body", async () => {
     window.S.data!.bookings = { m1: { '2021-01-04': booking({ name: '<b>x</b>' }) } };
     act(() => showCtx(100, 100));
@@ -152,6 +188,9 @@ describe('ContextMenu', () => {
     );
   });
 
+  // What: declining the confirm dialog aborts the delete entirely — the booking stays exactly
+  // as it was.
+  // How: stubs askConfirm to resolve false, triggers delete, and checks the booking is still there.
   it('does not delete when the confirm dialog is declined', async () => {
     window.askConfirm = vi.fn().mockResolvedValue(false);
     window.S.data!.bookings = { m1: { '2021-01-04': booking({ name: 'anna' }) } };
