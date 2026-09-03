@@ -174,6 +174,20 @@ describe('AssistantModal — checklist → work area', () => {
     });
     expect(screen.getByText(/Keine Geräte ausgewählt/)).toBeInTheDocument();
   });
+
+  // What: a selection chip carries a category-color custom property (blue Maschinen, green
+  // Messtechnik — user request), not a plain inline background, so the existing hover/
+  // dragover CSS rules (app.css) can still override it.
+  // How: checks a device chip and reads its own `--devcolor` custom property.
+  it('sets a category-color custom property on each selection chip', () => {
+    act(() => openAssistant());
+    openChecklistCategory();
+    act(() => {
+      screen.getByRole('checkbox', { name: /Fräse/ }).click();
+    });
+    const chip = document.querySelector<HTMLElement>('.asdev[title^="Fräse"]')!;
+    expect(chip.style.getPropertyValue('--devcolor')).not.toBe('');
+  });
 });
 
 describe('AssistantModal — checklist details', () => {
@@ -252,12 +266,12 @@ describe('AssistantModal — search validation', () => {
 });
 
 describe('AssistantModal — search results', () => {
-  // What: a successful search shows the results header, and with no redundancy group in the
-  // work tree (just a bare device), there's no suggested-device pill row — that only appears
-  // when a group's own structure suggests something.
-  // How: checks one device, searches, and checks the results header appears while no pill
-  // row is rendered.
-  it('finds a free run and shows it with no suggestion pills (no group in the tree)', async () => {
+  // What: the suggested-device pill row is a universal feature (user request) — it shows even
+  // for a bare device with no Bedarfsgruppe at all, not just when a group's own structure
+  // suggests something.
+  // How: checks one bare device, searches, and checks both the results header and a pill
+  // naming that exact device appear.
+  it('finds a free run and shows a suggestion pill even with no group in the tree', async () => {
     act(() => openAssistant());
     openChecklistCategory();
     act(() => {
@@ -268,7 +282,31 @@ describe('AssistantModal — search results', () => {
       await Promise.resolve();
     });
     expect(screen.getByText('Passende Termine:')).toBeInTheDocument();
-    expect(document.querySelector('.aspills')).toBeNull();
+    expect(document.querySelector('.aspills')).not.toBeNull();
+    expect(screen.getByText('Fräse', { selector: '.aspill' })).toBeInTheDocument();
+  });
+
+  // What: the suggestion pills are colored by resource CATEGORY, not by device name (user
+  // request) — two differently-named devices of the same category (both "Maschinen" in the
+  // fixture) get the exact same pill color, unlike the old per-name hash which would have
+  // given them two unrelated colors.
+  // How: checks two devices of the same category, searches, and compares both pills' inline
+  // background color.
+  it('colors suggestion pills by resource category, not by device name', async () => {
+    act(() => openAssistant());
+    openChecklistCategory();
+    act(() => {
+      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
+      screen.getByRole('checkbox', { name: /^Presse/ }).click();
+    });
+    await act(async () => {
+      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
+      await Promise.resolve();
+    });
+    const fraese = screen.getByText('Fräse', { selector: '.aspill' }) as HTMLElement;
+    const presse = screen.getByText('Presse', { selector: '.aspill' }) as HTMLElement;
+    expect(fraese.style.backgroundColor).not.toBe('');
+    expect(fraese.style.backgroundColor).toBe(presse.style.backgroundColor);
   });
 
   // What: when the searched machine has no free days anywhere in the requested range, the

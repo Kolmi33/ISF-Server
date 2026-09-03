@@ -18,12 +18,14 @@
 // =======================================================================================
 
 import { useRef } from 'react';
-import type { DragEvent } from 'react';
+import type { CSSProperties, DragEvent } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
 import type { AssistContainer, AssistDev, AssistGrp, AssistNode } from '../../core/assistant.ts';
 import { effectiveNeed } from '../../core/assistant.ts';
-import { hasAnyMaintenanceSlot } from '../../core/machines.ts';
+import { getMachineCategory, hasAnyMaintenanceSlot } from '../../core/machines.ts';
 import { maintenanceKind, statusRangeText } from '../machine-text.ts';
+import { categoryColor } from '../grid.ts';
+import { isDarkTheme } from '../theme.ts';
 import { Icon } from './Icon.tsx';
 
 /** The maintenance/defect status tag, when the machine has one. */
@@ -66,6 +68,16 @@ function DevNodeView({ node, handlers }: { node: AssistDev; handlers: NodeHandle
       draggable
       data-uid={node.uid}
       title={`${machine.name} (${machine.group})`}
+      // Faint category background (blue Maschinen, green Messtechnik — user request) so
+      // equipment reads as "which kind" at a glance, consistently with the result pills
+      // (AssistantResults.tsx) using the same categoryColor. Set as a custom property, not a
+      // plain inline `background` — an inline style would permanently win over the .asdev:hover
+      // /.asdev.dragover CSS rules (app.css) that also need to override this same property.
+      style={
+        {
+          '--devcolor': categoryColor(getMachineCategory(machine), isDarkTheme()),
+        } as CSSProperties
+      }
     >
       <DragHandle />
       {machine.name}

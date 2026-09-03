@@ -337,6 +337,17 @@ export function nameColor(name: string, isDarkTheme: boolean): string {
   return isDarkTheme ? `hsl(${hue} 35% 30%)` : `hsl(${hue} 55% 88%)`;
 }
 
+/** A fixed (not hashed) hue per resource category — blue for Maschinen, green for Messtechnik
+ *  (user request) — so equipment reads as "which kind of resource" at a glance in the
+ *  Assistant's selection chips and result pills, the same faint-background/dark-text style
+ *  `nameColor` above already establishes for per-person coloring elsewhere. */
+const CATEGORY_HUES: Record<MachineCategory, number> = { maschine: 210, messtechnik: 140 };
+
+export function categoryColor(category: MachineCategory, isDarkTheme: boolean): string {
+  const hue = CATEGORY_HUES[category];
+  return isDarkTheme ? `hsl(${hue} 35% 30%)` : `hsl(${hue} 55% 88%)`;
+}
+
 /**
  * Returns the maintenance slot type active on `machine` today, or null if operational.
  */

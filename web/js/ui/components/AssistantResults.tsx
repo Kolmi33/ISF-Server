@@ -21,10 +21,11 @@ import type { ChangeEvent } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
 import { formatDateLong, mondayOfDate, parseIsoDateString } from '../../../../shared/dates.ts';
 import { chooseDevicesForTree, type AssistContainer, type IsFree } from '../../core/assistant.ts';
+import { getMachineCategory } from '../../core/machines.ts';
 import type { AssistantResultRow } from '../assistant-results.ts';
 import { clearSelection } from '../grid-interaction.ts';
 import { gotoDate, prependWeek, resetView } from '../grid-scroll.ts';
-import { nameColor } from '../grid.ts';
+import { categoryColor } from '../grid.ts';
 import { isDarkTheme } from '../theme.ts';
 import { collapseReactModal } from '../modal.tsx';
 import { openBookingForm } from './BookingForm.tsx';
@@ -60,7 +61,6 @@ interface ResultItemProps {
   row: AssistantResultRow;
   tree: AssistContainer;
   isFreeDev: IsFree;
-  hasGroup: boolean;
   allIds: readonly string[];
   machineById: (id: string) => Machine | undefined;
 }
@@ -89,11 +89,12 @@ function useClampedDays(maxDays: number, initialDays: number) {
 
 /** The system's suggested devices for this run, as prominent colored pills directly under the
  *  date range — replacing the old plain-text "Vorschlag: A, B, C" hint line (user request: no
- *  longer hidden in fine print). Each pill's color comes from the same deterministic
- *  name→hue hash the grid's own booking cells use (`nameColor`), so a device's color stays
- *  recognizable if it also shows up as a booking elsewhere. */
-function SuggestedDevicePills({ names }: { names: readonly string[] }) {
-  if (!names.length) {
+ *  longer hidden in fine print). Each pill's color is now its device's resource-category color
+ *  (`categoryColor` — blue Maschinen, green Messtechnik, user request), the same one the
+ *  Assistant's own selection chips use (`AssistantTree.tsx`), so equipment reads as "which
+ *  kind" consistently across both. */
+function SuggestedDevicePills({ devices }: { devices: readonly Machine[] }) {
+  if (!devices.length) {
     return (
       <div className="aspills">
         <span className="hint" style={{ margin: 0 }}>
@@ -105,9 +106,13 @@ function SuggestedDevicePills({ names }: { names: readonly string[] }) {
   const dark = isDarkTheme();
   return (
     <div className="aspills">
-      {names.map((name) => (
-        <span key={name} className="aspill" style={{ background: nameColor(name, dark) }}>
-          {name}
+      {devices.map((device) => (
+        <span
+          key={device.id}
+          className="aspill"
+          style={{ background: categoryColor(getMachineCategory(device), dark) }}
+        >
+          {device.name}
         </span>
       ))}
     </div>
@@ -117,18 +122,18 @@ function SuggestedDevicePills({ names }: { names: readonly string[] }) {
 interface ResultInfoProps {
   selectedDates: readonly string[];
   windowText: string;
-  hasGroup: boolean;
-  pickedNames: readonly string[];
+  pickedDevices: readonly Machine[];
 }
 
-/** The run's date range, (mode-dependent) suggested-device pills, and the free-window
- *  description. Split out of `AssistantResultItem` purely to stay under the function-length
- *  budget. */
-function ResultInfo({ selectedDates, windowText, hasGroup, pickedNames }: ResultInfoProps) {
+/** The run's date range, the suggested-device pills (color-coded by resource category — a
+ *  universal feature now, not just when a Bedarfsgruppe exists: user request), and the
+ *  free-window description. Split out of `AssistantResultItem` purely to stay under the
+ *  function-length budget. */
+function ResultInfo({ selectedDates, windowText, pickedDevices }: ResultInfoProps) {
   return (
     <div>
       <b className="asRange">{rangeText(selectedDates)}</b>
-      {hasGroup && <SuggestedDevicePills names={pickedNames} />}
+      <SuggestedDevicePills devices={pickedDevices} />
       <span className="hint" style={{ margin: 0, display: 'block' }}>
         {windowText}
       </span>
@@ -136,21 +141,14 @@ function ResultInfo({ selectedDates, windowText, hasGroup, pickedNames }: Result
   );
 }
 
-function AssistantResultItem({
-  row,
-  tree,
-  isFreeDev,
-  hasGroup,
-  allIds,
-  machineById,
-}: ResultItemProps) {
+function AssistantResultItem({ row, tree, isFreeDev, allIds, machineById }: ResultItemProps) {
   const maxDays = row.dates.length;
   const { days, tip, onChange } = useClampedDays(maxDays, row.defaultDays);
   const selectedDates = row.dates.slice(0, days);
   const pickedIds = chooseDevicesForTree(tree, selectedDates, isFreeDev);
-  const pickedNames = pickedIds
-    .map((id) => machineById(id)?.name)
-    .filter((name): name is string => !!name);
+  const pickedDevices = pickedIds
+    .map((id) => machineById(id))
+    .filter((device): device is Machine => !!device);
   const windowText = row.isOpenEnded
     ? `ab ${formatDateLong(row.dates[0]!)} durchgehend frei (offen – ${maxDays} Tage wählbar)`
     : `freies Fenster: ${rangeText(row.dates)} (${maxDays} Tag${maxDays > 1 ? 'e' : ''})`;
@@ -160,8 +158,7 @@ function AssistantResultItem({
       <ResultInfo
         selectedDates={selectedDates}
         windowText={windowText}
-        hasGroup={hasGroup}
-        pickedNames={pickedNames}
+        pickedDevices={pickedDevices}
       />
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <input
@@ -218,7 +215,6 @@ export function AssistantResults({
       </p>
     );
   }
-  const hasGroup = tree.children.some((child) => child.type === 'grp');
   return (
     <>
       <h2 style={{ marginTop: 14 }}>Passende Termine:</h2>
@@ -231,7 +227,6 @@ export function AssistantResults({
             row={row}
             tree={tree}
             isFreeDev={isFreeDev}
-            hasGroup={hasGroup}
             allIds={allIds}
             machineById={machineById}
           />

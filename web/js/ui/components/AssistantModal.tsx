@@ -206,7 +206,7 @@ function AssistantSelectedDevicesCard({
   assistant: ReturnType<typeof useAssistantTree>;
 }) {
   return (
-    <div className="assist-card">
+    <div className="assist-card assist-cart">
       <div className="assist-card-title">Ausgewählte Geräte</div>
       <AssistantTree
         tree={assistant.tree}

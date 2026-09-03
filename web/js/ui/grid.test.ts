@@ -10,6 +10,7 @@ import {
   orderedMachines,
   visibleWeeks,
   nameColor,
+  categoryColor,
   maintenanceKindToday,
   buildGridRows,
   computeBookingBlocks,
@@ -208,6 +209,28 @@ describe('nameColor', () => {
   it('uses a darker lightness for the dark theme', () => {
     expect(nameColor('anna', true)).toMatch(/35% 30%/);
     expect(nameColor('anna', false)).toMatch(/55% 88%/);
+  });
+});
+
+describe('categoryColor', () => {
+  // What: each resource category gets its own fixed hue (not hashed) — blue for Maschinen,
+  // green for Messtechnik (user request) — so equipment reads as "which kind" at a glance,
+  // consistently across every device regardless of its own name.
+  // How: checks the two categories' colors differ, and that the same category always returns
+  // the exact same color.
+  it('gives each category its own fixed, deterministic hue', () => {
+    const machineColor = categoryColor('maschine', false);
+    const measColor = categoryColor('messtechnik', false);
+    expect(machineColor).not.toBe(measColor);
+    expect(categoryColor('maschine', false)).toBe(machineColor);
+  });
+  // What: the dark theme uses a darker lightness value than the light theme, matching
+  // nameColor's own light/dark convention.
+  // How: checks a category's dark-theme color contains the darker lightness value and its
+  // light-theme color contains the lighter one.
+  it('uses a darker lightness for the dark theme', () => {
+    expect(categoryColor('maschine', true)).toMatch(/35% 30%/);
+    expect(categoryColor('maschine', false)).toMatch(/55% 88%/);
   });
 });
 

@@ -323,12 +323,20 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .assist-columns{display:flex;flex-direction:column;gap:10px}
 @media (min-width:860px){
   #modal:has(.assist-columns){max-width:920px}
-  .assist-columns{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  /* 40/60 split (user request) with align-items: stretch, not the default start — both columns
+     now always match height regardless of which one's own content is naturally taller (long
+     equipment names included), instead of the shorter one just trailing off with empty space
+     below it. */
+  .assist-columns{display:grid;grid-template-columns:2fr 3fr;gap:16px;align-items:stretch}
   .assist-columns .aswork{max-height:260px;overflow:auto}
 }
 .assist-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px}
 .assist-card-title{font-weight:700;font-size:13px;margin-bottom:8px;color:var(--text)}
 .assist-col-right{display:flex;flex-direction:column;gap:10px}
+/* flex-grow: 1 on the "Ausgewählte Geräte" cart card specifically (user request) — once the
+   column as a whole is stretched to match the left card's height, the cart (not the fixed-size
+   Buchungsparameter card or the action row) is what actually grows to fill the extra space. */
+.assist-col-right .assist-cart{flex:1;display:flex;flex-direction:column}
 /* Die primäre Aktion, unten in der rechten Spalte verankert — der klare letzte Schritt des
    Ablaufs, nicht lose unter einem unabhängigen Formular (user request) */
 .assist-actions{display:flex;gap:8px;justify-content:flex-end}
@@ -367,7 +375,11 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 /* Drag-Handle (⋮⋮): die einzige visuelle Erklärung, dass ein Knoten ziehbar ist — ersetzt den
    früheren Fließtext dazu (siehe AssistantTree.tsx) */
 .draghandle{color:var(--muted);cursor:grab;letter-spacing:-2px;font-size:13px;line-height:1}
-.asdev{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;margin:3px;border:1px solid var(--border);border-radius:8px;background:var(--panel);cursor:grab;font-size:13px;transition:background .12s,border-color .12s}
+/* background reads from --devcolor (set inline per-device by AssistantTree.tsx, the device's
+   category color — user request) rather than a plain inline background, so the :hover/
+   .dragover rules below (plain CSS, not inline) can still override it — an inline `background`
+   would otherwise permanently win over both regardless of specificity. */
+.asdev{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;margin:3px;border:1px solid var(--border);border-radius:8px;background:var(--devcolor,var(--panel));cursor:grab;font-size:13px;transition:background .12s,border-color .12s}
 .asdev:hover{background:var(--hover)}
 .asdev:active{cursor:grabbing}
 .asdev.dragging,.asgrp.dragging{opacity:.45}
