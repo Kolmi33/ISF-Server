@@ -104,51 +104,97 @@ function CompactRow() {
   );
 }
 
-/** The grid's cell border width in pixels, 0 (invisible) to `GRIDLINE_WIDTH_MAX` (bold) — a
- *  slider, not a threshold: {@link applyGridlineWidth} writes it straight to the `--gridline-width`
- *  CSS custom property (`app.css`), which `th`/`td`'s own border-width already reads from, so no
- *  class toggling or extra CSS state is needed the way `body.compact` needs a class. Every cell
- *  stays exactly where and what it was; only the line between cells changes. */
+/** The grid's cell/header border widths in pixels, 0 (invisible) to `GRIDLINE_WIDTH_MAX` (bold),
+ *  in `GRIDLINE_WIDTH_STEP`-sized increments (sub-pixel — CSS border widths accept fractional
+ *  px just fine) — two independent sliders, not one, since the data grid (td) and the header
+ *  (th: the "KW X" row + the weekday/date row) are visually distinct regions a user may want
+ *  thick/thin differently. Each is a slider, not a threshold: {@link applyGridlineWidth}/
+ *  {@link applyGridlineWidthHeader} write straight to their own `--gridline-width`/
+ *  `--gridline-width-header` CSS custom property (`app.css`), which `td`'s/`th`'s own
+ *  border-width already reads from, so no class toggling or extra CSS state is needed the way
+ *  `body.compact` needs a class. Every cell stays exactly where and what it was; only the line
+ *  between cells changes. */
 const GRIDLINE_WIDTH_DEFAULT = 1;
 const GRIDLINE_WIDTH_MAX = 4;
+const GRIDLINE_WIDTH_STEP = 0.25;
 
-function readGridlineWidth(): number {
-  const stored = parseInt(localStorage.getItem('mb_gridline_width') || '', 10);
-  return Number.isFinite(stored)
-    ? Math.min(Math.max(stored, 0), GRIDLINE_WIDTH_MAX)
+function clampGridlineWidth(value: number): number {
+  return Number.isFinite(value)
+    ? Math.min(Math.max(value, 0), GRIDLINE_WIDTH_MAX)
     : GRIDLINE_WIDTH_DEFAULT;
 }
 
-/** Applies a gridline width both live (the CSS variable) and persisted (`localStorage`) — the
- *  one function both `GridLinesRow`'s live slider and `app.ts`'s boot-time restore call, so
- *  the two can never drift out of sync on what "applying" actually means. */
+function readGridlineWidth(storageKey: string): number {
+  return clampGridlineWidth(parseFloat(localStorage.getItem(storageKey) || ''));
+}
+
+/** Applies the data-grid (td) gridline width both live (the CSS variable) and persisted
+ *  (`localStorage`) — the one function both `GridLinesRow`'s live slider and `app.ts`'s
+ *  boot-time restore call, so the two can never drift out of sync on what "applying" means. */
 export function applyGridlineWidth(px: number): void {
   document.documentElement.style.setProperty('--gridline-width', `${px}px`);
 }
 
-function GridLinesRow() {
-  const [width, setWidth] = useState(readGridlineWidth);
+/** Same as {@link applyGridlineWidth}, for the header (th) rows' own independent width. */
+export function applyGridlineWidthHeader(px: number): void {
+  document.documentElement.style.setProperty('--gridline-width-header', `${px}px`);
+}
+
+/** One gridline-thickness slider row, parameterized by which region it controls — used twice
+ *  below (data grid vs. header) so the two stay in lockstep on every behavior except which
+ *  storage key/CSS variable they touch. */
+function GridlineSliderRow({
+  label,
+  ariaLabel,
+  storageKey,
+  apply,
+}: {
+  label: string;
+  ariaLabel: string;
+  storageKey: string;
+  apply: (px: number) => void;
+}) {
+  const [width, setWidth] = useState(() => readGridlineWidth(storageKey));
   return (
     <div className="formrow">
-      <label>Raster</label>
+      <label>{label}</label>
       <input
         type="range"
         min={0}
         max={GRIDLINE_WIDTH_MAX}
-        step={1}
+        step={GRIDLINE_WIDTH_STEP}
         value={width}
-        aria-label="Rasterlinien-Stärke"
+        aria-label={ariaLabel}
         onChange={(event) => {
-          const px = parseInt(event.target.value, 10);
+          const px = clampGridlineWidth(parseFloat(event.target.value));
           setWidth(px);
-          localStorage.setItem('mb_gridline_width', String(px));
-          applyGridlineWidth(px);
+          localStorage.setItem(storageKey, String(px));
+          apply(px);
         }}
       />
       <span className="hint" style={{ margin: 0, minWidth: '3.5em' }}>
         {width === 0 ? 'aus' : `${width}px`}
       </span>
     </div>
+  );
+}
+
+function GridLinesRow() {
+  return (
+    <>
+      <GridlineSliderRow
+        label="Raster (Tabelle)"
+        ariaLabel="Rasterlinien-Stärke"
+        storageKey="mb_gridline_width"
+        apply={applyGridlineWidth}
+      />
+      <GridlineSliderRow
+        label="Raster (Kopfzeile)"
+        ariaLabel="Rasterlinien-Stärke (Kopfzeile)"
+        storageKey="mb_gridline_width_header"
+        apply={applyGridlineWidthHeader}
+      />
+    </>
   );
 }
 

@@ -35,6 +35,7 @@ beforeEach(() => {
   localStorage.clear();
   document.body.className = '';
   document.documentElement.style.removeProperty('--gridline-width');
+  document.documentElement.style.removeProperty('--gridline-width-header');
   store.set({ user: 'Kolmanovskyi', extraWeeks: 3 } as unknown as Partial<AppState>);
   window.S = store.state;
   notifySpy.mockClear();
@@ -136,6 +137,39 @@ describe('SettingsModal', () => {
     localStorage.setItem('mb_gridline_width', '3');
     render(<SettingsModal />);
     expect((screen.getByLabelText('Rasterlinien-Stärke') as HTMLInputElement).value).toBe('3');
+  });
+
+  // What: the data-grid and header gridline sliders are fully independent — each has its own
+  // storage key and CSS variable, so setting one never touches the other.
+  // How: renders, checks the header slider defaults to 1px with its own aria-label, changes
+  // only the header slider, and checks the data-grid slider/variable/storage are untouched.
+  it('the header gridline slider is independent of the data-grid one', () => {
+    render(<SettingsModal />);
+    const headerSlider = screen.getByLabelText(
+      'Rasterlinien-Stärke (Kopfzeile)',
+    ) as HTMLInputElement;
+    expect(headerSlider.value).toBe('1');
+    fireEvent.change(headerSlider, { target: { value: '2' } });
+    expect(localStorage.getItem('mb_gridline_width_header')).toBe('2');
+    expect(document.documentElement.style.getPropertyValue('--gridline-width-header')).toBe('2px');
+    // The data-grid slider/variable/storage stay at their own untouched defaults.
+    expect((screen.getByLabelText('Rasterlinien-Stärke') as HTMLInputElement).value).toBe('1');
+    expect(localStorage.getItem('mb_gridline_width')).toBeNull();
+  });
+
+  // What: increments smaller than 1px are possible (fractional CSS border widths render fine),
+  // and both sliders support them via their step attribute.
+  // How: sets each slider to a fractional value and checks it applies exactly, unrounded.
+  it('supports sub-pixel (fractional) grid-line widths on both sliders', () => {
+    render(<SettingsModal />);
+    fireEvent.change(screen.getByLabelText('Rasterlinien-Stärke'), { target: { value: '0.5' } });
+    expect(document.documentElement.style.getPropertyValue('--gridline-width')).toBe('0.5px');
+    fireEvent.change(screen.getByLabelText('Rasterlinien-Stärke (Kopfzeile)'), {
+      target: { value: '1.75' },
+    });
+    expect(document.documentElement.style.getPropertyValue('--gridline-width-header')).toBe(
+      '1.75px',
+    );
   });
 
   // What: the settings modal displays the currently logged-in user's name.

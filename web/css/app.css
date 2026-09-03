@@ -12,11 +12,14 @@
   --wknd:#e9ebef; --wkndhead:#dfe2e8; --wkndtint:rgba(110,116,128,.13);
   --star:#d4a017;
   /* Raster-Linienfarbe/-stärke der Buchungstabelle — eigene Tokens statt --border, damit die
-     Einstellung (SettingsModal.tsx, ein Schieberegler in Pixeln) nur das Zellgitter betrifft,
-     nicht Rahmen andernorts (Modals, Buttons, …). --gridline-width ist themeunabhängig (reine
+     Einstellung (SettingsModal.tsx, zwei unabhängige Schieberegler in Pixeln) nur das
+     Zellgitter betrifft, nicht Rahmen andernorts (Modals, Buttons, …). --gridline-width ist die
+     Datenzellen (td), --gridline-width-header die Kopfzeile (th: KW-Zeile + Datumszeile) — zwei
+     Variablen statt einer, damit beide unabhängig einstellbar sind. Themeunabhängig (reine
      Nutzerpräferenz), deshalb nur einmal hier gesetzt, nicht im dark-Block unten wiederholt. */
   --gridline: var(--border);
   --gridline-width: 1px;
+  --gridline-width-header: 1px;
 }
 html[data-theme="dark"]{
   --bg:#15171a; --panel:#1e2126; --border:#3a3f46; --text:#e8eaed; --muted:#9aa0a6;
@@ -107,7 +110,9 @@ td.cell.booked.dim{opacity:.28;filter:grayscale(.8)}
 /* ---------- Grid ---------- */
 #gridWrap{flex:1;overflow:auto;position:relative}
 table{border-collapse:separate;border-spacing:0;min-width:100%}
-th,td{border-right:var(--gridline-width) solid var(--gridline);border-bottom:var(--gridline-width) solid var(--gridline);padding:0;font-size:13px}
+th,td{padding:0;font-size:13px}
+td{border-right:var(--gridline-width) solid var(--gridline);border-bottom:var(--gridline-width) solid var(--gridline)}
+th{border-right:var(--gridline-width-header) solid var(--gridline);border-bottom:var(--gridline-width-header) solid var(--gridline)}
 thead th{background:var(--headbg);position:sticky;top:0;z-index:20;padding:4px 6px;font-weight:600;text-align:center;min-width:96px}
 thead th.machcol{left:0;z-index:25;text-align:left;min-width:var(--machw);max-width:var(--machw);padding-left:12px}
 /* "KW X" pinned to the left edge (right after the sticky machine column) while its own week's

@@ -121,8 +121,14 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
 });
 if (localStorage.getItem('mb_compact') === 'on') document.body.classList.add('compact');
 {
-  const storedGridlineWidth = parseInt(localStorage.getItem('mb_gridline_width') || '', 10);
+  const storedGridlineWidth = parseFloat(localStorage.getItem('mb_gridline_width') || '');
   if (Number.isFinite(storedGridlineWidth)) settingsModal.applyGridlineWidth(storedGridlineWidth);
+  const storedGridlineWidthHeader = parseFloat(
+    localStorage.getItem('mb_gridline_width_header') || '',
+  );
+  if (Number.isFinite(storedGridlineWidthHeader)) {
+    settingsModal.applyGridlineWidthHeader(storedGridlineWidthHeader);
+  }
 }
 
 /**
