@@ -82,6 +82,49 @@ describe('StatsModal — Ressourcen overview (default)', () => {
     expect(screen.getByText('Fräse')).toBeInTheDocument();
     expect(screen.queryByText('Messgerät')).not.toBeInTheDocument();
   });
+
+  // What: the category filter row (Maschinen/Messtechnik) renders as its own "pillrow" style
+  // rather than the primary mode-switch "seg" style, visually separating a secondary filter
+  // from the primary Ressourcen/Wartung tab control above it (user request).
+  // How: opens stats and checks the category row's own class is exactly "pillrow", not "seg".
+  it('renders the category filter as pill tags, distinct from the primary tab control', () => {
+    act(() => openStats());
+    const categoryRow = screen.getByRole('group', { name: 'Kategorie wählen' });
+    expect(categoryRow.className).toBe('pillrow');
+  });
+
+  // What: a machine's utilisation bar is colored by a traffic-light scheme — yellow under
+  // 60%, green 60–85%, red over 85% (user request) — recomputed live as the date range
+  // (and so the percent) changes.
+  // How: books Fräse on Mon/Tue/Wed of a fixed week (3 booked workdays, held constant), then
+  // moves the date filter's "Bis" end through three distinct end dates that shrink/grow the
+  // total-workday denominator — 6, 5, then 3 workdays — giving exactly 50%, 60%, and 100%
+  // utilisation over the same 3 booked days, checking the bar fill's class each time. (Each
+  // step uses a genuinely different date, not a repeat of a prior value — React's controlled
+  // `<input>` skips firing `onChange` again for an unchanged value.)
+  it('colors the machine utilization bar low/mid/high by its percent', () => {
+    window.S.data!.bookings.m1 = {
+      '2021-01-04': { name: 'anna' }, // Mon
+      '2021-01-05': { name: 'anna' }, // Tue
+      '2021-01-06': { name: 'anna' }, // Wed — Thu/Fri/next Mon stay unbooked
+    };
+    act(() => openStats());
+    const [fromInput, toInput] = document.querySelectorAll<HTMLInputElement>(
+      '#modal input[type="date"]',
+    );
+    fireEvent.change(fromInput!, { target: { value: '2021-01-04' } }); // Mon, fixed throughout
+    const setToAndReadBarClass = (to: string): string => {
+      fireEvent.change(toInput!, { target: { value: to } });
+      return screen.getByText('Fräse').closest('.statrow')!.querySelector('.statbar div')!
+        .className;
+    };
+    // Mon(04)–Mon(11): 6 workdays (weekend skipped), 3 booked → 50%.
+    expect(setToAndReadBarClass('2021-01-11')).toBe('util-low');
+    // Mon(04)–Fri(08): 5 workdays, 3 booked → 60%.
+    expect(setToAndReadBarClass('2021-01-08')).toBe('util-mid');
+    // Mon(04)–Wed(06): 3 workdays, all 3 booked → 100%.
+    expect(setToAndReadBarClass('2021-01-06')).toBe('util-high');
+  });
 });
 
 describe('StatsModal — Ressourcen drilldown', () => {

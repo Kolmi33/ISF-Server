@@ -51,8 +51,17 @@ header h1{font-size:16px;margin:0;white-space:nowrap;padding-left:13px} /* Emoji
   font-size:13px;font-weight:normal;line-height:1;color:var(--muted);white-space:nowrap;transition:background .12s,color .12s}
 .seg button+button{border-left:1px solid var(--border)}
 .seg button:hover{background:var(--hover);color:var(--text)}
-.seg button.on{background:var(--accent);color:#fff}
+.seg button.on{background:var(--accent);color:#fff;font-weight:600}
 .seg button.on:hover{background:var(--accent);color:#fff}
+/* Pill-Tag-Reihe: sekundäre Filter (z.B. Kategorie-Auswahl in der Statistik), bewusst
+   anders als der primäre `.seg`-Tab-Umschalter darüber — lose, abgerundete, einzeln
+   umrandete Chips statt einer zusammenhängenden Segment-Leiste */
+.pillrow{display:flex;flex-wrap:wrap;gap:6px}
+.pillrow button{border:1px solid var(--border);border-radius:999px;padding:3px 12px;
+  min-height:26px;background:var(--panel);cursor:pointer;font-size:12px;color:var(--muted);
+  white-space:nowrap;transition:background .12s,color .12s,border-color .12s}
+.pillrow button:hover{background:var(--hover);color:var(--text)}
+.pillrow button.on{background:var(--accent-light);color:var(--accent);border-color:var(--accent);font-weight:600}
 .statrow.click{cursor:pointer}
 .statrow.click:hover{background:var(--hover)}
 @media (max-width:1000px){
@@ -204,7 +213,13 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 #confirm2 .cbox{background:var(--panel);border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.35);max-width:460px;width:100%;padding:16px 18px}
 #confirm2 h3{margin:0 0 8px;font-size:15px}
 .btn.dangerfill{background:var(--danger);border-color:var(--danger);color:#fff}
-.statgrp{font-weight:700;padding:6px 6px 2px;font-size:12px;color:var(--muted);border-bottom:2px solid var(--border)}
+/* Untergeordnete Listenköpfe (Bereichs-/Gruppen-Überschriften wie "Alte Halle") — deutlich
+   dunklerer Kontrast als eine Datenzeile, damit sie beim Scannen sofort als Gliederung
+   erkennbar sind, nicht als Zeile mit besonders wenig Inhalt. `.statgrp.cathead` (die
+   Hauptkategorie, z.B. "MASCHINEN") überschreibt das unten mit noch mehr Gewicht — höhere
+   Selektor-Spezifität gewinnt automatisch. */
+.statgrp{font-weight:700;padding:6px 8px;font-size:12px;color:var(--text);
+  background:var(--headbg);border-bottom:2px solid var(--border);border-radius:4px;margin-top:2px}
 #ctxMenu{position:fixed;z-index:150;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);padding:6px;display:none;min-width:200px}
 #ctxMenu button{display:block;width:100%;text-align:left;border:none;background:none;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text)}
 #ctxMenu button:hover{background:var(--hover)}
@@ -269,6 +284,15 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .statrow .nm{flex:0 0 210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .statbar{flex:1;background:var(--headbg);border-radius:4px;height:14px;overflow:hidden}
 .statbar div{height:100%;background:var(--accent)}
+/* Ampel-Einfärbung für echte Auslastungs-Balken (StatBar's `colorByUtilization` — nur die
+   Ressourcen-Übersicht der Maschinen, siehe StatsDrilldown.tsx): gelb = unterausgelastet
+   (<60%), grün = gesund (60–85%), rot = überausgelastet (>85%) */
+.statbar div.util-low{background:var(--warn)}
+.statbar div.util-mid{background:var(--dot-free)}
+.statbar div.util-high{background:var(--danger)}
+/* Rechtsbündige Zahlenspalten: feste Ziffernbreite, damit z.B. "8/12 · 67%" untereinander
+   exakt ausgerichtet steht statt je nach Ziffernbreite leicht zu wandern */
+.statrow .pct,.statgrp{font-variant-numeric:tabular-nums}
 .statrow .pct{width:100px;text-align:right;white-space:nowrap}
 .admrow{display:flex;gap:6px;align-items:center;padding:4px 6px;border-bottom:1px solid var(--border)}
 .admrow .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

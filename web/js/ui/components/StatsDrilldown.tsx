@@ -11,11 +11,39 @@
 import type { StatsMachineRow, StatsPerson } from '../views/stats.ts';
 import { Icon } from './Icon.tsx';
 
-/** A single result row's horizontal bar, sized to `percent` (0–100). */
-export function StatBar({ percent }: { percent: number }) {
+/** The traffic-light utilisation band a percent falls into: under-used, healthy, or
+ *  over-used. Thresholds per user request — under 60% is under-utilized, 60–85% is the
+ *  healthy band, over 85% is over-utilized (worth watching for overbooking/burnout). */
+function utilizationBand(percent: number): 'low' | 'mid' | 'high' {
+  if (percent > 85) return 'high';
+  if (percent >= 60) return 'mid';
+  return 'low';
+}
+
+/**
+ * A single result row's horizontal bar, sized to `percent` (0–100).
+ *
+ * `colorByUtilization` switches the fill from the plain accent color to the traffic-light
+ * band above — only meaningful when `percent` IS a genuine 0–100 utilisation rate (a
+ * machine's booked-workday share of the range). Most `StatBar` call sites instead pass a
+ * percent *relative to the list's own top scorer* (e.g. a person's days as a fraction of the
+ * busiest person's days) — traffic-light coloring there would be misleading (the busiest
+ * entry always reads "over-utilized" red even at a genuinely low absolute rate), so those
+ * callers leave this off and keep the neutral accent fill.
+ */
+export function StatBar({
+  percent,
+  colorByUtilization = false,
+}: {
+  percent: number;
+  colorByUtilization?: boolean;
+}) {
   return (
     <div className="statbar">
-      <div style={{ width: `${percent}%` }} />
+      <div
+        className={colorByUtilization ? `util-${utilizationBand(percent)}` : undefined}
+        style={{ width: `${percent}%` }}
+      />
     </div>
   );
 }

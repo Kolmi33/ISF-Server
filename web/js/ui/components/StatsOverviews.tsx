@@ -61,7 +61,7 @@ function ResourceRowView({
       onClick={() => onSelectMachine(row.row.machine.id)}
     >
       <span className="nm">{row.row.machine.name}</span>
-      <StatBar percent={row.row.percent} />
+      <StatBar percent={row.row.percent} colorByUtilization />
       <span className="pct">
         {row.row.bookedWorkdayCount}/{totalDays} · {row.row.percent}%
       </span>
