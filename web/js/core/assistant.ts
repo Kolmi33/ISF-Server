@@ -1,20 +1,27 @@
-// Pure logic for the booking Assistant, extracted from the monolith (legacy.js): the
-// device/group tree operations AND the N-of-M scheduling solver. No DOM, no globals — the
-// tree is passed explicitly, and device availability is supplied via an injected `isFree`
-// predicate, so the solver is a pure function of (tree, calendar days, availability).
+// =======================================================================================
+// BOOKING ASSISTANT MODULE (web/js/core/assistant.ts)
+// =======================================================================================
 //
-// The Assistant lets the user pick devices and drag equivalents onto each other to form
-// "need N of M" groups. The tree is: a root/group container holds children, each child is a
-// device leaf or a nested group (with a `need` count). The DOM rendering, drag-and-drop, and
-// the availability source (bookings/maintenance) stay in legacy.js; this is the pure kernel.
+// Pure logic for the booking Assistant: the device/group tree operations AND the N-of-M
+// scheduling solver.
+// This module provides:
+// 1. Tree operations (find, detach, cleanup) over the Assistant's device/group tree.
+// 2. Drag-and-drop tree edits (group two nodes, join, dissolve, change a group's need).
+// 3. The N-of-M scheduling solver: given an availability predicate, find which days/runs
+//    satisfy the whole tree, and which concrete devices to book for a chosen window.
 //
-// Naming note: the seven `treeXxx` tree operations are called ONLY through legacy.js's
-// one-line `asXxx` adapters (e.g. `asFind` calls `treeFind`) — never directly by bare name —
-// so they'd need no bridge alias even if renamed. They're left as-is because "tree" + a verb
-// is already a full, descriptive name, nothing to shorten. `hasAnyRedundancy` and
-// `chooseDevicesForTree`, by contrast, ARE called directly by bare name in `legacy.js`
-// (`runAssistant`) under their OLD names (`anyRedund`, `pickFor`) — those old names survive
-// only as the aliases at the bottom of this file, deleted whole in Phase 7 slice B10.
+// Key Principles:
+// - PURE FUNCTIONS: no DOM, no globals — the tree is passed explicitly, and device
+//   availability is supplied via an injected `isFree` predicate (E4), so the solver is a
+//   pure function of (tree, calendar days, availability) and is fully unit-testable
+//   without a live booking calendar.
+// - THE TREE MODEL: the Assistant lets the user pick devices and drag equivalents onto
+//   each other to form "need N of M" groups. A tree is: a root/group container holds
+//   children, each child is a device leaf or a nested group (with its own `need` count).
+//   The DOM rendering and drag-and-drop chrome live in the React components; this file is
+//   the pure kernel underneath them.
+//
+// =======================================================================================
 
 import { nextWeekday } from '../../../shared/dates.ts';
 
@@ -41,7 +48,7 @@ export interface AssistContainer {
   children: AssistNode[];
 }
 
-/** Find a node by uid anywhere in the tree, or null. */
+/** Finds a node by uid anywhere in the tree (searching every group recursively), or null. */
 export function treeFind(node: AssistContainer, uid: string): AssistNode | null {
   for (const child of node.children) {
     if (child.uid === uid) return child;
@@ -53,7 +60,8 @@ export function treeFind(node: AssistContainer, uid: string): AssistNode | null 
   return null;
 }
 
-/** Find the container that directly holds `uid`, or null. */
+/** Finds the container that directly holds `uid` (its immediate parent group, or the tree
+ *  root), or null if `uid` doesn't exist anywhere in the tree. */
 export function treeFindParent(node: AssistContainer, uid: string): AssistContainer | null {
   for (const child of node.children) {
     if (child.uid === uid) return node;
@@ -65,14 +73,16 @@ export function treeFindParent(node: AssistContainer, uid: string): AssistContai
   return null;
 }
 
-/** True if `aUid` is `bUid` or an ancestor group of it. */
+/** True if `aUid` is `bUid` itself, or a group that (directly or transitively) contains it —
+ *  used to block a drag operation that would nest a node inside its own descendant. */
 export function treeIsAncestor(root: AssistContainer, aUid: string, bUid: string): boolean {
   if (aUid === bUid) return true;
   const ancestorNode = treeFind(root, aUid);
   return !!ancestorNode && ancestorNode.type === 'grp' && !!treeFind(ancestorNode, bUid);
 }
 
-/** Remove the node `uid` from the tree and return it (or null if not found). Mutates the tree. */
+/** Removes the node `uid` from wherever it lives in the tree and returns it (or null if not
+ *  found). Mutates the tree — the caller typically re-inserts the detached node elsewhere. */
 export function treeDetach(root: AssistContainer, uid: string): AssistNode | null {
   const parent = treeFindParent(root, uid);
   if (!parent) return null;
@@ -80,7 +90,7 @@ export function treeDetach(root: AssistContainer, uid: string): AssistNode | nul
   return parent.children.splice(index, 1)[0]!;
 }
 
-/** All device ids in the tree, in order (flattening groups). */
+/** Lists every device id in the tree, in tree order, flattening all nested groups. */
 export function treeDevs(node: AssistContainer): string[] {
   let deviceIds: string[] = [];
   for (const child of node.children) {
@@ -90,7 +100,8 @@ export function treeDevs(node: AssistContainer): string[] {
   return deviceIds;
 }
 
-/** The uid of the device leaf whose device id is `id`, or null. */
+/** Finds the uid of the device leaf whose device id is `id`, or null if that device isn't
+ *  anywhere in the tree. */
 export function treeDevUid(node: AssistContainer, id: string): string | null {
   for (const child of node.children) {
     if (child.type === 'dev' && child.id === id) return child.uid;
@@ -103,8 +114,15 @@ export function treeDevUid(node: AssistContainer, id: string): string | null {
 }
 
 /**
- * Normalize the tree in place: recurse first, then drop empty groups, dissolve single-child
- * groups (promoting the child), and clamp each surviving group's `need` to 1..childCount.
+ * Normalizes the tree in place after an edit, so it never accumulates degenerate groups.
+ *
+ * How it works, recursively (children cleaned up before their parent, so a parent sees its
+ * children's already-final shape):
+ * 1. An empty group (every child removed) is dropped entirely.
+ * 2. A single-child group is dissolved, promoting that one child up to the group's own
+ *    position — a "need 1 of 1" group carries no information a bare device/group doesn't.
+ * 3. A surviving group's `need` is clamped to `1..childCount`, so it never asks for more
+ *    devices than it has, or fewer than 1.
  */
 export function treeCleanup(node: AssistContainer): void {
   for (const child of node.children) {
@@ -119,19 +137,26 @@ export function treeCleanup(node: AssistContainer): void {
   });
 }
 
-// ---- N-of-M scheduling solver ----------------------------------------------------------
-// Availability is injected: `isFree(deviceId, isoDay)` is true when that device is bookable
-// that day (in legacy.js: not booked, not blocked, weekday available). Keeps the solver pure.
+// ---------------------------------------------------------------------------------------
+// N-of-M scheduling solver
+// ---------------------------------------------------------------------------------------
+// Availability is injected via `isFree(deviceId, isoDay)` — true when that device is
+// bookable that day (not already booked, not blocked, and available that weekday). Keeping
+// it injected rather than read from the live calendar directly is what keeps the solver a
+// pure function, testable with a hand-built availability table instead of a live booking
+// calendar.
 
 /** Whether device `id` is free on ISO day `day`. */
 export type IsFree = (id: string, day: string) => boolean;
 
-/** A group's effective requirement, clamped to 1..childCount. */
+/** A group's effective requirement: `need`, clamped to `1..childCount` in case the stored
+ *  value is stale relative to the group's current children. */
 export function effectiveNeed(group: AssistGrp): number {
   return Math.max(1, Math.min(group.children.length, group.need));
 }
 
-/** Is `node` satisfiable on `day`? A device: free. A group: at least `need` children free. */
+/** Whether `node` is satisfiable on `day`: a device leaf is satisfiable when it's free that
+ *  day; a group is satisfiable when at least `effectiveNeed` of its children are (recursively). */
 export function isNodeSatisfiable(node: AssistNode, day: string, isFree: IsFree): boolean {
   return node.type === 'dev'
     ? isFree(node.id, day)
@@ -139,7 +164,8 @@ export function isNodeSatisfiable(node: AssistNode, day: string, isFree: IsFree)
         effectiveNeed(node);
 }
 
-/** Is the whole tree satisfiable on `day`? (Root = AND over its children.) */
+/** Whether the whole tree is satisfiable on `day` — every top-level child must be
+ *  satisfiable (the root itself has no `need`; it's an implicit AND over its children). */
 export function isTreeSatisfiableOnDay(
   root: AssistContainer,
   day: string,
@@ -148,7 +174,8 @@ export function isTreeSatisfiableOnDay(
   return root.children.every((child) => isNodeSatisfiable(child, day, isFree));
 }
 
-/** True if any group carries real redundancy (more children than it needs), anywhere. */
+/** True if any group anywhere in the tree carries real redundancy — more children than it
+ *  actually needs — which is what lets the Assistant show "this plan has backup capacity". */
 export function hasAnyRedundancy(node: AssistContainer): boolean {
   return node.children.some(
     (child) =>
@@ -157,12 +184,13 @@ export function hasAnyRedundancy(node: AssistContainer): boolean {
   );
 }
 
-/** Of `days`, those on which the whole tree is satisfiable. */
+/** Filters `days` down to those on which the whole tree is satisfiable. */
 export function freeDays(root: AssistContainer, days: string[], isFree: IsFree): string[] {
   return days.filter((day) => isTreeSatisfiableOnDay(root, day, isFree));
 }
 
-/** Split a sorted list of free days into weekday-contiguous runs. */
+/** Splits a sorted list of free days into weekday-contiguous runs — a gap of more than one
+ *  workday (via `nextWeekday`, so a weekend doesn't itself count as a gap) starts a new run. */
 export function groupRuns(sortedFreeDates: string[]): string[][] {
   const runs: string[][] = [];
   let currentRun: string[] = [];
@@ -179,8 +207,18 @@ export function groupRuns(sortedFreeDates: string[]): string[][] {
 }
 
 /**
- * Runs that reach the end of the search window `to` are "open": extend them (in place) while
- * the whole tree stays free, up to `cap` days. Returns the set of runs that were extended.
+ * Extends every run that reaches the end of the search window `to` ("open" runs) for as
+ * long as the whole tree stays free, up to `cap` additional days.
+ *
+ * How it works, per run:
+ * 1. A run only counts as "open" if its last day's next workday falls after `to` — i.e. the
+ *    search window ended while the run was still going, not because availability ran out.
+ * 2. For each open run, keeps appending the next workday while the tree stays satisfiable
+ *    on it, stopping at the first unsatisfiable day or at `cap` extensions (whichever comes
+ *    first — `cap` is a safety bound against runaway open-ended availability).
+ *
+ * Mutates each open run's array in place; returns the set of runs that were extended, so
+ * the caller can distinguish "ends here for good" from "still open beyond what we searched".
  */
 export function extendOpenRuns(
   root: AssistContainer,
@@ -205,7 +243,8 @@ export function extendOpenRuns(
   return openRuns;
 }
 
-/** Is `node` free on every day of the window `selectedDates`? */
+/** Whether `node` is satisfiable on EVERY day of `selectedDates` — the check a chosen
+ *  booking window must pass before devices are actually picked for it. */
 export function isSatisfiableAcrossWindow(
   node: AssistNode,
   selectedDates: string[],
@@ -214,7 +253,14 @@ export function isSatisfiableAcrossWindow(
   return selectedDates.every((date) => isNodeSatisfiable(node, date, isFree));
 }
 
-/** Device ids chosen to satisfy `node` over window `selectedDates`, preferring continuously-free ones. */
+/**
+ * Chooses which device ids to actually book for `node` over the window `selectedDates`.
+ *
+ * How it works: a device leaf just picks itself. A group sorts its children so the ones
+ * satisfiable across the WHOLE window come first (preferring a device that's continuously
+ * free over one that would need a mid-window substitution), takes the first `effectiveNeed`
+ * of them, and recurses into each chosen child.
+ */
 export function chooseDevicesForNode(
   node: AssistNode,
   selectedDates: string[],
@@ -232,7 +278,8 @@ export function chooseDevicesForNode(
         .flatMap((child) => chooseDevicesForNode(child, selectedDates, isFree));
 }
 
-/** Distinct device ids chosen to satisfy the whole tree over window `selectedDates`. */
+/** Distinct device ids chosen to satisfy the whole tree over window `selectedDates` — the
+ *  union of {@link chooseDevicesForNode}'s picks for every top-level child. */
 export function chooseDevicesForTree(
   root: AssistContainer,
   selectedDates: string[],
@@ -245,14 +292,19 @@ export function chooseDevicesForTree(
   ];
 }
 
-// ---- Drag-and-drop tree edits (Phase 7 slice B7) ---------------------------------------
-// Each mutates `tree` in place and calls `treeCleanup` itself, matching legacy's own
-// `asXxx` adapters — minus the DOM/render side effects, which the caller (the React
-// component) triggers itself after calling one of these.
+// ---------------------------------------------------------------------------------------
+// Drag-and-drop tree edits
+// ---------------------------------------------------------------------------------------
+// Each of these mutates `tree` in place and calls `treeCleanup` itself, so every edit
+// leaves the tree in a normalized state before the caller (the React component) re-renders
+// it — the DOM/drag-and-drop chrome itself lives entirely in the component, not here.
 
-/** Drag a device onto another node: wraps both in a new 2-child "need 1 of 2" group, colored
- *  from the next hue in the caller's cycle. No-op when dragging onto itself or an ancestor of
- *  the target. Faithful port of legacy `asGroupOnto`. */
+/**
+ * Drags a device/group onto another node: wraps both in a new 2-child "need 1 of 2" group,
+ * colored from the next hue in the caller's cycle. A no-op when dragging onto itself, or
+ * onto a node that's already an ancestor of the drag target (that would nest a group inside
+ * its own descendant).
+ */
 export function groupNodeOnto(
   tree: AssistContainer,
   dragUid: string,
@@ -280,8 +332,8 @@ export function groupNodeOnto(
   treeCleanup(tree);
 }
 
-/** Move a dragged node into an existing group. No-op if the group is an ancestor of the
- *  dragged node, doesn't exist, or isn't a group. Faithful port of legacy `asJoin`. */
+/** Moves a dragged node into an existing group. A no-op if the target group is an ancestor
+ *  of the dragged node, doesn't exist, or isn't actually a group. */
 export function joinNode(tree: AssistContainer, dragUid: string, groupUid: string): void {
   if (treeIsAncestor(tree, dragUid, groupUid)) return;
   const group = treeFind(tree, groupUid);
@@ -292,8 +344,7 @@ export function joinNode(tree: AssistContainer, dragUid: string, groupUid: strin
   treeCleanup(tree);
 }
 
-/** Move a dragged node back to the tree root (dropped on empty canvas). Faithful port of
- *  legacy `asToRoot`. */
+/** Moves a dragged node back to the tree root — dropped on empty canvas, outside any group. */
 export function moveNodeToRoot(tree: AssistContainer, dragUid: string): void {
   const node = treeDetach(tree, dragUid);
   if (!node) return;
@@ -301,8 +352,7 @@ export function moveNodeToRoot(tree: AssistContainer, dragUid: string): void {
   treeCleanup(tree);
 }
 
-/** Dissolve a group, promoting its children up to its own position. Faithful port of legacy
- *  `asDissolve`. */
+/** Dissolves a group, promoting its children up to its own position in the parent. */
 export function dissolveGroup(tree: AssistContainer, groupUid: string): void {
   const group = treeFind(tree, groupUid);
   const parent = treeFindParent(tree, groupUid);
@@ -312,32 +362,32 @@ export function dissolveGroup(tree: AssistContainer, groupUid: string): void {
   treeCleanup(tree);
 }
 
-/** Change a group's `need` by `delta`, clamped to 1..childCount. Faithful port of legacy
- *  `asChangeNeed`. */
+/** Changes a group's `need` by `delta` (the stepper buttons' +1/-1), clamped to
+ *  `1..childCount` so it can never ask for more devices than the group has, or fewer than 1. */
 export function changeGroupNeed(tree: AssistContainer, groupUid: string, delta: number): void {
   const group = treeFind(tree, groupUid);
   if (!group || group.type !== 'grp') return;
   group.need = Math.max(1, Math.min(group.children.length, group.need + delta));
 }
 
-/** Set a group's `need` to an absolute value, clamped to 1..childCount. Faithful port of the
- *  `data-need` number input's onChange in legacy `renderWork` (the stepper buttons use
- *  `changeGroupNeed`'s delta instead). */
+/** Sets a group's `need` to an absolute value (typed directly into the number input, as
+ *  opposed to `changeGroupNeed`'s relative +1/-1 stepper), clamped to `1..childCount`. */
 export function setGroupNeed(tree: AssistContainer, groupUid: string, value: number): void {
   const group = treeFind(tree, groupUid);
   if (!group || group.type !== 'grp') return;
   group.need = Math.max(1, Math.min(group.children.length, value));
 }
 
-/** Remove a node (device or group) from the tree entirely. Faithful port of the tree-editing
- *  half of legacy `asRemove` (the DOM checkbox side effect is the caller's job). */
+/** Removes a node (device or group, with all its descendants) from the tree entirely, then
+ *  normalizes what's left. The DOM checkbox side effect (unchecking the removed device in
+ *  the picker) is the caller's own responsibility, not this function's. */
 export function removeNode(tree: AssistContainer, uid: string): void {
   treeDetach(tree, uid);
   treeCleanup(tree);
 }
 
-/** Add a device to the tree root, unless it's already present anywhere in the tree. Returns
- *  whether it was actually added. Faithful port of legacy `asAdd`. */
+/** Adds a device to the tree root, unless it's already present anywhere in the tree (as a
+ *  bare leaf or nested inside a group). Returns whether it was actually added. */
 export function addDeviceToTree(
   tree: AssistContainer,
   deviceId: string,

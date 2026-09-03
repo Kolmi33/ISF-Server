@@ -1,26 +1,28 @@
-// The booking domain: pure read-only queries AND the write-path reducers, in one cohesive
-// file. No DOM, no I/O, no global state — the reducers take the FRESH server data and mutate
-// it in place, returning the same {abort} / {conflicts} / {count,undo} / {deletedCount,undo} shapes the
-// legacy `mutate(fresh => …)` callbacks returned; the queries are plain lookups over the same
-// data. Merged from a prior split (`booking.ts` mutations / `booking-queries.ts` queries,
-// PRINCIPLES.md E10's original "one domain, one file pair" shape) back into a single file per
-// domain — same reasoning `shared/types.ts`/`shared/dates.ts`/`web/js/state.ts` already use
-// (one file, one domain, sectioned internally), and `core/machines.ts` mirrors — see
-// PRINCIPLES.md E10 for the updated rule. Sectioned below: 1) types, 2) queries (read-only),
-// 3) mutations (write-path). The two impurities the booking apply needs — the wall-clock
-// timestamp and the group-id factory — are injected (E4), so the reducers stay deterministic
-// functions of their inputs.
+// =======================================================================================
+// BOOKING DOMAIN MODULE (web/js/core/bookings.ts)
+// =======================================================================================
 //
-// This belongs in core/ (domain logic, like sweepWeekends), NOT ui/. Gate-only: the mutations
-// POST to /api/mutate, so they're verified by exhaustive unit tests rather than a
-// production-write browser smoke (ARCHITECTURE §15).
+// Pure domain logic for bookings (the grid's cells).
+// This module provides:
+// 1. Read-only queries (looking up a cell, finding a same-name run of workdays, collecting
+//    every cell in a booking group).
+// 2. Write-path reducers (booking cells, deleting cells — by clicked cell, by owner, by
+//    marquee selection, or by whole group).
 //
-// Naming note: each exported mutation here IS called by its bare name in `legacy.js` (inside a
-// `mutate(fresh => bookCells(fresh, ...))` callback, via the window bridge), so those exported
-// names are left exactly as they were — they were already full, descriptive words, not
-// abbreviations. Only INTERNAL parameters and local variables are spelled out in full
-// (PRINCIPLES.md E9); a parameter's name is never visible to a caller, so those renames need no
-// change outside this file.
+// Key Principles:
+// - PURE FUNCTIONS: the reducers take the FRESH server data and mutate it in place,
+//   returning the same `{abort}` / `{conflicts}` / `{count,undo}` / `{deletedCount,undo}`
+//   shapes the current React components (`BookingForm.tsx`, `BookingDetailModal.tsx`,
+//   `MyBookingsModal.tsx`, `ContextMenu.tsx`) already expect from `window.mutate`.
+// - INJECTED IMPURITIES: the two non-deterministic inputs booking-apply needs — the
+//   wall-clock timestamp and the group-id factory — are passed in as `BookOptions` fields
+//   rather than read from `Date.now()`/a random-id call directly, so the reducers stay
+//   deterministic functions of their inputs and are trivially unit-testable.
+// - DOMAIN LOGIC LIVES IN core/, NOT ui/: this module (like `sweepWeekends`) has no DOM
+//   dependency, so it's exhaustively unit-tested here rather than only exercised through a
+//   production-write browser smoke test (ARCHITECTURE §15).
+//
+// =======================================================================================
 
 import type { Booking, Bookings, BookingData, Machine } from '../../../shared/types.ts';
 import {
@@ -78,7 +80,8 @@ export interface CellRef {
 }
 
 /** Every cell (across every machine) sharing booking-group id `gid`, plus which machines and
- *  dates that spans. Faithful port of legacy `openBookingDetail`'s group-collection loop. */
+ *  dates that spans — the shape a booking's detail view needs to show "this group covers 3
+ *  machines over 5 workdays". */
 export interface BookingGroup {
   machineIds: Set<string>;
   /** Every date in the group, sorted ascending. */
@@ -102,11 +105,16 @@ export function getBooking(
 }
 
 /**
- * The contiguous run of workdays, centered on `isoDate`, that `machineId` has booked under
- * the same `name` — weekends don't break the run (they're simply skipped over), but a gap of
- * any other kind (a different booker, or a free/blocked day) does. Returned in chronological
- * order, always including `isoDate` itself. Faithful port of legacy `openBookingDetail`'s
- * backward/forward walk.
+ * Finds the contiguous run of workdays, centered on `isoDate`, that `machineId` has booked
+ * under the same `name` — weekends don't break the run (they're simply skipped over), but a
+ * gap of any other kind (a different booker, or a free/blocked day) does.
+ *
+ * How it works:
+ * 1. Starts the run at `isoDate` itself.
+ * 2. Walks backward one workday at a time (via `previousWeekday`, so weekends are
+ *    transparently skipped), extending the run while the same `name` booked that day too.
+ * 3. Walks forward the same way from `isoDate`.
+ * 4. Returns the whole run in chronological order.
  */
 export function findSameNameWorkdayRun(
   bookings: Bookings,
@@ -136,8 +144,8 @@ export function findSameNameWorkdayRun(
   return run;
 }
 
-/** Every cell sharing booking-group id `groupId`, across every machine. Faithful port of
- *  legacy `openBookingDetail`'s group-collection loop. */
+/** Collects every cell sharing booking-group id `groupId`, across every machine — walks the
+ *  full `bookings` map once, recording each machine/date pair whose cell carries that `gid`. */
 export function findBookingGroup(bookings: Bookings, groupId: string): BookingGroup {
   const machineIds = new Set<string>();
   const dates = new Set<string>();
@@ -153,7 +161,15 @@ export function findBookingGroup(bookings: Bookings, groupId: string): BookingGr
   return { machineIds, dates: [...dates].sort() };
 }
 
-/** Conflicts against the fresh data: blocked days and already-booked days. */
+/**
+ * Checks `machineIds` × `dates` against the fresh data for conflicts.
+ *
+ * How it works, per machine/date pair:
+ * 1. An unavailable weekday (per that machine's `days` mask) is silently skipped — not a
+ *    conflict, since the caller never intended to book on a day the machine doesn't work.
+ * 2. A day blocked by maintenance/defect IS a conflict, labeled with the block reason.
+ * 3. A day already booked by someone else is a conflict, labeled with their name.
+ */
 function findBookingConflicts(
   freshServerData: BookingData,
   machineIds: readonly string[],
@@ -184,7 +200,13 @@ function findBookingConflicts(
 // 3. Mutations (write-path reducers)
 // ---------------------------------------------------------------------------------------
 
-/** Write the bookable `dates` on one machine (`buildCell` builds a fresh cell each time). */
+/**
+ * Writes the bookable `dates` on one machine (`buildCell` builds a fresh cell each time it's
+ * called, so every written cell gets its own object). A date is silently skipped — not
+ * written, not counted, not an error — when the cell is already taken, blocked, or the
+ * machine doesn't work that weekday; `bookCells`'s own conflict check has already decided
+ * whether skipping is acceptable before this function ever runs.
+ */
 function writeMachineCells(
   freshServerData: BookingData,
   machine: Machine,
@@ -226,15 +248,21 @@ function buildBookingCellFactory(
   };
 }
 
-/** Write the free cells into `freshServerData` and return the applied count + undo records. */
+/**
+ * Writes the free cells into `freshServerData` and returns the applied count + undo records.
+ *
+ * How it works:
+ * 1. Decides whether this action needs a shared group id: more than one cell (several
+ *    machines and/or days) OR an explicit title makes it a group, even a single cell with
+ *    a title.
+ * 2. Builds one cell factory (shared gid/title baked in) and applies it per machine.
+ */
 function applyBooking(
   freshServerData: BookingData,
   machineIds: readonly string[],
   dates: readonly string[],
   options: BookOptions,
 ): { count: number; undo: CellUndo[] } {
-  // A shared group id ties the cells together when this action creates more than one
-  // cell (several machines and/or days) OR a title was given.
   const isGroup = machineIds.length > 1 || dates.length > 1 || !!options.title;
   const groupId = isGroup ? options.newGid() : null;
   const buildCell = buildBookingCellFactory(options, groupId, options.title);
@@ -249,10 +277,14 @@ function applyBooking(
 }
 
 /**
- * Book `dates` on every machine in `machineIds`. Conflicts are checked against the fresh
- * data first; if any exist and `skipConflicts` is false, aborts with the conflict list
- * (nothing written). Otherwise writes the free cells and returns the count + undo.
- * Faithful port of the `submitBooking` mutate callback.
+ * Books `dates` on every machine in `machineIds`.
+ *
+ * How it works:
+ * 1. Checks for conflicts against the fresh data first.
+ * 2. If any conflicts exist and `skipConflicts` is false, aborts with the conflict list —
+ *    nothing is written, so the caller can show the conflicts and let the user decide.
+ * 3. Otherwise (no conflicts, or the caller opted to skip them) writes the free cells and
+ *    returns the applied count + undo records.
  */
 export function bookCells(
   freshServerData: BookingData,
@@ -266,9 +298,10 @@ export function bookCells(
 }
 
 /**
- * Delete the given `dates` on `machineId` that belong to `name`, then sweep any
- * weekend bridge days the deletion orphaned. Returns the deleted count + undo records
- * (including the swept weekend days). Faithful port of the booking-detail `del`.
+ * Deletes the given `dates` on `machineId` that belong to `name` (a date not booked under
+ * that exact name is left untouched — this only removes what the caller identified as
+ * theirs to delete), then sweeps any weekend bridge days the deletion orphaned. Returns the
+ * deleted count + undo records, including the swept weekend days.
  */
 export function deleteCells(
   freshServerData: BookingData,
@@ -292,10 +325,9 @@ export function deleteCells(
 }
 
 /**
- * Delete the current user's OWN cells (case-insensitive name match) among `dates` on
- * `machineId`, then sweep. Faithful port of the my-bookings `delDates` (which matches
- * `S.user` case-insensitively — distinct from {@link deleteCells}, which matches the
- * clicked cell's exact stored name).
+ * Deletes the current user's OWN cells among `dates` on `machineId` (case-insensitive name
+ * match against `user` — distinct from {@link deleteCells}, which matches the clicked cell's
+ * exact stored name instead of "whoever is currently logged in"), then sweeps.
  */
 export function deleteOwnCells(
   freshServerData: BookingData,
@@ -320,8 +352,10 @@ export function deleteOwnCells(
 }
 
 /**
- * Delete the exact cells listed (those that still exist — no name check), then sweep
- * each machine in `machineIds`. Faithful port of the marquee-selection context-menu delete.
+ * Deletes the exact cells listed (whichever of them still exist — no name check, so this
+ * removes anyone's booking, not just the caller's own), then sweeps each machine in
+ * `machineIds`. Used for a marquee-selection bulk delete, where the user has already
+ * explicitly selected every cell to remove.
  */
 export function deleteSelectedCells(
   freshServerData: BookingData,
@@ -344,8 +378,9 @@ export function deleteSelectedCells(
 }
 
 /**
- * Delete every cell belonging to booking-group `groupId` across all machines, then sweep
- * the affected machines. Faithful port of the booking-detail "delete whole group".
+ * Deletes every cell belonging to booking-group `groupId` across all machines, then sweeps
+ * each machine that lost at least one cell — the "delete the whole group at once" action
+ * from a booking's detail view, as opposed to deleting just the one clicked cell.
  */
 export function deleteGroup(
   freshServerData: BookingData,

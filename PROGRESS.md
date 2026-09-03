@@ -553,8 +553,11 @@ files, e.g. Phase 9's slices).
   stale `catOf` reference in `MachineCategory`'s doc comment (renamed twice since: to
   `categoryOf` in Phase 7, then `getMachineCategory`). `dates.test.ts` left as-is — already
   description-driven, no function-level prose to expand; `types.ts` has no test file.
-- [ ] 10b `web/js/core/` — `assistant.ts`, `bookings.ts`, `weekend.ts` (+ tests; `machines.ts`
-  already done, the template for this whole phase)
+- [x] 10b `web/js/core/` — `assistant.ts`, `bookings.ts`, `weekend.ts` rewritten to the verbose
+  style. Also fixed stale legacy.js attributions (deleted whole in Phase 7) in `bookings.ts`'s
+  header and several docstrings, and in `assistant.ts`'s header/per-function comments — same
+  category of fix as `machines.ts`'s. Test files (`*.test.ts`) left as-is: already
+  description-driven, no stale references found.
 - [ ] 10c `web/js/` root + `web/js/net/` — `app.ts`, `state.ts`, `store-instance.ts`, `api.ts`,
   `sse.ts` (+ tests)
 - [ ] 10d `web/js/ui/` top-level, part 1 (alphabetical first half) — `assistant-checklist.ts`
