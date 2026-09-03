@@ -11,6 +11,10 @@ const bk = (name: string) => ({ name });
 const today = '2021-01-04';
 
 describe('computeMyRuns', () => {
+  // What: consecutive booked workdays group into one run, and a genuine gap (a missing day,
+  // not a weekend) starts a new run.
+  // How: books three days with a one-day gap in the middle and checks the result splits into
+  // two runs at that gap.
   it('groups consecutive workdays into runs and splits on gaps', () => {
     const bookings: Bookings = {
       m1: {
@@ -26,12 +30,19 @@ describe('computeMyRuns', () => {
     ]);
   });
 
+  // What: a Friday followed by the next Monday counts as one continuous run — the weekend
+  // gap between them doesn't split it, since the weekend was never bookable in the first place.
+  // How: books a Friday and the following Monday only and checks they form a single run.
   it('treats Fri→Mon as one run (weekend skipped)', () => {
     const bookings: Bookings = { m1: { '2021-01-08': bk('anna'), '2021-01-11': bk('anna') } };
     const runs = computeMyRuns([m1], bookings, 'anna', today);
     expect(runs).toEqual([{ machine: m1, dates: ['2021-01-08', '2021-01-11'] }]);
   });
 
+  // What: only future workdays booked by THIS user (matched case-insensitively) count — past
+  // days, weekend bookings, and other people's bookings are all excluded.
+  // How: seeds one booking of each excluded kind plus one legitimately-matching (different
+  // case) booking, and checks only the matching one survives.
   it('drops past days, weekend bookings, and other users; matches case-insensitively', () => {
     const bookings: Bookings = {
       m1: {
@@ -45,6 +56,10 @@ describe('computeMyRuns', () => {
     expect(runs).toEqual([{ machine: m1, dates: ['2021-01-05'] }]);
   });
 
+  // What: runs from different machines are all merged into one list, sorted by each run's own
+  // first date — not grouped by machine first.
+  // How: books runs on two machines with interleaved dates and checks the result is ordered
+  // purely by date, crossing back and forth between machines.
   it('sorts runs across machines by their first date', () => {
     const bookings: Bookings = {
       m1: { '2021-01-04': bk('anna'), '2021-01-07': bk('anna') },
@@ -59,6 +74,10 @@ describe('computeMyRuns', () => {
     ]);
   });
 
+  // What: a machine with no matching bookings at all — whether it has an empty bookings
+  // bucket or no bucket at all — yields no runs.
+  // How: checks both an explicitly-empty bookings object and a completely absent entry for
+  // the machine both produce an empty result.
   it('is empty when the machine has no matching bookings', () => {
     expect(computeMyRuns([m1], { m1: {} }, 'anna', today)).toEqual([]);
     expect(computeMyRuns([m1], {}, 'anna', today)).toEqual([]); // no entry for the machine
