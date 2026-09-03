@@ -105,6 +105,25 @@ describe('MachineFilterDropdown', () => {
     expect(document.getElementById('machBtn')!.textContent).toContain('Filtern ▾');
   });
 
+  // What: the "N ausgewählt" counter only appears once something is actually selected — with
+  // nothing selected there's nothing to count, so no orphan label sits next to the clear
+  // button (user request: replace the always-shown "alle sichtbar" text with a counter that
+  // only shows up when it means something).
+  // How: opens the dropdown with nothing selected (no counter), selects one machine (counter
+  // appears with the right count), then clears it (counter disappears again).
+  it('shows a live "N ausgewählt" counter only once something is selected', () => {
+    openDropdown();
+    act(() => fireEvent.click(catHeader()));
+    act(() => fireEvent.click(document.querySelector('.mlist .grpsub')!));
+    expect(screen.queryByText(/ausgewählt/)).not.toBeInTheDocument();
+    act(() => {
+      screen.getByRole('checkbox', { name: 'Fräse' }).click();
+    });
+    expect(screen.getByText('1 ausgewählt')).toBeInTheDocument();
+    act(() => fireEvent.click(screen.getByRole('button', { name: /Filter löschen/ })));
+    expect(screen.queryByText(/ausgewählt/)).not.toBeInTheDocument();
+  });
+
   // What: the show/hide toggle for a whole category section (distinct from the machine
   // selection filter) removes that category's section from the list entirely — and this is
   // purely a local dropdown-UI concern, so it doesn't trigger the store's notify/repaint.

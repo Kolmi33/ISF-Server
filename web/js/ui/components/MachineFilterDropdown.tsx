@@ -230,10 +230,15 @@ function MachineFilterBody({
           justifyContent: 'space-between',
         }}
       >
-        <span className="hint" style={{ margin: 0 }}>
-          {store.get('machSel').size ? `${store.get('machSel').size} gewählt` : 'alle sichtbar'}
-        </span>
-        <button className="btn small clearbtn" onClick={onClear}>
+        {/* Only shown once something's actually selected (user request) — with nothing
+            selected there's nothing to count, and "alle sichtbar" sat here disconnected from
+            the clear button next to it since there was nothing yet to clear. */}
+        {store.get('machSel').size > 0 && (
+          <span className="hint" style={{ margin: 0 }}>
+            {store.get('machSel').size} ausgewählt
+          </span>
+        )}
+        <button className="btn small clearbtn" style={{ marginLeft: 'auto' }} onClick={onClear}>
           <Icon name="trash" /> Filter löschen
         </button>
       </div>

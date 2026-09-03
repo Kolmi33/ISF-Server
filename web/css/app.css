@@ -57,10 +57,13 @@ header h1{font-size:16px;margin:0;white-space:nowrap;padding-left:13px} /* Emoji
 .seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--panel)}
 .seg.fill{display:flex}
 .seg.fill button{flex:1}
-.seg button{border:none;padding:6px 14px;min-height:32px;background:transparent;cursor:pointer;
+/* Inactive segments get a pale grey fill, not just transparent (user request: transparent read
+   as too close to the active blue at a glance — a real fill makes "this one's off" obvious
+   on sight, not just on close inspection). */
+.seg button{border:none;padding:6px 14px;min-height:32px;background:var(--hover);cursor:pointer;
   font-size:13px;font-weight:normal;line-height:1;color:var(--muted);white-space:nowrap;transition:background .12s,color .12s}
 .seg button+button{border-left:1px solid var(--border)}
-.seg button:hover{background:var(--hover);color:var(--text)}
+.seg button:hover{background:var(--grpbg);color:var(--text)}
 .seg button.on{background:var(--accent);color:#fff;font-weight:600}
 .seg button.on:hover{background:var(--accent);color:#fff}
 /* Pill-Tag-Reihe: sekundäre Filter (z.B. Kategorie-Auswahl in der Statistik), bewusst
@@ -95,9 +98,14 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-light);bo
 #machWrap{position:relative;display:inline-flex;align-items:center;gap:4px}
 #machDrop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:8px;z-index:60;min-width:320px}
 #machDrop.open{display:block}
-#machDrop label{display:block;padding:3px 6px;cursor:pointer;border-radius:4px;font-size:13px}
+/* Taller rows (user request: too tight to comfortably click, especially for long device
+   names like the Fire-III pyrometer or the Keyence Highspeed camera) */
+#machDrop label{display:block;padding:8px 6px;cursor:pointer;border-radius:4px;font-size:13px}
 #machDrop label:hover{background:var(--hover)}
 #machDrop .grp{font-weight:700;margin-top:6px;color:var(--muted);font-size:12px}
+/* The popover's own border/shadow already provides structural containment (user request) —
+   the inner scrollable list doesn't need a second nested border around it too. */
+#machDrop .mlist{border:none;padding:0}
 .chip{background:var(--accent-light);color:var(--accent);border:1px solid var(--accent);border-radius:12px;padding:2px 8px;font-size:12px;cursor:pointer;white-space:nowrap}
 .chip:hover{filter:brightness(.95)}
 #groupWrap{position:relative;display:inline-flex;align-items:center;gap:4px}
