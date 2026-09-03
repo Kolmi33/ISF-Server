@@ -1,23 +1,23 @@
-// The optimistic write pipeline (Phase 7 slice B10f) — every mutation in this app goes
-// through `mutate`. Faithful port of legacy `mutate`/`persist`/`refreshNow`/`stampRef` (v5.5):
+// =======================================================================================
+// OPTIMISTIC WRITE PIPELINE MODULE (web/js/ui/mutate.ts)
+// =======================================================================================
 //
-//   1) `fn` applies SYNCHRONOUSLY to the in-memory `S.data` — cells change at the moment of
-//      the click, no network round-trip in the critical path.
-//   2) `persist` then writes authoritatively in the background: re-reads fresh, merges our
-//      delta against anyone else's concurrent change (a foreign booking never gets silently
-//      overwritten), and writes. On error/collision, the actual server state wins and the
-//      view is reconciled via `refreshNow`.
+// The optimistic write pipeline — every mutation in this app goes through `mutate`. This
+// module IS the single authoritative server write path (CLAUDE.md) — every caller goes
+// through `window.mutate`.
 //
-// The single authoritative server write path (CLAUDE.md) — this is IT. Every caller already
-// goes through `window.mutate`, unchanged; this slice only moves the implementation, faithfully.
+// Key Principles:
+// - OPTIMISTIC, THEN RECONCILED: `fn` applies SYNCHRONOUSLY to the in-memory client data —
+//   cells change at the moment of the click, with no network round-trip in the critical
+//   path. `persist` then writes authoritatively in the background: re-reads fresh, merges
+//   the local delta against anyone else's concurrent change (a foreign booking never gets
+//   silently overwritten), and writes. On error/collision, the actual server state wins and
+//   the view is reconciled via `refreshNow`.
+// - NO UNOBSERVED STATE: there is deliberately no "saving" flag anywhere in this pipeline —
+//   a full-codebase search confirmed nothing ever reads such a flag to gate behavior on it
+//   (e.g. pausing auto-refresh), so there's nothing to conserve by adding one back.
 //
-// legacy's `saving` flag (set true by `mutate`/`persist`, cleared in `persist`'s `finally`) is
-// NOT ported: it was write-only dead state — confirmed via a full-codebase search, nothing
-// anywhere ever read it (its own comment claims it "pauses auto-refresh while saving", but no
-// code ever branched on it). A write with no observable read has no behavior to conserve.
-// legacy's own `persist(fn, logEntry, result)` also took an `fn` parameter it never once used
-// in its body — dropped here (E2, matching `net/sse.ts`'s `remoteMessage` dropping its own
-// unused `ts` field).
+// =======================================================================================
 
 import type { BookingData } from '../../../shared/types.ts';
 import type { CellUndo, Conflict } from '../core/bookings.ts';
@@ -37,15 +37,14 @@ export interface MutateResult {
   undo?: CellUndo[];
 }
 
-/** Stamp `#lastRef` with the current time. Faithful port of legacy `stampRef`. */
+/** Stamps `#lastRef` with the current time — the toolbar's small "last synced" indicator. */
 export function stampRef(): void {
   const el = document.getElementById('lastRef');
   if (el)
     el.textContent = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 }
 
-/** Re-fetch and reconcile the view to the server's authoritative state. Faithful port of
- *  legacy `refreshNow`. */
+/** Re-fetches and reconciles the view to the server's authoritative state. */
 export async function refreshNow(silent: boolean): Promise<void> {
   try {
     store.set({ data: await readFile() });
@@ -110,8 +109,7 @@ async function handleMutateResponse(
   }
 }
 
-/** Write `result` (from `fn`'s optimistic apply) to the server in the background. Faithful
- *  port of legacy `persist`. */
+/** Writes `result` (from `fn`'s optimistic apply) to the server in the background. */
 async function persist(logEntry: { action: string }, result: MutateResult | null): Promise<void> {
   try {
     const out = (await apiPost(
@@ -136,10 +134,10 @@ async function persist(logEntry: { action: string }, result: MutateResult | null
 }
 
 /**
- * Apply `fn` to the in-memory `S.data`, log the action, repaint (patched or full), and persist
- * to the server in the background — returns `fn`'s own result immediately, without waiting for
- * `persist` to finish. `null` in read-only mode (a toast explains why, `fn` never runs).
- * Faithful port of legacy `mutate`.
+ * Applies `fn` to the in-memory client data, logs the action, repaints (patched or full),
+ * and persists to the server in the background — returns `fn`'s own result immediately,
+ * without waiting for `persist` to finish. Returns `null` in read-only mode instead (a
+ * toast explains why, and `fn` never runs at all).
  */
 export async function mutate(
   fn: (fresh: BookingData) => unknown,

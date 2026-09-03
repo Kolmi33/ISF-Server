@@ -1,9 +1,16 @@
-// The toast notification and its "undo" affordance (Phase 7 slice B4). Faithful port of
-// legacy `toast`/`offerUndo`. A plain gated module, not a component — it's one static `#toast`
-// element legacy already owns in index.html, shown/hidden by toggling a class, exactly like
-// the context menu and confirm dialog it sits alongside. `queueRemote`'s own remote-change
-// queue (still legacy, Phase 7 slice B8) calls `toast()` too, so this stays a simple function
-// rather than something that owns its own React-rendered queue.
+// =======================================================================================
+// TOAST NOTIFICATION MODULE (web/js/ui/toast.ts)
+// =======================================================================================
+//
+// The toast notification and its "undo" affordance.
+//
+// Key Principles:
+// - PLAIN MODULE, NOT REACT: `#toast` is one static element already in `index.html`,
+//   shown/hidden by toggling a class — the same pattern the context menu and confirm dialog
+//   use. `ui/live-connection.ts`'s own remote-change toast queue calls `toast()` too, so
+//   this stays a simple function rather than something that owns its own React-rendered queue.
+//
+// =======================================================================================
 
 import type { CellUndo } from '../core/bookings.ts';
 
@@ -13,9 +20,9 @@ const DEFAULT_MS = 3500;
 const UNDO_MS = 9000;
 
 /**
- * Show a toast for `ms` (default 3.5s, or 9s when `undoFn` is given). A second call while one
- * is showing replaces it outright (the previous hide timer is cleared) — faithful port of
- * legacy `toast`.
+ * Shows a toast for `ms` (default 3.5s, or 9s when `undoFn` is given — an undo affordance
+ * needs longer to actually notice and click). A second call while one is already showing
+ * replaces it outright, clearing the previous hide timer, so toasts never stack or overlap.
  */
 export function toast(message: string, undoFn?: () => void, ms?: number): void {
   const toastElement = document.getElementById('toast')!;
@@ -44,9 +51,9 @@ export function toast(message: string, undoFn?: () => void, ms?: number): void {
 }
 
 /**
- * Offer to undo a write for 9s: restores each entry's previous value (or deletes the cell, for
- * an entry that created one) via `window.mutate`, going through the same patch path as the
- * original write. Faithful port of legacy `offerUndo`.
+ * Offers to undo a write for 9s: restores each entry's previous value (or deletes the cell,
+ * for an entry that created one) via `window.mutate`, going through the same patch path as
+ * the original write.
  */
 export function offerUndo(
   message: string,

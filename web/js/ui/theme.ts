@@ -1,11 +1,15 @@
-// Dark/light theme application (Phase 7 slice B10f). Faithful port of legacy `applyTheme`.
-// The boot-time initialization (the initial call, the `matchMedia` "change" listener that
-// re-applies it live, and the `mb_compact` class application) stays in legacy.js for now —
-// absorbed into `app.ts`'s boot orchestration in Phase 7 slice B10g, when `start`/`startUI`/
-// `init` move; it keeps calling this function by its (now window-bridged) bare name unchanged.
+// =======================================================================================
+// THEME MODULE (web/js/ui/theme.ts)
+// =======================================================================================
+//
+// Dark/light theme application. The boot-time wiring (the initial call, the `matchMedia`
+// "change" listener that re-applies it live, and the `mb_compact` class application) lives
+// in `app.ts`'s boot orchestration, which calls this function directly.
+//
+// =======================================================================================
 
-/** Apply the device's theme preference (`mb_theme`: 'light' | 'dark' | 'auto') to
- *  `<html data-theme>`. 'auto' follows the OS preference. */
+/** Applies the device's theme preference (`mb_theme`: 'light' | 'dark' | 'auto') to
+ *  `<html data-theme>`. 'auto' follows the OS preference via `prefers-color-scheme`. */
 export function applyTheme(): void {
   const preference = localStorage.getItem('mb_theme') || 'auto';
   const isDark =

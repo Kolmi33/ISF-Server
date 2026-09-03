@@ -1,22 +1,35 @@
-// Shared open/close mechanics for the toolbar's two filter dropdowns (Phase 7 slice B10e):
-// "Filtern ▾" (`MachineFilterDropdown.tsx`) and "Alle Bereiche ▾" (`GroupFilterDropdown.tsx`).
-// Each dropdown is a fixed empty `<div>` already in `index.html` (`#machDrop`/`#groupDrop`,
-// CSS-driven `display:none`/`.open{display:block}`) — this hook toggles that class on the
-// panel, same trick `ui/components/ContextMenu.tsx` (B10b) uses for `#ctxMenu`'s `display`.
+// =======================================================================================
+// TOOLBAR DROPDOWN HOOK (web/js/ui/toolbar-dropdown.ts)
+// =======================================================================================
 //
-// Faithful port of legacy's per-dropdown `<button>.onclick` (toggle) + document-level
-// outside-click-closes pattern, with one deliberate simplification (E2): legacy's two
-// dropdowns could both end up open at once — each button's `ev.stopPropagation()` meant
-// clicking one button's toggle never reached the OTHER dropdown's own outside-click listener.
-// Almost certainly an unintended quirk of two independently-added, identically-shaped
-// features, not a deliberate design choice, and worse UX either way — this hook instead
-// closes any other open toolbar dropdown whenever one opens. Every other behavior (toggle on
-// the button, close on any other outside click) is unchanged.
+// Shared open/close mechanics for the toolbar's two filter dropdowns: "Filtern ▾"
+// (`MachineFilterDropdown.tsx`) and "Alle Bereiche ▾" (`GroupFilterDropdown.tsx`).
+//
+// Key Principles:
+// - CSS-DRIVEN VISIBILITY: each dropdown is a fixed empty `<div>` already in `index.html`
+//   (`#machDrop`/`#groupDrop`, CSS-driven `display:none`/`.open{display:block}`) — this
+//   hook just toggles that class on the panel, the same trick `ContextMenu.tsx` uses for
+//   `#ctxMenu`'s visibility.
+// - ONLY ONE DROPDOWN OPEN AT A TIME: opening either dropdown closes the other one first,
+//   via the shared `closeOthers` registry below — two toolbar dropdowns open
+//   simultaneously would be confusing UI, not a useful state.
+//
+// =======================================================================================
 
 import { useEffect, useRef, useState } from 'react';
 
 const closeOthers = new Set<() => void>();
 
+/**
+ * A React hook that wires one toolbar dropdown's toggle button, its outside-click-to-close
+ * behavior, and its CSS `.open` class.
+ *
+ * How it works: registers this dropdown's own close function in the shared `closeOthers`
+ * set on mount; the toggle handler closes every OTHER registered dropdown before opening
+ * this one. A `mousedown` anywhere outside both the panel and its button closes this
+ * dropdown (while it's open); the panel's `.open` class is kept in sync with `isOpen` via
+ * its own effect.
+ */
 export function useToolbarDropdown(panelId: string, buttonId: string): { isOpen: boolean } {
   const [isOpen, setIsOpen] = useState(false);
   const isOpenRef = useRef(false);

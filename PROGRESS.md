@@ -563,10 +563,19 @@ files, e.g. Phase 9's slices).
   legacy `X`" tails (4 functions) and `state.ts`'s outdated "not yet wired to render()" note
   (subscribe/notify has been wired since Phase 7). Tests left as-is; `app.ts` has no test
   file (boot orchestration, covered by the smoke test).
-- [ ] 10d `web/js/ui/` top-level, part 1 (alphabetical first half) — `assistant-checklist.ts`
-  through `machine-lookup.ts` (+ tests)
-- [ ] 10e `web/js/ui/` top-level, part 2 (alphabetical second half) — `machine-text.ts` through
-  `user-chip.ts` (+ tests)
+- [x] 10d `web/js/ui/` top-level, part 1 (18 files: `assistant-checklist.ts` through
+  `machine-lookup.ts`) — landed as 3 commits (10 smaller files, then grid/lookup/filter/form,
+  then grid-scroll.ts + grid-interaction.ts). Removed one genuinely stale block comment in
+  grid-interaction.ts claiming `refreshCell`/`refreshDot`/`patchCells` weren't ported yet and
+  `mutate()` was "still entirely legacy" — both had been true for a while by the time this
+  sweep reached it. `live-connection.test.ts` got the first "What/How" test-comment pass
+  (see 10e's note).
+- [x] 10e `web/js/ui/` top-level, part 2 (8 files: `machine-text.ts` through `mutate.ts`) —
+  also fixed stale claims in `user-chip.ts` ("click/dblclick wiring stays in legacy.js" —
+  it's `app.ts`'s `wireUserChip` now) and `theme.ts` ("boot init stays in legacy.js for
+  now" — absorbed into `app.ts` since Phase 7). Test files for 10a–10e still need the
+  "What/How" retrofit `live-connection.test.ts` established — tracked as a follow-up, not
+  blocking the source-file sweep's progress.
 - [ ] 10f `web/js/ui/components/` part 1 — `ActiveUsersModal.tsx` through `GroupOptions.tsx`
   (+ tests)
 - [ ] 10g `web/js/ui/components/` part 2 — `HelpModal.tsx` through `StatsOverviews.tsx`

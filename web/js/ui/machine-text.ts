@@ -1,8 +1,21 @@
-// Machine status/availability presentation text (Phase 4.3). Small pure German-text formatters
-// shared across the grid row headers, the admin list badges and the machine form: a single
-// maintenance slot's text, a machine's overall status summary, and its available-weekday mask.
-// Pure over `core/dates` + `core/machines`; `statusRangeText` injects "today" with a default so the
-// legacy call sites (`statusRangeText(m)`) are unchanged while tests stay deterministic (E4/E6).
+// =======================================================================================
+// MACHINE STATUS TEXT MODULE (web/js/ui/machine-text.ts)
+// =======================================================================================
+//
+// Small pure German-text formatters for machine status/availability, shared across the
+// grid row headers, the admin list badges, and the machine form.
+// This module provides:
+// 1. `maintText`: one maintenance/defect slot as a German sentence fragment.
+// 2. `statusRangeText`/`maintenanceKind`: a machine's overall status summary.
+// 3. `daysMaskText`: a machine's available weekdays as text.
+//
+// Key Principles:
+// - INJECTED "TODAY": `statusRangeText`/`maintenanceKind` take `today` as an optional
+//   parameter defaulting to the real current date, so every call site can omit it (reading
+//   naturally as "the status right now") while tests still pass a fixed date for
+//   deterministic, reproducible results.
+//
+// =======================================================================================
 
 import type { Machine, MaintSlot } from '../../../shared/types.ts';
 import { formatDateLong, todayAsIsoDateString } from '../../../shared/dates.ts';
@@ -25,8 +38,12 @@ export function maintText(s: MaintSlot | null | undefined): string {
 }
 
 /**
- * A machine's status summary: the slot covering `today` if any, else the earliest slot by `from`,
- * plus a `· +N weitere` suffix when more than one slot exists. Empty when the machine has no slots.
+ * Builds a machine's status summary.
+ *
+ * How it works: shows the slot covering `today` if one exists, else the earliest slot by
+ * `from` (so an upcoming, not-yet-active slot is still surfaced rather than showing
+ * nothing), plus a `· +N weitere` suffix when more than one slot exists. Empty when the
+ * machine has no slots at all.
  */
 export function statusRangeText(m: Machine, today: string = todayAsIsoDateString()): string {
   const ss = getMaintenanceSlots(m);
@@ -37,19 +54,16 @@ export function statusRangeText(m: Machine, today: string = todayAsIsoDateString
   return maintText(active) + (ss.length > 1 ? ` · +${ss.length - 1} weitere` : '');
 }
 
-/**
- * The type (`'wartung'`/`'defekt'`/…) of the maintenance slot covering `today`, or null if none
- * is active right now. Used for the admin list's status-badge colour/label. Faithful port of
- * legacy `maintKind` — kept there too, under its old name, for two not-yet-ported call sites
- * (the grid row header and the machine-filter dropdown).
- */
+/** The type (`'wartung'`/`'defekt'`/…) of the maintenance slot covering `today`, or null if
+ *  none is active right now — used for the admin list's and the Assistant tree/checklist's
+ *  status-badge colour/label. */
 export function maintenanceKind(m: Machine, today: string = todayAsIsoDateString()): string | null {
   return getMaintenanceSlotAtDate(m, today)?.type ?? null;
 }
 
 /**
- * The machine's available weekdays as text. `m.days` is a 7-char Mo..So mask ('1' = available);
- * absent / wrong length / all-on → 'jeden Tag', all-off → 'keine Tage'. Faithful port.
+ * Formats the machine's available weekdays as text. `m.days` is a 7-char Mo..So mask
+ * ('1' = available); absent, the wrong length, or all-on → 'jeden Tag', all-off → 'keine Tage'.
  */
 export function daysMaskText(m: Machine): string {
   if (!m.days || m.days.length !== 7 || m.days === '1111111') return 'jeden Tag';
