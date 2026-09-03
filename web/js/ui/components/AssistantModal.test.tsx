@@ -97,11 +97,18 @@ function openChecklistCategory(): void {
 }
 
 describe('AssistantModal — checklist → work area', () => {
+  // What: with no devices checked yet, the work area shows a hint prompting the user to
+  // check some devices above, rather than an empty/confusing blank area.
+  // How: opens the assistant with nothing checked and checks the hint text appears.
   it('shows the empty-work hint until a device is checked', () => {
     act(() => openAssistant());
     expect(screen.getByText(/Oben Geräte anhaken/)).toBeInTheDocument();
   });
 
+  // What: checking a device's checklist checkbox adds it to the work area (and clears the
+  // empty hint); unchecking it removes it again (and the hint reappears).
+  // How: opens the checklist, checks a device, checks the hint is gone and the device node
+  // appears in the work area, then unchecks it and checks the hint is back.
   it('checking a device adds it to the work area; unchecking removes it', () => {
     act(() => openAssistant());
     openChecklistCategory();
@@ -119,6 +126,10 @@ describe('AssistantModal — checklist → work area', () => {
 });
 
 describe('AssistantModal — checklist details', () => {
+  // What: a machine with an info note shows an info icon, and one with active maintenance
+  // shows a "Wartung" badge — both are per-machine decorations shown right in the checklist.
+  // How: opens the checklist (the fixture's "Kaputte Presse" has both an info note and an
+  // active maintenance slot) and checks the icon and badge both appear.
   it('shows the info icon and the maintenance badge for a machine that has them', () => {
     act(() => openAssistant());
     openChecklistCategory();
@@ -126,6 +137,9 @@ describe('AssistantModal — checklist details', () => {
     expect(screen.getByText('Wartung')).toBeInTheDocument();
   });
 
+  // What: clicking the info icon shows the info (a tooltip/toast, not asserted here) without
+  // also toggling that row's checkbox — the two are independent click targets.
+  // How: clicks the info icon and checks the corresponding checkbox is still unchecked.
   it('clicking the info icon does not toggle the checkbox', () => {
     act(() => openAssistant());
     openChecklistCategory();
@@ -135,6 +149,10 @@ describe('AssistantModal — checklist details', () => {
     expect(screen.getByRole('checkbox', { name: /Kaputte Presse/ })).not.toBeChecked();
   });
 
+  // What: the search box switches the checklist to a flat list of matches, the same
+  // search-bypasses-fold-state behavior the machine filter dropdown and checklist share.
+  // How: searches for a substring matching two machines and checks exactly those two
+  // checkboxes render while a non-matching one is absent.
   it('the search box filters the checklist, bypassing fold state entirely', () => {
     act(() => openAssistant());
     fireEvent.change(screen.getByPlaceholderText('filtern…'), { target: { value: 'presse' } });
@@ -144,6 +162,9 @@ describe('AssistantModal — checklist details', () => {
 });
 
 describe('AssistantModal — search validation', () => {
+  // What: searching with no devices in the work area at all is rejected client-side with a
+  // toast, rather than running a meaningless empty search.
+  // How: opens the assistant and clicks search with nothing checked, checking the toast text.
   it('toasts when no devices have been added', () => {
     act(() => openAssistant());
     act(() => {
@@ -152,6 +173,9 @@ describe('AssistantModal — search validation', () => {
     expect(document.getElementById('toast')!.textContent).toBe('Bitte oben Geräte übernehmen.');
   });
 
+  // What: searching with an inverted date range (bis before von) is rejected client-side.
+  // How: checks a device, sets the "bis" date before the default "von", clicks search, and
+  // checks the toast text.
   it('toasts on an invalid date range', () => {
     act(() => openAssistant());
     openChecklistCategory();
@@ -168,6 +192,11 @@ describe('AssistantModal — search validation', () => {
 });
 
 describe('AssistantModal — search results', () => {
+  // What: a successful search shows the results header, and with no redundancy group in the
+  // work tree (just a bare device), there's no "suggestion" line — that only appears when a
+  // group's own structure suggests something.
+  // How: checks one device, searches, and checks the results header appears while the
+  // suggestion text is absent.
   it('finds a free run and shows it with no suggestion line (no group in the tree)', async () => {
     act(() => openAssistant());
     openChecklistCategory();
@@ -182,6 +211,9 @@ describe('AssistantModal — search results', () => {
     expect(screen.queryByText(/Vorschlag:/)).not.toBeInTheDocument();
   });
 
+  // What: when the searched machine has no free days anywhere in the requested range, the
+  // results show an explicit "no matching dates found" message, not an empty/ambiguous list.
+  // How: books every day in a 5-day range, searches that exact range, and checks the message.
   it('shows "keine passenden Termine" when the machine is fully booked in range', async () => {
     window.S.data!.bookings = {
       m1: Object.fromEntries(
@@ -206,6 +238,10 @@ describe('AssistantModal — search results', () => {
     expect(screen.getByText(/Keine passenden Termine im Zeitraum gefunden/)).toBeInTheDocument();
   });
 
+  // What: a found run's "Buchen…" (book) button opens the booking form pre-filled with that
+  // run's exact dates.
+  // How: runs a search, clicks the result's Buchen button, and checks the booking form's
+  // heading appears.
   it('"Buchen…" opens the booking form pre-picked with the run\'s dates', async () => {
     act(() => openAssistant());
     openChecklistCategory();
@@ -222,6 +258,11 @@ describe('AssistantModal — search results', () => {
     expect(screen.getByRole('heading', { name: 'Buchen' })).toBeInTheDocument(); // BookingForm opened
   });
 
+  // What: a found run's "days to book" field clamps to the run's own actual length when the
+  // user types a value longer than what's really free, and shows an explanatory tip.
+  // How: sets up a run that ends at a fixed length (booked short of the search window's end,
+  // so it's NOT open-ended and extendable), searches, types a too-large day count into the
+  // run's days field, and checks it clamped to the run's real length with a tip explaining why.
   it('entering more days than the free window has clamps the value and shows a tip', async () => {
     // A booking on the 11th ends the run at the 8th WITHOUT reaching the search window's end
     // (the 15th) — so it stays a fixed 5-day run instead of being extended as "open-ended".
@@ -246,6 +287,13 @@ describe('AssistantModal — search results', () => {
     expect(screen.getByText(/nur 5 Tage am Stück verfügbar/)).toBeInTheDocument();
   });
 
+  // What: "pinning" a result (Termin anzeigen) filters the live grid to every device in the
+  // work tree and collapses the assistant modal (not closing it entirely — it's still mounted
+  // and reachable via the "reopen" affordance), so the user can look at the grid with the
+  // assistant's work still available.
+  // How: searches, clicks the pin button, and checks the grid's machine filter, that the
+  // overlay is no longer "open" but the reopen indicator is showing and the modal content is
+  // still actually in the DOM.
   it('"pin" collapses the modal and filters the grid to every device in the tree', async () => {
     act(() => openAssistant());
     openChecklistCategory();
@@ -267,6 +315,12 @@ describe('AssistantModal — search results', () => {
 });
 
 describe('AssistantModal — redundancy confirm', () => {
+  // What: when the work tree contains a group with real redundancy (need < member count —
+  // the search could substitute between equivalent devices), the assistant asks for
+  // confirmation before running the search at all ("did you really add every equivalent
+  // device?"), and declining that confirmation cancels the search entirely.
+  // How: checks two devices, drags one onto the other to form a redundant group, declines
+  // the confirmation, and checks the confirm dialog's title plus that no results appeared.
   it('asks for confirmation before searching when a group has redundancy, and respects "no"', async () => {
     window.askConfirm = vi.fn().mockResolvedValue(false);
     act(() => openAssistant());
@@ -294,6 +348,11 @@ describe('AssistantModal — redundancy confirm', () => {
     expect(screen.queryByText('Passende Termine:')).not.toBeInTheDocument(); // declined → no search
   });
 
+  // What: accepting the redundancy confirmation lets the search actually run, and now that a
+  // group exists in the tree, the results show a "suggestion" line (the mirror case of the
+  // no-group test earlier).
+  // How: forms the same redundant group, accepts the confirmation, and checks the suggestion
+  // text now appears.
   it('runs the search once confirmed, and shows the suggestion line (a group exists)', async () => {
     window.askConfirm = vi.fn().mockResolvedValue(true);
     act(() => openAssistant());
@@ -332,12 +391,20 @@ describe('AssistantModal — the work-area group node', () => {
     });
   }
 
+  // What: a freshly-formed group (drag one device onto another) shows a redundancy hint
+  // asking "are all equivalent devices here?" and defaults its need-count stepper to 1 (of
+  // however many members the group has — 2 here).
+  // How: forms a 2-device group and checks the hint text and the stepper's default value.
   it('shows the redundancy hint and the stepper defaults to need 1 of 2', () => {
     addGroupedPair();
     expect(screen.getByText(/alle gleichwertigen Geräte hier\?/)).toBeInTheDocument();
     expect((document.querySelector('.asNeed') as HTMLInputElement).value).toBe('1');
   });
 
+  // What: incrementing the need stepper raises the group's need, and once need equals the
+  // member count (no more redundancy — every device is required), the redundancy hint disappears.
+  // How: clicks the "+" stepper once (need 1→2, matching the group's 2 members) and checks
+  // the value updated and the hint is gone.
   it('the "+" stepper increases need and hides the redundancy hint once need meets the count', () => {
     addGroupedPair();
     act(() => {
@@ -347,6 +414,10 @@ describe('AssistantModal — the work-area group node', () => {
     expect(screen.queryByText(/alle gleichwertigen Geräte hier\?/)).not.toBeInTheDocument();
   });
 
+  // What: the "✕ auflösen" (dissolve) button breaks a group apart, returning its member
+  // devices to being loose devices directly in the work area.
+  // How: clicks dissolve on a 2-device group and checks no groups remain while both devices
+  // now exist as standalone nodes.
   it('"✕ auflösen" dissolves the group back into loose devices', () => {
     addGroupedPair();
     act(() => {
@@ -356,6 +427,11 @@ describe('AssistantModal — the work-area group node', () => {
     expect(document.querySelectorAll('.asdev')).toHaveLength(2);
   });
 
+  // What: removing one device from a 2-device group leaves the group with only 1 child, so
+  // it auto-dissolves (a group needs 2+ members to make sense) rather than lingering as a
+  // pointless single-device group.
+  // How: removes one device from a group of 2 via its own "remove" button and checks no
+  // group remains, with exactly one loose device left.
   it('removing a device from within a group dissolves the now-single-child group', () => {
     addGroupedPair();
     act(() => {
@@ -369,6 +445,10 @@ describe('AssistantModal — the work-area group node', () => {
 });
 
 describe('AssistantModal — drag-and-drop highlighting', () => {
+  // What: dragging one device over another highlights the hovered device as a drop target,
+  // and the highlight clears once the drag ends (whether or not a drop actually happened).
+  // How: starts a drag on one device, drags over another, checks the target got the dragover
+  // class, then ends the drag and checks the class was removed.
   it('highlights the hovered device during dragover, and clears it on dragend', () => {
     act(() => openAssistant());
     openChecklistCategory();
@@ -389,6 +469,11 @@ describe('AssistantModal — drag-and-drop highlighting', () => {
     expect(devNodes()[0]!.classList.contains('dragover')).toBe(false);
   });
 
+  // What: dragging a device onto the empty work-area canvas (not onto another device)
+  // highlights the canvas itself as a valid drop target — the "move this device to root
+  // level" gesture, distinct from dropping onto another device (which would group them).
+  // How: drags a device over the work-area container itself and checks it got the
+  // dragover-root class.
   it('dragging onto the empty canvas highlights dragover-root', () => {
     act(() => openAssistant());
     openChecklistCategory();
@@ -406,6 +491,8 @@ describe('AssistantModal — drag-and-drop highlighting', () => {
 });
 
 describe('openAssistant', () => {
+  // What: the "Abbrechen" (cancel) button closes the assistant modal.
+  // How: opens the assistant, clicks Abbrechen, and checks the overlay's open class is gone.
   it('closes on "Abbrechen"', () => {
     act(() => openAssistant());
     act(() => {
