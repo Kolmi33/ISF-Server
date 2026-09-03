@@ -114,11 +114,12 @@ describe('MyBookingsModal', () => {
     expect(screen.getAllByRole('button', { name: 'Löschen' })).toHaveLength(2); // one per day
   });
 
-  // What: the expand chip sits on the right, under the pin ("Im Plan anzeigen") button — user
-  // request — not on the date line's own left edge as before.
+  // What: the expand chip sits on the right, alongside the pin ("Im Plan anzeigen") button in
+  // the shared horizontal actions row — user request — not on the date line's own left edge
+  // as before.
   // How: books a 2-day series and checks the chip shares its immediate parent with the pin
   // button, rather than living inside the `.abdate` date line.
-  it('places the expand chip on the right, under the pin button', () => {
+  it('places the expand chip on the right, alongside the pin button', () => {
     window.S.data!.bookings = {
       m1: { '2021-01-04': { name: 'anna' }, '2021-01-05': { name: 'anna' } },
     };
@@ -155,6 +156,76 @@ describe('MyBookingsModal', () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
     render(<MyBookingsModal />);
     expect(screen.queryByText(/Teil einer Buchungsgruppe/)).not.toBeInTheDocument();
+  });
+
+  // What: runs sharing the same multi-machine booking group get a faint, non-transparent
+  // colored left-border accent (not just the text hint) — user request: "a faint coloured
+  // marking for the same booking groups", not just the info that it's part of one. Both rows
+  // in the same group get the exact same color, so the marking actually reads as "same group"
+  // at a glance rather than two unrelated colors.
+  // How: seeds the same 2-machine group as the hint test above and reads each row's own
+  // `.mybk` inline border-left color.
+  it('gives runs in the same multi-machine group a matching colored border accent', () => {
+    window.S.data!.machines = [machine(), machine({ id: 'm2', name: 'Presse' })];
+    window.S.data!.bookings = {
+      m1: { [TODAY]: { name: 'anna', gid: 'g1', gtitle: 'Projekt X' } },
+      m2: { [TODAY]: { name: 'anna', gid: 'g1' } },
+    };
+    render(<MyBookingsModal />);
+    const rows = [...document.querySelectorAll<HTMLElement>('.resultlist > div > .mybk')];
+    expect(rows).toHaveLength(2);
+    const colors = rows.map((row) => row.style.borderLeftColor);
+    expect(colors[0]).not.toBe('transparent');
+    expect(colors[0]).toBe(colors[1]); // same group id -> same color on both rows
+  });
+
+  // What: a plain (ungrouped) run's border-left accent stays transparent — the border-left
+  // itself is always set (so grouped and ungrouped rows keep identical padding/alignment),
+  // just invisible when there's no real group to mark.
+  // How: books one ordinary single-machine run and checks its border-left color.
+  it('leaves the border-left accent transparent for a plain, ungrouped run', () => {
+    window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
+    render(<MyBookingsModal />);
+    const row = document.querySelector<HTMLElement>('.resultlist > div > .mybk')!;
+    expect(row.style.borderLeftColor).toBe('transparent');
+  });
+
+  // What: the three per-row actions (jump-to-plan, expand, delete) are standardized icon
+  // buttons sharing one immediate horizontal-row container, not a wide labeled "Serie
+  // löschen" button stacked below a separate pin/expand column (user request).
+  // How: books a 2-day series (so all three actions are present) and checks all three
+  // buttons are icon-only (no visible text), each still identifiable via aria-label, and are
+  // all direct siblings under the same actions container.
+  it('renders the row actions as standardized icon buttons in one horizontal row', () => {
+    window.S.data!.bookings = {
+      m1: { '2021-01-04': { name: 'anna' }, '2021-01-05': { name: 'anna' } },
+    };
+    render(<MyBookingsModal />);
+    const pin = screen.getByRole('button', { name: 'Im Plan anzeigen' });
+    const expandBtn = screen.getByRole('button', { name: 'Tage ausklappen' });
+    const del = screen.getByRole('button', { name: 'Serie löschen' });
+    const actions = pin.parentElement!;
+    expect(actions.classList.contains('mybk-actions')).toBe(true);
+    expect(expandBtn.parentElement).toBe(actions);
+    expect(del.parentElement).toBe(actions);
+    expect(pin.classList.contains('iconbtn')).toBe(true);
+    expect(del.classList.contains('iconbtn')).toBe(true);
+    expect(del.classList.contains('danger')).toBe(true);
+    // Icon-only: no visible text content, the label lives in aria-label/title instead.
+    expect(pin.textContent).toBe('');
+    expect(del.textContent).toBe('');
+  });
+
+  // What: the "only my machines" shortcut is styled to read as a toggle switch (a track +
+  // thumb), not a plain button — user request — while its click behavior (apply the filter
+  // and close the modal) stays exactly as before.
+  // How: books one run and checks the switch-track/thumb markup is present inside the button.
+  it('renders the "only my machines" shortcut with a toggle-switch look', () => {
+    window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
+    render(<MyBookingsModal />);
+    const button = screen.getByRole('button', { name: /Nur meine Maschinen im Plan zeigen/ });
+    expect(button.querySelector('.switchtrack')).not.toBeNull();
+    expect(button.querySelector('.switchtrack .switchthumb')).not.toBeNull();
   });
 
   // What: the filter row offers the same fields as All Bookings' own — Maschine, Bereich,

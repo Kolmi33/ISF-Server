@@ -369,6 +369,32 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .abfilters .fld{display:flex;flex-direction:column;gap:2px;min-width:0}
 .abfilters .fld>label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;min-width:auto;font-weight:600}
 .abfilters .fld input,.abfilters .fld select{width:100%}
+
+/* ---------- Meine Buchungen (.mybookings) ---------- */
+/* Scoped under .mybookings rather than edited directly on .abfilters/.mybk/.chip — those base
+   classes are shared with AllBookingsModal, whose own look isn't part of this pass. Higher
+   selector specificity here (two classes) wins over the shared single-class rules above. */
+.mybookings .abfilters{background:var(--hover);border-radius:8px;padding:10px 10px 8px;margin:8px 0 10px}
+.mybookings .abfilters .fld>label{text-transform:none;font-size:12px}
+.mybookings .abfilters input,.mybookings .abfilters select{min-height:36px}
+.mybookings .mybk{padding:12px 10px;align-items:center}
+.mybookings .abmach b{font-size:15px;font-weight:700}
+/* One horizontal row of standardized icon buttons (pin / expand / delete) — replaces the old
+   stacked column + separate wide "Serie löschen" button (user request). */
+.mybookings .mybk-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.mybookings .iconbtn{
+  display:flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;
+  border:1px solid var(--border);border-radius:50%;background:var(--panel);color:var(--text);
+  font-size:14px;cursor:pointer;transition:background .12s,color .12s,border-color .12s}
+.mybookings .iconbtn:hover{background:var(--hover)}
+.mybookings .iconbtn.danger{color:var(--muted)}
+.mybookings .iconbtn.danger:hover{color:var(--danger);border-color:var(--danger)}
+/* The "only my machines" shortcut, restyled to read as a toggle switch (user request) — the
+   underlying click still just applies the filter and closes the modal in one shot, same as
+   before; this only changes what the control looks like. */
+.mybookings .switchbtn{display:inline-flex;align-items:center;gap:8px}
+.mybookings .switchtrack{position:relative;display:inline-block;width:32px;height:18px;flex:0 0 auto;background:var(--border);border-radius:999px}
+.mybookings .switchthumb{position:absolute;top:2px;left:2px;width:14px;height:14px;background:var(--panel);border-radius:50%}
 .daylist{margin-left:26px;border-left:2px solid var(--accent-light)}
 .statrow{display:flex;align-items:center;gap:8px;padding:3px 6px;border-bottom:1px solid var(--border);font-size:12px}
 .statrow .nm{flex:0 0 210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

@@ -14,7 +14,6 @@
 // =======================================================================================
 
 import { useState } from 'react';
-import type { ChangeEvent } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
 import {
   formatDateLong,
@@ -22,16 +21,11 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../../shared/dates.ts';
-import {
-  CATEGORIES,
-  CATEGORY_FILTER_PREFIX,
-  getMachineCategory,
-  groupsByCategory,
-  type CategoryGroups,
-} from '../../core/machines.ts';
+import { getMachineCategory, groupsByCategory } from '../../core/machines.ts';
 import { deleteOwnCells, findBookingGroup } from '../../core/bookings.ts';
-import { orderedMachines, FAVORITES_GROUP_LABEL } from '../grid.ts';
+import { orderedMachines, FAVORITES_GROUP_LABEL, nameColor } from '../grid.ts';
 import { getBooking } from '../../core/bookings.ts';
+import { isDarkTheme } from '../theme.ts';
 import {
   computeMyRuns,
   filterMyRuns,
@@ -40,12 +34,11 @@ import {
 } from '../views/my-bookings.ts';
 import { gotoDate, prependWeek, resetView } from '../grid-scroll.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
-import { toast, offerUndo } from '../toast.ts';
+import { offerUndo } from '../toast.ts';
 import { Icon } from './Icon.tsx';
-import { GroupOptions } from './GroupOptions.tsx';
+import { MyBookingsFilters, MachineFilterButton } from './MyBookingsFilters.tsx';
 import { askUserName } from './AskUserNameModal.tsx';
 import { store } from '../../store-instance.ts';
-import { saveFilters, updateMachBtn } from './MachineFilterDropdown.tsx';
 
 /** One run's live state: its frozen machine + full date list, and which of those dates are
  *  still actually booked under the current user's name right now. `ts`/`groupId`/`groupTitle`
@@ -120,15 +113,31 @@ interface RunRowProps {
   onDeleteDates: (dates: readonly string[]) => void;
 }
 
-/** Shows "Teil einer Buchungsgruppe" when this run's first day belongs to a booking group
- *  spanning more than just this one machine — looked up live (current bookings, not the
- *  frozen run), same as `BookingDetailModal.tsx`'s own `SeriesOrGroupHint` this mirrors. A
- *  group of exactly one machine (a titled single-machine booking) isn't called out here — it's
- *  visually indistinguishable from a plain run anyway, so the hint would say nothing useful. */
-function GroupHint({ run }: { run: LiveRun }) {
-  if (!run.groupId) return null;
+/** This run's booking group, but only when it actually spans more than one machine — looked up
+ *  live (current bookings, not the frozen run). A group of exactly one machine (a titled
+ *  single-machine booking) isn't treated as a "real" group by either caller below: it's
+ *  visually indistinguishable from a plain run anyway, so neither the hint nor the color
+ *  accent would say/show anything useful. Shared by `GroupHint` and `groupAccentColor` so both
+ *  agree on exactly which runs count as grouped. */
+function multiMachineGroup(run: LiveRun): { machineIds: Set<string> } | undefined {
+  if (!run.groupId) return undefined;
   const group = findBookingGroup(store.get('data')!.bookings, run.groupId);
-  if (group.machineIds.size <= 1) return null;
+  return group.machineIds.size > 1 ? group : undefined;
+}
+
+/** A faint, deterministic left-border accent marking runs that share the same multi-machine
+ *  booking group — reuses `grid.ts`'s `nameColor` hash (the same mechanism the grid itself uses
+ *  to color-code booker names) keyed on the group id, so every run in the same group always
+ *  gets the same color and ungrouped runs get none. */
+function groupAccentColor(run: LiveRun): string | undefined {
+  return multiMachineGroup(run) ? nameColor(run.groupId!, isDarkTheme()) : undefined;
+}
+
+/** Shows "Teil einer Buchungsgruppe" when this run belongs to a real (multi-machine) booking
+ *  group — same as `BookingDetailModal.tsx`'s own `SeriesOrGroupHint` this mirrors. */
+function GroupHint({ run }: { run: LiveRun }) {
+  const group = multiMachineGroup(run);
+  if (!group) return null;
   return (
     <div className="hint" style={{ margin: '2px 0 0' }}>
       <Icon name="folder" /> Teil einer Buchungsgruppe
@@ -149,8 +158,8 @@ function GroupHint({ run }: { run: LiveRun }) {
  *  budget. The third `.abdate`-style "who booked it" line All Bookings has is skipped here —
  *  every run in this modal is already known to be the current user's own, so naming them again
  *  would be redundant; the day-level note (`DayNote`) takes that line's place for a
- *  single-day run instead. The expand chip lives in `RunHead`'s own button column now, not
- *  here — see that component's comment for why. */
+ *  single-day run instead. The expand chip lives in `RunHead`'s own horizontal actions row
+ *  now, not here — see that component's comment for why. */
 function RunCardBody({ run, isSeries }: { run: LiveRun; isSeries: boolean }) {
   return (
     <div style={{ minWidth: 0 }}>
@@ -194,33 +203,44 @@ function RunHead({ run, isExpanded, onToggleExpand, onDeleteDates }: RunRowProps
     onDeleteDates(run.liveDates);
   }
 
-  // The expand chip sits under the pin ("Im Plan anzeigen") button, on the right — user
-  // request — instead of the date line's own left edge it used to occupy.
+  // The action icons sit in one horizontal row on the right (user request — they used to
+  // stack vertically), all sharing one standardized circular icon-button shape/border. A run
+  // that's part of a real (multi-machine) booking group gets a faint colored left-border
+  // accent — every run's border-left is set (transparent when ungrouped) so grouped and
+  // ungrouped cards still line up with identical padding.
+  const deleteLabel = isSeries ? 'Serie löschen' : 'Löschen';
   return (
-    <div className="mybk">
+    <div
+      className="mybk"
+      style={{ borderLeft: `4px solid ${groupAccentColor(run) ?? 'transparent'}` }}
+    >
       <RunCardBody run={run} isSeries={isSeries} />
-      <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <div className="mybk-actions">
+        <button
+          className="iconbtn"
+          title="Im Plan anzeigen (dorthin springen)"
+          aria-label="Im Plan anzeigen"
+          onClick={() => gotoRun(run)}
+        >
+          <Icon name="pin" />
+        </button>
+        {isSeries && (
           <button
-            className="btn small"
-            title="Im Plan anzeigen (dorthin springen)"
-            aria-label="Im Plan anzeigen"
-            onClick={() => gotoRun(run)}
+            className="iconbtn"
+            title={`Tage ${isExpanded ? 'einklappen' : 'ausklappen'}`}
+            aria-label={isExpanded ? 'Tage einklappen' : 'Tage ausklappen'}
+            onClick={onToggleExpand}
           >
-            <Icon name="pin" />
+            {isExpanded ? '▾' : '▸'}
           </button>
-          {isSeries && (
-            <span
-              className="chip"
-              title={`Tage ${isExpanded ? 'einklappen' : 'ausklappen'}`}
-              onClick={onToggleExpand}
-            >
-              {isExpanded ? '▾' : '▸'}
-            </span>
-          )}
-        </div>
-        <button className="btn small danger" onClick={() => void handleDeleteClick()}>
-          {isSeries ? 'Serie löschen' : 'Löschen'}
+        )}
+        <button
+          className="iconbtn danger"
+          title={deleteLabel}
+          aria-label={deleteLabel}
+          onClick={() => void handleDeleteClick()}
+        >
+          <Icon name="trash" />
         </button>
       </div>
     </div>
@@ -247,92 +267,6 @@ function DayList({
           </button>
         </div>
       ))}
-    </div>
-  );
-}
-
-const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: 'termin', label: 'Termin der Buchung' },
-  { value: 'erstellt', label: 'Zuletzt gebucht' },
-  { value: 'bereich', label: 'Bereich' },
-  { value: 'maschine', label: 'Maschine' },
-];
-
-interface MyBookingsFiltersProps {
-  filter: MyBookingsFilter;
-  groupOptions: readonly CategoryGroups[];
-  onChange: (patch: Partial<MyBookingsFilter>) => void;
-}
-
-/** The filter row: the same shape as `AllBookingsModal.tsx`'s own `AllBookingsFilters` — a
- *  Maschine text filter, a Bereich select (grouped by category, plus whole-category options),
- *  a sort key, and a date-overlap window — minus the Person field that one also has, since
- *  every run here is already known to be the current user's own (user request). */
-function MyBookingsFilters({ filter, groupOptions, onChange }: MyBookingsFiltersProps) {
-  const onInput =
-    (key: keyof MyBookingsFilter) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      onChange({ [key]: event.target.value });
-  return (
-    <div className="abfilters">
-      <div className="fld">
-        <label>Maschine</label>
-        <input type="text" placeholder="Berger" value={filter.mach} onChange={onInput('mach')} />
-      </div>
-      <div className="fld">
-        <label>Bereich</label>
-        <select value={filter.group} onChange={onInput('group')}>
-          <option value="">Alle</option>
-          {groupOptions.map(({ category }) => (
-            <option key={`cat:${category}`} value={`${CATEGORY_FILTER_PREFIX}${category}`}>
-              {CATEGORIES.find((c) => c.id === category)?.label ?? category} (alle Bereiche)
-            </option>
-          ))}
-          <GroupOptions groupOptions={groupOptions} />
-        </select>
-      </div>
-      <div className="fld">
-        <label>Sortieren</label>
-        <select value={filter.sort} onChange={onInput('sort')}>
-          {SORT_OPTIONS.map(({ value, label }) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="fld">
-        <label>Von</label>
-        <input type="date" value={filter.from} onChange={onInput('from')} />
-      </div>
-      <div className="fld">
-        <label>Bis</label>
-        <input type="date" value={filter.to} onChange={onInput('to')} />
-      </div>
-    </div>
-  );
-}
-
-function MachineFilterButton({ machineIds }: { machineIds: readonly string[] }) {
-  if (!machineIds.length) return null;
-  function apply(): void {
-    // Silent — saveFilters()/updateMachBtn() run before the one notify, matching the
-    // original's single window.notify() after this write and both those calls.
-    store.state.machSel = new Set(machineIds);
-    saveFilters();
-    updateMachBtn();
-    store.notify();
-    closeReactModal();
-    toast(
-      `Plan gefiltert: nur deine ${machineIds.length} Maschine${machineIds.length === 1 ? '' : 'n'}. Aufheben über „Filtern → Filter löschen".`,
-      undefined,
-      6000,
-    );
-  }
-  return (
-    <div style={{ marginBottom: 8 }}>
-      <button className="btn small" onClick={apply}>
-        <Icon name="search" /> Nur meine Maschinen im Plan zeigen ({machineIds.length})
-      </button>
     </div>
   );
 }
@@ -445,8 +379,12 @@ export function MyBookingsModal() {
     }
   }
 
+  // Wrapped in its own `.mybookings` class so the CSS below (shaded filter card, sentence-case
+  // labels, standardized icon buttons, …) can scope its overrides to this modal specifically —
+  // `.abfilters`/`.mybk` are shared base classes AllBookingsModal also uses, and that modal's
+  // own look isn't part of this request.
   return (
-    <>
+    <div className="mybookings">
       <h2>
         <Icon name="clip" /> Meine Buchungen (ab heute)
       </h2>
@@ -464,7 +402,7 @@ export function MyBookingsModal() {
           Schließen
         </button>
       </div>
-    </>
+    </div>
   );
 }
 
