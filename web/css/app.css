@@ -406,6 +406,16 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 #overlay.open{display:flex}
 #modal{background:var(--panel);border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.25);max-width:640px;width:100%;padding:18px 20px;max-height:85vh;overflow:auto}
 #modal h2{margin:0 0 12px;font-size:16px}
+/* Booking detail modal: title + top-right close "×" share one row (user request — frees the
+   bottom action row for just the two destructive actions, no separate "Schließen" needed there). */
+.bkdetail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.bkdetail-head h2{margin:0}
+/* A real two-column grid, not the shared .formrow flex row — .formrow's fixed label min-width
+   left a wide gap after short labels like "Datum"; sizing the column to the longest label
+   tightens that up (user request) without touching every other modal's own .formrow rows. */
+.bkdetail-facts{display:grid;grid-template-columns:max-content 1fr;column-gap:10px;row-gap:8px;align-items:center;margin-bottom:8px}
+.bkdetail-facts label{font-size:13px;color:var(--muted)}
+.iconbtn.small{width:22px;height:22px;font-size:12px;vertical-align:middle}
 .formrow{display:flex;gap:8px;margin:8px 0;align-items:center;flex-wrap:wrap}
 .formrow label{min-width:90px;font-size:13px;color:var(--muted)}
 .formrow input[type=text],.formrow textarea{flex:1;min-width:160px}
@@ -441,13 +451,16 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 /* One horizontal row of standardized icon buttons (pin / expand / delete) — replaces the old
    stacked column + separate wide "Serie löschen" button (user request). */
 .mybookings .mybk-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto}
-.mybookings .iconbtn{
+/* .iconbtn: a standalone circular icon-only button — originally added for My Bookings' row
+   actions, promoted to a plain global utility (no .mybookings scoping) once BookingDetailModal
+   needed the exact same shape for its own top-right close "×" and inline Statistik icon. */
+.iconbtn{
   display:flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;
   border:1px solid var(--border);border-radius:50%;background:var(--panel);color:var(--text);
   font-size:14px;cursor:pointer;transition:background .12s,color .12s,border-color .12s}
-.mybookings .iconbtn:hover{background:var(--hover)}
-.mybookings .iconbtn.danger{color:var(--muted)}
-.mybookings .iconbtn.danger:hover{color:var(--danger);border-color:var(--danger)}
+.iconbtn:hover{background:var(--hover)}
+.iconbtn.danger{color:var(--muted)}
+.iconbtn.danger:hover{color:var(--danger);border-color:var(--danger)}
 /* The "only my machines" shortcut, restyled to read as a toggle switch (user request) — the
    underlying click still just applies the filter and closes the modal in one shot, same as
    before; this only changes what the control looks like. */

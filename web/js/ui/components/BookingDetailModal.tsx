@@ -71,7 +71,7 @@ function RunDeleteButton({ machine, booking, run }: RunDeleteButtonProps) {
     if (confirmed) await deleteDates(machine, booking, run);
   }
   return (
-    <button className="btn danger" onClick={handleClick}>
+    <button className="btn dangerfill" onClick={handleClick}>
       Ganze Serie löschen
     </button>
   );
@@ -111,7 +111,7 @@ function GroupDeleteButton({
     }
   }
   return (
-    <button className="btn danger" onClick={handleClick}>
+    <button className="btn dangerfill" onClick={handleClick}>
       Ganze Buchungsgruppe löschen
     </button>
   );
@@ -123,47 +123,48 @@ interface BookingFactsProps {
   booking: Booking;
 }
 
-/** The read-only fact rows: machine, date, who booked it (+ the Statistik shortcut), and the
- *  optional note/entered-at rows. */
+/** The read-only fact rows: machine (+ the Statistik shortcut, now a small icon right next to
+ *  the name instead of its own labeled button), date, who booked it, and the optional
+ *  note/entered-at rows. A CSS grid (`.bkdetail-facts`), not the shared `.formrow` flex row —
+ *  `.formrow label`'s fixed min-width left a wide gap after short labels like "Datum"; a grid
+ *  sized to the longest label tightens that up (user request) without affecting every other
+ *  modal's own `.formrow` rows. */
 function BookingFacts({ machine, date, booking }: BookingFactsProps) {
   return (
-    <>
-      <div className="formrow">
-        <label>Maschine</label>
-        <div>{machine.name}</div>
+    <div className="bkdetail-facts">
+      <label>Maschine</label>
+      <div>
+        {machine.name}{' '}
         <button
-          className="btn small"
+          className="iconbtn small"
           title={`Personenstatistik von ${booking.name} öffnen`}
+          aria-label="Statistik"
           onClick={() => openStats(booking.name.toLowerCase())}
         >
-          <Icon name="chart" /> Statistik
+          <Icon name="chart" />
         </button>
       </div>
-      <div className="formrow">
-        <label>Datum</label>
-        <div>{formatDateLong(date)}</div>
-      </div>
-      <div className="formrow">
-        <label>Gebucht von</label>
-        <div>
-          <b>{booking.name}</b>
-        </div>
-      </div>
+      <label>Datum</label>
+      <div>{formatDateLong(date)}</div>
+      <label>Gebucht von</label>
+      {/* No bold here (user request) — keeps a consistent visual weight across every fact
+          value instead of singling this one out. */}
+      <div>{booking.name}</div>
       {booking.note && (
-        <div className="formrow">
+        <>
           <label>Notiz</label>
           <div>{booking.note}</div>
-        </div>
+        </>
       )}
       {booking.ts && (
-        <div className="formrow">
+        <>
           <label>Eingetragen</label>
           <div className="hint" style={{ margin: 0 }}>
             {formatTimestamp(booking.ts)}
           </div>
-        </div>
+        </>
       )}
-    </>
+    </div>
   );
 }
 
@@ -215,15 +216,32 @@ export function BookingDetailModal({ machine, date, booking }: BookingDetailModa
   const group = booking.gid ? findBookingGroup(store.get('data')!.bookings, booking.gid) : null;
   const groupWorkdays = group ? group.dates.filter((d) => !isWeekend(parseIsoDateString(d))) : [];
 
+  // Title is the machine + date (user request), not the generic "Buchung" — immediate context
+  // without having to read the fact rows below. "Schließen" moved to a top-right "×" icon (same
+  // row as the title), freeing the bottom action row for just the two destructive actions.
   return (
     <>
-      <h2>Buchung</h2>
+      <div className="bkdetail-head">
+        <h2>
+          {machine.name} – {formatDateLong(date)}
+        </h2>
+        <button
+          className="iconbtn"
+          onClick={closeReactModal}
+          aria-label="Schließen"
+          title="Schließen"
+        >
+          <Icon name="close" />
+        </button>
+      </div>
       <BookingFacts machine={machine} date={date} booking={booking} />
       <SeriesOrGroupHint booking={booking} run={run} group={group} groupWorkdays={groupWorkdays} />
+      {/* The two destructive actions sit at opposite ends, not packed together (user request:
+          separate them to prevent a catastrophic accidental click) — the broader-scope one
+          (a whole series/group) also gets the bolder filled-red treatment (.dangerfill) so it
+          visibly outweighs "just this one day" (.danger, outline only), matching the actual
+          difference in blast radius between the two. */}
       <div className="modal-actions" style={{ justifyContent: 'flex-start', flexWrap: 'wrap' }}>
-        <button className="btn" onClick={closeReactModal}>
-          Schließen
-        </button>
         {group ? (
           <GroupDeleteButton
             booking={booking}
@@ -236,7 +254,11 @@ export function BookingDetailModal({ machine, date, booking }: BookingDetailModa
         ) : (
           run.length > 1 && <RunDeleteButton machine={machine} booking={booking} run={run} />
         )}
-        <button className="btn danger" onClick={() => void deleteDates(machine, booking, [date])}>
+        <button
+          className="btn danger"
+          style={{ marginLeft: 'auto' }}
+          onClick={() => void deleteDates(machine, booking, [date])}
+        >
           Diesen Tag löschen
         </button>
       </div>

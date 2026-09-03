@@ -41,6 +41,56 @@ describe('BookingDetailModal', () => {
     expect(screen.getByText('anna')).toBeInTheDocument();
   });
 
+  // What: the modal's title is the actual machine name + date (user request), not a generic
+  // "Buchung" label — immediate context without reading the fact rows below.
+  // How: renders and checks the heading's text contains both the machine name and the
+  // formatted date.
+  it('titles the modal with the machine name and date, not a generic label', () => {
+    render(<BookingDetailModal machine={machine()} date={TODAY} booking={booking()} />);
+    const heading = screen.getByRole('heading', { level: 2 });
+    expect(heading.textContent).toContain('Fräse');
+    expect(heading.textContent).toContain('06.01.2021');
+    expect(heading.textContent).not.toBe('Buchung');
+  });
+
+  // What: "Schließen" is a top-right "×" icon button (user request), not a labeled button in
+  // the bottom action row — freeing that row for just the two destructive actions. Its
+  // behavior (closing the modal) is unchanged.
+  // How: renders, finds the close button by its accessible name, and checks clicking it closes
+  // the overlay.
+  it('closes via a top-right "×" icon button', () => {
+    document.getElementById('overlay')!.classList.add('open');
+    render(<BookingDetailModal machine={machine()} date={TODAY} booking={booking()} />);
+    const closeButton = screen.getByRole('button', { name: 'Schließen' });
+    expect(closeButton.closest('.bkdetail-head')).not.toBeNull();
+    closeButton.click();
+    expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
+  });
+
+  // What: the booker's name is displayed with the same visual weight as every other fact value
+  // (user request) — no longer singled out in bold.
+  // How: checks the booker name's own element isn't a <b>, nor wrapped in one.
+  it('does not bold the booker name', () => {
+    render(<BookingDetailModal machine={machine()} date={TODAY} booking={booking()} />);
+    const nameEl = screen.getByText('anna');
+    expect(nameEl.tagName).not.toBe('B');
+    expect(nameEl.closest('b')).toBeNull();
+  });
+
+  // What: the "Eingetragen" timestamp is minute-precision with no seconds, "Uhr"-suffixed
+  // (user request) — not the raw de-DE default that includes seconds.
+  // How: renders a booking with a known ts and checks the exact rendered text.
+  it('shows the entered-at timestamp with no seconds', () => {
+    render(
+      <BookingDetailModal
+        machine={machine()}
+        date={TODAY}
+        booking={booking({ ts: '2021-01-01T10:15:45Z' })}
+      />,
+    );
+    expect(screen.getByText('01.01.2021, 10:15 Uhr')).toBeInTheDocument();
+  });
+
   // What: the optional "Notiz" (note) and "Eingetragen" (entered-at) rows only render when
   // the booking actually has those fields — they're not shown as empty placeholders.
   // How: renders a bare booking (checks neither row shows), then re-renders with a note and
@@ -73,17 +123,19 @@ describe('BookingDetailModal', () => {
     expect(openStats).toHaveBeenCalledWith('anna');
   });
 
-  // What: the Statistik button sits next to the machine (in the "Maschine" row), not next to
-  // the booker's name (the "Gebucht von" row) — a deliberate placement choice, not incidental.
-  // How: renders a booking and checks the button is inside the "Maschine" formrow but not
-  // inside the "Gebucht von" one.
+  // What: the Statistik button sits next to the machine's own value (in the "Maschine" row's
+  // value cell), not next to the booker's name (the "Gebucht von" row) — a deliberate placement
+  // choice, not incidental. The two-column grid layout means each label's value sits in its
+  // very next sibling element, not a shared wrapping row div.
+  // How: renders a booking and checks the button is inside the "Maschine" label's value cell
+  // but not inside the "Gebucht von" one.
   it('places the Statistik button next to the machine, not next to the booker name', () => {
     render(<BookingDetailModal machine={machine()} date={TODAY} booking={booking()} />);
-    const machineRow = screen.getByText('Maschine').closest<HTMLElement>('.formrow')!;
-    expect(within(machineRow).getByRole('button', { name: /Statistik/ })).toBeInTheDocument();
-    const bookedByRow = screen.getByText('Gebucht von').closest<HTMLElement>('.formrow')!;
+    const machineValue = screen.getByText('Maschine').nextElementSibling as HTMLElement;
+    expect(within(machineValue).getByRole('button', { name: /Statistik/ })).toBeInTheDocument();
+    const bookedByValue = screen.getByText('Gebucht von').nextElementSibling as HTMLElement;
     expect(
-      within(bookedByRow).queryByRole('button', { name: /Statistik/ }),
+      within(bookedByValue).queryByRole('button', { name: /Statistik/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -120,6 +172,25 @@ describe('BookingDetailModal', () => {
     const fresh = { machines: [machine()], bookings: { ...window.S.data!.bookings } };
     const result = reducer(fresh);
     expect(result.deletedCount).toBe(3);
+  });
+
+  // What: the two destructive actions are visually distinguished by their actual blast radius
+  // (user request: prevent a catastrophic accidental click) — the whole-series delete (removes
+  // more) gets the bolder filled-red treatment, "just this one day" stays the lighter
+  // outline-only style, and they sit at opposite ends of the row rather than packed together.
+  // How: seeds a run so both buttons render, and checks each one's class and that "Diesen Tag
+  // löschen" is pushed away from the other (marginLeft: auto).
+  it('visually distinguishes the whole-series delete from the single-day delete', () => {
+    window.S.data!.bookings = {
+      m1: { '2021-01-05': booking(), [TODAY]: booking(), '2021-01-07': booking() },
+    };
+    render(<BookingDetailModal machine={machine()} date={TODAY} booking={booking()} />);
+    const seriesButton = screen.getByRole('button', { name: 'Ganze Serie löschen' });
+    const dayButton = screen.getByRole('button', { name: 'Diesen Tag löschen' });
+    expect(seriesButton.className).toContain('dangerfill');
+    expect(dayButton.className).toContain('danger');
+    expect(dayButton.className).not.toContain('dangerfill');
+    expect(dayButton.style.marginLeft).toBe('auto');
   });
 
   // What: declining the whole-run delete confirmation aborts it — no write happens.
@@ -250,11 +321,12 @@ describe('openCellAction', () => {
   });
 
   // What: clicking an occupied cell opens the booking DETAIL modal (view/delete an existing booking).
-  // How: books the cell, calls openCellAction, and checks the detail modal's heading appears.
+  // How: books the cell, calls openCellAction, and checks the detail modal's heading (machine
+  // name + date, not a generic "Buchung" title) appears.
   it('opens the booking detail when the cell is occupied', () => {
     window.S.data!.bookings = { m1: { [TODAY]: booking() } };
     act(() => openCellAction('m1', TODAY));
-    expect(screen.getByText('Buchung')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Fräse/ })).toBeInTheDocument();
   });
 
   // What: clicking a free, bookable cell opens the booking FORM instead (create a new booking).

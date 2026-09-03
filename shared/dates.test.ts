@@ -172,11 +172,12 @@ describe('formatDateShort / formatDateLong', () => {
 });
 
 describe('formatTimestamp', () => {
-  // What: renders an ISO timestamp as a German-locale date+time label.
-  // How: formats a known UTC timestamp and checks the result contains both the de-DE date and
-  // the 24-hour time (the test environment pins TZ=UTC, so this is deterministic).
-  it('renders a de-DE date+time label (test env runs TZ=UTC, test/setup.ts)', () => {
-    expect(formatTimestamp('2021-01-04T14:30:00Z')).toMatch(/4\.1\.2021.*14:30/);
+  // What: renders an ISO timestamp as a German-locale date+time label, minute precision only
+  // (no seconds) with a trailing "Uhr", both day/month zero-padded.
+  // How: formats a known UTC timestamp and checks the exact result (the test environment pins
+  // TZ=UTC, so this is deterministic).
+  it('renders a de-DE date+time label with no seconds (test env runs TZ=UTC, test/setup.ts)', () => {
+    expect(formatTimestamp('2021-01-04T14:30:45Z')).toBe('04.01.2021, 14:30 Uhr');
   });
 });
 

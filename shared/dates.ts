@@ -92,10 +92,19 @@ export function formatDateShort(date: Date): string {
 
 /**
  * Formats an ISO timestamp into a localized German date and time string in the viewer's timezone
- * (e.g. '04.01.2026, 14:30:00'). Used in booking detail dialogs and audit logs.
+ * (e.g. '04.01.2026, 14:30 Uhr'). Used in booking detail dialogs and audit logs. Minute
+ * precision only, no seconds — nothing here is ever meaningfully precise to the second, and
+ * showing them just added visual noise.
  */
 export function formatTimestamp(isoTimestamp: string): string {
-  return new Date(isoTimestamp).toLocaleString('de-DE');
+  const date = new Date(isoTimestamp);
+  const datePart = date.toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const timePart = date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  return `${datePart}, ${timePart} Uhr`;
 }
 
 /**
