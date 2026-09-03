@@ -1,15 +1,20 @@
-// The booking form (Phase 7 slice B4). Faithful port of legacy `openBookingForm`/
-// `submitBooking` — one form for 1..n machines, used identically by a single click, a
-// range/rectangle selection, and the (still-legacy) assistant.
+// =======================================================================================
+// BOOKING FORM COMPONENT (web/js/ui/components/BookingForm.tsx)
+// =======================================================================================
 //
-// Shape decision (E2 — flagged, not silently absorbed): legacy closes the modal immediately,
-// then reopens a fresh one prefilled with the same values if the write hits a conflict. Since
-// `window.mutate`'s reducer call is itself synchronous (it applies to the in-memory `S.data`;
-// only the network persist afterward is a real background task — see `mutate`'s own comment),
-// closing first buys no real responsiveness here, only an extra close+reopen flicker. This
-// component instead keeps the SAME modal open and shows the conflict list as state, closing
-// only once the outcome is actually known (a clean success, or Abbrechen). The visible result
-// for the user is identical or smoother — never a hidden behavior change.
+// The booking form: one form for 1..n machines, used identically by a single click, a
+// range/rectangle selection, and the Assistant's "Buchen…" action.
+//
+// Key Principles:
+// - THE SAME MODAL STAYS OPEN THROUGH A CONFLICT: since `window.mutate`'s reducer call is
+//   itself synchronous (it applies to the in-memory data immediately; only the network
+//   persist afterward is a real background task), closing the modal and reopening a fresh
+//   one prefilled with the same values on conflict would buy no real responsiveness — only
+//   an extra close+reopen flicker. This component instead keeps the SAME modal open and
+//   shows the conflict list as state, closing only once the outcome is actually known (a
+//   clean success, or Abbrechen).
+//
+// =======================================================================================
 
 import { useState } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
@@ -23,15 +28,13 @@ import { machById } from '../machine-lookup.ts';
 const MAX_CELLS_PER_BOOKING = 500;
 const MAX_CONFLICTS_SHOWN = 15;
 
-/** A short random group id, generated only when a booking actually needs one. Faithful port
- *  of legacy `genGid`. */
+/** Generates a short random group id, called only when a booking actually needs one. */
 function generateGroupId(): string {
   return 'g_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-/** The submit form's validation, as a pure function of its inputs: the days to book, or the
- *  German message to toast when the input is invalid. Faithful port of legacy `submitBooking`'s
- *  guard clauses. */
+/** Validates the submit form's inputs, as a pure function of them: returns the days to
+ *  book, or the German message to toast when the input is invalid. */
 function validateBookingInput(
   name: string,
   fromDate: string,
@@ -156,10 +159,10 @@ interface SubmitBookingInput {
   skipConflicts: boolean;
 }
 
-/** Validate and, if valid, actually book. Returns the conflict list (form stays open, shows
- *  them) or nothing (either the input was invalid — already toasted — or it succeeded and the
- *  form should close). Pulled out of the component so `BookingForm` itself stays a thin
- *  render + wiring layer. Faithful port of legacy `submitBooking`. */
+/** Validates and, if valid, actually books. Returns the conflict list (the form stays open
+ *  and shows them) or nothing — either the input was invalid (already toasted), or it
+ *  succeeded and the form should close. Pulled out of the component so `BookingForm` itself
+ *  stays a thin render + wiring layer. */
 async function submitBooking(input: SubmitBookingInput): Promise<readonly Conflict[] | undefined> {
   const validation = validateBookingInput(
     input.name,
@@ -246,9 +249,9 @@ export function BookingForm({ machineIds, from, to }: BookingFormProps) {
   );
 }
 
-/** Open the booking form for `machineIds` over `[from, to]`. Faithful port of legacy
- *  `openBookingForm`. The form is sticky — Escape/outside-click don't dismiss it, only the
- *  buttons do — matching legacy's `{sticky:true}`. */
+/** Opens the booking form for `machineIds` over `[from, to]`. The form is sticky —
+ *  Escape/outside-click don't dismiss it, only the buttons do, since an accidental
+ *  dismissal here would lose a partially-filled booking. */
 export function openBookingForm(machineIds: readonly string[], from: string, to: string): void {
   openReactModal(<BookingForm machineIds={machineIds} from={from} to={to} />, { sticky: true });
 }

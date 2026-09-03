@@ -1,22 +1,26 @@
-// The booking grid (Phase 7 slice B1). Faithful port of legacy `render()`.
+// =======================================================================================
+// GRID COMPONENT (web/js/ui/components/Grid.tsx)
+// =======================================================================================
 //
-// Legacy's mouse/keyboard/selection handlers (still unported, slice B2) are attached via
-// event delegation on `#grid` and `document`, not on individual cells — so this component
-// only needs to reproduce the exact DOM contract those handlers already depend on (classes,
-// `data-machine-id`/`data-date`/`data-group`/`data-catgroup` attributes) for selection, jump-to-next-
-// free and keyboard navigation to keep working completely unmodified.
+// The booking grid: the header (category toggles, KW/date columns) plus the body rows,
+// re-derived fresh from the store on every render.
+// The body rows (`GridBodyRow` and everything under it) live in `GridBody.tsx` — split out
+// purely to stay under the file-length budget; conceptually this is one component.
 //
-// Store subscription: rather than adding a new subscription mechanism, this component reuses
-// the existing bridge — legacy's `render()` was the function the store already called on every
-// change (`app.ts`'s `store.subscribe(() => { if (store.get('data')) triggerGridRender(); })`).
-// The force-update trigger itself is registered with `grid-render-bridge.ts` (F8 cleanup,
-// ARCHITECTURE_AUDIT.md) rather than held as a local ref bridged onto `window`: `grid-scroll.ts`
-// and `grid-interaction.ts` both need to trigger a repaint too, and both already have an
-// existing import edge FROM this component (`daysPerWeek`, `paintSelection`) — a direct import
-// the other way would cycle, so the bridge module holds the mutable ref instead of either side.
+// Key Principles:
+// - THE DOM CONTRACT IS LOAD-BEARING: `ui/grid-interaction.ts`'s mouse/keyboard/selection
+//   handlers are attached via event delegation on `#grid` and `document`, not on individual
+//   cells — so this component must reproduce the exact DOM contract those handlers depend
+//   on (classes, `data-machine-id`/`data-date`/`data-group`/`data-catgroup` attributes) for
+//   selection, jump-to-next-free, and keyboard navigation to keep working.
+// - REPAINT VIA THE RENDER BRIDGE, NOT A LOCAL REF: the force-update trigger is registered
+//   with `grid-render-bridge.ts` rather than held as a local ref bridged onto `window` —
+//   `grid-scroll.ts` and `grid-interaction.ts` both need to trigger a repaint too, and both
+//   already have an existing import edge FROM this component (`daysPerWeek`,
+//   `paintSelection`), so a direct import the other way would cycle; the bridge module
+//   holds the mutable ref instead of either side.
 //
-// The body rows (`GridBodyRow` and everything under it) live in `GridBody.tsx`, split out
-// purely to stay under the file-length budget — conceptually this is one component.
+// =======================================================================================
 
 import { Fragment, useEffect, useRef, useState } from 'react';
 import {
@@ -191,7 +195,7 @@ export function Grid() {
     requestAnimationFrame(ensureOverflow);
   });
 
-  if (!store.get('data')) return null; // faithful to the store-subscription guard in app.ts
+  if (!store.get('data')) return null; // nothing to render before the initial load completes
 
   const { today, weeks, columnsPerWeek, columnCount, dateLabels, rows } = computeGridViewModel();
 
@@ -216,10 +220,10 @@ export function Grid() {
   );
 }
 
-/** Re-renders the mounted grid via `grid-render-bridge.ts`. Faithful replacement for legacy's
- *  own `render()`, called by the same store subscription in app.ts. Kept as a thin named
- *  export (rather than having every caller import the bridge module itself) so this stays the
- *  one place that names "the grid's own repaint" — existing imports/tests are unaffected. */
+/** Re-renders the mounted grid via `grid-render-bridge.ts` — called by `app.ts`'s store
+ *  subscription on every state change. Kept as a thin named export (rather than having
+ *  every caller import the bridge module itself) so this stays the one place that names
+ *  "the grid's own repaint". */
 export function render(): void {
   triggerGridRender();
 }

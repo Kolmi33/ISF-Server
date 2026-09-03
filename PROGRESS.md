@@ -576,8 +576,10 @@ files, e.g. Phase 9's slices).
   now" — absorbed into `app.ts` since Phase 7). Test files for 10a–10e still need the
   "What/How" retrofit `live-connection.test.ts` established — tracked as a follow-up, not
   blocking the source-file sweep's progress.
-- [ ] 10f `web/js/ui/components/` part 1 — `ActiveUsersModal.tsx` through `GroupOptions.tsx`
-  (+ tests)
+- [x] 10f `web/js/ui/components/` part 1 (15 files: `ActiveUsersModal.tsx` through
+  `GroupOptions.tsx`) — landed as 4 commits. Also fixed a stale "the (still-legacy)
+  assistant" mention in `BookingForm.tsx`'s header (`AssistantModal.tsx` is fully React
+  now). Tests still need the "What/How" retrofit.
 - [ ] 10g `web/js/ui/components/` part 2 — `HelpModal.tsx` through `StatsOverviews.tsx`
   (+ tests)
 - [ ] 10h `web/js/ui/views/` — `admin.ts`, `all-bookings.ts`, `my-bookings.ts`, `stats.ts`

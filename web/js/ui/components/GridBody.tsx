@@ -1,6 +1,13 @@
-// The booking grid's body rows (Phase 7 slice B1) — split out of Grid.tsx purely to stay
-// under the file-length budget; conceptually still one component, `Grid`'s direct child.
-// See Grid.tsx's header comment for the event-delegation/DOM-contract background.
+// =======================================================================================
+// GRID BODY COMPONENT (web/js/ui/components/GridBody.tsx)
+// =======================================================================================
+//
+// The booking grid's body rows — split out of `Grid.tsx` purely to stay under the
+// file-length budget; conceptually still one component, `Grid`'s direct child. See
+// `Grid.tsx`'s header comment for the event-delegation/DOM-contract background every cell
+// here has to honor.
+//
+// =======================================================================================
 
 import { Fragment } from 'react';
 import type { Booking, Machine } from '../../../../shared/types.ts';
@@ -80,8 +87,8 @@ function TodayDot({ machine, today }: { machine: Machine; today: string }) {
   return <span className="dot free" role="img" aria-label="heute frei" title="heute frei" />;
 }
 
-/** The title tooltip for a booked cell: the booker's name, plus their note and/or the
- *  booking-group title when present. Faithful port of `render()`'s inline title string. */
+/** Builds the title tooltip for a booked cell: the booker's name, plus their note and/or
+ *  the booking-group title when present. */
 function bookedCellTitle(booking: Booking): string {
   let title = booking.name;
   if (booking.note) title += ' — ' + booking.note;
@@ -133,9 +140,9 @@ function BookedCell({ machine, isoDate, isToday, weekend, dateLabel }: CellAttrs
   );
 }
 
-/** One data cell: a machine × date intersection. Faithful port of `render()`'s cell branch.
- *  `dateLabel` is this date's German long-form text for aria-labels, precomputed once per
- *  render (not per cell) since it's the same value for every machine on a given date. */
+/** One data cell: a machine × date intersection. `dateLabel` is this date's German
+ *  long-form text for aria-labels, precomputed once per render (not per cell) since it's
+ *  the same value for every machine on a given date. */
 function GridCell({
   machine,
   isoDate,
@@ -178,10 +185,9 @@ function GridCell({
 }
 
 /**
- * Whether the "jump back to a previous free day" button shows for `machine` today: only once
- * the user has jumped forward at least once (tracked per-machine in `favorite-jump.ts`'s own
- * `nextFreePtr`) and there is somewhere to go back to. Faithful port of `render()`'s `hasBack`
- * calculation.
+ * Whether the "jump back to a previous free day" button shows for `machine` today: only
+ * once the user has jumped forward at least once (tracked per-machine in
+ * `favorite-jump.ts`'s own `nextFreePtr`) and there is somewhere to go back to.
  */
 function hasBackJumpButton(machine: Machine, today: string): boolean {
   const lastJumpedTo = nextFreePtr[machine.id];
@@ -302,8 +308,9 @@ function MachineRow({
   );
 }
 
-/** One row of the grid body: a category header, a group header, or a machine's data row.
- *  Faithful port of `render()`'s body loop, now driven by the pure `buildGridRows` (ui/grid.ts). */
+/** One row of the grid body: a category header, a group header, or a machine's data row —
+ *  driven entirely by the pure `buildGridRows` (`ui/grid.ts`), which decides the row list
+ *  and its order; this component just renders whichever kind of row it's handed. */
 export function GridBodyRow({
   row,
   columnCount,
