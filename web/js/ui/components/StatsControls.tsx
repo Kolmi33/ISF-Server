@@ -63,15 +63,29 @@ export function StatsModeRow({
         <button className={mode === 'm' ? 'on' : ''} onClick={() => onModeChange('m')}>
           <Icon name="factory" /> Ressourcen
         </button>
+        {
+          // Personen is hidden from manual tab selection for now (user request, 2026-09) —
+          // kept, not deleted: the mode itself, `PersonsOverview`, and `PersonDrilldown` all
+          // still work exactly as before. It's still reachable two ways: a booking's
+          // "Statistik" button (`BookingDetailModal.tsx`) opens `openStats(presetPerson)`
+          // straight into that person's drilldown, and from there the drilldown's own
+          // "← Übersicht" back button lands on this mode's overview list.
+          /*
         <button className={mode === 'p' ? 'on' : ''} onClick={() => onModeChange('p')}>
           <Icon name="user" /> Personen
         </button>
+        */
+        }
         <button className={mode === 'w' ? 'on' : ''} onClick={() => onModeChange('w')}>
           <Icon name="bolt" /> Wartung
         </button>
       </div>
       {mode === 'm' && (
-        <div className="seg" role="group" aria-label="Kategorie wählen">
+        // Pill tags, not a segmented control: this row is a secondary *filter* (which
+        // categories show at all) sitting under the primary Ressourcen/Wartung tab switch
+        // above — the two need to read as different kinds of control, not two rows of the
+        // same widget (user request: separate "primary tabs" from "secondary filters").
+        <div className="pillrow" role="group" aria-label="Kategorie wählen">
           {CATEGORIES.map(({ id, label, icon }) => (
             <button
               key={id}

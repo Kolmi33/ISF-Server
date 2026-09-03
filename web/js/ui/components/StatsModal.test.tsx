@@ -104,15 +104,20 @@ describe('StatsModal — Ressourcen drilldown', () => {
   });
 });
 
+// Personen's own mode-switch button is hidden now (StatsControls.tsx — user request, kept not
+// deleted), so these tests reach it the same two ways production code still can: `openStats`
+// with a preset person (a booking's "Statistik" button), then that drilldown's own "←
+// Übersicht" back button to reach the bare overview list.
 describe('StatsModal — Personen mode', () => {
   // What: Personen mode lists every person with at least one booking in range, and clicking
   // a person drills into which machines they used.
-  // How: switches to Personen mode, checks both bookers appear, clicks one, and checks the
-  // drilldown heading and that machine's name appear.
+  // How: opens directly into anna's drilldown (the preset-person entry point), backs out to
+  // the overview, checks both bookers appear, clicks one, and checks the drilldown heading and
+  // that machine's name appear.
   it('lists everyone with a booking in range; clicking a row drills into their machines', () => {
-    act(() => openStats());
+    act(() => openStats('anna'));
     act(() => {
-      screen.getByRole('button', { name: /Personen/ }).click();
+      screen.getByRole('button', { name: '← Übersicht' }).click();
     });
     expect(screen.getByText('anna')).toBeInTheDocument();
     expect(screen.getByText('bob')).toBeInTheDocument();
@@ -123,20 +128,20 @@ describe('StatsModal — Personen mode', () => {
     expect(screen.getByText('Fräse')).toBeInTheDocument();
   });
 
-  // What: switching between modes (e.g. Ressourcen → Personen) clears any active drilldown
-  // and filter — the two modes don't share drilldown state.
-  // How: drills into a machine in Ressourcen mode, switches to Personen mode, and checks the
-  // machine drilldown is gone and the Personen overview shows instead.
+  // What: switching modes (e.g. Ressourcen → Wartung) clears any active drilldown and filter
+  // — modes don't share drilldown state. (Originally written against Ressourcen → Personen;
+  // adapted to Wartung since Personen's own tab button is now hidden — `onModeChange` resets
+  // the same way regardless of which mode it switches to, so this still pins the invariant.)
   it('switching modes resets the filter and any drilldown', () => {
     act(() => openStats());
     act(() => {
       screen.getByText('Fräse').click(); // drill into the machine
     });
     act(() => {
-      screen.getByRole('button', { name: /Personen/ }).click();
+      screen.getByRole('button', { name: /Wartung/ }).click();
     });
     expect(screen.queryByText('Am meisten belegt von', { exact: false })).not.toBeInTheDocument();
-    expect(screen.getByText('anna')).toBeInTheDocument();
+    expect(screen.getByText(/Keine Wartungs-\/Ausfallzeiten/)).toBeInTheDocument();
   });
 });
 
