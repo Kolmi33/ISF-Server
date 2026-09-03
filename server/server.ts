@@ -1,24 +1,21 @@
 // =======================================================================================
-// SERVER ENTRY MODULE (server/server.ts)
+// HTTP SERVER & API ROUTER (server/server.ts)
 // =======================================================================================
 //
-// Zero-dependency HTTP API + Server-Sent-Events for the machine plan (Node >= 22, using
-// the built-in node:sqlite).
+// Standalone zero-dependency HTTP server powering the Maschinenplan system.
 //
-// This is the impure entry shell: HTTP routing, SSE, the daily backup, and the first-run
-// seed. All domain logic lives in the pure modules it imports (db / model / mutate /
-// api-*), which are unit-tested; this shell itself is verified by running it (E5).
-//
-// This module provides:
-// 1. The `/api/v1/*` REST route table (`apiV1Routes`) — see api-router.ts/api-*.ts.
-// 2. The existing `/api/state`/`/api/mutate`/`/api/stream` trio the live grid itself uses.
-// 3. SSE client bookkeeping (presence, broadcast) and the daily VACUUM-into backup.
-// 4. Static file serving for the built frontend.
-//
-// Key Principles:
-// - ONE AUTHORITATIVE WRITE PATH: `/api/mutate` and every `/api/v1/*` write route funnel
-//   into `mutate.ts`'s single `applyMutate` — see PROGRESS.md's Phase 9 plan for why the
-//   REST API is a second entrance onto the same data, not a second write engine.
+// Architecture & Endpoints:
+// 1. Live Grid Protocol:
+//    - `GET /api/state`: Returns the complete team-wide application state.
+//    - `POST /api/mutate`: Transactional Compare-And-Set (CAS) write path for cell and machine updates.
+//    - `GET /api/stream`: Server-Sent Events (SSE) stream broadcasting real-time updates and user presence.
+// 2. Automation REST API (`/api/v1/*`):
+//    - Granular CRUD endpoints for external scripting, CI tooling, and third-party integrations.
+//    - Routes write operations directly through the authoritative `applyMutate` engine.
+// 3. Automated Resilience:
+//    - Daily atomic database snapshots via SQLite `VACUUM INTO` with 30-day retention.
+// 4. Static Asset Server:
+//    - Serves built frontend assets (`index.html`, JavaScript bundles, CSS stylesheets, SVGs).
 //
 // =======================================================================================
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -46,16 +43,13 @@ const DB_PATH = process.env.DB_PATH || join(currentDirectory, '..', 'data', 'buc
 const IMPORT_JSON = process.env.IMPORT_JSON || join(dirname(DB_PATH), 'buchungen.json');
 const BACKUP_DIR = process.env.BACKUP_DIR || join(dirname(DB_PATH), 'backups');
 const BACKUP_KEEP = parseInt(process.env.BACKUP_KEEP || '30');
-const WEEKEND_BRIDGE = process.env.WEEKEND_BRIDGE !== 'off'; // 6.3 maintain hook (on unless disabled)
+const WEEKEND_BRIDGE = process.env.WEEKEND_BRIDGE !== 'off';
 const PUBLIC_DIR = join(currentDirectory, '..', 'public');
-const BUNDLED_JSON = join(currentDirectory, '..', 'buchungen.json'); // shipped in the image (Dockerfile copies it)
+const BUNDLED_JSON = join(currentDirectory, '..', 'buchungen.json');
 
 const db = openDb(DB_PATH);
 
-// ---------- REST API (Phase 9) — a second entrance onto the same data, not a second write
-// engine: every write route below still goes through `mutate.ts`'s single `applyMutate` path,
-// alongside the existing /api/state, /api/mutate, /api/stream trio the live grid itself uses
-// (see PROGRESS.md's Phase 9 plan for why the two don't merge).
+// REST API v1 Route Table
 const apiV1Routes: ApiRoute[] = [
   { method: 'GET', pattern: '/api/v1/machines', handler: (_params, url) => listMachines(db, url) },
   {
@@ -79,8 +73,7 @@ const apiV1Routes: ApiRoute[] = [
     handler: (_params, url) => listBookingsByGroup(db, url),
   },
   { method: 'GET', pattern: '/api/v1/activity', handler: (_params, url) => listActivity(db, url) },
-  // ---- writes (Phase 9e/9f) — every one of these funnels into `mutate.ts`'s single
-  // `applyMutate` write path; see `api-machines-write.ts`/`api-bookings-write.ts` headers.
+  // REST write endpoints
   {
     method: 'POST',
     pattern: '/api/v1/machines',
@@ -125,12 +118,8 @@ const apiV1Routes: ApiRoute[] = [
   },
 ];
 
-// First-run seed: DB empty? Import from the volume (/data/buchungen.json), else from the
-// image-bundled buchungen.json (no docker cp needed).
+// Initial database seeding on first boot
 try {
-  // Prefer the volume-mounted JSON (a previous deployment's data); fall back to the
-  // image-bundled JSON (first-ever deploy); if neither exists, use the volume path anyway
-  // so the read below fails with a clear "file not found" instead of silently no-op-ing.
   let seedPath = IMPORT_JSON;
   if (!existsSync(IMPORT_JSON) && existsSync(BUNDLED_JSON)) {
     seedPath = BUNDLED_JSON;
@@ -148,33 +137,42 @@ try {
   }
 }
 
-// ---------- SSE clients ----------
+// ---------------- Server-Sent Events (SSE) Client Pool ----------------
 const clients = new Set<ServerResponse>();
-const clientNames = new Map<ServerResponse, string>(); // res -> user name (for presence)
-/** The distinct, non-empty client user names currently connected, German-sorted — the
- *  "who's online" list the presence indicator shows. */
+const clientNames = new Map<ServerResponse, string>();
+
+/**
+ * Returns a sorted list of unique online user names currently connected via SSE.
+ */
 function presenceUsers(): string[] {
   const distinctNames = [...new Set([...clientNames.values()].filter(Boolean))];
   return distinctNames.sort((nameA, nameB) => nameA.localeCompare(nameB, 'de'));
 }
-/** Sends one SSE event to every connected client (the `Broadcast` sink `mutate.ts`/the REST
- *  write handlers are given); a write failure just drops that one client, not the loop. */
+
+/**
+ * Broadcasts an SSE event to all connected clients.
+ */
 function broadcast(event: string, data: unknown): void {
   const line = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const res of clients) {
     try {
       res.write(line);
     } catch {
-      /* dropped client */
+      /* client disconnected */
     }
   }
 }
-/** Broadcasts the current client count + presence list — called whenever a client connects
- *  or disconnects. */
+
+/**
+ * Pushes the current active user count and presence list to all connected clients.
+ */
 function sendPresence(): void {
   broadcast('presence', { clientCount: clients.size, users: presenceUsers() });
 }
-/** Appends one row to the `log` table (best-effort — a logging failure never fails the request). */
+
+/**
+ * Writes an action to the database log table.
+ */
 function log(user: string, action: string): void {
   try {
     db.prepare('INSERT INTO log(ts,user,action) VALUES(?,?,?)').run(
@@ -187,12 +185,11 @@ function log(user: string, action: string): void {
   }
 }
 
-// ---------- daily backup (protects against corruption / mass-delete) ----------
+// ---------------- Daily Automated Backup Engine ----------------
+
 /**
- * Writes one consistent snapshot of the DB per calendar day (skips if today's file already
- * exists — safe to call more often than daily), then prunes down to the newest `BACKUP_KEEP`
- * files. Uses SQLite's `VACUUM INTO`, which produces a clean copy safely even while the DB
- * is live. Called once at startup and then every 6h (so a restart doesn't miss the day's backup).
+ * Generates an atomic daily database snapshot using SQLite's `VACUUM INTO` command
+ * and prunes snapshots older than `BACKUP_KEEP` days.
  */
 function runBackup(): void {
   try {
@@ -200,19 +197,16 @@ function runBackup(): void {
     const backupFileName = `buchungen_${formatDateAsIsoString(new Date())}.db`;
     const backupPath = join(BACKUP_DIR, backupFileName);
     if (!existsSync(backupPath)) {
-      // Single quotes inside a SQLite string literal are escaped by doubling them.
-      db.exec(`VACUUM INTO '${backupPath.replace(/'/g, "''")}'`); // clean consistent copy, safe while running
+      db.exec(`VACUUM INTO '${backupPath.replace(/'/g, "''")}'`);
       const oldestFirstBackupFileNames = readdirSync(BACKUP_DIR)
         .filter((fileName) => /^buchungen_\d{4}-\d{2}-\d{2}\.db$/.test(fileName))
         .sort();
-      // Keep only the newest BACKUP_KEEP files: a negative slice bound drops everything
-      // except the last BACKUP_KEEP entries, so this list is everything OLDER than that.
       const filesToDelete = oldestFirstBackupFileNames.slice(0, -BACKUP_KEEP);
       for (const fileName of filesToDelete) {
         try {
           rmSync(join(BACKUP_DIR, fileName));
         } catch {
-          /* ignore */
+          /* ignore deletion errors */
         }
       }
       console.log('Backup:', backupPath);
@@ -222,9 +216,9 @@ function runBackup(): void {
   }
 }
 runBackup();
-setInterval(runBackup, 6 * 60 * 60 * 1000); // check every 6h; one file per day
+setInterval(runBackup, 6 * 60 * 60 * 1000);
 
-// ---------- HTTP ----------
+// ---------------- HTTP Request & Response Utilities ----------------
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript',
@@ -232,8 +226,10 @@ const MIME: Record<string, string> = {
   '.json': 'application/json',
   '.svg': 'image/svg+xml',
 };
-/** Writes a JSON (or, if already a string, verbatim) response with the given status/headers —
- *  the one place every route in this file sends its response through. */
+
+/**
+ * Sends a JSON HTTP response with the specified status code and headers.
+ */
 function send(
   res: ServerResponse,
   code: number,
@@ -243,10 +239,10 @@ function send(
   res.writeHead(code, { 'Content-Type': 'application/json', ...headers });
   res.end(typeof body === 'string' ? body : JSON.stringify(body));
 }
-/** Read + JSON-parse a request body (shared by `/api/mutate` and every `/api/v1/*` write route)
- *  — `null` means "reject with 400" (overflow or malformed JSON), `{}` an empty-but-valid body.
- *  Deliberately untyped (`unknown`): the caller knows which shape it expects (`MutateBody` for
- *  `/api/mutate`, a REST write's own body type for `/api/v1/*`). */
+
+/**
+ * Reads and parses an incoming JSON request body with a 1MB size limit.
+ */
 function readBody(req: IncomingMessage): Promise<unknown | null> {
   return new Promise((resolve) => {
     let bodyText = '';
@@ -255,7 +251,7 @@ function readBody(req: IncomingMessage): Promise<unknown | null> {
       if (bodyText.length > 1e6) {
         req.destroy();
         resolve(null);
-      } // overflow: finish immediately (no hanging handler)
+      }
     });
     req.on('end', () => {
       try {
@@ -269,10 +265,7 @@ function readBody(req: IncomingMessage): Promise<unknown | null> {
 }
 
 /**
- * `GET /api/stream` — opens one client's SSE connection. Sends the current revision as a
- * `hello` event so the client can detect whether it missed anything while disconnected,
- * registers the client for `broadcast`/presence, and pings every 25s to keep the connection
- * alive through intermediate proxies. Cleans up (and re-broadcasts presence) on disconnect.
+ * Handles `GET /api/stream` SSE connections, sending initial revision and periodic keep-alive pings.
  */
 function openStream(req: IncomingMessage, res: ServerResponse, url: URL): void {
   res.writeHead(200, {
@@ -292,7 +285,7 @@ function openStream(req: IncomingMessage, res: ServerResponse, url: URL): void {
     try {
       res.write(': ping\n\n');
     } catch {
-      /* dropped */
+      /* client disconnected */
     }
   }, 25000);
   req.on('close', () => {
@@ -303,8 +296,9 @@ function openStream(req: IncomingMessage, res: ServerResponse, url: URL): void {
   });
 }
 
-/** Serves the built frontend from `PUBLIC_DIR` (`/` → `index.html`); 400 on a path-traversal
- *  attempt (`..`), 404 when the file doesn't exist — the catch-all once no API route matched. */
+/**
+ * Serves static web assets from the public directory.
+ */
 async function serveStatic(res: ServerResponse, urlPath: string): Promise<void> {
   const filePath = urlPath === '/' ? '/index.html' : urlPath;
   if (filePath.includes('..')) return send(res, 400, { error: 'bad path' });
@@ -321,8 +315,9 @@ async function serveStatic(res: ServerResponse, urlPath: string): Promise<void> 
   }
 }
 
-/** `POST /api/mutate` — the legacy (non-REST) write endpoint the live grid itself still
- *  uses; parses the body and hands it straight to `mutate.ts`'s `applyMutate`. */
+/**
+ * Handles `POST /api/mutate` requests from the frontend client.
+ */
 async function handleMutatePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const body = await readBody(req);
   if (body === null) return send(res, 400, { error: 'Ungültige oder zu große Anfrage' });
@@ -330,11 +325,9 @@ async function handleMutatePost(req: IncomingMessage, res: ServerResponse): Prom
   return send(res, result.error ? 400 : 200, result);
 }
 
-/** Try the `/api/v1/*` route table; returns whether it handled the request (and already sent
- *  the response), so the caller falls through to static-file serving when it didn't. Split out
- *  purely to keep the main request handler under the complexity budget. Reads + parses the
- *  request body for any non-GET method (a write route's handler ignores it otherwise), rejecting
- *  with the REST error envelope — not `/api/mutate`'s plain `{error}` shape — on malformed JSON. */
+/**
+ * Matches and executes `/api/v1/*` REST endpoints.
+ */
 async function tryApiV1(
   req: IncomingMessage,
   res: ServerResponse,
@@ -381,9 +374,9 @@ server.listen(PORT, HOST, () =>
   console.log(`Maschinenplan-Server läuft auf http://${HOST}:${PORT}  (DB: ${DB_PATH})`),
 );
 
-// graceful shutdown so the DB closes cleanly
-/** Stops accepting new connections, closes the DB, and exits — with a 3s hard-exit fallback
- *  in case an open SSE connection keeps `server.close`'s callback from ever firing. */
+/**
+ * Performs graceful shutdown on SIGTERM / SIGINT, closing the database cleanly.
+ */
 function shutdown(): void {
   console.log('Shutdown …');
   server.close(() => {

@@ -1,34 +1,27 @@
 // =======================================================================================
-// SSE MESSAGE LOGIC (web/js/net/sse.ts)
+// SSE EVENT & PRESENCE PARSER (web/js/net/sse.ts)
 // =======================================================================================
 //
-// Pure logic for the live Server-Sent-Events connection's message handling.
-// This module provides:
-// 1. `applyUpdate`: applies an `update` event's changes onto the in-memory bookings.
-// 2. `presenceInfo`: formats the live "who's active" presence list for display.
-// 3. `remoteMessage`/`formatDayMonth`: turns a colleague's raw log action into a one-line
-//    German toast notification.
+// Pure processing logic for Server-Sent Events (SSE) messages from `/api/stream`.
 //
-// Key Principles:
-// - PURE FUNCTIONS OF THEIR INPUT: the EventSource lifecycle and all DOM/toast side effects
-//   live in `ui/live-connection.ts`'s `connectSSE`/`applyPresence` adapter (too coupled to
-//   move cleanly into this module); this module holds only the pieces that are pure
-//   functions of their input, so they're unit-tested to 100% coverage without a live
-//   connection.
+// Responsibilities:
+// 1. Live Cell Updates: Transforms `update` event payloads into targeted in-memory booking mutations.
+// 2. Active User Presence: Formats the active users list for toolbar badges and presence tooltips.
+// 3. Remote Action Notifications: Formats colleague activity log messages into readable German toasts.
 //
 // =======================================================================================
 
 import type { Booking, Bookings } from '../../../shared/types.ts';
 
-/** One booking change carried by an `update` event. */
+/** A single cell modification carried by an SSE `update` event. */
 export interface SseChange {
   machineId: string;
   day: string;
-  /** New booking, or falsy to clear the cell. */
+  /** New booking payload, or null/undefined if the cell was deleted. */
   val?: Booking | null;
 }
 
-/** The payload of an `update` event. */
+/** Payload structure of an SSE `update` event broadcast by the server. */
 export interface SseUpdate {
   rev?: number;
   changes?: SseChange[];
@@ -36,27 +29,22 @@ export interface SseUpdate {
   log?: string;
 }
 
-/** A repaint instruction for the legacy `patchCells` adapter. */
+/** Cell coordinate instruction for targeted DOM cell repainting. */
 export interface CellRef {
   machineId: string;
   date: string;
 }
 
+/** Result returned by applyUpdate containing the new revision and list of modified cells. */
 export interface UpdateResult {
-  /** The new revision if the event carried a numeric one, else `null` (leave unchanged). */
   rev: number | null;
-  /** The cells that changed, for the caller to repaint. */
   patch: CellRef[];
 }
 
 /**
- * Applies an `update` event's changes to `bookings` in place, returning the cells to
- * repaint plus the revision to adopt.
- *
- * How it works, per changed cell: a truthy `val` sets the cell to that new booking; a
- * falsy `val` (the server's way of saying "this cell is now empty") deletes it. Either way
- * the cell's address is added to the repaint list, so the caller always knows exactly
- * which cells to redraw instead of repainting the whole grid.
+ * Applies incoming SSE booking modifications directly to the client's in-memory bookings table.
+ * Returns the exact set of changed cell coordinates to allow localized DOM repainting without
+ * re-rendering the entire table.
  */
 export function applyUpdate(event: SseUpdate, bookings: Bookings): UpdateResult {
   const patch: CellRef[] = [];
@@ -70,10 +58,7 @@ export function applyUpdate(event: SseUpdate, bookings: Bookings): UpdateResult 
 }
 
 /**
- * Turns a raw presence user list into the display fields (count badge + tooltip label).
- * Falsy entries (a client that hasn't set a name yet) are filtered out first, so they
- * don't inflate the count or show up as a blank name in the tooltip. The `presenceData`
- * timestamp map and the actual DOM write live in `ui/live-connection.ts`.
+ * Formats a list of active online user names for display in the UI toolbar chip and tooltip.
  */
 export function presenceInfo(users: readonly (string | null | undefined)[] | undefined): {
   list: string[];
@@ -89,36 +74,29 @@ export function presenceInfo(users: readonly (string | null | undefined)[] | und
 }
 
 /**
- * Whether a change attributed to `by` came from someone other than `me` (case-insensitive,
- * and only when `by` is present). Used to gate the "remote change" notices.
+ * Checks if a change author is different from the currently logged-in user.
  */
 export function isForeign(by: string | undefined, me: string): boolean {
   return !!by && String(by).toLowerCase() !== me.toLowerCase();
 }
 
-/** Abbreviates one ISO day as `DD.MM.` — falls back to the raw string when it isn't a plain
- *  ISO date (`YYYY-MM-DD`), so a malformed date degrades gracefully instead of throwing. */
+/**
+ * Formats an ISO date string ('YYYY-MM-DD') as 'DD.MM.'.
+ */
 export function formatDayMonth(isoDate: string): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(isoDate)
     ? `${isoDate.slice(8, 10)}.${isoDate.slice(5, 7)}.`
     : isoDate;
 }
 
-/** A colleague's log entry, as carried by an `update` SSE event. */
+/** A log entry structure received over SSE. */
 export interface RemoteLogEntry {
   user: string;
   action: string;
 }
 
 /**
- * Builds a German one-line summary of a colleague's log action, for the remote-change
- * toast queue.
- *
- * How it works: tries each recognized action pattern in turn — a multi-cell booking (with a
- * count and date range), a same-name delete, a whole-area delete, a machine action — and
- * returns a friendlier, person-centric phrasing for whichever one matches. Anything that
- * doesn't match any pattern falls back to the generic `"<user>: <action>"`, so an
- * unrecognized (or future) action type still shows something rather than nothing.
+ * Generates a human-friendly German notification message describing an action performed by a colleague.
  */
 export function remoteMessage(entry: RemoteLogEntry): string {
   const { user, action } = entry;

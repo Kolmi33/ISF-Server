@@ -1,33 +1,27 @@
 // =======================================================================================
-// DATABASE MODULE (server/db.ts)
+// DATABASE INITIALIZATION & SCHEMA ENGINE (server/db.ts)
 // =======================================================================================
 //
-// SQLite (built-in node:sqlite) open + schema + meta helpers + JSON seed import.
-// This module provides:
-// 1. `openDb` — opens/creates the DB file, applies the schema, and runs column migrations.
-// 2. `getMeta`/`setMeta`/`bumpRev` — the `meta` key-value table (revision, groups, ...).
-// 3. `importFromJson` — one-time seed of an empty DB from an existing buchungen.json.
+// Persistent storage engine backed by Node's native SQLite driver (`node:sqlite`).
 //
-// Key Principles:
-// - ZERO EXTERNAL DEPENDENCIES: node:sqlite is loaded via `createRequire`, not a static
-//   import, so neither Vite nor a bundler tries to resolve it as a package — Node loads it
-//   natively at runtime.
-// - SINGLE WRITER: all writes go through this one server process, so SQLite serialises
-//   them for us — no client-side lock/merge logic needed.
+// Responsibilities:
+// 1. Database Lifecycle: Opens database files, enables WAL (Write-Ahead Logging) for fast concurrent
+//    reads and safe single-writer serialization, and applies busy timeouts.
+// 2. Schema Creation & Auto-Migration: Creates tables (`machines`, `bookings`, `log`, `meta`) and
+//    safely adds new optional columns without data loss.
+// 3. Metadata & Revisioning: Maintains system metadata and manages the monotonic `revision` counter.
+// 4. Seed Importer: Provides idempotent JSON seeding for initial database population.
 //
 // =======================================================================================
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-// node:sqlite is a very new built-in. Load it through createRequire rather than a static
-// `import … from 'node:sqlite'`, so neither Vite (in the tests) nor any bundler tries to
-// resolve it as a package — Node loads it natively at runtime, and the compiled build
-// keeps working unchanged. The type still comes from @types/node (erased, no runtime cost).
+// Load Node's built-in sqlite module via dynamic require
 const nodeRequire = createRequire(import.meta.url);
 const { DatabaseSync } = nodeRequire('node:sqlite') as typeof import('node:sqlite');
 
-/** The open database handle type (node:sqlite's synchronous API). */
+/** The open database handle instance type (synchronous API). */
 export type Db = InstanceType<typeof DatabaseSync>;
 
 const SCHEMA = `
@@ -41,9 +35,9 @@ CREATE TABLE IF NOT EXISTS machines(
   statusFrom TEXT,
   statusUntil TEXT,
   info TEXT DEFAULT '',
-  redu TEXT,                      -- Redundanz-Markierung (nur Label; keine Buchungswirkung)
-  days TEXT,                      -- verfügbare Wochentage als 7-Zeichen-Maske Mo..So ('1'=verfügbar); NULL = jeden Tag
-  maint TEXT,                     -- Wartungs-/Ausfall-Slots als JSON-Array [{type,from,until,note}]; NULL = keine
+  redu TEXT,                      -- Redundancy marker label (UI grouping only)
+  days TEXT,                      -- 7-character Mo..So availability mask ('1' = available)
+  maint TEXT,                     -- Maintenance / defect slots JSON array [{type,from,until,note}]
   sort INTEGER
 );
 CREATE TABLE IF NOT EXISTS bookings(
@@ -52,7 +46,7 @@ CREATE TABLE IF NOT EXISTS bookings(
   name TEXT NOT NULL,
   note TEXT,
   ts TEXT,
-  gid TEXT,                       -- booking-group id (NULL = single)
+  gid TEXT,                       -- Booking group ID (NULL = single cell reservation)
   gtitle TEXT,
   PRIMARY KEY(mid, day)
 );
@@ -66,24 +60,17 @@ CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 `;
 
 /**
- * Opens (or creates) the SQLite database at `path`, applies the schema, and retro-fits any
- * columns added since an older DB file was created — never destructive, always additive.
- *
- * How it works: creates the containing directory if needed, opens the DB with WAL journaling
- * (concurrent readers + durable writes) and a busy timeout (so a brief lock contention waits
- * instead of erroring), runs the full `CREATE TABLE IF NOT EXISTS` schema (a no-op on an
- * existing DB), then checks `machines`' actual columns against the ones added after the
- * original schema (`redu`/`days`/`maint`) and `ALTER TABLE ADD COLUMN`s in whichever are
- * still missing. Finally seeds the `meta` table's `revision`/`schema_version` keys if unset.
+ * Opens or creates the SQLite database, configures pragmas, applies the schema, and executes auto-migrations.
  */
 export function openDb(path: string): Db {
   mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
-  db.exec('PRAGMA journal_mode = WAL;'); // concurrent readers + durable writes
-  db.exec('PRAGMA synchronous = NORMAL;'); // safe with WAL, faster
+  db.exec('PRAGMA journal_mode = WAL;');
+  db.exec('PRAGMA synchronous = NORMAL;');
   db.exec('PRAGMA busy_timeout = 4000;');
   db.exec(SCHEMA);
-  // Migration: 'redu'/'days'/'maint' columns retro-fitted into existing DBs (no data loss)
+
+  // Column auto-migrations for additive non-breaking schema updates
   const existingColumnNames = (
     db.prepare('PRAGMA table_info(machines)').all() as { name: string }[]
   ).map((column) => column.name);
@@ -97,28 +84,34 @@ export function openDb(path: string): Db {
   return db;
 }
 
-/** The `meta` table's value for `key`, or null if unset (e.g. `revision`, `groups`, `schema_version`). */
+/**
+ * Reads a metadata string value by key from the `meta` table, returning null if unset.
+ */
 export function getMeta(db: Db, key: string): string | null {
   const row = db.prepare('SELECT value FROM meta WHERE key=?').get(key) as
     { value: string } | undefined;
   return row ? row.value : null;
 }
-/** Sets the `meta` table's `key` to `value` (insert or update, whichever applies). */
+
+/**
+ * Writes or updates a key-value pair in the `meta` table.
+ */
 export function setMeta(db: Db, key: string, value: string | number): void {
   db.prepare(
     'INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
   ).run(key, String(value));
 }
-/** Increments and persists the `revision` counter every write bumps; returns the new value. */
+
+/**
+ * Atomically increments and persists the monotonic database revision counter. Returns the new revision number.
+ */
 export function bumpRev(db: Db): number {
-  // `|| '0'` guards a never-set meta row; `|| 0` guards parseInt returning NaN on a
-  // corrupt/non-numeric value — either way we fall back to revision 0 before bumping.
   const newRevision = (parseInt(getMeta(db, 'revision') || '0') || 0) + 1;
   setMeta(db, 'revision', newRevision);
   return newRevision;
 }
 
-/** A machine as it appears in the JSON seed (wire shape: `group`, not `grp`). */
+/** Machine structure parsed from JSON seed files. */
 interface SeedMachine {
   id: string;
   name: string;
@@ -133,6 +126,7 @@ interface SeedMachine {
   days?: string;
   maint?: unknown[];
 }
+
 interface SeedBooking {
   name: string;
   note?: string;
@@ -140,24 +134,26 @@ interface SeedBooking {
   gid?: string;
   gtitle?: string;
 }
-/** The JSON seed shape (a subset of the wire ServerData). */
+
+/** Top-level structure of a JSON seed file. */
 interface SeedJson {
   machines?: SeedMachine[];
   bookings?: Record<string, Record<string, SeedBooking>>;
   groups?: string[];
 }
 
-/** Result of an import: skipped (DB already seeded) or the counts inserted. */
+/** Result summary of a database seed import operation. */
 export interface ImportResult {
   skipped: boolean;
   machines: number;
   bookings?: number;
 }
 
-/** `value || null` as a call, so the many optional seed columns don't inflate complexity. */
 const orNull = (value: string | undefined): string | null => value || null;
 
-/** Insert the seed machines (INSERT OR REPLACE), preserving array order as `sort`. */
+/**
+ * Inserts machines from seed data, preserving original array index as the sort order.
+ */
 function seedMachines(db: Db, machines: SeedMachine[]): void {
   const insertMachine =
     db.prepare(`INSERT OR REPLACE INTO machines(id,name,grp,cat,status,statusNote,statusFrom,statusUntil,info,redu,days,maint,sort)
@@ -181,7 +177,9 @@ function seedMachines(db: Db, machines: SeedMachine[]): void {
   );
 }
 
-/** Insert the seed bookings; returns the count written. */
+/**
+ * Inserts booking cell records from seed data into the database.
+ */
 function seedBookings(db: Db, bookings: Record<string, Record<string, SeedBooking>>): number {
   const insertBooking = db.prepare(
     'INSERT OR REPLACE INTO bookings(mid,day,name,note,ts,gid,gtitle) VALUES(?,?,?,?,?,?,?)',
@@ -204,8 +202,9 @@ function seedBookings(db: Db, bookings: Record<string, Record<string, SeedBookin
   return insertedCount;
 }
 
-// One-time seed from an existing buchungen.json (the current file-based data).
-// Idempotent: skips if the DB already has machines, unless force=true.
+/**
+ * Idempotently seeds an empty database from a JSON file.
+ */
 export function importFromJson(db: Db, jsonPath: string, { force = false } = {}): ImportResult {
   const existingMachineCount = (
     db.prepare('SELECT COUNT(*) c FROM machines').get() as { c: number }

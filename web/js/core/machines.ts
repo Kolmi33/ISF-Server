@@ -2,15 +2,14 @@
 // MACHINE DOMAIN MODULE (web/js/core/machines.ts)
 // =======================================================================================
 //
-// Pure domain logic for machines (resources).
-// This module provides:
-// 1. Read-only queries & availability predicates (checking if machines are free, blocked, or in maintenance).
-// 2. Write-path reducers (creating, editing, deleting, and reordering machines).
+// Core business rules and state transformations for physical resources (machines and measurement equipment).
 //
-// Key Principles:
-// - PURE FUNCTIONS: No DOM access, no network I/O, no global state mutations.
-// - EXPLICIT NAMES: All domain concepts (categories, maintenance slots, availability masks) are spelled out in full.
-// - IN-MEMORY REDUCERS: Mutates the dataset (BookingData) deterministically in place.
+// Responsibilities:
+// 1. Availability Evaluation: Determines whether resources can be booked based on operational calendars,
+//    scheduled maintenance periods, and equipment breakdowns.
+// 2. Resource Hierarchy: Organizes machines into production categories and organizational department groups.
+// 3. Resource Lifecycle Management: Handles creation with unique identifier generation, configuration updates,
+//    deletions, and relative position reordering within department groups.
 //
 // =======================================================================================
 
@@ -27,16 +26,15 @@ import { mondayFirstWeekdayIndex, parseIsoDateString } from '../../../shared/dat
 // ---------------------------------------------------------------------------------------
 
 /**
- * The step to move a machine by in the visual list: -1 (up, earlier) or 1 (down, later).
- * `AdminModal.tsx`'s reorder buttons are the only caller — they already compute -1/1
- * directly from which arrow was clicked, so `moveMachine` takes the same shape rather than
- * translating to/from a separate 'up'/'down' string form nothing else in the app produces.
+ * Relative movement offset when adjusting the display order of machines within a department group:
+ * - `-1`: Shifts the resource upwards (earlier in sequence).
+ * - `1`: Shifts the resource downwards (later in sequence).
  */
 export type MoveDirection = -1 | 1;
 
 /**
- * Represents a resource category and its distinct group names in first-seen order.
- * Used to populate group filter dropdowns and grouped table headers.
+ * Structured group summary representing an entire equipment category along with all unique
+ * department groups currently associated with it, ordered by first appearance in the dataset.
  */
 export interface CategoryGroups {
   category: MachineCategory;
@@ -44,27 +42,22 @@ export interface CategoryGroups {
 }
 
 /**
- * Validated input fields from the machine configuration dialog, as `validateMachineForm`
- * (`ui/machine-form.ts`) produces them. Used by `saveMachine` to create or update a machine.
- *
- * Field names mirror the `Machine` wire shape they end up written to (`cat`/`redu`/`maint`
- * — PRINCIPLES.md E9's wire-naming exemption) rather than a "nicer" alias, so there's exactly
- * one name for each piece of data from the form to the stored machine.
+ * Form payload capturing user input from the machine creation or edit dialog.
  */
 export interface MachineForm {
-  /** Display name of the machine (e.g. "5-Achs Fräse DMU 50"). */
+  /** Human-readable display label (e.g. "5-Achs Fräse DMU 50"). */
   name: string;
-  /** Group / department name the machine belongs to (e.g. "Fräsen", "Drehen"). */
+  /** Department or workshop group to which this resource is assigned (e.g. "Fräsen", "Drehen"). */
   group: string;
-  /** Category: 'messtechnik' for measurement devices, or 'maschine' for standard machines. */
+  /** Equipment category: `'messtechnik'` for quality assurance / measurement devices, or `'maschine'` for production machinery. */
   cat?: string;
-  /** Optional free-form description or notes about the machine. */
+  /** Free-form technical specifications, location details, or operator notes. */
   info: string;
-  /** Optional redundancy group marker/label (used for automatic device substitution). */
+  /** Optional redundancy group identifier used by the booking assistant to find equivalent substitute machines. */
   redu?: string;
-  /** 7-character Mo..So availability mask (e.g. '1111100' for Mo-Fr), or null for all days. */
+  /** 7-character Monday-to-Sunday mask (e.g. `'1111100'` for workdays only) indicating which days of the week the machine operates. */
   daysMask?: string | null;
-  /** Active maintenance and defect date ranges for this machine. */
+  /** Scheduled maintenance downtime and active defect periods. */
   maint?: MaintenanceSlot[];
 }
 
@@ -73,16 +66,18 @@ export interface MachineForm {
 // ---------------------------------------------------------------------------------------
 
 /**
- * Determines a machine's category.
- * - If machine.cat is 'messtechnik', returns 'messtechnik'.
- * - Otherwise defaults to 'maschine' (standard machines).
+ * Resolves the equipment category for a machine.
+ *
+ * Business Rule:
+ * In the workshop schedule, equipment is partitioned into production machinery and measurement devices.
+ * Resources default to standard machines (`'maschine'`) unless specifically flagged as metrology instruments (`'messtechnik'`).
  */
 export function getMachineCategory(machine: Machine | null | undefined): MachineCategory {
   return machine && machine.cat === 'messtechnik' ? 'messtechnik' : 'maschine';
 }
 
 /**
- * The standard list of resource categories in display order, including their German labels and icon names.
+ * Global definitions for all supported resource categories, defining their display labels and visual iconography.
  */
 export const CATEGORIES: ReadonlyArray<{ id: MachineCategory; label: string; icon: string }> = [
   { id: 'maschine', label: 'Maschinen', icon: 'factory' },
@@ -90,14 +85,11 @@ export const CATEGORIES: ReadonlyArray<{ id: MachineCategory; label: string; ico
 ];
 
 /**
- * Groups machines by their category, preserving the order in which groups first appear.
- * Categories with no machines are omitted from the result.
+ * Discovers and organizes all distinct department groups under their parent category.
  *
- * Example Output:
- * [
- *   { category: 'maschine', groups: ['Fräsen', 'Drehen', 'Sägen'] },
- *   { category: 'messtechnik', groups: ['3D-Scanner', 'Messarme'] }
- * ]
+ * Business Rule:
+ * Preserves the natural workshop ordering (first-seen sequence) so department groupings remain
+ * consistent in dropdowns and table views. Categories containing no active machines are omitted.
  */
 export function groupsByCategory(machines: readonly Machine[]): CategoryGroups[] {
   const result: CategoryGroups[] = [];
@@ -123,21 +115,18 @@ export function groupsByCategory(machines: readonly Machine[]): CategoryGroups[]
 }
 
 /**
- * Returns all maintenance/defect date ranges (slots) for a machine.
+ * Extracts all scheduled maintenance intervals and defect downtimes for a machine.
  *
- * How it works:
- * 1. Checks if the machine has a modern `maint` array. If found, returns it directly.
- * 2. If no `maint` array exists, checks legacy single-status fields (`status`, `statusFrom`, `statusUntil`).
- *    If status is not 'ok', synthesizes a temporary maintenance slot from those fields.
- * 3. If machine is fully operational with no maintenance, returns an empty array `[]`.
+ * Data Compatibility:
+ * Reads structured maintenance ranges when present. If an older machine record contains only
+ * legacy status properties (`status`, `statusFrom`, `statusUntil`), this function seamlessly
+ * converts those properties into a normalized maintenance slot so modern blocking rules apply uniformly.
  */
 export function getMaintenanceSlots(machine: Machine): MaintenanceSlot[] {
-  // 1. Modern structured array
   if (Array.isArray(machine.maint)) {
     return machine.maint;
   }
 
-  // 2. Legacy fallback
   if (machine.status && machine.status !== 'ok') {
     return [
       {
@@ -149,17 +138,15 @@ export function getMaintenanceSlots(machine: Machine): MaintenanceSlot[] {
     ];
   }
 
-  // 3. No maintenance
   return [];
 }
 
 /**
- * Checks whether a maintenance slot covers a given ISO date ('YYYY-MM-DD').
+ * Evaluates whether a maintenance or breakdown interval overlaps with a specific calendar date.
  *
- * How date range boundaries work:
- * - If `from` is empty: Open-ended start (covers all dates up to `until`).
- * - If `until` is empty: Open-ended end (covers all dates from `from` onwards).
- * - If both are set: Date must fall inside `from <= isoDate <= until`.
+ * Calendar Logic:
+ * Supports open-ended ranges where a start or end date is omitted (e.g. ongoing breakdown without an ETA),
+ * as well as strictly bounded maintenance windows.
  */
 export function isSlotCoveringDate(slot: MaintenanceSlot, isoDate: string): boolean {
   const isAfterOrAtStart = !slot.from || isoDate >= slot.from;
@@ -168,11 +155,8 @@ export function isSlotCoveringDate(slot: MaintenanceSlot, isoDate: string): bool
 }
 
 /**
- * Finds the maintenance or defect slot covering a specific ISO date.
- *
- * Returns:
- * - The matching `MaintenanceSlot` object if the machine is blocked on that date.
- * - `null` if the machine is operational and free of maintenance on that date.
+ * Retrieves the specific maintenance slot causing a machine to be unavailable on a given date.
+ * Returns `null` if the machine is operational on that date.
  */
 export function getMaintenanceSlotAtDate(
   machine: Machine,
@@ -188,49 +172,42 @@ export function getMaintenanceSlotAtDate(
 }
 
 /**
- * Checks if a machine is blocked by maintenance or defect on a specific ISO date.
- * Returns `true` if any maintenance slot covers that date; otherwise `false`.
+ * Checks whether a machine is blocked by maintenance or downtime on a given calendar date.
  */
 export function isMachineBlockedOnDate(machine: Machine, isoDate: string): boolean {
   return getMaintenanceSlotAtDate(machine, isoDate) !== null;
 }
 
 /**
- * Checks if a machine has any maintenance or defect slots defined at all.
- * Used by UI icons to highlight machines with pending or active maintenance.
+ * Determines whether a machine has any planned or active maintenance downtime configured.
+ * Used to display warning badges and maintenance indicators in the UI headers.
  */
 export function hasAnyMaintenanceSlot(machine: Machine): boolean {
   return getMaintenanceSlots(machine).length > 0;
 }
 
 /**
- * Checks if a machine is scheduled to work on the day of the week of `isoDate`.
+ * Evaluates whether a machine is scheduled for operation on the specific day of the week of `isoDate`.
  *
- * How the Weekday Mask works:
- * - `machine.days` is a 7-character string corresponding to Monday through Sunday:
- *   Index 0 = Monday, Index 1 = Tuesday, ..., Index 5 = Saturday, Index 6 = Sunday.
- * - '1' = Operational (can be booked).
- * - '0' = Off / Unavailable (cannot be booked).
- *
- * Examples:
- * - '1111100' ➔ Monday-Friday only (Weekends off).
- * - '1111111' ➔ Available 7 days a week.
- * - Missing or invalid mask ➔ Defaults to `true` (available every day).
+ * Business Rule:
+ * Operating schedules are defined by a 7-character bitmask representing Monday through Sunday
+ * (where index 0 is Monday and index 6 is Sunday). A `'1'` indicates regular working hours,
+ * while `'0'` indicates planned downtime (e.g. weekend closures or non-working days).
+ * If no mask is configured, the machine is assumed to operate 7 days a week.
  */
 export function isMachineAvailableOnWeekday(machine: Machine, isoDate: string): boolean {
   if (!machine.days || machine.days.length !== 7) {
-    return true; // No mask = available every day
+    return true;
   }
   const weekdayIndex = mondayFirstWeekdayIndex(parseIsoDateString(isoDate));
   return machine.days.charAt(weekdayIndex) !== '0';
 }
 
 /**
- * Determines if a specific cell (machine × date) can be booked.
+ * Determines whether an individual calendar cell (machine on a given date) is open for reservations.
  *
- * A cell is bookable ONLY when BOTH conditions are met:
- * 1. The machine is NOT blocked by maintenance or defect on that date (`!isMachineBlockedOnDate`).
- * 2. The machine is scheduled to work on that weekday (`isMachineAvailableOnWeekday`).
+ * Invariant:
+ * A cell is only bookable if the machine is both operational on that weekday AND not blocked by maintenance or breakdown.
  */
 export function isCellBookable(machine: Machine, isoDate: string): boolean {
   return !isMachineBlockedOnDate(machine, isoDate) && isMachineAvailableOnWeekday(machine, isoDate);
@@ -241,46 +218,40 @@ export function isCellBookable(machine: Machine, isoDate: string): boolean {
 // ---------------------------------------------------------------------------------------
 
 /**
- * Applies form values onto an existing machine object in place.
+ * Updates a machine entity with validated values from the machine management form.
  *
- * Logic:
- * - Sets required properties (`name`, `group`, `info`).
- * - Sets optional properties if provided, or deletes them if empty (avoids cluttering JSON).
- * - Cleans up legacy status fields (`status`, `statusNote`, etc.) superseded by `maint`.
+ * Invariant:
+ * Synchronizes core properties (`name`, `group`, `info`), updates optional configuration attributes
+ * (redundancy group, weekday operating mask, maintenance intervals), and purges superseded legacy fields.
  */
 export function applyFormFieldsToMachine(machine: Machine, form: MachineForm): void {
   machine.name = form.name;
   machine.group = form.group;
   machine.info = form.info;
 
-  // 1. Redundancy group
   if (form.redu) {
     machine.redu = form.redu;
   } else {
     delete machine.redu;
   }
 
-  // 2. Weekday availability mask
   if (form.daysMask) {
     machine.days = form.daysMask;
   } else {
     delete machine.days;
   }
 
-  // 3. Maintenance slots
   if (form.maint && form.maint.length > 0) {
     machine.maint = form.maint;
   } else {
     delete machine.maint;
   }
 
-  // 4. Remove obsolete legacy single-status fields
   delete machine.status;
   delete machine.statusNote;
   delete machine.statusFrom;
   delete machine.statusUntil;
 
-  // 5. Category ('messtechnik' vs default 'maschine')
   if (form.cat === 'messtechnik') {
     machine.cat = 'messtechnik';
   } else {
@@ -289,8 +260,8 @@ export function applyFormFieldsToMachine(machine: Machine, form: MachineForm): v
 }
 
 /**
- * Generates a short, deterministic 6-character hex hash from any string.
- * Used to construct unique IDs for machine names written in non-Latin scripts (e.g. Cyrillic, Chinese, Arabic).
+ * Computes a deterministic 6-character hexadecimal hash using the DJB2 hashing algorithm.
+ * Used as a collision-free ID fallback when machine names cannot be transliterated into ASCII slugs.
  */
 function generateShortHash(input: string): string {
   let hash = 5381;
@@ -301,14 +272,14 @@ function generateShortHash(input: string): string {
 }
 
 /**
- * Derives a clean, URL-safe machine ID from a human-readable name.
+ * Generates a stable, URL-safe resource identifier from a human-readable machine name.
  *
- * Multi-Language Logic:
- * 1. Converts to lowercase and expands German umlauts (ä->ae, ö->oe, ü->ue, ß->ss).
- * 2. Normalizes Latin diacritics via Unicode NFKD (é->e, ñ->n, å->a, č->c, etc.).
- * 3. Replaces non-alphanumeric characters with hyphens and trims leading/trailing hyphens (max 40 chars).
- * 4. Non-Latin Fallback: If the name contains no Latin letters (e.g. Cyrillic "Фрезерный" or Chinese "铣床"),
- *    generates a unique deterministic ID from its hash (e.g. "m_8f2a1c") to avoid ID collisions.
+ * Multi-Language Strategy:
+ * 1. Standardizes Latin names by expanding German umlauts (`ä` -> `ae`) and stripping diacritics via Unicode NFKD.
+ * 2. Produces clean, readable ASCII slugs (e.g. "5-Achs Fräse" -> "5-achs-fraese").
+ * 3. Fallback for Non-Latin Scripts: If the machine name consists entirely of non-Latin characters
+ *    (such as Cyrillic, Chinese, Arabic, or symbols), a deterministic unique hash (e.g. "m_8f2a1c")
+ *    is produced instead of a generic placeholder, preventing ID collisions.
  */
 export function generateMachineIdFromName(name: string): string {
   if (!name || typeof name !== 'string') {
@@ -317,35 +288,29 @@ export function generateMachineIdFromName(name: string): string {
 
   const trimmed = name.trim().toLowerCase();
 
-  // 1. Expand German umlauts
   const umlautsExpanded = trimmed
     .replace(/ä/g, 'ae')
     .replace(/ö/g, 'oe')
     .replace(/ü/g, 'ue')
     .replace(/ß/g, 'ss');
 
-  // 2. Normalize Latin diacritics (removes accents from é, ñ, å, etc.)
   const asciiNormalized = umlautsExpanded.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
 
-  // 3. Keep only ASCII a-z and 0-9
   const slug = asciiNormalized
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 40);
 
-  // 4. Any readable Latin slug at all (even one character, e.g. a machine literally named "Z")
-  //    is used as-is; only a genuinely empty result falls through to the hash below.
   if (slug.length > 0) {
     return slug;
   }
 
-  // 5. Non-Latin / symbol fallback: deterministic hash from the input string
   return `m_${generateShortHash(trimmed)}`;
 }
 
 /**
- * Guarantees that a machine ID is unique across the entire machine list.
- * If `desiredId` already exists, appends numeric suffixes (-2, -3, ...) until an unused ID is found.
+ * Resolves naming collisions by verifying that the candidate machine ID is globally unique across the workspace.
+ * If another machine already uses the desired ID, appends incrementing numeric suffixes (`-2`, `-3`, ...) until an available ID is found.
  */
 export function ensureUniqueMachineId(
   existingMachines: readonly Machine[],
@@ -363,10 +328,11 @@ export function ensureUniqueMachineId(
 }
 
 /**
- * Calculates the array index where a new machine should be inserted:
- * - Inserts immediately AFTER the last existing machine of the same group so that machines
- *   belonging to the same department stay visually grouped in the UI.
- * - If the group is new (no siblings exist), places the new machine at the end of the array.
+ * Determines the insertion index for a new machine to preserve department grouping in the UI.
+ *
+ * Business Rule:
+ * New machines are positioned immediately following existing machines belonging to the same department group.
+ * If the machine belongs to a brand new department, it is appended to the end of the list.
  */
 export function findGroupInsertionIndex(
   existingMachines: readonly Machine[],
@@ -381,18 +347,15 @@ export function findGroupInsertionIndex(
 }
 
 /**
- * Saves machine configuration:
- * - Edit mode (`machineId` is string): Updates the existing machine's fields in place.
- *   Returns `{ abort: true }` if the machine was deleted concurrently.
- * - Create mode (`machineId` is null): Generates a unique ID from the name and inserts the new machine
- *   adjacent to its group siblings.
+ * Persists machine configuration changes to the in-memory dataset:
+ * - Update Mode (`machineId` is provided): Modifies the existing machine entity in place.
+ * - Create Mode (`machineId` is null): Derives a unique ID from the machine name and inserts it into its department group.
  */
 export function saveMachine(
   data: BookingData,
   machineId: string | null,
   form: MachineForm,
 ): { abort: true } | void {
-  // 1. Edit existing machine
   if (machineId) {
     const existingMachine = data.machines.find((candidate) => candidate.id === machineId);
     if (!existingMachine) {
@@ -402,7 +365,6 @@ export function saveMachine(
     return;
   }
 
-  // 2. Create new machine
   const desiredId = generateMachineIdFromName(form.name);
   const uniqueMachineId = ensureUniqueMachineId(data.machines, desiredId);
   const insertionIndex = findGroupInsertionIndex(data.machines, form.group);
@@ -413,8 +375,8 @@ export function saveMachine(
 }
 
 /**
- * Deletes a machine from the list and removes all of its associated bookings.
- * Returns `{ abort: true }` if the machine does not exist in `data.machines`.
+ * Permanently removes a machine from the resource registry and deletes all corresponding reservations.
+ * Returns `{ abort: true }` if the target machine was not found in the dataset.
  */
 export function deleteMachine(data: BookingData, machineId: string): { abort: true } | void {
   const machineIndex = data.machines.findIndex((candidate) => candidate.id === machineId);
@@ -427,14 +389,12 @@ export function deleteMachine(data: BookingData, machineId: string): { abort: tr
 }
 
 /**
- * Reorders a machine one step up or down within its group by swapping positions with its neighbor.
+ * Adjusts the display sequence of a machine by swapping positions with its immediate neighbor within the same department.
  *
- * Validation Rules (Guards):
- * 1. The target machine must exist in data.machines.
- * 2. Movement cannot exceed list boundaries (cannot move 'up' past index 0 or 'down' past the last item).
- * 3. Movement is strictly restricted to machines within the EXACT same group (group boundaries are preserved).
- *
- * Returns `{ abort: true }` if any validation rule is violated; otherwise performs the swap in place.
+ * Business Rules & Invariants:
+ * 1. Existence: The requested machine must exist in the dataset.
+ * 2. Bounds: Movement cannot exceed array limits (cannot move above the first item or below the last).
+ * 3. Department Isolation: Machines can only be reordered within their own department group. Cross-group swaps are rejected.
  */
 export function moveMachine(
   data: BookingData,
@@ -449,7 +409,6 @@ export function moveMachine(
 
   const targetNeighborIndex = currentIndex + direction;
 
-  // 1. Boundary check: ensure target index is within array range
   const isOutOfBounds = targetNeighborIndex < 0 || targetNeighborIndex >= machines.length;
   if (isOutOfBounds) {
     return { abort: true };
@@ -458,13 +417,11 @@ export function moveMachine(
   const currentMachine = machines[currentIndex]!;
   const neighborMachine = machines[targetNeighborIndex]!;
 
-  // 2. Group boundary check: reordering is only permitted within the same group
   const isDifferentGroup = currentMachine.group !== neighborMachine.group;
   if (isDifferentGroup) {
     return { abort: true };
   }
 
-  // 3. Perform swap
   machines[currentIndex] = neighborMachine;
   machines[targetNeighborIndex] = currentMachine;
 }

@@ -2,17 +2,16 @@
 // GRID VIEW LOGIC MODULE (web/js/ui/grid.ts)
 // =======================================================================================
 //
-// Pure grid view-layer logic, shared between the full render and the targeted cell patch.
-// This module provides:
-// 1. Cell/dot classification: which of the possible states a cell (or a row's today-dot)
-//    is in, and the resulting CSS class stem.
-// 2. Row ordering: favorites first, then everyone else grouped by category.
-// 3. `buildGridRows`: the flat, fold/filter-aware row list the grid body renders from.
+// Pure view-layer calculations for rendering the interactive scheduling grid table.
 //
-// Key Principles:
-// - PURE FUNCTIONS OF THEIR INPUTS: DOM-free and unit-tested to 100%, so the full render and
-//   the targeted cell patch (`ui/cell-patch.ts`) share exactly one source of truth for "what
-//   state is this cell in" instead of two copies that could drift apart.
+// Responsibilities:
+// 1. Cell State Classification: Determines the visual state of each calendar cell
+//    ('blocked' | 'booked' | 'unavail' | 'free') based on maintenance, reservations, and workdays.
+// 2. Machine Row Hierarchy: Groups and orders machines, prioritizing user favorites at the top,
+//    followed by Maschinen and Messtechnik categories.
+// 3. Grid Row Assembly (`buildGridRows`): Generates the flat list of category headers, group headers,
+//    and machine data rows respecting user filter and collapse states.
+// 4. Color Assignment (`nameColor`): Computes consistent, deterministic HSL colors hashed from booker names.
 //
 // =======================================================================================
 
@@ -20,14 +19,15 @@ import type { Booking, Machine, MachineCategory } from '../../../shared/types.ts
 import { addDays, formatDateAsIsoString } from '../../../shared/dates.ts';
 import { getMachineCategory, getMaintenanceSlotAtDate } from '../core/machines.ts';
 
-/** The four mutually exclusive states a grid cell can be in, in priority order. */
+/** The four mutually exclusive states of a grid cell in priority order. */
 export type CellState = 'blocked' | 'booked' | 'unavail' | 'free';
 
 /**
- * Classifies a cell, checked in priority order: a maintenance/defect block wins over
- * everything (even an existing booking underneath it), then a booking, then
- * day-unavailability, else free. The impure inputs (`blocked`/`booking`/`available`) are
- * computed by the caller and passed in, so this stays a pure decision function.
+ * Classifies the visual state of a grid cell:
+ * 1. Maintenance / Defect (`blocked`): Overrides all other states.
+ * 2. Active Reservation (`booked`): Machine is reserved by a user.
+ * 3. Weekday Off (`unavail`): Machine is non-operational on that day of the week.
+ * 4. Free (`free`): Available for booking.
  */
 export function classifyCell(
   blocked: boolean,
@@ -40,21 +40,25 @@ export function classifyCell(
   return 'free';
 }
 
-/** Whether a booking name belongs to the current user (case-insensitive; empty user = no). */
+/**
+ * Checks if a booking was created by the currently logged-in user.
+ */
 export function isMine(user: string, name: string): boolean {
   return !!user && name.toLowerCase() === user.toLowerCase();
 }
 
+/** Styling options for generating CSS classes for a grid cell. */
 export interface CellClassOpts {
-  /** Only meaningful for the 'booked' state (a booking of the current user). */
+  /** Highlights cells booked by the current user. */
   mine?: boolean;
+  /** Highlights the column corresponding to today. */
   today?: boolean;
+  /** Marks Saturday and Sunday columns. */
   weekend?: boolean;
 }
 
 /**
- * Builds the cell's CSS class stem, e.g. `cell booked mine today`. `mine` only ever applies
- * to the `'booked'` state — passing it alongside any other state is simply ignored.
+ * Builds the composite CSS class string for a table cell (e.g. `cell booked mine today`).
  */
 export function cellClass(state: CellState, opts: CellClassOpts = {}): string {
   let c = 'cell ' + state;
@@ -64,16 +68,11 @@ export function cellClass(state: CellState, opts: CellClassOpts = {}): string {
   return c;
 }
 
-/** The state of a machine's "today" indicator dot in its row header. */
+/** Visual status dot state displayed in the machine row header. */
 export type DotState = 'defekt' | 'maint' | 'busy' | 'unavail' | 'free';
 
 /**
- * Classifies the today-dot, checked in priority order: an active maintenance/defect slot
- * wins (a `defekt` type → 'defekt', any other → 'maint'; both render as the static
- * `statdot`), then a booking → 'busy', then day-unavailability → 'unavail', else 'free'.
- * `maintType` is the type of the slot active today, or null/undefined when none — the
- * patch path always passes null, since a row with an active maintenance slot shows a
- * `statdot` instead of a `dot`, so `refreshDot` never even runs on it.
+ * Classifies the row header status dot representing the machine's current operational state today.
  */
 export function classifyDot(
   maintType: string | null | undefined,
@@ -86,19 +85,21 @@ export function classifyDot(
   return 'free';
 }
 
-/** The group header a machine's row appears under: its favorite label, or its own group. */
+/** Group header label under which pinned favorite machines are displayed. */
 export const FAVORITES_GROUP_LABEL = '★ Favoriten';
 
-/** Which group header `machine`'s row appears under (favorites float to their own group). */
+/**
+ * Returns the effective group header under which a machine should be rendered.
+ * Pinned favorite machines float into the dedicated '★ Favoriten' group.
+ */
 export function displayGroup(machine: Machine, favoriteIds: ReadonlySet<string>): string {
   return favoriteIds.has(machine.id) ? FAVORITES_GROUP_LABEL : machine.group;
 }
 
 /**
- * Orders machines for grid display: favorited machines first (in their original relative
- * order), then everyone else with Maschinen before Messtechnik (a stable sort, so ties —
- * two machines in the same category — keep their existing relative order rather than
- * being shuffled).
+ * Sorts machines for visual grid display:
+ * 1. Favorited machines float to the top of the table.
+ * 2. Standard machines ('maschine') appear before measurement tools ('messtechnik').
  */
 export function orderedMachines(
   machines: readonly Machine[],
@@ -114,8 +115,9 @@ export function orderedMachines(
   return favorites.concat(everyoneElse);
 }
 
-/** Builds the grid's visible date columns, grouped into weeks: `weekCount` weeks of
- *  `daysPerWeek` days each (5 for Mon–Fri, 7 for Mon–Sun), starting at `startMonday`. */
+/**
+ * Generates the 2D array of visible date columns grouped by week blocks.
+ */
 export function visibleWeeks(
   startMonday: Date,
   weekCount: number,
@@ -133,10 +135,8 @@ export function visibleWeeks(
 }
 
 /**
- * Computes a deterministic background color for a booking, hashed from the booker's name so
- * the same person always gets the same color across every cell and every render.
- * `isDarkTheme` is injected rather than read from the DOM directly, so this stays a pure
- * function of its inputs.
+ * Computes a deterministic HSL background color from the user's name so that bookings by
+ * the same individual share a consistent, recognizable color across the entire schedule.
  */
 export function nameColor(name: string, isDarkTheme: boolean): string {
   let hash = 0;
@@ -145,13 +145,15 @@ export function nameColor(name: string, isDarkTheme: boolean): string {
   return isDarkTheme ? `hsl(${hue} 35% 30%)` : `hsl(${hue} 55% 88%)`;
 }
 
-/** The type of the maintenance/defect slot active on `machine` today, or null if none. */
+/**
+ * Returns the maintenance slot type active on `machine` today, or null if operational.
+ */
 export function maintenanceKindToday(machine: Machine, today: string): string | null {
   const slot = getMaintenanceSlotAtDate(machine, today);
   return slot ? slot.type : null;
 }
 
-/** One row of the grid body: a category header, a group header, or a machine's data row. */
+/** Discriminator union of all row types rendered in the table body. */
 export type GridRow =
   | { kind: 'category'; category: MachineCategory; collapsed: boolean }
   | {
@@ -163,19 +165,18 @@ export type GridRow =
     }
   | { kind: 'machine'; machine: Machine };
 
+/** Filter and collapse options passed into buildGridRows. */
 export interface BuildGridRowsOptions {
-  /** Groups checked in the "Gruppen" filter; empty means no group filter is active. */
   selectedGroups: ReadonlySet<string>;
-  /** Machines checked in the "Filtern" picker; empty means no machine filter is active. */
   selectedMachineIds: ReadonlySet<string>;
-  /** Categories currently expanded (their machines/groups shown). */
   openCategories: ReadonlySet<string>;
-  /** Groups currently collapsed (their machine rows hidden, but the group header still shows). */
   collapsedGroups: ReadonlySet<string>;
   favoriteIds: ReadonlySet<string>;
 }
 
-/** How many machines display under each group header (favorites counted in their own group). */
+/**
+ * Counts the number of visible machines per group header.
+ */
 function countMachinesByGroup(
   orderedList: readonly Machine[],
   favoriteIds: ReadonlySet<string>,
@@ -188,8 +189,9 @@ function countMachinesByGroup(
   return counts;
 }
 
-/** True if `machine` is hidden entirely by an active group or machine filter (not even a row
- *  is emitted for it — unlike a closed category/collapsed group, which still shows a header). */
+/**
+ * Checks if a machine is hidden by an active group or machine filter.
+ */
 function isHiddenByFilter(
   machine: Machine,
   isFavoritesGroup: boolean,
@@ -202,16 +204,17 @@ function isHiddenByFilter(
   return selectedMachineIds.size > 0 && !selectedMachineIds.has(machine.id);
 }
 
-/** Tracks which category/group `buildGridRows` is currently walking through, and whether the
- *  current category is closed — the small state machine `render()`'s loop used to carry
- *  as three local variables. */
+/**
+ * State machine cursor tracking category and group boundaries during row assembly.
+ */
 class GridRowsCursor {
   category: MachineCategory | null = null;
   group: string | null = null;
   isCategoryClosed = false;
 
-  /** Advance into `machine`'s category, pushing a header row if it's a new one. Returns
-   *  `false` when the category is closed and everything under it should stay hidden. */
+  /**
+   * Evaluates category boundaries, emitting a category header when entering a new category.
+   */
   enterCategory(
     machine: Machine,
     isFavoritesGroup: boolean,
@@ -222,7 +225,7 @@ class GridRowsCursor {
     const category = getMachineCategory(machine);
     if (!isFavoritesGroup && category !== this.category) {
       this.category = category;
-      this.group = null; // force the new category's first group header to (re-)emit
+      this.group = null;
       const isOpen = openCategories.has(category);
       this.isCategoryClosed = !isOpen && !isMachineFilterActive;
       rows.push({ kind: 'category', category, collapsed: !isOpen });
@@ -230,7 +233,9 @@ class GridRowsCursor {
     return isFavoritesGroup || !this.isCategoryClosed;
   }
 
-  /** Advance into `machine`'s group, pushing a header row if it's a new one. */
+  /**
+   * Evaluates group boundaries, emitting a group header when entering a new department group.
+   */
   enterGroup(
     group: string,
     isFavoritesGroup: boolean,
@@ -251,17 +256,8 @@ class GridRowsCursor {
 }
 
 /**
- * The flat list of rows `render()` builds the grid body from, in order. This is the trickiest
- * part of `render()` to port faithfully: as it walks `orderedMachines()`, it tracks the
- * category and group it is currently inside and emits a header row whenever either changes.
- * A closed category hides everything under it, including its group headers; a collapsed group
- * hides only its machine rows — its own header stays visible so it can be reopened. An active
- * machine filter ("Filtern") overrides both category and group collapsing, so a filtered-in
- * machine is never hidden by a fold the user made before filtering.
- *
- * Kept as a pure function returning data (not building HTML) precisely because this state
- * machine is easy to get subtly wrong — testing it in isolation, once, is worth more than
- * re-reading a large JSX loop every time the grid changes.
+ * Assembles the flat sequence of rows (category headers, group headers, machine rows)
+ * for rendering in the grid body, applying filtering and folding rules.
  */
 export function buildGridRows(
   machines: readonly Machine[],
@@ -287,10 +283,10 @@ export function buildGridRows(
       isMachineFilterActive,
       rows,
     );
-    if (!categoryIsOpen) continue; // category closed: hide its group headers and rows
+    if (!categoryIsOpen) continue;
 
     cursor.enterGroup(group, isFavoritesGroup, machineCountByGroup, collapsedGroups, rows);
-    if (collapsedGroups.has(group) && !isMachineFilterActive) continue; // group collapsed: hide row only
+    if (collapsedGroups.has(group) && !isMachineFilterActive) continue;
 
     rows.push({ kind: 'machine', machine });
   }

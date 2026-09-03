@@ -2,20 +2,16 @@
 // OPTIMISTIC WRITE PIPELINE MODULE (web/js/ui/mutate.ts)
 // =======================================================================================
 //
-// The optimistic write pipeline — every mutation in this app goes through `mutate`. This
-// module IS the single authoritative server write path (CLAUDE.md) — every caller goes
-// through `window.mutate`.
+// The authoritative write pipeline coordinating client mutations with server persistence.
 //
-// Key Principles:
-// - OPTIMISTIC, THEN RECONCILED: `fn` applies SYNCHRONOUSLY to the in-memory client data —
-//   cells change at the moment of the click, with no network round-trip in the critical
-//   path. `persist` then writes authoritatively in the background: re-reads fresh, merges
-//   the local delta against anyone else's concurrent change (a foreign booking never gets
-//   silently overwritten), and writes. On error/collision, the actual server state wins and
-//   the view is reconciled via `refreshNow`.
-// - NO UNOBSERVED STATE: there is deliberately no "saving" flag anywhere in this pipeline —
-//   a full-codebase search confirmed nothing ever reads such a flag to gate behavior on it
-//   (e.g. pausing auto-refresh), so there's nothing to conserve by adding one back.
+// Optimistic UI Architecture:
+// 1. Synchronous Local Mutation: Mutates client state (`store.state.data`) in place immediately,
+//    giving users instant visual feedback with zero network latency.
+// 2. Local Paint: Performs localized DOM cell patching (`patchCells`) or triggers a full grid repaint.
+// 3. Background Persistence: Sends compare-and-set cell deltas (or full structural machine lists)
+//    to `/api/mutate`.
+// 4. Server Reconciliation: If a race condition or conflict occurred, the server state wins and
+//    the client automatically resynchronizes via `refreshNow`.
 //
 // =======================================================================================
 
@@ -29,6 +25,7 @@ import { showCollisionBanner } from './collision-banner.ts';
 import { dbg, errorMessage } from './debug-panel.ts';
 import { invalidateMachineLookupCache } from './machine-lookup.ts';
 
+/** Result returned by mutate callbacks. */
 export interface MutateResult {
   abort?: boolean;
   conflicts?: Conflict[];
@@ -37,14 +34,16 @@ export interface MutateResult {
   undo?: CellUndo[];
 }
 
-/** Stamps `#lastRef` with the current time — the toolbar's small "last synced" indicator. */
+/** Updates the toolbar's "last synced" time indicator. */
 export function stampRef(): void {
   const el = document.getElementById('lastRef');
   if (el)
     el.textContent = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 }
 
-/** Re-fetches and reconciles the view to the server's authoritative state. */
+/**
+ * Re-fetches authoritative state from `/api/state` and reconciles the active view.
+ */
 export async function refreshNow(silent: boolean): Promise<void> {
   try {
     store.set({ data: await readFile() });
@@ -57,11 +56,9 @@ export async function refreshNow(silent: boolean): Promise<void> {
   }
 }
 
-/** Whether `result` came from a machine-structural reducer (saveMachine/deleteMachine/
- *  moveMachine, core/machines.ts) rather than a booking-cell one — those never return an
- *  `undo` array, every booking-cell reducer always does (`buildMutateRequestBody` below makes
- *  the same distinction, inline, for the request-shape decision). Split out purely so `mutate`
- *  itself stays under the complexity budget. */
+/**
+ * Checks whether the mutation modified machine list structure (CRUD/reorder) rather than booking cells.
+ */
 function isStructuralChange(result: MutateResult | null): boolean {
   return !(result && Array.isArray(result.undo));
 }
@@ -72,9 +69,11 @@ interface MutateApiResponse {
   conflicts?: Conflict[];
 }
 
-/** The `/api/mutate` request body: a cell delta (compare-and-set per cell) when
- *  `result.undo` is an array, else the full machine/group list (a structural change).
- *  Split out from `persist` only to stay under the complexity budget. */
+/**
+ * Formats the `/api/mutate` HTTP request body:
+ * - Booking cell mutations: Generates a list of cell deltas with `prev` and `val` for compare-and-set.
+ * - Machine management mutations: Sends the full `machines` and `groups` arrays.
+ */
 function buildMutateRequestBody(
   logEntry: { action: string },
   result: MutateResult | null,
@@ -92,9 +91,10 @@ function buildMutateRequestBody(
   return { machines: store.get('data')!.machines, groups: store.get('data')!.groups, ...common };
 }
 
-/** Handle the parsed `/api/mutate` response: adopt the new revision, and either flag a
- *  partial conflict (banner + reconcile) or log the success. Split out from `persist` only to
- *  stay under the complexity budget. */
+/**
+ * Processes server response from `/api/mutate`, updating the local revision number and triggering
+ * reconciliation if concurrent booking collisions occurred.
+ */
 async function handleMutateResponse(
   logEntry: { action: string },
   out: MutateApiResponse,
@@ -103,13 +103,15 @@ async function handleMutateResponse(
   if (out.conflicts && out.conflicts.length) {
     showCollisionBanner();
     dbg('err', 'Teilkonflikt: ' + out.conflicts.length + ' Termin(e) waren bereits belegt');
-    await refreshNow(true); // reconcile the view to the authoritative state
+    await refreshNow(true);
   } else {
     dbg('write', `${logEntry.action} ✓ (Rev ${out.rev})`);
   }
 }
 
-/** Writes `result` (from `fn`'s optimistic apply) to the server in the background. */
+/**
+ * Persists an applied mutation to the server in the background.
+ */
 async function persist(logEntry: { action: string }, result: MutateResult | null): Promise<void> {
   try {
     const out = (await apiPost(
@@ -128,16 +130,18 @@ async function persist(logEntry: { action: string }, result: MutateResult | null
     try {
       await refreshNow(true);
     } catch {
-      /* refreshNow already handles its own failure (offline indicator + toast) */
+      /* refreshNow handles its own errors */
     }
   }
 }
 
 /**
- * Applies `fn` to the in-memory client data, logs the action, repaints (patched or full),
- * and persists to the server in the background — returns `fn`'s own result immediately,
- * without waiting for `persist` to finish. Returns `null` in read-only mode instead (a
- * toast explains why, and `fn` never runs at all).
+ * Authoritative mutation pipeline:
+ * 1. Executes reducer `fn` on local data synchronously.
+ * 2. Invalidate caches if machine structure changed.
+ * 3. Records action in the in-memory audit log.
+ * 4. Patches DOM cells or notifies store listeners.
+ * 5. Dispatches background persistence to `/api/mutate`.
  */
 export async function mutate(
   fn: (fresh: BookingData) => unknown,
@@ -148,10 +152,8 @@ export async function mutate(
     return null;
   }
   const result = fn(store.get('data')!) as MutateResult | null;
-  if (result && result.abort) return result; // conflict/cancel: S.data unchanged
+  if (result && result.abort) return result;
 
-  // Machine CRUD mutates `data.machines` IN PLACE (splice/swap) rather than replacing the
-  // array — machById's reference-equality cache can't see that on its own.
   if (isStructuralChange(result)) invalidateMachineLookupCache();
 
   const logEntry = {
@@ -169,6 +171,6 @@ export async function mutate(
   } else {
     store.notify();
   }
-  void persist(logEntry, result); // file work in the background
+  void persist(logEntry, result);
   return result;
 }

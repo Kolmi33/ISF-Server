@@ -1,85 +1,104 @@
 // =======================================================================================
-// DOMAIN CONTRACT (shared/types.ts)
+// DOMAIN DATA CONTRACTS (shared/types.ts)
 // =======================================================================================
 //
-// The shapes both the frontend and (from Phase 6) the backend share — the single source
-// of truth for the wire/domain contract (see ARCHITECTURE.md §5).
+// Core domain interfaces and data shapes shared verbatim across frontend and backend.
 //
-// Key Principles:
-// - GROWS WITH REAL USAGE: every field here is one the code actually reads somewhere —
-//   this file is kept faithful to the data, not speculatively broadened.
-// - WIRE-FAITHFUL NAMING: a field mirrors its actual persisted/wire name (e.g. `cat`,
-//   `redu`, `maint`) rather than a "nicer" alias, so there is exactly one name for a piece
-//   of data as it crosses the network/storage boundary — no translation layer to keep in
-//   sync on both sides.
+// Architecture & Data Flow:
+// 1. Storage & Wire Model: BookingData and ServerData represent the persisted state stored
+//    in SQLite on the server and synchronized to the browser via `/api/state` and SSE push.
+// 2. Resource Hierarchy: Machines belong to Groups (e.g. "Fräsen", "Drehen") and Categories
+//    ('maschine' | 'messtechnik').
+// 3. Grid Coordinates: Bookings are indexed in a 2D map: bookings[machineId][isoDate] = Booking.
+// 4. Runtime Store: AppState represents the complete client-side application state,
+//    combining server data with local UI filters, pagination, and user preferences.
 //
 // =======================================================================================
 
 /**
- * A maintenance or defect window on a machine.
- * `from`/`until` are inclusive ISO date strings ('YYYY-MM-DD'); an empty or absent bound
- * means open-ended on that side (no start limit, or no end limit, respectively).
+ * A scheduled maintenance or defect window on a machine.
+ *
+ * Date Bounds:
+ * - `from` and `until` are inclusive ISO date strings ('YYYY-MM-DD').
+ * - An empty or omitted bound represents an open-ended window (no start or end date).
  */
 export interface MaintSlot {
-  /** Free-form status, e.g. 'wartung' | 'defekt' — preserved verbatim from the data. */
+  /** The status/type label, e.g. 'wartung' (maintenance) or 'defekt' (breakdown). */
   type: string;
+  /** Start date of maintenance in ISO format 'YYYY-MM-DD'. */
   from?: string;
+  /** End date of maintenance in ISO format 'YYYY-MM-DD'. */
   until?: string;
+  /** Optional descriptive note or reason for the maintenance. */
   note?: string;
 }
 
-/** Explicit domain alias for `MaintSlot`, for call sites that prefer the fully-spelled name. */
+/** Explicit domain alias for MaintSlot. */
 export type MaintenanceSlot = MaintSlot;
 
-/** A bookable resource — a machine or a measurement device ('messtechnik'). */
+/**
+ * A bookable resource (machine or measurement device).
+ */
 export interface Machine {
+  /** Unique, URL-safe identifier (e.g. 'dmu-50' or 'm_k8f92a'). */
   id: string;
+  /** Display name shown in UI headers and table rows (e.g. "5-Achs Fräse DMU 50"). */
   name: string;
+  /** Group / department name (e.g. "Fräsen", "Drehen", "Messtechnik"). */
   group: string;
-  /** 'messtechnik' marks a measurement device; absent or anything else means 'maschine'. */
+  /** Category marker: 'messtechnik' for measurement tools; absent defaults to 'maschine'. */
   cat?: string;
-  /** 7-char Mo..So availability mask ('1' = available). Absent = available every day. */
+  /** 7-character Mo..So availability mask ('1' = available, '0' = off). */
   days?: string;
-  /** Structured maintenance slots (the newer form). */
+  /** Structured maintenance and defect date ranges. */
   maint?: MaintSlot[];
-  /** Redundancy marker (label only — a free-form note the machine-form save writes). */
+  /** Redundancy marker label used for machine substitution in the Assistant. */
   redu?: string;
-  /** Legacy single-status form; synthesized into a MaintSlot when no `maint` array exists. */
+  /** Legacy single-status field; synthesized into maint when maint is missing. */
   status?: string;
   statusFrom?: string;
   statusUntil?: string;
   statusNote?: string;
+  /** Free-form descriptive information or notes about the machine. */
   info?: string;
 }
 
-/** A machine's resource category, as returned by `core/machines.ts`'s `getMachineCategory`. */
+/** Resource category identifier: 'maschine' (production machine) or 'messtechnik' (measurement). */
 export type MachineCategory = 'messtechnik' | 'maschine';
 
-/** A single booked day: who booked it (and when it was written). */
+/**
+ * A single booked cell representing a machine reservation on a specific calendar day.
+ */
 export interface Booking {
+  /** Name of the person who booked the cell. */
   name: string;
+  /** ISO timestamp when the reservation was created. */
   ts?: string;
-  /** Optional note carried on the cell (doubles as the group title source). */
+  /** Optional description or project note for this booking. */
   note?: string;
-  /** Booking-group id, shared by every cell created in one multi-cell/titled action. */
+  /** Booking group ID, shared across multiple cells booked together. */
   gid?: string;
-  /** Booking-group title (present only on grouped cells that were given a title). */
+  /** Optional title for the entire booking group (e.g. "Projekt Alpha"). */
   gtitle?: string;
 }
 
-/** One machine's bookings, keyed by ISO date 'YYYY-MM-DD'. */
+/** A single machine's bookings, indexed by ISO date ('YYYY-MM-DD'). */
 export type MachineBookings = Record<string, Booking>;
 
-/** All bookings, keyed by machine id → that machine's bookings. */
+/** Full matrix of all bookings across all machines: `bookings[machineId][isoDate] = Booking`. */
 export type Bookings = Record<string, MachineBookings>;
 
-/** The subset of app state the pure booking/weekend logic reads. */
+/**
+ * The core domain dataset required for calendar computations and business rules.
+ */
 export interface BookingData {
   machines: Machine[];
   bookings: Bookings;
 }
 
-/** One audit-log line the client keeps in memory (newest first, capped at 500). */
+/**
+ * An audit log entry recording a user action (e.g. booking, deletion, machine edit).
+ */
 export interface LogEntry {
   ts: string;
   user: string;
@@ -87,55 +106,51 @@ export interface LogEntry {
 }
 
 /**
- * The team-wide state mirrored from `/api/state`.
- *
- * How it maps onto the wire: the server sends `{ rev, groups, machines, bookings }`; the
- * client then normalizes `revision = rev || 0` and carries its own in-memory `log` on top
- * (see legacy `loadState`). Kept faithful to that shape.
+ * The authoritative dataset received from the server (`/api/state`).
  */
 export interface ServerData extends BookingData {
+  /** Ordered list of distinct group names. */
   groups: string[];
-  /** Server's monotonic revision under its wire name; present on server responses. */
+  /** Monotonic revision number from the server used for optimistic concurrency control. */
   rev?: number;
-  /** Client-normalized revision (`= rev || 0`). */
+  /** Normalized client revision number. */
   revision: number;
+  /** In-memory audit log entries (newest first, capped at 500). */
   log: LogEntry[];
 }
 
 /**
- * The complete frontend runtime state — the object legacy code knows as the global `S`.
- *
- * Ownership: the store (`web/js/state.ts`) owns this object; `app.ts` bridges it as
- * `window.S` during the strangler transition. Kept faithful to legacy `S`
- * (ARCHITECTURE §14 D4); the FS-era `lastRaw` field was removed in Phase 5.2 with the
- * rest of the file-backed dead code.
+ * The complete frontend application runtime state managed by the reactive Store.
  */
 export interface AppState {
-  /** Server data (`/api/state`); `null` until the first load completes. */
+  /** Server data payload; null until the initial load completes. */
   data: ServerData | null;
+  /** When true, editing actions are disabled (e.g. for guest / read-only views). */
   readOnly: boolean;
+  /** Current user's name entered in the UI. */
   user: string;
-  /** Monday of the currently displayed week block (a local-calendar `Date`). */
+  /** Monday of the currently focused week block. */
   startMonday: Date;
-  /** Base weeks shown; further weeks auto-append while scrolling right. */
+  /** Number of base weeks visible on the screen. */
   weeks: number;
+  /** Additional weeks appended dynamically during infinite horizontal scrolling. */
   extraWeeks: number;
-  /** Machine-id filter (empty = all). */
+  /** Filter: selected machine IDs (empty Set = show all). */
   machSel: Set<string>;
-  /** Group filter (empty = all). */
+  /** Filter: selected group names (empty Set = show all). */
   groupsSel: Set<string>;
-  /** Visible top-level categories, e.g. 'maschine' | 'messtechnik'. */
+  /** Filter: visible top-level categories (e.g. 'maschine', 'messtechnik'). */
   cats: Set<string>;
-  /** Collapsed group ids. */
+  /** Collapsed group names. */
   collapsed: Set<string>;
-  /** Person filter (highlight). */
+  /** Filter: person name highlight. */
   person: string;
-  /** Show only this person's rows. */
+  /** Filter: when true, hides all rows not booked by the selected person. */
   personOnly: boolean;
-  /** Favorite machine ids. */
+  /** Set of favorite machine IDs pinned for quick navigation. */
   favs: Set<string>;
-  /** Currently rendered machine ids (rows). */
+  /** IDs of currently visible machine rows in top-to-bottom rendering order. */
   visM: string[];
-  /** Currently rendered dates (columns), ISO 'YYYY-MM-DD'. */
+  /** ISO dates of currently visible calendar day columns in left-to-right order. */
   visD: string[];
 }

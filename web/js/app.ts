@@ -1,31 +1,17 @@
 // =======================================================================================
-// APPLICATION ENTRY POINT (web/js/app.ts)
+// APPLICATION BOOT & ORCHESTRATION MODULE (web/js/app.ts)
 // =======================================================================================
 //
-// The application's ES-module entry point: boot/orchestration.
-// This module:
-// 1. Hydrates the runtime state and mounts the app's React roots.
-// 2. Wires the few remaining imperative DOM handlers (toolbar buttons, user chip, theme).
-// 3. Loads the initial server state and starts the app (or shows a connection-failed screen).
+// Primary entry point for the browser application.
 //
-// Key Principles:
-// - RUNS ONCE, EARLY: `index.html` loads this as `type="module"`, so it executes once,
-//   after parsing, before anything else on the page.
-// - MINIMAL WINDOW BRIDGE: a small `window`-bridge remains below (`declare global`/
-//   `Object.assign`) for two genuinely still-current needs — (1) the runtime state itself
-//   (`S`, shrinking as F9's remaining call sites migrate to importing `store` directly) and
-//   (2) `mutate`/`askConfirm`, kept as a deliberate convenience for their very wide fan-out
-//   across already-gated components (not a coupling problem — see their own modules).
-// - NOT A SHARED-TREE PROBLEM: what looked like "the 4 independently-mounted React roots
-//   (Grid, ContextMenu, the two filter dropdowns) need to talk to each other" turned out on
-//   closer inspection (F8, ARCHITECTURE_AUDIT.md) to be ordinary ES-module coupling with
-//   nothing tree-shaped about it: plain direct imports for the vast majority, an injected
-//   `GridInteractionHandlers` struct (`ui/grid-interaction.ts`) for the handful of cases
-//   where direct imports would cycle, and a tiny `ui/grid-render-bridge.ts` for the one case
-//   (repainting the mounted Grid) that imperative, non-React modules genuinely need a live
-//   registration slot for. Merging the roots into one tree was rejected: nothing here
-//   actually needed shared-tree machinery (context, refs across siblings) — every component
-//   already reads the same module-singleton `store` regardless of where it's mounted.
+// Boot Sequence & Responsibilities:
+// 1. Store Initialization: Connects the global store instance and binds reactive render triggers.
+// 2. React UI Mounting: Mounts the interactive Calendar Grid, Context Menu, and Filter Dropdowns.
+// 3. Global Event Handlers: Initializes grid interactions (marquee selection, keyboard navigation,
+//    drag-select, infinite horizontal scrolling, column resizing, and theme switching).
+// 4. Toolbar Action Wiring: Binds modal dialog openers (Assistant, Statistics, Admin, Logs, Settings).
+// 5. Server Synchronization: Fetches initial dataset from `/api/state`, starts Server-Sent Events (SSE)
+//    for live multi-user synchronization, and reveals the interactive UI.
 //
 // =======================================================================================
 
@@ -68,50 +54,31 @@ import { triggerGridRender } from './ui/grid-render-bridge.ts';
 
 declare global {
   interface Window {
-    /** Legacy compat bridge for the runtime state (ARCHITECTURE §14). It IS `store.state`
-     *  — the same object reference. Only shrinks as legacy sites migrate to `store`. */
+    /** Global reference to the application state store. */
     S: AppState;
-    /** Trigger a store notify. Dead as an actual call target since F9 completed (every
-     *  migrated module calls `store.notify()` directly) — kept assigned as a working no-op
-     *  fallback rather than deleted outright, since several component tests still wire it
-     *  defensively as a safety net for "did something still call the old bridge". */
+    /** Triggers a reactive store notification to repaint all subscribed UI views. */
     notify: () => void;
-    /** Bridged from ui/mutate.ts (Phase 7 slice B10f) — the single authoritative write path
-     *  (CLAUDE.md): applies `fn` to the in-memory `S.data` synchronously, logs the action,
-     *  repaints (patch or full), then persists to the server in the background. Returns
-     *  `fn`'s own result (or `null` in read-only mode). Deliberately kept window-bridged
-     *  rather than direct-imported (F8, ARCHITECTURE_AUDIT.md): dozens of call sites across
-     *  already-gated components, a separate convenience tradeoff from the cross-module
-     *  coupling F8 investigated. */
+    /**
+     * Authoritative write pipeline: applies optimistic mutation locally, updates UI immediately,
+     * and persists changes to the backend in the background with automatic conflict detection.
+     */
     mutate: (
       fn: (fresh: BookingData) => unknown,
       logAction: string,
     ) => Promise<MutateResult | null>;
-    /** Bridged from ui/confirm.ts (Phase 7 slice B10c); called by every "delete more"/
-     *  destructive-action confirmation across the app (B4/B6/B7/B10b) — same "many call
-     *  sites, deliberate convenience" reasoning as `mutate` above. */
+    /** Opens an interactive modal confirmation prompt before destructive operations. */
     askConfirm: (options: AskConfirmOptions) => Promise<boolean>;
   }
 }
 
-// Bridge onto the global scope only the two functions with a genuine remaining reason to be
-// reached via `window` rather than a direct import — see the file header and each one's own
-// doc comment above. Everything else that used to live here (F8, ARCHITECTURE_AUDIT.md) is
-// now a direct import between the modules that actually need it.
+// Attach write and confirm utilities to window for global convenience across UI components
 Object.assign(window, confirm);
 Object.assign(window, mutateModule);
 
-// `store` (imported above from `./store-instance.ts`) already holds the hydrated state —
-// `window.S` bridges the same object reference for the pieces that haven't migrated to
-// importing `store` directly yet (mostly React components — a separate, later decision,
-// ARCHITECTURE_AUDIT.md §7/F9).
+// Bridge store state reference to window.S
 window.S = store.state;
 
-// The store drives repaints: the Grid's force-update trigger (registered with
-// `ui/grid-render-bridge.ts` on mount) subscribes here, and the data-load/SSE paths call the
-// bridged `notify()` instead of triggering a render directly, so those repaints flow through
-// the store (SSE/refresh → store change → notify → render). The guard preserves the original
-// invariant that the grid never renders before the first data load.
+// Subscribe the Grid renderer to store updates: triggers a repaint whenever server data or filters change
 store.subscribe(() => {
   if (store.get('data')) triggerGridRender();
 });
@@ -119,11 +86,7 @@ window.notify = () => {
   store.notify();
 };
 
-// Phase 7 slice B1 — the grid itself is now a React component (`ui/components/Grid.tsx`),
-// mounted once here onto the `<table id="grid">` legacy already renders into (it manages
-// `#grid`'s `<thead>`/`<tbody>` directly, replacing the empty ones from index.html). Its own
-// mount effect registers with `ui/grid-render-bridge.ts`, so the store subscription just
-// above keeps driving it exactly as it drove legacy's `render()` before this slice.
+// Mount primary React interface roots
 createRoot(document.getElementById('grid')!).render(createElement(gridComponent.Grid));
 createRoot(document.getElementById('ctxMenu')!).render(createElement(contextMenu.ContextMenu));
 createRoot(document.getElementById('machDrop')!).render(
@@ -133,12 +96,7 @@ createRoot(document.getElementById('groupDrop')!).render(
   createElement(groupFilterDropdown.GroupFilterDropdown),
 );
 
-// Phase 7 slice B2 — selection, drag-select and keyboard navigation (`ui/grid-interaction.ts`).
-// Wired once at boot, same as legacy's own top-level `gridEl.addEventListener(...)` calls did;
-// event delegation means it doesn't matter that the React grid mounted just above hasn't
-// necessarily painted its rows yet. The handlers it hands booking actions off to are injected
-// here (F8, ARCHITECTURE_AUDIT.md) rather than reached through `window` — app.ts already
-// imports every module involved with no cycle risk of its own.
+// Initialize grid user interactions: cell selection, context menu, favorite machine navigation
 gridInteraction.initGridInteraction({
   showCtx: contextMenu.showCtx,
   hideCtx: contextMenu.hideCtx,
@@ -149,21 +107,13 @@ gridInteraction.initGridInteraction({
   prependWeek: gridScroll.prependWeek,
 });
 
-// Phase 7 slice B3 — infinite scroll / week growth and the month-jump controls
-// (`ui/grid-scroll.ts`). Wired once at boot, same as legacy's own top-level
-// `gridWrap.addEventListener(...)`/`.onchange=`/`.onclick=` assignments did.
+// Initialize infinite horizontal scrolling, date jumping, collision banners, debug logs, and column resizing
 gridScroll.initGridScroll();
-
-// Phase 7 slice B8 — the write-collision banner's dismiss button (`ui/collision-banner.ts`).
-// Wired once at boot, same as legacy's own top-level `document.getElementById('collOk')
-// .onclick=...` assignment did.
 collisionBanner.initCollisionBanner();
 debugPanel.initDebugPanel();
 columnResize.initColumnResize();
 
-// Phase 7 slice B10g — the app's own theme/compact-mode boot init (legacy's top-level
-// `applyTheme(); matchMedia(...).addEventListener(...); if(mb_compact==='on') ...`). Applied
-// before the first paint, same as legacy — no flash of the wrong theme.
+// Initialize theme styling (light/dark mode & compact grid option)
 theme.applyTheme();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
   theme.applyTheme();
@@ -171,8 +121,9 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
 });
 if (localStorage.getItem('mb_compact') === 'on') document.body.classList.add('compact');
 
-/** Wires each toolbar button to open its own modal, plus the refresh button — one-time
- *  bindings done at boot, since these elements exist for the app's entire lifetime. */
+/**
+ * Wires toolbar buttons to open their respective modal dialogs.
+ */
 function wireToolbarButtons(): void {
   document.getElementById('btnAssist')!.onclick = assistantModal.openAssistant;
   document.getElementById('btnMine')!.onclick = myBookingsModal.openMyBookings;
@@ -184,8 +135,11 @@ function wireToolbarButtons(): void {
   document.getElementById('btnRefresh')!.onclick = () => void mutateModule.refreshNow(false);
 }
 
-/** Wires the user-name chip: a debounced single click changes the name (so a double-click
- *  doesn't also fire it), a double-click shows who's currently active. */
+/**
+ * Wires the current user chip in the toolbar:
+ * - Single click: Prompt to change user name.
+ * - Double click: Show active online users.
+ */
 function wireUserChip(): void {
   let userClickTimer: ReturnType<typeof setTimeout> | null = null;
   const chip = document.getElementById('userChip')!;
@@ -203,19 +157,19 @@ function wireUserChip(): void {
 wireToolbarButtons();
 wireUserChip();
 
-/** Finishes booting once the initial data load succeeds: reveals the toolbar/grid, primes the
- *  toolbar buttons' labels, prompts for a name on a first run, starts the live connection, and
- *  logs the boot line. */
+/**
+ * Transitions from the loading screen to the live interactive application once data is loaded.
+ */
 function startUI(): void {
   document.getElementById('startScreen')!.style.display = 'none';
-  document.getElementById('toolbar')!.style.display = ''; // CSS layout (Grid) takes over
+  document.getElementById('toolbar')!.style.display = '';
   document.getElementById('gridWrap')!.style.display = 'block';
   groupFilterDropdown.fillGroupSel();
-  machineFilterDropdown.updateMachBtn(); // show the persisted filter in the toolbar
+  machineFilterDropdown.updateMachBtn();
   if (!store.get('user') && !store.get('readOnly')) askUserNameModal.askUserName(true);
   userChip.updateUserChip();
   store.notify();
-  gridScroll.prependWeek(); // one week of past scroll buffer to the left
+  gridScroll.prependWeek();
   gridScroll.centerToday();
   mutateModule.stampRef();
   debugPanel.applyDebug();
@@ -226,20 +180,15 @@ function startUI(): void {
       ' Maschinen geladen' +
       (store.get('readOnly') ? ' (Nur-Lese-Modus)' : ''),
   );
-  // Auto-refresh + presence (registered exactly once, even if read-only mode is later lifted).
   if (!store.get('readOnly')) liveConnection.startLiveTimers();
 }
 
 /**
- * The real boot entry point: loads the initial state, then either finishes booting
- * ({@link startUI}) or shows a connection-failed message.
+ * Main application bootloader: fetches server state and initializes the workspace.
  */
 async function init(): Promise<void> {
   document.getElementById('startScreen')!.style.display = 'none';
   try {
-    // Silent — startUI() (called below on success) does its own DOM setup first and
-    // notifies once, at its current spot; notifying here too would render the grid a beat
-    // early, while the toolbar/gridWrap are still hidden (display:none).
     store.state.data = await api.readFile();
   } catch (error) {
     document.getElementById('startScreen')!.style.display = '';

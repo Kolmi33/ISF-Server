@@ -2,23 +2,13 @@
 // STORE INSTANCE MODULE (web/js/store-instance.ts)
 // =======================================================================================
 //
-// The app's single, module-singleton `Store` instance.
-// This module:
-// 1. Reads device-local prefs from `localStorage` and today's date into the initial state.
-// 2. Creates and exports the one `store` every other module imports and shares.
+// Application-wide singleton instance of the reactive Store.
 //
-// Key Principles:
-// - SINGLE SOURCE OF TRUTH: split out from `app.ts` (the boot/orchestration entry) so plain
-//   `.ts` modules can import `store` directly and read/write state through
-//   `store.get()`/`store.set()`/`store.notify()`, instead of reaching through the
-//   `window.S`/`window.notify()` bridge. `app.ts` still does `window.S = store.state` for
-//   the pieces that haven't migrated yet (mostly React components — a separate, later
-//   decision, ARCHITECTURE_AUDIT.md §7/F9) — both read the same live object, so the two
-//   stay in sync automatically.
-// - HYDRATION LIVES HERE, NOT IN state.ts: `state.ts`'s `createStore` stays pure/DOM-free
-//   on purpose (D3/E4) — it never does its own impure hydration. Reading `localStorage`
-//   and `new Date()` is this module's job specifically because it's the one place that's
-//   allowed to be impure.
+// Responsibilities:
+// 1. LocalStorage Hydration: Restores user preferences, active filters, selected categories,
+//    collapsed groups, and favorite machine lists on page boot.
+// 2. Calendar Initialization: Anchors the initial view to Monday of the current week.
+// 3. Singleton Export: Exports the shared `store` instance used by all UI components and views.
 //
 // =======================================================================================
 
@@ -26,13 +16,16 @@ import type { AppState } from '../../shared/types.ts';
 import { mondayOfDate } from '../../shared/dates.ts';
 import { createStore } from './state.ts';
 
+/**
+ * Safely parses a JSON array from localStorage into a Set of strings, with fallback.
+ */
 function jsonSet(key: string, defaultJson: string): Set<string> {
   return new Set<string>(JSON.parse(localStorage.getItem(key) || defaultJson));
 }
 
-/** Builds the initial runtime state from device-local prefs (`localStorage`) plus this
- *  week's Monday — every filter/collapse/favorite selection the user made last time
- *  persists across a page reload, while the visible week always starts fresh at "today". */
+/**
+ * Hydrates the initial `AppState` object from localStorage and the current wall clock time.
+ */
 function hydrateState(): AppState {
   return {
     data: null,
@@ -53,4 +46,7 @@ function hydrateState(): AppState {
   };
 }
 
+/**
+ * The application's reactive store singleton.
+ */
 export const store = createStore(hydrateState());

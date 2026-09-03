@@ -2,30 +2,21 @@
 // BOOKING DOMAIN MODULE (web/js/core/bookings.ts)
 // =======================================================================================
 //
-// Pure domain logic for bookings (the grid's cells).
-// This module provides:
-// 1. Read-only queries (looking up a cell, finding a same-name run of workdays, collecting
-//    every cell in a booking group).
-// 2. Write-path reducers (booking cells, deleting cells — by clicked cell, by owner, by
-//    marquee selection, or by whole group — each one sweeping any weekend bridge day its
-//    deletion orphaned; see `sweepWeekends` below).
+// Pure domain logic for cell reservations (bookings) on the schedule grid.
 //
-// Key Principles:
-// - PURE FUNCTIONS: the reducers take the FRESH server data and mutate it in place,
-//   returning the same `{abort}` / `{conflicts}` / `{count,undo}` / `{deletedCount,undo}`
-//   shapes the current React components (`BookingForm.tsx`, `BookingDetailModal.tsx`,
-//   `MyBookingsModal.tsx`, `ContextMenu.tsx`) already expect from `window.mutate`.
-// - INJECTED IMPURITIES: the two non-deterministic inputs booking-apply needs — the
-//   wall-clock timestamp and the group-id factory — are passed in as `BookOptions` fields
-//   rather than read from `Date.now()`/a random-id call directly, so the reducers stay
-//   deterministic functions of their inputs and are trivially unit-testable.
-// - DOMAIN LOGIC LIVES IN core/, NOT ui/: this module has no DOM dependency, so it's
-//   exhaustively unit-tested here rather than only exercised through a production-write
-//   browser smoke test (ARCHITECTURE §15).
-// - WEEKEND BRIDGING LIVES HERE, NOT IN ITS OWN FILE: `sweepWeekends` is only ever called
-//   from this module's own delete reducers (four call sites, no other consumer) — it's an
-//   internal rule of the booking domain, not a separate domain, so it belongs in the same
-//   file rather than a single-purpose module one import hop away (PRINCIPLES.md E10).
+// Responsibilities:
+// 1. Read-Only Queries: Looking up individual cells, detecting continuous same-name booking runs,
+//    and resolving multi-cell booking groups.
+// 2. Write-Path Reducers: Creating new bookings and executing targeted deletions (single cell,
+//    user's own cells, marquee selection, or entire booking group).
+// 3. Automated Weekend Sweep: Pruning orphaned Saturday/Sunday bridge days when their surrounding
+//    Friday or Monday bookings are removed.
+// 4. Undo Journaling: Generating deterministic undo records for every applied cell modification.
+//
+// Invariants & Business Rules:
+// - Determinism: Timestamps and group ID generators are injected via BookOptions for reproducible tests.
+// - Concurrency Protection: Mutations never overwrite existing bookings silently unless explicitly instructed.
+// - Availability Enforcement: Bookings cannot be placed on days blocked by maintenance or excluded by weekday masks.
 //
 // =======================================================================================
 
@@ -44,61 +35,81 @@ import {
 } from '../../../shared/dates.ts';
 
 // ---------------------------------------------------------------------------------------
-// 1. Types
+// 1. Types & Domain Interfaces
 // ---------------------------------------------------------------------------------------
 
-/** A cell change, with the previous value for undo (`null` = the cell was empty). */
+/**
+ * An undo record capturing the previous state of a single cell (`prev: null` if previously empty).
+ */
 export interface CellUndo {
   machineId: string;
   date: string;
   prev: Booking | null;
 }
 
-/** A day that could not be booked: already taken, or blocked by maintenance. */
+/**
+ * Represents a scheduling conflict where a requested cell cannot be booked.
+ */
 export interface Conflict {
   machineId: string;
   date: string;
+  /** Reason for conflict: name of the existing booker, or maintenance/defect description. */
   by: string;
 }
 
-/** The impure inputs + user-entered fields the booking apply needs. */
+/**
+ * Form values and runtime options supplied to bookCells.
+ */
 export interface BookOptions {
+  /** Name of the person booking the machine. */
   name: string;
+  /** Optional cell note. */
   note: string;
-  /** Group title (also the note source in the legacy form); non-empty forces a group. */
+  /** Optional booking group title (e.g. project name). Non-empty forces group creation. */
   title: string;
-  /** When true, book the free days and skip the conflicting ones instead of aborting. */
+  /** If true, successfully books all free days while skipping conflicting ones instead of aborting. */
   skipConflicts: boolean;
-  /** Injected clock: the ISO timestamp stamped on every created cell. */
+  /** Injected ISO timestamp stamped onto each created cell. */
   ts: string;
-  /** Injected id factory: called once, only when the action forms a booking group. */
+  /** Factory producing unique group IDs when booking multiple cells or a titled group. */
   newGid: () => string;
 }
 
-/** The result of {@link bookCells}: a conflict abort, or the applied count + undo. */
+/**
+ * Result returned by bookCells.
+ */
 export interface BookResult {
+  /** True if the operation was aborted due to conflicts. */
   abort?: boolean;
+  /** List of detected booking conflicts when abort is true. */
   conflicts?: Conflict[];
+  /** Total number of cells successfully written. */
   count?: number;
+  /** List of undo records for rollback support. */
   undo?: CellUndo[];
 }
 
-/** A cell address (machine + ISO date) for the selection delete. */
+/**
+ * Direct reference to a cell coordinates (machine ID + ISO date).
+ */
 export interface CellRef {
   machineId: string;
   date: string;
 }
 
-/** Every cell (across every machine) sharing booking-group id `gid`, plus which machines and
- *  dates that spans — the shape a booking's detail view needs to show "this group covers 3
- *  machines over 5 workdays". */
+/**
+ * Represents a resolved multi-cell booking group spanning multiple machines and dates.
+ */
 export interface BookingGroup {
+  /** All machine IDs involved in this group. */
   machineIds: Set<string>;
-  /** Every date in the group, sorted ascending. */
+  /** Chronologically sorted list of all dates included in this group. */
   dates: string[];
 }
 
-/** An orphaned weekend day `sweepWeekends` removed, with the previous value for undo. */
+/**
+ * An undo record for an orphaned weekend bridge day removed by sweepWeekends.
+ */
 export interface WeekendUndo {
   machineId: string;
   date: string;
@@ -106,13 +117,13 @@ export interface WeekendUndo {
 }
 
 // ---------------------------------------------------------------------------------------
-// 2. Queries (read-only)
+// 2. Read-Only Queries
 // ---------------------------------------------------------------------------------------
 
-/** The booking on `machineId` for `isoDate`, or undefined if that cell is free. Moved here
- *  from `ui/grid.ts` (a rendering module) — it's a plain data lookup with no DOM/rendering
- *  involvement, used by several components that have nothing to do with grid rendering
- *  (ARCHITECTURE_AUDIT.md F6). */
+/**
+ * Looks up the booking at `machineId` on `isoDate`.
+ * Returns the Booking object or undefined if the cell is unoccupied.
+ */
 export function getBooking(
   bookings: Bookings,
   machineId: string,
@@ -122,16 +133,13 @@ export function getBooking(
 }
 
 /**
- * Finds the contiguous run of workdays, centered on `isoDate`, that `machineId` has booked
- * under the same `name` — weekends don't break the run (they're simply skipped over), but a
- * gap of any other kind (a different booker, or a free/blocked day) does.
+ * Finds the contiguous sequence of workdays booked by the same person centered around `isoDate`.
  *
- * How it works:
- * 1. Starts the run at `isoDate` itself.
- * 2. Walks backward one workday at a time (via `previousWeekday`, so weekends are
- *    transparently skipped), extending the run while the same `name` booked that day too.
- * 3. Walks forward the same way from `isoDate`.
- * 4. Returns the whole run in chronological order.
+ * Algorithm:
+ * 1. Starts at `isoDate`.
+ * 2. Walks backward workday-by-workday (skipping weekends) as long as the cell belongs to `name`.
+ * 3. Walks forward workday-by-workday as long as the cell belongs to `name`.
+ * 4. Returns the full chronological array of date strings.
  */
 export function findSameNameWorkdayRun(
   bookings: Bookings,
@@ -161,8 +169,9 @@ export function findSameNameWorkdayRun(
   return run;
 }
 
-/** Collects every cell sharing booking-group id `groupId`, across every machine — walks the
- *  full `bookings` map once, recording each machine/date pair whose cell carries that `gid`. */
+/**
+ * Resolves all cells belonging to a specific booking group ID (`groupId`) across all machines.
+ */
 export function findBookingGroup(bookings: Bookings, groupId: string): BookingGroup {
   const machineIds = new Set<string>();
   const dates = new Set<string>();
@@ -179,13 +188,12 @@ export function findBookingGroup(bookings: Bookings, groupId: string): BookingGr
 }
 
 /**
- * Checks `machineIds` × `dates` against the fresh data for conflicts.
+ * Scans a matrix of `machineIds` × `dates` for potential scheduling conflicts.
  *
- * How it works, per machine/date pair:
- * 1. An unavailable weekday (per that machine's `days` mask) is silently skipped — not a
- *    conflict, since the caller never intended to book on a day the machine doesn't work.
- * 2. A day blocked by maintenance/defect IS a conflict, labeled with the block reason.
- * 3. A day already booked by someone else is a conflict, labeled with their name.
+ * Evaluation Rules:
+ * 1. Days where the machine is non-operational per its weekday mask are silently skipped.
+ * 2. Days blocked by maintenance or defect are flagged as conflicts with the maintenance note.
+ * 3. Days already booked by another reservation are flagged as conflicts with the booker's name.
  */
 function findBookingConflicts(
   freshServerData: BookingData,
@@ -198,7 +206,7 @@ function findBookingConflicts(
     if (!machine) continue;
     const machineBookings = freshServerData.bookings[machineId] || {};
     for (const date of dates) {
-      if (!isMachineAvailableOnWeekday(machine, date)) continue; // unavailable weekdays are silently skipped
+      if (!isMachineAvailableOnWeekday(machine, date)) continue;
       if (isMachineBlockedOnDate(machine, date)) {
         conflicts.push({
           machineId,
@@ -214,15 +222,12 @@ function findBookingConflicts(
 }
 
 // ---------------------------------------------------------------------------------------
-// 3. Mutations (write-path reducers)
+// 3. Write-Path Reducers (Mutations)
 // ---------------------------------------------------------------------------------------
 
 /**
- * Writes the bookable `dates` on one machine (`buildCell` builds a fresh cell each time it's
- * called, so every written cell gets its own object). A date is silently skipped — not
- * written, not counted, not an error — when the cell is already taken, blocked, or the
- * machine doesn't work that weekday; `bookCells`'s own conflict check has already decided
- * whether skipping is acceptable before this function ever runs.
+ * Writes new booking cells for a single machine across valid dates.
+ * Skips dates that are already booked, blocked by maintenance, or non-operational on that weekday.
  */
 function writeMachineCells(
   freshServerData: BookingData,
@@ -234,7 +239,6 @@ function writeMachineCells(
     freshServerData.bookings[machine.id] || {});
   const undo: CellUndo[] = [];
   for (const date of dates) {
-    // Never overwrite an existing cell, and respect blocks + unavailable weekdays.
     if (
       machineBookings[date] ||
       isMachineBlockedOnDate(machine, date) ||
@@ -248,7 +252,9 @@ function writeMachineCells(
   return undo;
 }
 
-/** Build the fields for a newly booked cell, given the current booking's shared gid/title. */
+/**
+ * Constructs a cell factory function that attaches shared group attributes (gid, gtitle) to new cells.
+ */
 function buildBookingCellFactory(
   options: Pick<BookOptions, 'name' | 'note' | 'ts'>,
   groupId: string | null,
@@ -266,13 +272,7 @@ function buildBookingCellFactory(
 }
 
 /**
- * Writes the free cells into `freshServerData` and returns the applied count + undo records.
- *
- * How it works:
- * 1. Decides whether this action needs a shared group id: more than one cell (several
- *    machines and/or days) OR an explicit title makes it a group, even a single cell with
- *    a title.
- * 2. Builds one cell factory (shared gid/title baked in) and applies it per machine.
+ * Applies bookings across multiple machines and dates in memory, generating group IDs when applicable.
  */
 function applyBooking(
   freshServerData: BookingData,
@@ -294,14 +294,12 @@ function applyBooking(
 }
 
 /**
- * Books `dates` on every machine in `machineIds`.
+ * Books `dates` across `machineIds`.
  *
- * How it works:
- * 1. Checks for conflicts against the fresh data first.
- * 2. If any conflicts exist and `skipConflicts` is false, aborts with the conflict list —
- *    nothing is written, so the caller can show the conflicts and let the user decide.
- * 3. Otherwise (no conflicts, or the caller opted to skip them) writes the free cells and
- *    returns the applied count + undo records.
+ * Workflow:
+ * 1. Evaluates all requested cells for scheduling conflicts.
+ * 2. If conflicts exist and `skipConflicts` is false, aborts immediately without modifying state.
+ * 3. If no conflicts exist (or `skipConflicts` is true), writes the cells and returns undo entries.
  */
 export function bookCells(
   freshServerData: BookingData,
@@ -315,22 +313,11 @@ export function bookCells(
 }
 
 /**
- * Removes orphaned Sat/Sun entries for `machineId`: a weekend day survives only while both
- * the Friday before and the Monday after are booked (by anyone). A weekend day belongs in
- * the plan only as part of a continuous Fri→Mon booking series — every delete reducer below
- * calls this on each machine it touched, so removing a Friday or Monday booking also drops
- * the now-orphaned Sat/Sun bridge day next to it.
+ * Removes orphaned weekend entries (Saturday/Sunday) on `machineId`.
  *
- * How it works, for each booked day on the machine:
- * 1. Skips anything that isn't a Saturday or Sunday — this rule only ever removes weekend
- *    entries, never a weekday booking.
- * 2. Finds that weekend day's bridging Friday and Monday (Saturday's Friday is 1 day back
- *    and its Monday 2 days forward; Sunday's Friday is 2 days back and its Monday 1 day
- *    forward).
- * 3. If both bridging days are still booked, the weekend entry stays. Otherwise it's
- *    deleted and recorded as an undo entry.
- *
- * Mutates `freshServerData.bookings[machineId]` in place; returns the removed entries.
+ * Business Rule:
+ * Weekend bookings are only valid as part of a continuous bridge connecting Friday through Monday.
+ * If either Friday or Monday is unbooked, the intervening weekend days are automatically pruned.
  */
 export function sweepWeekends(freshServerData: BookingData, machineId: string): WeekendUndo[] {
   const machineBookings = freshServerData.bookings[machineId];
@@ -354,10 +341,7 @@ export function sweepWeekends(freshServerData: BookingData, machineId: string): 
 }
 
 /**
- * Deletes the given `dates` on `machineId` that belong to `name` (a date not booked under
- * that exact name is left untouched — this only removes what the caller identified as
- * theirs to delete), then sweeps any weekend bridge days the deletion orphaned. Returns the
- * deleted count + undo records, including the swept weekend days.
+ * Deletes cells on `machineId` for `dates` that match `name` exactly, followed by a weekend sweep.
  */
 export function deleteCells(
   freshServerData: BookingData,
@@ -376,14 +360,12 @@ export function deleteCells(
       deletedCount++;
     }
   }
-  undo.push(...sweepWeekends(freshServerData, machineId)); // remove orphaned Sat/Sun bridge days too
+  undo.push(...sweepWeekends(freshServerData, machineId));
   return { deletedCount, undo };
 }
 
 /**
- * Deletes the current user's OWN cells among `dates` on `machineId` (case-insensitive name
- * match against `user` — distinct from {@link deleteCells}, which matches the clicked cell's
- * exact stored name instead of "whoever is currently logged in"), then sweeps.
+ * Deletes the logged-in user's own cells (case-insensitive name match) on `machineId` across `dates`.
  */
 export function deleteOwnCells(
   freshServerData: BookingData,
@@ -408,10 +390,7 @@ export function deleteOwnCells(
 }
 
 /**
- * Deletes the exact cells listed (whichever of them still exist — no name check, so this
- * removes anyone's booking, not just the caller's own), then sweeps each machine in
- * `machineIds`. Used for a marquee-selection bulk delete, where the user has already
- * explicitly selected every cell to remove.
+ * Deletes an explicit list of selected cells regardless of owner (e.g. from marquee selection).
  */
 export function deleteSelectedCells(
   freshServerData: BookingData,
@@ -434,9 +413,7 @@ export function deleteSelectedCells(
 }
 
 /**
- * Deletes every cell belonging to booking-group `groupId` across all machines, then sweeps
- * each machine that lost at least one cell — the "delete the whole group at once" action
- * from a booking's detail view, as opposed to deleting just the one clicked cell.
+ * Deletes all cells across all machines belonging to a booking group (`groupId`), followed by weekend sweep.
  */
 export function deleteGroup(
   freshServerData: BookingData,

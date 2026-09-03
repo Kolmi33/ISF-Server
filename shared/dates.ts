@@ -2,28 +2,18 @@
 // DATE & CALENDAR HELPERS (shared/dates.ts)
 // =======================================================================================
 //
-// Pure date/calendar logic, shared verbatim between the frontend and the backend.
-// This module provides:
-// 1. ISO date string <-> Date conversions (the wire/storage format is always 'YYYY-MM-DD').
-// 2. Calendar arithmetic (adding days, finding Monday-of-week, ISO week numbers).
-// 3. Display formatting (German de-DE date/weekday/timestamp labels for the UI).
+// Pure date and calendar math shared across frontend and backend.
+//
+// Responsibilities:
+// 1. ISO Conversion: Canonical serialization between JavaScript Date and 'YYYY-MM-DD' strings.
+// 2. Calendar Arithmetic: Timezone-safe addition/subtraction of days and weekday index calculations.
+// 3. Grid Positioning: Finding Monday of the current week and ISO 8601 week numbering.
+// 4. Localization: German (de-DE) formatting for UI headers, tooltip labels, and timestamps.
 //
 // Key Principles:
-// - PURE FUNCTIONS: data in, data out — no DOM, no I/O, no global state.
-// - UTC FOR CALENDAR MATH: date arithmetic runs in UTC so it never drifts with the
-//   viewer's timezone; only `mondayOfDate`/`todayAsIsoDateString` intentionally read local
-//   calendar components (they answer "what day is it for the person looking at the
-//   screen right now", which is inherently a local-time question).
-// - ISO STRINGS AS THE WIRE FORMAT: 'YYYY-MM-DD' sorts correctly as a plain string and is
-//   used directly as an object key in `bookings` — no separate id scheme needed.
-//
-// History: this file was originally frontend-only (`web/js/core/dates.ts`). The backend
-// needed the same three primitives (`parseIsoDateString`/`formatDateAsIsoString`/`addDays`)
-// and, having no shared *runtime* module to reach for, grew its own private copies instead
-// (`server/bridge.ts`, then `server/server.ts`) — moved here once that duplication was
-// noticed, since this file imports nothing and has no DOM/browser dependency, making it
-// the one genuinely easy case for real cross-boundary sharing (see
-// docs/ARCHITECTURE_AUDIT.md §9/F2 for the fuller history).
+// - UTC-Pinned Math: Calendar arithmetic operates at UTC midnight to avoid daylight saving drifts.
+// - Local Time Anchoring: Functions asking "what day is it today" (`todayAsIsoDateString`,
+//   `mondayOfDate`) use local wall-clock time so the UI opens on the user's current day.
 //
 // =======================================================================================
 
@@ -33,8 +23,8 @@ const WEEKDAY_NAMES = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'] as const;
 type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 /**
- * Formats a Date as its UTC calendar day, 'YYYY-MM-DD'.
- * This is the canonical wire/storage format used everywhere in the app.
+ * Formats a Date as its UTC calendar day in ISO format ('YYYY-MM-DD').
+ * This is the canonical string format used across the database, wire API, and state keys.
  */
 export function formatDateAsIsoString(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -42,8 +32,7 @@ export function formatDateAsIsoString(date: Date): string {
 
 /**
  * Parses an ISO date string ('YYYY-MM-DD') into a Date at UTC midnight of that day.
- * Malformed input (missing/non-numeric parts) produces an `Invalid Date`, not a thrown error —
- * callers that need to reject bad input should validate the string shape themselves first.
+ * Returns an `Invalid Date` object if the string is malformed.
  */
 export function parseIsoDateString(isoDateString: string): Date {
   const [year, month, day] = isoDateString.split('-');
@@ -51,8 +40,8 @@ export function parseIsoDateString(isoDateString: string): Date {
 }
 
 /**
- * Returns a new Date `numberOfDays` calendar days after `date`, computed in UTC. Does not
- * mutate `date` — a negative `numberOfDays` moves backward in time.
+ * Computes a new Date `numberOfDays` calendar days after `date` in UTC.
+ * Negative numbers move backward in time. Does not mutate the input Date.
  */
 export function addDays(date: Date, numberOfDays: number): Date {
   const resultDate = new Date(date);
@@ -61,28 +50,20 @@ export function addDays(date: Date, numberOfDays: number): Date {
 }
 
 /**
- * Re-indexes `date`'s weekday so Monday=0 .. Sunday=6 (native `Date#getUTCDay()` uses
- * Sunday=0..Saturday=6, which doesn't match a Mo..So grid layout).
- *
- * Used wherever a Mo..So layout needs to know which column a date falls in: this file's own
- * `mondayOfDate`/`getIsoWeekNumber`, and machine weekday-availability masks
- * (`core/machines.ts`'s `isMachineAvailableOnWeekday`, `server/model.ts`'s `isDayAvailable`) —
- * both sides of the frontend/backend boundary needed this exact re-indexing independently
- * before it was consolidated here.
+ * Converts a Date into a Monday-first weekday index (Monday=0 .. Sunday=6).
+ * Aligns with the 7-day calendar grid layout and machine availability masks ('1111100').
  */
 export function mondayFirstWeekdayIndex(date: Date): number {
   return (date.getUTCDay() + 6) % 7;
 }
 
 /**
- * Finds the Monday (at UTC midnight) of the ISO week containing `date`.
+ * Finds the Monday of the ISO week containing `date`.
  *
- * How it works:
- * 1. Reads the LOCAL calendar day (not UTC) so "today" matches the viewer's wall clock —
- *    this is one of the two functions in this file that deliberately isn't UTC-pinned.
- * 2. Re-anchors that local day at UTC midnight, so every later date computation on the
- *    result stays timezone-safe.
- * 3. Walks backward by `mondayFirstWeekdayIndex` days to land on that week's Monday.
+ * Logic:
+ * 1. Takes the user's local year, month, and day to respect the viewer's current date.
+ * 2. Anchors that date at UTC midnight for drift-free calculations.
+ * 3. Walks backward by `mondayFirstWeekdayIndex` days to find Monday.
  */
 export function mondayOfDate(date: Date): Date {
   const localCalendarDayAtUtcMidnight = new Date(
@@ -94,33 +75,32 @@ export function mondayOfDate(date: Date): Date {
   );
 }
 
-/** True if `date` falls on a Saturday or Sunday (UTC). */
+/**
+ * Returns true if `date` falls on a Saturday or Sunday in UTC.
+ */
 export function isWeekend(date: Date): boolean {
   const weekday = date.getUTCDay(); // Sunday=0, Saturday=6
   return weekday === 0 || weekday === 6;
 }
 
-/** Formats a Date as 'DD.MM.' in de-DE (UTC) — used for compact grid column labels. */
+/**
+ * Formats a Date as compact German date string ('DD.MM.') for grid column headers.
+ */
 export function formatDateShort(date: Date): string {
   return date.toLocaleDateString('de-DE', { timeZone: 'UTC', day: '2-digit', month: '2-digit' });
 }
 
 /**
- * Formats an ISO timestamp (e.g. a booking's `ts`) as a de-DE date+time label in the
- * viewer's local timezone, e.g. '4.1.2021, 14:30:00'.
- *
- * Unlike the calendar-day formatters in this file, a timestamp is a real instant in time,
- * not a plain calendar day — deliberately NOT UTC-pinned, so it reads as the viewer's own
- * wall-clock time (when a booking was actually written, from wherever they were sitting).
- * Consolidates an identical `new Date(x).toLocaleString('de-DE')` expression that had been
- * written out three times independently across `ui/components/*`
- * (see docs/ARCHITECTURE_AUDIT.md's file-by-file review).
+ * Formats an ISO timestamp into a localized German date and time string in the viewer's timezone
+ * (e.g. '04.01.2026, 14:30:00'). Used in booking detail dialogs and audit logs.
  */
 export function formatTimestamp(isoTimestamp: string): string {
   return new Date(isoTimestamp).toLocaleString('de-DE');
 }
 
-/** Formats an ISO date string as a long de-DE label, e.g. 'Mo., 04.01.2021' (UTC). */
+/**
+ * Formats an ISO date string as a full German date label (e.g. 'Mo., 04.01.2026').
+ */
 export function formatDateLong(isoDateString: string): string {
   return parseIsoDateString(isoDateString).toLocaleDateString('de-DE', {
     timeZone: 'UTC',
@@ -131,7 +111,9 @@ export function formatDateLong(isoDateString: string): string {
   });
 }
 
-/** Returns a Date's German 2-letter weekday abbreviation (UTC): 'So', 'Mo', …, 'Sa'. */
+/**
+ * Returns the German 2-letter weekday abbreviation (UTC): 'So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'.
+ */
 export function formatWeekdayName(date: Date): string {
   return WEEKDAY_NAMES[date.getUTCDay() as WeekdayIndex];
 }
@@ -139,14 +121,10 @@ export function formatWeekdayName(date: Date): string {
 /**
  * Calculates the ISO 8601 week number (1–53) of `date`.
  *
- * How it works (per the ISO 8601 definition of a week number):
- * 1. Finds the Thursday that falls in the same ISO week as `date` — ISO weeks are
- *    identified by the calendar year that contains their Thursday, so anchoring on
- *    Thursday sidesteps every edge case around a week spanning New Year's.
- * 2. January 4th always falls in week 1 of its year (part of the ISO 8601 definition
- *    itself), so it's a fixed, reliable point to count weeks from.
- * 3. Counts whole weeks between the two Thursdays and adds 1 (since January 4th's week
- *    is week 1, not week 0).
+ * ISO 8601 Logic:
+ * 1. Anchors to the Thursday of the same week (which determines the calendar year of the week).
+ * 2. Compares against January 4th of that year (which always falls in ISO Week 1).
+ * 3. Counts the whole number of weeks elapsed between the two Thursdays.
  */
 export function getIsoWeekNumber(date: Date): number {
   const daysUntilThursdayOfThisWeek = 3 - mondayFirstWeekdayIndex(date);
@@ -165,9 +143,7 @@ export function getIsoWeekNumber(date: Date): number {
 }
 
 /**
- * Returns today's LOCAL calendar day as 'YYYY-MM-DD' — the other function in this file
- * that intentionally reads local time rather than UTC, for the same reason as
- * `mondayOfDate`: "today" is a local-time question, not a UTC one.
+ * Returns today's calendar date in the user's local timezone as an ISO string ('YYYY-MM-DD').
  */
 export function todayAsIsoDateString(): string {
   const now = new Date();
@@ -178,8 +154,8 @@ export function todayAsIsoDateString(): string {
 }
 
 /**
- * Lists every weekday (Mon–Fri) as an ISO string from `fromIsoDate` to `toIsoDate`, inclusive.
- * Walks one calendar day at a time, keeping only workdays, until it passes the end date.
+ * Generates an array of all weekday ISO strings (Monday through Friday) in the range [from, to] inclusive.
+ * Skips Saturday and Sunday.
  */
 export function getWeekdaysInRange(fromIsoDate: string, toIsoDate: string): string[] {
   const isoDatesInRange: string[] = [];
@@ -195,8 +171,7 @@ export function getWeekdaysInRange(fromIsoDate: string, toIsoDate: string): stri
 }
 
 /**
- * Lists every calendar day (including weekends) as an ISO string from `fromIsoDate` to
- * `toIsoDate`, inclusive. Same walk as `getWeekdaysInRange`, just without the weekday filter.
+ * Generates an array of all calendar day ISO strings (including weekends) in the range [from, to] inclusive.
  */
 export function getAllDaysInRange(fromIsoDate: string, toIsoDate: string): string[] {
   const isoDatesInRange: string[] = [];
@@ -210,8 +185,8 @@ export function getAllDaysInRange(fromIsoDate: string, toIsoDate: string): strin
 }
 
 /**
- * Finds the next weekday (Mon–Fri) ISO date strictly after `isoDateString`, skipping
- * weekends entirely — Friday's next weekday is the following Monday, not Saturday.
+ * Returns the next business day (Monday–Friday) ISO date strictly after `isoDateString`.
+ * If given Friday, skips the weekend and returns the following Monday.
  */
 export function nextWeekday(isoDateString: string): string {
   let candidateDate = addDays(parseIsoDateString(isoDateString), 1);
@@ -222,8 +197,8 @@ export function nextWeekday(isoDateString: string): string {
 }
 
 /**
- * Finds the previous weekday (Mon–Fri) ISO date strictly before `isoDateString`, skipping
- * weekends entirely — Monday's previous weekday is the preceding Friday, not Sunday.
+ * Returns the previous business day (Monday–Friday) ISO date strictly before `isoDateString`.
+ * If given Monday, skips the weekend and returns the preceding Friday.
  */
 export function previousWeekday(isoDateString: string): string {
   let candidateDate = addDays(parseIsoDateString(isoDateString), -1);

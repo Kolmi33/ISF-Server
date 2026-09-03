@@ -1,46 +1,40 @@
 // =======================================================================================
-// STATE STORE MODULE (web/js/state.ts)
+// REACTIVE STATE STORE MODULE (web/js/state.ts)
 // =======================================================================================
 //
-// The state store — owner of the frontend runtime state (ARCHITECTURE §14).
-// This module provides:
-// 1. `createStore`: builds a store around an injected initial state.
-// 2. A get/set/subscribe/notify API every reader and writer of app state goes through.
+// Reactive central state store for the frontend application.
 //
-// Key Principles:
-// - PURE FACTORY: the initial state is injected (E4) rather than read from
-//   `localStorage`/the DOM directly, so the store is unit-tested in plain Node.
-//   `store-instance.ts` is the one place that actually hydrates the real initial state and
-//   bridges it as `window.S`, the legacy compat alias.
-// - MUTATES IN PLACE: the store mutates its state object in place (`Object.assign`, not a
-//   fresh object per update) so the bridged `window.S` reference legacy code holds stays
-//   valid — a fresh object each time would silently desync the two.
+// Responsibilities:
+// 1. Single Source of Truth: Holds the live `AppState` object containing both server data and local UI state.
+// 2. Read/Write Access: Provides `get` and `set` methods with TypeScript key safety.
+// 3. Reactive Subscriptions: Allows UI components and render triggers to subscribe to state modifications.
+// 4. In-Place Merging: Merges updates via `Object.assign` to maintain object identity across views.
 //
 // =======================================================================================
 
 import type { AppState } from '../../shared/types.ts';
 
-/** A function notified with the current state every time the store changes. */
+/** Callback listener invoked whenever the store state changes. */
 type StateListener = (state: AppState) => void;
 
+/**
+ * Public interface of the reactive store.
+ */
 export interface Store {
-  /** The live state object (bridged as `window.S`; same reference throughout). */
+  /** The live application state object. */
   state: AppState;
+  /** Reads a property from state with strong typing. */
   get<Key extends keyof AppState>(key: Key): AppState[Key];
-  /** Shallow-merge `partialState` into state (in place), then `notify()`. */
+  /** Shallow-merges `partialState` into the state object and triggers a change notification. */
   set(partialState: Partial<AppState>): void;
-  /** Register a subscriber; returns an unsubscribe function. */
+  /** Registers a change listener; returns an unsubscribe function. */
   subscribe(listener: StateListener): () => void;
+  /** Manually notifies all registered listeners with the current state. */
   notify(): void;
 }
 
 /**
- * Builds a `Store` around `initialState`.
- *
- * How it works: `set` shallow-merges its argument into the live state object (in place,
- * not a replacement) then calls `notify`; `notify` simply calls every subscriber with the
- * current state. There's no diffing or batching — a caller that sets several fields in a
- * row and wants only one repaint should call `set` once with all of them together.
+ * Factory function creating a reactive `Store` instance around `initialState`.
  */
 export function createStore(initialState: AppState): Store {
   const state = initialState;

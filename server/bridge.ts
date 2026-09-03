@@ -1,38 +1,36 @@
 // =======================================================================================
-// BRIDGE MODULE (server/bridge.ts)
+// AUTOMATED WEEKEND BRIDGING MODULE (server/bridge.ts)
 // =======================================================================================
 //
-// Server-authoritative weekend auto-bridging: a weekend day (Sat/Sun) belongs in the plan
-// as part of a continuous Fri→Mon series. `core/weekend.ts` already REMOVES orphaned
-// weekend days on the client (the sweep) — this is the mirror, ADDING the Sat/Sun between
-// a booked Friday and a booked Monday, carrying the Friday's name.
+// Automated management of weekend calendar bridge days (Saturday / Sunday).
 //
-// This module provides:
-// 1. `missingBridges` — the pure computation: which weekend days are missing.
-// 2. `maintainBridges` — applies it going forward, inside an already-open mutate transaction.
-// 3. `backfillBridges` — applies it once, in its own transaction, across the whole DB.
+// Domain Rule:
+// When a machine is booked on both Friday and the following Monday, the intervening weekend days
+// (Saturday and Sunday) are automatically populated as bridge reservations carrying the Friday booker's name.
+//
+// Responsibilities:
+// 1. Missing Bridge Computation: Pure detection of missing Saturday/Sunday dates in Fri->Mon runs.
+// 2. Transactional Maintenance: Inserts bridge days inside active mutation transactions (`maintainBridges`).
+// 3. Database Backfill Utility: One-time backfill runner for database migration scripts (`backfillBridges`).
 //
 // =======================================================================================
 import type { Db } from './db.js';
 import { parseIsoDateString, formatDateAsIsoString, addDays } from '../shared/dates.js';
 
-/** The minimal booking view the bridge computation needs: machine id → day → { name }. */
+/** Minimal booking map structure required for bridge evaluation: machineId -> day -> { name }. */
 export type BookingMap = Record<string, Record<string, { name: string }>>;
 
-/** A weekend day to insert, carrying the Friday booking's name. */
+/** Represents a weekend bridge cell to be inserted. */
 export interface Bridge {
   machineId: string;
   day: string;
   name: string;
 }
 
-// JavaScript's Date#getUTCDay(): Sunday=0, Monday=1, ... Saturday=6.
 const FRIDAY_WEEKDAY_NUMBER = 5;
 
 /**
- * The Sat/Sun days that sit inside a continuous Fri→Mon series but are not yet booked.
- * For every booked Friday whose following Monday is also booked (by anyone), the empty
- * Saturday and/or Sunday between them is returned, carrying the Friday's name.
+ * Computes all missing Saturday and Sunday bridge cells across the provided bookings map.
  */
 export function missingBridges(bookings: BookingMap): Bridge[] {
   const missing: Bridge[] = [];
@@ -46,7 +44,6 @@ export function missingBridges(bookings: BookingMap): Bridge[] {
       const sundayIsoDate = formatDateAsIsoString(addDays(fridayDate, 2));
       const mondayIsoDate = formatDateAsIsoString(addDays(fridayDate, 3));
       if (machineBookings[mondayIsoDate]) {
-        // the series runs across the weekend (Monday booked, any person)
         if (!machineBookings[saturdayIsoDate]) {
           missing.push({ machineId, day: saturdayIsoDate, name });
         }
@@ -59,7 +56,9 @@ export function missingBridges(bookings: BookingMap): Bridge[] {
   return missing;
 }
 
-/** Read the bookings (id → day → name) for the given machines into a BookingMap. */
+/**
+ * Loads current bookings for the given machine IDs from SQLite into a BookingMap.
+ */
 function bookingsFor(db: Db, machineIds: readonly string[]): BookingMap {
   const selectBookingsForMachine = db.prepare('SELECT day, name FROM bookings WHERE mid=?');
   const bookingsByMachine: BookingMap = {};
@@ -76,10 +75,8 @@ function bookingsFor(db: Db, machineIds: readonly string[]): BookingMap {
 }
 
 /**
- * Insert any missing weekend bridges for `machineIds` (never overwriting an existing cell),
- * using the given timestamp. Meant to run INSIDE an already-open transaction (the mutate
- * path); returns the bridges inserted so the caller can broadcast them. `ON CONFLICT DO
- * NOTHING` makes it safe even if a day filled concurrently.
+ * Inserts missing weekend bridge days for specified machine IDs within an open transaction.
+ * Returns the array of inserted bridge records.
  */
 export function maintainBridges(db: Db, machineIds: readonly string[], ts: string): Bridge[] {
   if (!machineIds.length) return [];
@@ -93,9 +90,7 @@ export function maintainBridges(db: Db, machineIds: readonly string[], ts: strin
 }
 
 /**
- * One-time backfill: insert every missing weekend bridge across the whole DB in a single
- * transaction (internal SQL — NOT subject to the API's 1000-cell batch cap). Returns the
- * number inserted. This is a production data write when run against live data.
+ * Executes a full database scan and inserts all missing weekend bridges in a single transaction.
  */
 export function backfillBridges(db: Db): number {
   const allMachineIds = (

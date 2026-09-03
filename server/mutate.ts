@@ -1,23 +1,18 @@
 // =======================================================================================
-// MUTATE MODULE (server/mutate.ts)
+// SERVER MUTATION ENGINE (server/mutate.ts)
 // =======================================================================================
 //
-// The SINGLE write path (CLAUDE.md's "one authoritative server write path"). The client
-// sends either a cell-delta (prev+val per cell → compare-and-set; foreign bookings are
-// never overwritten) OR, for management changes, the complete machine/group list. Every
-// input is validated here server-side — the client is NOT trusted (there is no login in
-// front of it).
+// Core server-side write pipeline handling transactional mutations from `/api/mutate`.
 //
-// This module provides:
-// 1. `applyMutate` — the single entry point; dispatches to whichever path below applies.
-// 2. The structural (management) path — replaces the whole machine list in one transaction.
-// 3. The cell-delta (booking/deletion) path — applies a batch of per-cell writes/deletes.
-//
-// Key Principles:
-// - SERVER VALIDATES EVERYTHING: every field from an untrusted client body is clamped,
-//   type-checked, or rejected before it reaches the database.
-// - INJECTED BROADCAST: the SSE `broadcast` sink is a parameter, not a global import, so
-//   the reducer is unit-testable without a live server.
+// Responsibilities:
+// 1. Structural Management Path: Atomically replaces the machine list and group configurations in
+//    a single transaction with orphan cleanup for deleted machines.
+// 2. Cell Delta Path: Executes fine-grained Compare-And-Set (CAS) booking creations and deletions,
+//    enforcing machine availability masks, maintenance blocks, and foreign booking protection.
+// 3. Automated Weekend Bridging: Automatically maintains weekend bridge days (Fri->Mon) on the server.
+// 4. Concurrency Control: Increments monotonic database revision numbers (`rev`) and broadcasts
+//    live updates to all connected browser clients via Server-Sent Events (SSE).
+// 5. Defensive Input Validation: Sanitizes and clamps all untrusted payload fields before DB execution.
 //
 // =======================================================================================
 import type { Db } from './db.js';
@@ -34,22 +29,23 @@ import type {
   MutateResult,
 } from './types.js';
 
-/** SSE broadcast sink; the real one lives in server.ts, tests pass a spy/noop. */
+/** SSE broadcast sink function to push events to active browser clients. */
 export type Broadcast = (event: string, data: unknown) => void;
 
 type Stmt = ReturnType<Db['prepare']>;
 
-/** An ISO 'YYYY-MM-DD' calendar day — the one definition of "valid day string" shared with
- *  the REST API's own date validation (`api-bookings.ts`). */
+/** Regular expression validating standard ISO 'YYYY-MM-DD' calendar date strings. */
 export const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
- * Clamp an untrusted value to a plain string of at most `maxLength` characters, or null
- * when the input is null/undefined OR the clamped result would be empty (`|| null` after
- * `.slice` catches both "no value" and "value was an empty string").
+ * Clamps an untrusted string to `maxLength` characters. Returns null if empty or non-string.
  */
 const clip = (value: unknown, maxLength: number): string | null =>
   value == null ? null : String(value).slice(0, maxLength) || null;
 
+/**
+ * Writes an action entry to the database audit log table.
+ */
 function logAction(db: Db, who: string, action: string): void {
   try {
     db.prepare('INSERT INTO log(ts,user,action) VALUES(?,?,?)').run(
@@ -62,9 +58,9 @@ function logAction(db: Db, who: string, action: string): void {
   }
 }
 
-/* ---------------- structural (management) path ---------------- */
+/* ---------------- Structural Management Path (Machines / Groups) ---------------- */
 
-/** An untrusted machine from the client's structural payload (all fields unknown). */
+/** Untrusted machine payload structure received from the client. */
 interface InMachine {
   id?: unknown;
   name?: unknown;
@@ -80,7 +76,9 @@ interface InMachine {
   maint?: unknown;
 }
 
-/** Validate the whole machine list; return an error message or null. */
+/**
+ * Validates the structure and uniqueness of the received machine list before writing.
+ */
 function structuralError(machines: InMachine[]): string | null {
   if (machines.length === 0 || machines.length > 5000) return 'Ungültige Maschinenliste';
   const seenIds = new Set<string>();
@@ -94,7 +92,9 @@ function structuralError(machines: InMachine[]): string | null {
   return null;
 }
 
-/** Validate + serialise a machine's maintenance slots to JSON, or null if none. */
+/**
+ * Validates and serializes a machine's maintenance slots into sanitized JSON.
+ */
 function cleanMaint(machine: InMachine): string | null {
   if (!Array.isArray(machine.maint)) return null;
   const cleanedSlots = (machine.maint as unknown[]).slice(0, 50).map((rawSlot) => {
@@ -113,7 +113,9 @@ function cleanMaint(machine: InMachine): string | null {
   return cleanedSlots.length ? JSON.stringify(cleanedSlots) : null;
 }
 
-/** Insert one machine row from an untrusted client machine (server-side clamps/validates). */
+/**
+ * Inserts a single machine record into SQLite with sanitized fields and sort order.
+ */
 function insertMachine(insertStatement: Stmt, machine: InMachine, sortIndex: number): void {
   const validStatusFrom = DAY_RE.test(String(machine.statusFrom || ''))
     ? String(machine.statusFrom)
@@ -140,15 +142,8 @@ function insertMachine(insertStatement: Stmt, machine: InMachine, sortIndex: num
 }
 
 /**
- * Replaces the whole machine list (and, if given, the group list) in one transaction —
- * management writes (add/edit/delete/reorder a machine) never patch a single row, they
- * resend the full list with their one change already applied.
- *
- * How it works: validates the whole list first (bails before touching the DB on any
- * error), then inside one transaction deletes every machine row and re-inserts the given
- * list in order (so `sort` always matches array order), updates `groups` if given, and
- * finally deletes any booking whose machine no longer exists (orphan cleanup after a
- * delete). Bumps the revision and broadcasts a `structural` event only on success.
+ * Atomically replaces the machine list and group definitions in a single database transaction.
+ * Automatically removes orphaned bookings for deleted machines and broadcasts the update.
  */
 function applyStructural(
   db: Db,
@@ -168,11 +163,10 @@ function applyStructural(
                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`);
     machines.forEach((machine, sortIndex) => insertMachine(insertStatement, machine, sortIndex));
     if (Array.isArray(groups)) {
-      // Clamp each group name (120 chars), then cap the whole list (500 groups).
       const clampedGroupNames = groups.map((group) => String(group).slice(0, 120));
       setMeta(db, 'groups', JSON.stringify(clampedGroupNames.slice(0, 500)));
     }
-    db.exec('DELETE FROM bookings WHERE mid NOT IN (SELECT id FROM machines)'); // orphans (deleted machine)
+    db.exec('DELETE FROM bookings WHERE mid NOT IN (SELECT id FROM machines)');
     if (note) logAction(db, who, note);
     db.exec('COMMIT');
   } catch (error) {
@@ -189,9 +183,11 @@ function applyStructural(
   return { ok: true, rev, structural: true };
 }
 
-/* ---------------- cell-delta (booking/deletion) path ---------------- */
+/* ---------------- Cell Delta Path (Bookings / Deletions) ---------------- */
 
-/** Validate the cell list against the current machines; return an error or null. */
+/**
+ * Validates a list of cell deltas against existing machines and required fields.
+ */
 function validateCells(cells: CellDelta[], machineById: Map<string, MachineRow>): string | null {
   for (const cell of cells) {
     if (!cell || typeof cell.machineId !== 'string' || !DAY_RE.test(cell.day || '')) {
@@ -203,14 +199,16 @@ function validateCells(cells: CellDelta[], machineById: Map<string, MachineRow>)
   return null;
 }
 
-/** The three prepared statements `writeCell` needs, named for what each one does. */
+/** Prepared statements used during cell write transactions. */
 interface BookingStatements {
   findExistingBooking: Stmt;
   upsertBooking: Stmt;
   deleteBooking: Stmt;
 }
 
-/** Apply one cell (set or delete) inside the open transaction, collecting change/conflict. */
+/**
+ * Applies a single cell modification (insert/update or delete) with conflict checks.
+ */
 function writeCell(
   cell: CellDelta,
   machine: MachineRow,
@@ -221,7 +219,7 @@ function writeCell(
   const existingBooking = statements.findExistingBooking.get(cell.machineId, cell.day) as
     BookingRow | undefined;
   if (cell.val) {
-    // set / book — enforce our own block/availability rule + never overwrite a foreign booking
+    // Booking insertion / update: enforce maintenance blocks and weekday availability
     const name = String(cell.val.name).trim();
     const reason = blockReason(machine, cell.day);
     if (reason) {
@@ -258,7 +256,7 @@ function writeCell(
     );
     changes.push({ machineId: cell.machineId, day: cell.day, val: bookingOut(newBooking) });
   } else {
-    // delete — abort the cell if it was taken over by someone else in the meantime
+    // Cell deletion: verify that the cell was not concurrently modified by another user
     if (existingBooking && cell.prev && existingBooking.name !== cell.prev.name) {
       conflicts.push({ machineId: cell.machineId, day: cell.day, by: existingBooking.name });
       return;
@@ -270,8 +268,9 @@ function writeCell(
   }
 }
 
-/** Add server-side weekend bridges for the machines the client just changed (6.3, ADD
- *  direction), appending them to `changes` so they broadcast to every client. */
+/**
+ * Invokes server-side automated weekend bridging for machines modified in the current transaction.
+ */
 function addWeekendBridges(db: Db, changes: MutateChange[]): void {
   const affectedMachineIds = [...new Set(changes.map((change) => change.machineId))];
   const bridges = maintainBridges(db, affectedMachineIds, new Date().toISOString());
@@ -285,16 +284,7 @@ function addWeekendBridges(db: Db, changes: MutateChange[]): void {
 }
 
 /**
- * Applies a batch of per-cell booking writes/deletes in one transaction — this is the path
- * every grid click and every REST booking write funnels through.
- *
- * How it works: validates the whole batch against the current machine list first (an
- * unknown machine id or malformed cell fails the entire batch before any of it writes),
- * then inside one transaction runs {@link writeCell} per cell, collecting `changes`
- * (applied) and `conflicts` (refused — blocked day, wrong weekday, or a foreign booking)
- * separately so the caller can report both. Optionally extends the transaction with
- * {@link addWeekendBridges} before logging and committing. Bumps the revision and
- * broadcasts an `update` event only when at least one cell actually changed.
+ * Applies a batch of cell modifications in a single database transaction.
  */
 function applyCells(
   db: Db,
@@ -327,8 +317,6 @@ function applyCells(
     for (const cell of cells) {
       writeCell(cell, machineById.get(cell.machineId)!, statements, changes, conflicts);
     }
-    // Must run BEFORE addWeekendBridges below — `applied` counts only the client's own
-    // requested changes, and addWeekendBridges appends more entries to `changes`.
     applied = changes.length;
     if (bridge) addWeekendBridges(db, changes);
     if (note) logAction(db, who, note);
@@ -348,10 +336,8 @@ function applyCells(
 }
 
 /**
- * The single write entry point. Dispatches to the structural path (a full machine list)
- * or the cell-delta path, validating server-side. `broadcast` defaults to a noop so the
- * reducer can be unit-tested without a live SSE server; `bridge` toggles the weekend
- * auto-bridging maintain hook (on by default — the decided Phase 6.3 scope).
+ * Main dispatch entry point for server mutations.
+ * Directs payloads to structural management or cell delta handlers.
  */
 export function applyMutate(
   db: Db,
