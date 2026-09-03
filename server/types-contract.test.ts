@@ -34,6 +34,12 @@ type StateOutWireShape = Pick<StateOut, 'groups' | 'machines' | 'bookings'>;
 type StateKeysMatch = KeysMatch<ServerDataWireShape, StateOutWireShape>;
 
 describe('shared/types.ts vs server/types.ts — wire-shape field-name contract', () => {
+  // What: shared/types.ts's client-trusted wire shapes and server/types.ts's independently-
+  // declared emitted shapes still agree on field names, even though the backend never
+  // imports shared/types.ts to enforce that structurally.
+  // How: the real check already happened at compile time via the KeysMatch type aliases
+  // above — if any of them stopped being exactly `true`, this file would fail to type-check
+  // before ever reaching a runtime assertion. This body just confirms the file actually ran.
   it('every field name on the wire matches (the real check is the types above)', () => {
     // These assignments ARE the check: TypeScript rejects them at compile time the moment
     // any of the three type aliases above stop being exactly `true`. There is nothing to
