@@ -1,18 +1,22 @@
-// The booking Assistant (Phase 7 slice B7): check off devices, drag equivalents onto each
-// other to form "need N of M" groups, then search for free windows. Faithful port of legacy
-// `openAssistant`/`runAssistant`. Tree mutation and the N-of-M scheduling solver are already
-// pure and 100%-tested in `core/assistant.ts` — this module is state/wiring: a mutable tree
-// held in a ref (mirroring legacy's own global `AS_TREE` — every mutation here is the exact
-// same `core/assistant.ts` call legacy's thin `asXxx` adapters made) plus a rerender tick,
-// the same "frozen structure, forced rerender" shape used elsewhere (My Bookings, Admin).
+// =======================================================================================
+// ASSISTANT MODAL COMPONENT (web/js/ui/components/AssistantModal.tsx)
+// =======================================================================================
 //
-// Shape decision (E2 — flagged): the results panel's suggested-devices line and its "Buchen…"/
-// pin button device list are computed from a tree snapshot FROZEN at search time (via
-// `structuredClone`), not legacy's live `AS_TREE` re-read at click time. Legacy's own behavior
-// is a touch inconsistent already (the inline suggestion text never updates after search, but
-// clicking "Buchen…" re-evaluates against whatever the live tree looks like by then) — freezing
-// both together is simpler and avoids submitting a booking for a device the user has since
-// removed from the tree between search and click.
+// The booking Assistant: check off devices, drag equivalents onto each other to form
+// "need N of M" groups, then search for free windows.
+//
+// Key Principles:
+// - MUTABLE TREE IN A REF, NOT REACT STATE: tree mutation and the N-of-M scheduling solver
+//   are already pure and 100%-tested in `core/assistant.ts` — this module holds a mutable
+//   tree in a ref plus a forced rerender tick, the same "frozen structure, forced rerender"
+//   shape My Bookings/Admin use elsewhere.
+// - RESULTS ARE FROZEN AT SEARCH TIME: the results panel's suggested-devices line and its
+//   "Buchen…"/pin button device list are computed from a tree snapshot frozen at search
+//   time (`structuredClone`), not the live tree re-read at click time — this avoids
+//   submitting a booking for a device the user has since removed from the tree between
+//   searching and clicking a result.
+//
+// =======================================================================================
 
 import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
@@ -65,9 +69,8 @@ function isFreeDevice(id: string, day: string): boolean {
   );
 }
 
-/** The mutable tree + every edit it supports, mirroring legacy's `AS_TREE` global plus its
- *  `asXxx` adapters. Split out of `AssistantModal` purely to stay under the function-length
- *  budget. */
+/** Owns the mutable tree plus every edit operation it supports — a single mutable object
+ *  held across renders, so drag-and-drop edits don't need to reconstruct the whole tree. */
 function useAssistantTree() {
   const treeRef = useRef<AssistContainer>({ children: [] });
   const [, forceRerender] = useState(0);
@@ -117,9 +120,9 @@ interface AssistantSearchState {
 }
 
 /**
- * Validate, confirm redundancy if any, then search for free windows. Faithful port of legacy
- * `runAssistant`'s guard clauses + scheduling call. Freezes a tree snapshot for the result (see
- * the file-header shape decision).
+ * Validates the search inputs, confirms redundancy if any exists, then searches for free
+ * windows and freezes a tree snapshot for the result (see the file header's note on why the
+ * result is frozen rather than reading the live tree).
  */
 async function runAssistantSearch(
   tree: AssistContainer,
@@ -210,8 +213,7 @@ function AssistantSearchForm({
   );
 }
 
-/** The "Ausgewählte Geräte" heading plus the work-area tree. Split out of `AssistantModal`
- *  purely to stay under the function-length budget. */
+/** The "Ausgewählte Geräte" heading plus the work-area tree. */
 function AssistantWorkSection({ assistant }: { assistant: ReturnType<typeof useAssistantTree> }) {
   return (
     <>
@@ -285,7 +287,7 @@ export function AssistantModal() {
   );
 }
 
-/** Open the booking Assistant. Faithful port of legacy `openAssistant`. */
+/** Opens the booking Assistant. */
 export function openAssistant(): void {
   openReactModal(<AssistantModal />);
 }

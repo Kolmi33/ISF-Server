@@ -1,8 +1,17 @@
-// The booking detail modal (Phase 7 slice B4). Faithful port of legacy `openBookingDetail`:
-// shows one booked cell's details, plus two different "delete more than this one day"
-// affordances — a contiguous same-name workday run (no explicit group), and an explicit
-// booking group (several machines and/or a titled multi-cell action) — which are mutually
-// exclusive per booking (a grouped booking never also gets the plain run-delete button).
+// =======================================================================================
+// BOOKING DETAIL MODAL COMPONENT (web/js/ui/components/BookingDetailModal.tsx)
+// =======================================================================================
+//
+// Shows one booked cell's details, plus two different "delete more than this one day"
+// affordances: a contiguous same-name workday run (no explicit group), and an explicit
+// booking group (several machines and/or a titled multi-cell action).
+//
+// Key Principles:
+// - MUTUALLY EXCLUSIVE DELETE AFFORDANCES: a booking is never both grouped and a plain run
+//   at once in this UI — a grouped booking's cells don't also form a plain run, so exactly
+//   one of the two delete-more buttons ever shows, never both.
+//
+// =======================================================================================
 
 import type { Booking, Machine } from '../../../../shared/types.ts';
 import {
@@ -235,15 +244,15 @@ export function BookingDetailModal({ machine, date, booking }: BookingDetailModa
   );
 }
 
-/** Open the booking detail modal for one booked cell. Faithful port of legacy
- *  `openBookingDetail`. Not sticky — Escape/outside-click close it like most modals. */
+/** Opens the booking detail modal for one booked cell. Not sticky — Escape/outside-click
+ *  close it, like most modals. */
 export function openBookingDetail(machine: Machine, date: string, booking: Booking): void {
   openReactModal(<BookingDetailModal machine={machine} date={date} booking={booking} />);
 }
 
-/** The cell action a click/Enter routes to: the booking detail when the cell is occupied, the
- *  booking form (single cell) otherwise — unless the machine is blocked or unavailable that
- *  day, which just shows why. Faithful port of legacy `openCellAction`. */
+/** The cell action a click/Enter routes to: the booking detail when the cell is occupied,
+ *  the booking form (single cell) otherwise — unless the machine is blocked or unavailable
+ *  that day, in which case a toast just explains why instead of opening anything. */
 export function openCellAction(machineId: string, date: string): void {
   const machine = machById(machineId);
   if (!machine) return;
