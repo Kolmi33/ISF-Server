@@ -9,7 +9,9 @@ import {
   findGroupInsertionIndex,
   getMachineCategory,
   CATEGORIES,
+  CATEGORY_FILTER_PREFIX,
   groupsByCategory,
+  matchesGroupFilter,
   getMaintenanceSlots,
   isSlotCoveringDate,
   getMaintenanceSlotAtDate,
@@ -173,6 +175,28 @@ describe('CATEGORIES & groupsByCategory', () => {
       { category: 'maschine', groups: ['Milling', 'Drilling'] },
       { category: 'messtechnik', groups: ['Sensors'] },
     ]);
+  });
+});
+
+describe('matchesGroupFilter', () => {
+  const messMachine = createMachine({ id: 'm1', group: 'Labor', cat: 'messtechnik' });
+  const maschMachine = createMachine({ id: 'm2', group: 'Halle', cat: 'maschine' });
+
+  // What: a plain (non-prefixed) filter value matches an exact department-group name only.
+  // How: checks a matching group name passes and a different one (even in the same category)
+  // does not.
+  it('matches an exact group name when the filter has no "cat:" prefix', () => {
+    expect(matchesGroupFilter(maschMachine, 'Halle')).toBe(true);
+    expect(matchesGroupFilter(maschMachine, 'Labor')).toBe(false);
+  });
+
+  // What: a "cat:<id>" filter value matches every machine in that whole category, regardless
+  // of its specific department group.
+  // How: checks both machines against each category's "cat:" filter value.
+  it('matches by whole category when the filter has the "cat:" prefix', () => {
+    expect(matchesGroupFilter(messMachine, `${CATEGORY_FILTER_PREFIX}messtechnik`)).toBe(true);
+    expect(matchesGroupFilter(maschMachine, `${CATEGORY_FILTER_PREFIX}messtechnik`)).toBe(false);
+    expect(matchesGroupFilter(maschMachine, `${CATEGORY_FILTER_PREFIX}maschine`)).toBe(true);
   });
 });
 

@@ -10,7 +10,7 @@
 
 import type { Machine, Bookings } from '../../../../shared/types.ts';
 import { parseIsoDateString, isWeekend, nextWeekday } from '../../../../shared/dates.ts';
-import { getMachineCategory } from '../../core/machines.ts';
+import { matchesGroupFilter } from '../../core/machines.ts';
 
 /** A booking run: consecutive workdays booked by one person on one machine, with the earliest ts. */
 export interface AllRun {
@@ -83,26 +83,16 @@ export interface AllBookingsFilter {
   person: string;
   mach: string;
   /** An exact department-group name (e.g. `"Halle 1"`), OR a whole top-level category
-   *  selection encoded as `"cat:<categoryId>"` (e.g. `"cat:messtechnik"`) — the "Bereich"
-   *  dropdown's own category-level options (`AllBookingsModal.tsx`) use this prefix so one
-   *  select can offer both "just this department" and "every department in this category"
-   *  without a second field. Empty string matches everything. */
+   *  selection encoded via `core/machines.ts`'s `CATEGORY_FILTER_PREFIX` (e.g.
+   *  `"cat:messtechnik"`) — the "Bereich" dropdown's own category-level options
+   *  (`AllBookingsModal.tsx`) use this prefix so one select can offer both "just this
+   *  department" and "every department in this category" without a second field. Empty
+   *  string matches everything. Matched via `core/machines.ts`'s `matchesGroupFilter`, shared
+   *  with `MyBookingsModal.tsx`'s identical Bereich filter. */
   group: string;
   from: string;
   to: string;
   sort: string;
-}
-
-/** The `group` filter's prefix for a whole-category selection — see `AllBookingsFilter.group`. */
-export const CATEGORY_FILTER_PREFIX = 'cat:';
-
-/** Whether `machine` matches the "Bereich" filter value: an exact group name, or (given the
- *  `cat:` prefix) membership in that whole category regardless of department group. */
-function matchesGroupFilter(machine: Machine, groupFilter: string): boolean {
-  if (groupFilter.startsWith(CATEGORY_FILTER_PREFIX)) {
-    return getMachineCategory(machine) === groupFilter.slice(CATEGORY_FILTER_PREFIX.length);
-  }
-  return machine.group === groupFilter;
 }
 
 /** The sort comparators, keyed by the modal's sort dropdown values. */

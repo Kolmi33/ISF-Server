@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
 
@@ -112,6 +112,118 @@ describe('MyBookingsModal', () => {
       screen.getByText('▸').click();
     });
     expect(screen.getAllByRole('button', { name: 'Löschen' })).toHaveLength(2); // one per day
+  });
+
+  // What: the expand chip sits on the right, under the pin ("Im Plan anzeigen") button — user
+  // request — not on the date line's own left edge as before.
+  // How: books a 2-day series and checks the chip shares its immediate parent with the pin
+  // button, rather than living inside the `.abdate` date line.
+  it('places the expand chip on the right, under the pin button', () => {
+    window.S.data!.bookings = {
+      m1: { '2021-01-04': { name: 'anna' }, '2021-01-05': { name: 'anna' } },
+    };
+    render(<MyBookingsModal />);
+    const pinButton = screen.getByRole('button', { name: 'Im Plan anzeigen' });
+    const chip = screen.getByText('▸');
+    expect(chip.parentElement).toBe(pinButton.parentElement);
+    expect(document.querySelector('.abdate')!.textContent).not.toContain('▸');
+  });
+
+  // What: a run whose first day belongs to a booking group spanning more than one machine
+  // shows a "Teil einer Buchungsgruppe" hint naming the title and machine count — booking
+  // groups are now detected and displayed, not silently treated as a plain run (user request).
+  // How: seeds two machines sharing one gid/gtitle on the same day and checks the hint appears
+  // on the resulting run with the right title and count.
+  it('detects and displays a booking group spanning multiple machines', () => {
+    window.S.data!.machines = [machine(), machine({ id: 'm2', name: 'Presse' })];
+    window.S.data!.bookings = {
+      m1: { [TODAY]: { name: 'anna', gid: 'g1', gtitle: 'Projekt X' } },
+      m2: { [TODAY]: { name: 'anna', gid: 'g1' } },
+    };
+    render(<MyBookingsModal />);
+    // Each machine's own row independently detects and shows the group hint — one per row,
+    // hence two matches, not one shared hint for the whole group.
+    expect(screen.getAllByText(/Teil einer Buchungsgruppe/)).toHaveLength(2);
+    expect(screen.getByText('Projekt X')).toBeInTheDocument(); // only m1's day carries a title
+    expect(screen.getAllByText(/2 Maschinen/)).toHaveLength(2);
+  });
+
+  // What: a plain (ungrouped) run, or a "group" of just one machine, shows no group hint at
+  // all — only a genuine multi-machine group is worth calling out.
+  // How: books an ordinary single-machine run and checks the hint never appears.
+  it('shows no group hint for a plain, ungrouped run', () => {
+    window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
+    render(<MyBookingsModal />);
+    expect(screen.queryByText(/Teil einer Buchungsgruppe/)).not.toBeInTheDocument();
+  });
+
+  // What: the filter row offers the same fields as All Bookings' own — Maschine, Bereich,
+  // Sortieren, Von, Bis — but deliberately no Person field, since every run here is already
+  // known to be the current user's own (user request).
+  // How: renders and checks each expected field is present by its label, and that no "Person"
+  // label exists anywhere in the modal.
+  it('offers a filter row matching All Bookings, minus the Person field', () => {
+    window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
+    render(<MyBookingsModal />);
+    expect(screen.getByPlaceholderText('Berger')).toBeInTheDocument(); // Maschine
+    // { selector: 'label' }: the Sortieren dropdown also has an option literally named
+    // "Bereich" (sort-by-department), a real collision with the filter's own label — a plain
+    // getByText('Bereich') would match both.
+    expect(screen.getByText('Bereich', { selector: 'label' })).toBeInTheDocument();
+    expect(screen.getByText('Sortieren')).toBeInTheDocument();
+    expect(screen.getByText('Von')).toBeInTheDocument();
+    expect(screen.getByText('Bis')).toBeInTheDocument();
+    expect(screen.queryByText('Person')).not.toBeInTheDocument();
+  });
+
+  // What: the Maschine filter narrows the run list to machines whose name matches, same
+  // matching rule as All Bookings' own.
+  // How: seeds two machines, filters by a substring of one's name, and checks only that
+  // machine's run remains.
+  it('filters the list by machine name', () => {
+    window.S.data!.machines = [machine(), machine({ id: 'm2', name: 'Presse' })];
+    window.S.data!.bookings = {
+      m1: { [TODAY]: { name: 'anna' } },
+      m2: { [TODAY]: { name: 'anna' } },
+    };
+    render(<MyBookingsModal />);
+    fireEvent.change(screen.getByPlaceholderText('Berger'), { target: { value: 'Pres' } });
+    expect(screen.getByText('Presse')).toBeInTheDocument();
+    expect(screen.queryByText('Fräse')).not.toBeInTheDocument();
+  });
+
+  // What: the Bereich filter's whole-category option (shared "cat:" encoding with All
+  // Bookings) narrows the list to every machine in that category, regardless of department group.
+  // How: seeds one maschine-category and one messtechnik-category machine, both booked, picks
+  // the Messtechnik category option, and checks only that machine's run remains.
+  it('filters by whole category via the Bereich select', () => {
+    window.S.data!.machines = [
+      machine(),
+      machine({ id: 'm2', name: 'Messgerät', group: 'Labor', cat: 'messtechnik' }),
+    ];
+    window.S.data!.bookings = {
+      m1: { [TODAY]: { name: 'anna' } },
+      m2: { [TODAY]: { name: 'anna' } },
+    };
+    render(<MyBookingsModal />);
+    const bereichSelect = screen
+      .getByText('Bereich', { selector: 'label' })
+      .closest('.fld')!
+      .querySelector('select')!;
+    fireEvent.change(bereichSelect, { target: { value: 'cat:messtechnik' } });
+    expect(screen.getByText('Messgerät')).toBeInTheDocument();
+    expect(screen.queryByText('Fräse')).not.toBeInTheDocument();
+  });
+
+  // What: filtering down to nothing (rather than there being no bookings at all) shows the
+  // "no matches for this filter" message, distinct from the "no bookings at all" one.
+  // How: books one run, filters by a machine name that matches nothing, and checks the
+  // filter-specific message appears.
+  it('shows a filter-specific message when the filter matches nothing', () => {
+    window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
+    render(<MyBookingsModal />);
+    fireEvent.change(screen.getByPlaceholderText('Berger'), { target: { value: 'zzz' } });
+    expect(screen.getByText('Keine Buchungen für diese Filter gefunden.')).toBeInTheDocument();
   });
 
   // What: with no bookings at all, the "show only my machines in the plan" shortcut button

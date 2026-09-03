@@ -114,6 +114,22 @@ export function groupsByCategory(machines: readonly Machine[]): CategoryGroups[]
   return result;
 }
 
+/** A "Bereich" filter value's prefix for a whole-category selection (e.g. `"cat:messtechnik"`),
+ *  as opposed to an exact department-group name (e.g. `"Halle 1"`) — lets one filter field
+ *  offer both "just this department" and "every department in this category" without a second
+ *  field. Shared by every view that offers a Bereich filter (`AllBookingsModal.tsx`,
+ *  `MyBookingsModal.tsx`), so the encoding and its matching rule below live in one place. */
+export const CATEGORY_FILTER_PREFIX = 'cat:';
+
+/** Whether `machine` matches a "Bereich" filter value: an exact group name, or (given the
+ *  `CATEGORY_FILTER_PREFIX`) membership in that whole category regardless of department group. */
+export function matchesGroupFilter(machine: Machine, groupFilter: string): boolean {
+  if (groupFilter.startsWith(CATEGORY_FILTER_PREFIX)) {
+    return getMachineCategory(machine) === groupFilter.slice(CATEGORY_FILTER_PREFIX.length);
+  }
+  return machine.group === groupFilter;
+}
+
 /**
  * Extracts all scheduled maintenance intervals and defect downtimes for a machine.
  *

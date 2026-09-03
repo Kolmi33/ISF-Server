@@ -22,12 +22,16 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../../shared/dates.ts';
-import { CATEGORIES, groupsByCategory, type CategoryGroups } from '../../core/machines.ts';
+import {
+  CATEGORIES,
+  CATEGORY_FILTER_PREFIX,
+  groupsByCategory,
+  type CategoryGroups,
+} from '../../core/machines.ts';
 import { orderedMachines } from '../grid.ts';
 import {
   computeAllRuns,
   filterAllRuns,
-  CATEGORY_FILTER_PREFIX,
   type AllRun,
   type AllBookingsFilter,
 } from '../views/all-bookings.ts';
