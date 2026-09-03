@@ -156,30 +156,32 @@ async function runAssistantSearch(
   };
 }
 
-interface AssistantSearchFormProps {
+interface AssistantParametersProps {
   from: string;
   to: string;
   minDays: number;
   onFromChange: (value: string) => void;
   onToChange: (value: string) => void;
   onMinDaysChange: (value: number) => void;
-  onSearch: () => void;
 }
 
-/** The date-range + minimum-consecutive-days inputs and the "Freie Termine suchen" button. */
-function AssistantSearchForm({
+/** The "Buchungsparameter" card: just the date-range + minimum-consecutive-days inputs, no
+ *  action buttons — those are anchored separately at the bottom of the whole right column
+ *  (`AssistantModal`), not tied to this one card, per the redesign's "primary action is the
+ *  clear final step of the flow" request. */
+function AssistantParametersCard({
   from,
   to,
   minDays,
   onFromChange,
   onToChange,
   onMinDaysChange,
-  onSearch,
-}: AssistantSearchFormProps) {
+}: AssistantParametersProps) {
   const onMinDaysInput = (event: ChangeEvent<HTMLInputElement>) =>
     onMinDaysChange(Math.max(1, Math.min(30, parseInt(event.target.value) || 1)));
   return (
-    <>
+    <div className="assist-card">
+      <div className="assist-card-title">Buchungsparameter</div>
       <div className="formrow">
         <label>Suchen von</label>
         <input type="date" value={from} onChange={(event) => onFromChange(event.target.value)} />
@@ -197,27 +199,24 @@ function AssistantSearchForm({
           onChange={onMinDaysInput}
         />
       </div>
-      <div className="modal-actions">
-        <button className="btn" onClick={closeReactModal}>
-          Abbrechen
-        </button>
-        <button className="btn primary" onClick={onSearch}>
-          Freie Termine suchen
-        </button>
-      </div>
-    </>
+    </div>
   );
 }
 
-/** The "Ausgewählte Geräte" heading plus the work-area tree. No explanatory drag-and-drop
- *  copy here (or in `AssistantTree`'s empty state) by design — the interaction is communicated
- *  purely visually now (drag handles, dashed drop zones), per the redesign in `AssistantTree`. */
-function AssistantWorkSection({ assistant }: { assistant: ReturnType<typeof useAssistantTree> }) {
+/** The "Ausgewählte Geräte" card — a "shopping cart" for checked devices (user request): each
+ *  one shows up here as its own line item (`AssistantTree`'s `.asdev`/`.asgrp` nodes already
+ *  work exactly this way, own remove icon included) the moment it's checked on the left, no
+ *  further action needed. No explanatory drag-and-drop copy here (or in `AssistantTree`'s
+ *  empty state) by design — the interaction is communicated purely visually now (drag
+ *  handles, dashed drop zones), per the redesign in `AssistantTree`. */
+function AssistantSelectedDevicesCard({
+  assistant,
+}: {
+  assistant: ReturnType<typeof useAssistantTree>;
+}) {
   return (
-    <>
-      <div className="catlbl" style={{ marginTop: 4 }}>
-        Ausgewählte Geräte
-      </div>
+    <div className="assist-card">
+      <div className="assist-card-title">Ausgewählte Geräte</div>
       <AssistantTree
         tree={assistant.tree}
         machineById={(id) => machById(id)}
@@ -229,7 +228,33 @@ function AssistantWorkSection({ assistant }: { assistant: ReturnType<typeof useA
         onSetNeed={assistant.onSetNeed}
         onRemove={assistant.onRemove}
       />
-    </>
+    </div>
+  );
+}
+
+interface AssistantConfigColumnProps extends AssistantParametersProps {
+  assistant: ReturnType<typeof useAssistantTree>;
+  onSearch: () => void;
+}
+
+/** The right column: the "Buchungsparameter" card, the "Ausgewählte Geräte" cart card, and the
+ *  primary action anchored at the bottom of both — the clear final step of the flow, not lose
+ *  under an unrelated form (user request). Split out of `AssistantModal` purely to stay under
+ *  the function-length budget. */
+function AssistantConfigColumn({ assistant, onSearch, ...parameters }: AssistantConfigColumnProps) {
+  return (
+    <div className="assist-col-right">
+      <AssistantParametersCard {...parameters} />
+      <AssistantSelectedDevicesCard assistant={assistant} />
+      <div className="assist-actions">
+        <button className="btn" onClick={closeReactModal}>
+          Abbrechen
+        </button>
+        <button className="btn primary" onClick={onSearch}>
+          Freie Termine suchen
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -253,27 +278,32 @@ export function AssistantModal() {
       <h2>
         <Icon name="compass" /> Buchungsassistent
       </h2>
-      {/* Two-column side-by-side on desktop (app.css, ".assist-columns"): device search stays
-          on the left, the configured setup on the right, both permanently visible without
-          their own scrolling getting in each other's way. Narrower viewports stack them. */}
+      {/* Card-based, two-column dashboard layout on desktop (app.css, ".assist-columns"): a
+          light-grey backdrop behind white cards — the catalog (search + checklist) on the
+          left, the active configuration (parameters, then the selected-devices "cart") on the
+          right, both permanently visible without their own scrolling getting in each other's
+          way. Narrower viewports stack everything in this same top-to-bottom order. */}
       <div className="assist-columns">
-        <AssistantChecklist
-          machines={machines}
-          favoriteIds={store.get('favs')}
-          addedIds={assistant.addedIds}
-          onToggle={assistant.toggleDevice}
+        <div className="assist-card">
+          <div className="assist-card-title">Geräteauswahl</div>
+          <AssistantChecklist
+            machines={machines}
+            favoriteIds={store.get('favs')}
+            addedIds={assistant.addedIds}
+            onToggle={assistant.toggleDevice}
+          />
+        </div>
+        <AssistantConfigColumn
+          assistant={assistant}
+          from={from}
+          to={to}
+          minDays={minDays}
+          onFromChange={setFrom}
+          onToChange={setTo}
+          onMinDaysChange={setMinDays}
+          onSearch={() => void search()}
         />
-        <AssistantWorkSection assistant={assistant} />
       </div>
-      <AssistantSearchForm
-        from={from}
-        to={to}
-        minDays={minDays}
-        onFromChange={setFrom}
-        onToChange={setTo}
-        onMinDaysChange={setMinDays}
-        onSearch={() => void search()}
-      />
       {searchState && (
         <AssistantResults
           results={searchState.results}

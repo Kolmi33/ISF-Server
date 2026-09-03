@@ -283,17 +283,27 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 #ctxMenu button{display:block;width:100%;text-align:left;border:none;background:none;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text)}
 #ctxMenu button:hover{background:var(--hover)}
 .machinfo{color:var(--muted);cursor:pointer}
-/* ---------- Assistent: Bedarfs-Baukasten (Drag & Drop) ---------- */
-/* Zwei-Spalten-Layout auf Desktop-Breiten: Geräteauswahl links, Versuchsaufbau rechts, beide
-   dauerhaft sichtbar. `:has()` weitet #modal nur für den Assistenten selbst — jedes andere
-   Modal behält seine normale max-width. Schmalere Breiten stapeln beide Spalten wie zuvor. */
-.assist-columns{display:flex;flex-direction:column;gap:4px}
+/* ---------- Assistent: kartenbasiertes Dashboard-Layout ---------- */
+/* Moderner SaaS-Dashboard-Look (user request): ein helles Grau als Seitenhintergrund, jeder
+   Abschnitt eine eigene weiße Karte mit dezentem Rahmen — nur für den Assistenten selbst
+   (`:has()`-scoped), kein anderes Modal ändert sein Aussehen. Zwei-Spalten-Layout auf
+   Desktop-Breiten: Geräteauswahl links, Buchungsparameter + ausgewählte Geräte rechts
+   übereinander, beide Spalten dauerhaft sichtbar. Schmalere Breiten stapeln alles in
+   derselben Reihenfolge von oben nach unten. */
+#modal:has(.assist-columns){background:var(--bg)}
+.assist-columns{display:flex;flex-direction:column;gap:10px}
 @media (min-width:860px){
   #modal:has(.assist-columns){max-width:920px}
   .assist-columns{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
-  .assist-columns .aswork{max-height:320px;overflow:auto}
+  .assist-columns .aswork{max-height:260px;overflow:auto}
 }
-.aswork{border:1px dashed var(--border);border-radius:10px;padding:8px;min-height:54px;margin:6px 0;background:var(--panel)}
+.assist-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px}
+.assist-card-title{font-weight:700;font-size:13px;margin-bottom:8px;color:var(--text)}
+.assist-col-right{display:flex;flex-direction:column;gap:10px}
+/* Die primäre Aktion, unten in der rechten Spalte verankert — der klare letzte Schritt des
+   Ablaufs, nicht lose unter einem unabhängigen Formular (user request) */
+.assist-actions{display:flex;gap:8px;justify-content:flex-end}
+.aswork{border:1px dashed var(--border);border-radius:10px;padding:8px;min-height:54px;background:var(--panel)}
 .aswork.dragover-root{border-color:var(--accent);border-style:dashed;background:var(--accent-light)}
 .aswork .catlbl{font-weight:700;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:6px 2px 3px}
 .asnode{border-radius:8px}

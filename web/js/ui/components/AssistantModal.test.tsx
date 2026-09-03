@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, act, fireEvent } from '@testing-library/react';
+import { screen, act, fireEvent, within } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
 import { initGridInteraction } from '../grid-interaction.ts';
@@ -95,6 +95,45 @@ function openChecklistCategory(): void {
     screen.getByText('Halle 1').click(); // opens its one group header, now rendered
   });
 }
+
+describe('AssistantModal — card layout', () => {
+  // What: the redesigned Assistant lays out its content as three distinct cards — device
+  // selection, booking parameters, and the selected-devices "cart" — each with its own
+  // heading, rather than one undifferentiated block of controls (user request: a modern,
+  // card-based dashboard layout).
+  // How: opens the Assistant and checks all three card titles are present, plus that there
+  // are exactly three ".assist-card" elements (the fourth section, the action buttons, is
+  // deliberately not a card).
+  it('lays out device selection, parameters, and selected devices as three separate cards', () => {
+    act(() => openAssistant());
+    expect(screen.getByText('Geräteauswahl')).toBeInTheDocument();
+    expect(screen.getByText('Buchungsparameter')).toBeInTheDocument();
+    expect(screen.getByText('Ausgewählte Geräte')).toBeInTheDocument();
+    expect(document.querySelectorAll('.assist-card')).toHaveLength(3);
+  });
+
+  // What: the primary action ("Freie Termine suchen") is anchored at the bottom of the right
+  // column, below both the parameters and selected-devices cards — the clear final step of
+  // the flow, not a separate/disconnected form (user request).
+  // How: opens the Assistant and checks the search button's container (".assist-actions")
+  // comes after both right-column cards in DOM order, within the same right-column parent.
+  it('anchors the primary action below both right-column cards', () => {
+    act(() => openAssistant());
+    const rightColumn = screen.getByText('Buchungsparameter').closest('.assist-col-right')!;
+    const children = [...rightColumn.children];
+    const actionsIndex = children.findIndex((el) => el.classList.contains('assist-actions'));
+    const cardIndices = children
+      .map((el, i) => (el.classList.contains('assist-card') ? i : -1))
+      .filter((i) => i >= 0);
+    expect(cardIndices).toHaveLength(2);
+    expect(actionsIndex).toBeGreaterThan(Math.max(...cardIndices));
+    expect(
+      within(rightColumn.children[actionsIndex] as HTMLElement).getByRole('button', {
+        name: 'Freie Termine suchen',
+      }),
+    ).toBeInTheDocument();
+  });
+});
 
 describe('AssistantModal — checklist → work area', () => {
   // What: with no devices checked yet, the work area shows a bare empty-state status line
