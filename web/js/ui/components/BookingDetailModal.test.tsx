@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, within } from '@testing-library/react';
 import type { AppState, Booking, Machine } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
 
@@ -71,6 +71,20 @@ describe('BookingDetailModal', () => {
     );
     screen.getByRole('button', { name: /Statistik/ }).click();
     expect(openStats).toHaveBeenCalledWith('anna');
+  });
+
+  // What: the Statistik button sits next to the machine (in the "Maschine" row), not next to
+  // the booker's name (the "Gebucht von" row) — a deliberate placement choice, not incidental.
+  // How: renders a booking and checks the button is inside the "Maschine" formrow but not
+  // inside the "Gebucht von" one.
+  it('places the Statistik button next to the machine, not next to the booker name', () => {
+    render(<BookingDetailModal machine={machine()} date={TODAY} booking={booking()} />);
+    const machineRow = screen.getByText('Maschine').closest<HTMLElement>('.formrow')!;
+    expect(within(machineRow).getByRole('button', { name: /Statistik/ })).toBeInTheDocument();
+    const bookedByRow = screen.getByText('Gebucht von').closest<HTMLElement>('.formrow')!;
+    expect(
+      within(bookedByRow).queryByRole('button', { name: /Statistik/ }),
+    ).not.toBeInTheDocument();
   });
 
   // What: a booking with no run of adjacent same-name days around it, and no group id, shows

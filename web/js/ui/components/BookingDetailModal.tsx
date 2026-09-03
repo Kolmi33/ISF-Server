@@ -131,6 +131,13 @@ function BookingFacts({ machine, date, booking }: BookingFactsProps) {
       <div className="formrow">
         <label>Maschine</label>
         <div>{machine.name}</div>
+        <button
+          className="btn small"
+          title={`Personenstatistik von ${booking.name} öffnen`}
+          onClick={() => openStats(booking.name.toLowerCase())}
+        >
+          <Icon name="chart" /> Statistik
+        </button>
       </div>
       <div className="formrow">
         <label>Datum</label>
@@ -141,13 +148,6 @@ function BookingFacts({ machine, date, booking }: BookingFactsProps) {
         <div>
           <b>{booking.name}</b>
         </div>
-        <button
-          className="btn small"
-          title={`Personenstatistik von ${booking.name} öffnen`}
-          onClick={() => openStats(booking.name.toLowerCase())}
-        >
-          <Icon name="chart" /> Statistik
-        </button>
       </div>
       {booking.note && (
         <div className="formrow">
