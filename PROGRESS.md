@@ -578,19 +578,31 @@ pin the old behavior, `verify` green, one commit per module).
   `weekdayAvailabilityMask`/`maintenanceSlots` — the real form-builder never constructs
   them, only the wire-named `cat`/`redu`/`daysMask`/`maint` siblings). `npm run verify`
   green: 889/889 tests unchanged, 68 test files (one merged in).
-- [ ] 11b Grep-based naming/dead-code audit across the rest of `web/js/` and `server/` —
+- [x] 11b Grep-based naming/dead-code audit across the rest of `web/js/` and `server/` —
   systematic search for abbreviation smells (E9), leftover re-exports, and single-consumer
   file splits, beyond the three examples already fixed in 11a. (11a's own audit found the
   rest of the tree already clean — no further short-name or dead-re-export hits outside
   CSS class-name string literals, which are out of scope; recorded here so the check itself
   is on record, not just its one positive result.)
-- [ ] 11c–11? "What/How" test-comment retrofit, one directory group per commit (mirrors
-  Phase 10's own grouping): `shared/`, `web/js/core/`, `web/js/` root + `net/`, `web/js/ui/`
-  top-level, `web/js/ui/components/` (28 files, likely 3–4 commits), `web/js/ui/views/`,
-  `server/`. Every `it(...)` gets a `// What: <behavior/invariant this pins>` / `// How:
-  <setup/action/assertion approach>` pair above it, per the template in
-  `web/js/ui/live-connection.test.ts`. Comments-only; no behavior change; verify-green each
-  commit.
+- [x] 11c–11x "What/How" test-comment retrofit — **COMPLETE**, all 68 test files. Landed as
+  ~20 commits, one directory group at a time (mirroring Phase 10's own grouping): `shared/`
+  → `web/js/core/` → `web/js/` root + `net/` → `web/js/ui/` top-level (24 files) →
+  `web/js/ui/components/` (17 files) → `web/js/ui/views/` (4 files) → `server/` (13 files).
+  Every `it(...)` in every test file now has a `// What: <behavior/invariant this pins>` /
+  `// How: <setup/action/assertion approach>` pair above it, per the template established in
+  `web/js/ui/live-connection.test.ts` back in Phase 10. Along the way, fixed two more stale
+  "(still-legacy)" references found in test descriptions/comments
+  (`AdminModal.test.tsx`, `MyBookingsModal.test.tsx` — `MachineFormModal.tsx`/`mutate.ts` are
+  fully ported, not legacy). Comments-only throughout; no behavior change. `npm run
+  build:server` clean and `npm run verify` green (889/889 tests, 68 files) after every commit.
+
+**Phase 11 is now COMPLETE.** Both directives from the user's original request are done:
+naming/structure/dead-code cleanup (11a/11b — the three flagged examples fixed, the rest of
+the tree audited and found already clean) and the full What/How test-comment retrofit
+(11c–11x — all 68 test files). Every source file under `web/js/` and `server/` now carries
+the machines.ts-style banner/JSDoc comments (Phase 10), and every test file now carries
+What/How comments on each of its test cases (Phase 11) — the two-part "readability sweep"
+directive the user gave is fully executed end to end.
 
 **Phase 11 methodology** (how a structural finding gets decided, not just a comment rewrite):
 1. **Notice** — a name, split, or export that doesn't explain itself, found either by a grep
