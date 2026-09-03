@@ -37,11 +37,11 @@ const createMachine = (overrides: Partial<Machine> = {}): Machine => ({
 const createForm = (overrides: Partial<MachineForm> = {}): MachineForm => ({
   name: 'Neue Fräse',
   group: 'Group A',
-  category: 'maschine',
+  cat: 'maschine',
   info: '',
-  redundancyGroup: '',
-  weekdayAvailabilityMask: null,
-  maintenanceSlots: [],
+  redu: '',
+  daysMask: null,
+  maint: [],
   ...overrides,
 });
 
@@ -247,10 +247,10 @@ describe('saveMachine — edit existing machine', () => {
       data,
       'm1',
       createForm({
-        category: 'messtechnik',
-        redundancyGroup: 'red-1',
-        weekdayAvailabilityMask: '1111100',
-        maintenanceSlots: slots,
+        cat: 'messtechnik',
+        redu: 'red-1',
+        daysMask: '1111100',
+        maint: slots,
       }),
     );
 
@@ -299,30 +299,22 @@ describe('moveMachine (reordering)', () => {
       createMachine({ id: 'c', group: 'Group A' }),
     ]);
 
-  it('swaps machine position upwards with "up" or -1', () => {
+  it('swaps machine position upwards with direction -1', () => {
     const data = setupThreeMachines();
-    expect(moveMachine(data, 'b', 'up')).toBeUndefined();
+    expect(moveMachine(data, 'b', -1)).toBeUndefined();
     expect(data.machines.map((machine) => machine.id)).toEqual(['b', 'a', 'c']);
-
-    const data2 = setupThreeMachines();
-    expect(moveMachine(data2, 'b', -1)).toBeUndefined();
-    expect(data2.machines.map((machine) => machine.id)).toEqual(['b', 'a', 'c']);
   });
 
-  it('swaps machine position downwards with "down" or 1', () => {
+  it('swaps machine position downwards with direction 1', () => {
     const data = setupThreeMachines();
-    expect(moveMachine(data, 'b', 'down')).toBeUndefined();
+    expect(moveMachine(data, 'b', 1)).toBeUndefined();
     expect(data.machines.map((machine) => machine.id)).toEqual(['a', 'c', 'b']);
-
-    const data2 = setupThreeMachines();
-    expect(moveMachine(data2, 'b', 1)).toBeUndefined();
-    expect(data2.machines.map((machine) => machine.id)).toEqual(['a', 'c', 'b']);
   });
 
   it('aborts at top and bottom list boundaries', () => {
     const data = setupThreeMachines();
-    expect(moveMachine(data, 'a', 'up')).toEqual({ abort: true });
-    expect(moveMachine(data, 'c', 'down')).toEqual({ abort: true });
+    expect(moveMachine(data, 'a', -1)).toEqual({ abort: true });
+    expect(moveMachine(data, 'c', 1)).toEqual({ abort: true });
   });
 
   it('aborts when attempting to swap with a machine in a different group', () => {
@@ -330,13 +322,13 @@ describe('moveMachine (reordering)', () => {
       createMachine({ id: 'a', group: 'Group A' }),
       createMachine({ id: 'b', group: 'Group B' }),
     ]);
-    expect(moveMachine(data, 'a', 'down')).toEqual({ abort: true });
+    expect(moveMachine(data, 'a', 1)).toEqual({ abort: true });
     expect(data.machines.map((machine) => machine.id)).toEqual(['a', 'b']);
   });
 
   it('aborts when the machine id does not exist at all (not just a boundary case)', () => {
     const data = setupThreeMachines();
-    expect(moveMachine(data, 'ghost', 'up')).toEqual({ abort: true });
+    expect(moveMachine(data, 'ghost', -1)).toEqual({ abort: true });
     expect(data.machines.map((machine) => machine.id)).toEqual(['a', 'b', 'c']);
   });
 });

@@ -5,6 +5,7 @@ import {
   findSameNameWorkdayRun,
   findBookingGroup,
   bookCells,
+  sweepWeekends,
   deleteCells,
   deleteOwnCells,
   deleteSelectedCells,
@@ -202,6 +203,53 @@ describe('bookCells — apply', () => {
     expect(res.count).toBe(1);
     expect(d.bookings.m1!['2021-01-04']!.name).toBe('Alice');
     expect(d.bookings.m2).toEqual({}); // bucket created, nothing written
+  });
+});
+
+// Anchor series for the weekend-bridge tests below: 2021-01-08 Fri, -09 Sat, -10 Sun, -11 Mon.
+const BRIDGE_FRI = '2021-01-08';
+const BRIDGE_SAT = '2021-01-09';
+const BRIDGE_SUN = '2021-01-10';
+const BRIDGE_MON = '2021-01-11';
+
+// Merged from the former weekend.ts/weekend.test.ts (PRINCIPLES.md E10 — sweepWeekends has
+// no consumer outside this file's own delete reducers, so it moved in with them).
+describe('sweepWeekends', () => {
+  it('keeps a weekend day that is bridged on both sides', () => {
+    const d = data([M()], {
+      m1: { [BRIDGE_FRI]: { name: 'A' }, [BRIDGE_SAT]: { name: 'A' }, [BRIDGE_MON]: { name: 'A' } },
+    });
+    expect(sweepWeekends(d, 'm1')).toEqual([]);
+    expect(d.bookings.m1?.[BRIDGE_SAT]).toBeDefined();
+  });
+  it('keeps a bridged Sunday too (Fri before + Mon after)', () => {
+    const d = data([M()], {
+      m1: { [BRIDGE_FRI]: { name: 'A' }, [BRIDGE_SUN]: { name: 'A' }, [BRIDGE_MON]: { name: 'A' } },
+    });
+    expect(sweepWeekends(d, 'm1')).toEqual([]);
+    expect(d.bookings.m1?.[BRIDGE_SUN]).toBeDefined();
+  });
+  it('removes an orphaned Saturday and returns its undo record', () => {
+    const d = data([M()], { m1: { [BRIDGE_SAT]: { name: 'A', ts: 't1' } } });
+    expect(sweepWeekends(d, 'm1')).toEqual([
+      { machineId: 'm1', date: BRIDGE_SAT, prev: { name: 'A', ts: 't1' } },
+    ]);
+    expect(d.bookings.m1?.[BRIDGE_SAT]).toBeUndefined(); // mutated in place
+  });
+  it('removes an orphaned Sunday (missing Friday)', () => {
+    const d = data([M()], { m1: { [BRIDGE_SUN]: { name: 'A' }, [BRIDGE_MON]: { name: 'A' } } });
+    expect(sweepWeekends(d, 'm1')).toEqual([
+      { machineId: 'm1', date: BRIDGE_SUN, prev: { name: 'A' } },
+    ]);
+    expect(d.bookings.m1?.[BRIDGE_SUN]).toBeUndefined();
+  });
+  it('leaves weekdays untouched', () => {
+    const d = data([M()], { m1: { [BRIDGE_FRI]: { name: 'A' } } });
+    expect(sweepWeekends(d, 'm1')).toEqual([]);
+    expect(d.bookings.m1?.[BRIDGE_FRI]).toBeDefined();
+  });
+  it('returns [] for a machine with no bookings', () => {
+    expect(sweepWeekends(data([M()], { m1: {} }), 'unknown')).toEqual([]);
   });
 });
 

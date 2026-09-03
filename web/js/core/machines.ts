@@ -16,25 +16,23 @@
 
 import type {
   Machine,
-  MaintSlot as MaintenanceSlot,
+  MaintenanceSlot,
   MachineCategory,
   BookingData,
 } from '../../../shared/types.ts';
 import { mondayFirstWeekdayIndex, parseIsoDateString } from '../../../shared/dates.ts';
-
-// Re-export MaintenanceSlot for callers
-export type { MaintenanceSlot };
 
 // ---------------------------------------------------------------------------------------
 // 1. Types & Domain Interfaces
 // ---------------------------------------------------------------------------------------
 
 /**
- * Direction for reordering a machine in the visual list.
- * - 'up' or -1: Move machine earlier in the list.
- * - 'down' or 1: Move machine later in the list.
+ * The step to move a machine by in the visual list: -1 (up, earlier) or 1 (down, later).
+ * `AdminModal.tsx`'s reorder buttons are the only caller — they already compute -1/1
+ * directly from which arrow was clicked, so `moveMachine` takes the same shape rather than
+ * translating to/from a separate 'up'/'down' string form nothing else in the app produces.
  */
-export type MoveDirection = 'up' | 'down' | -1 | 1;
+export type MoveDirection = -1 | 1;
 
 /**
  * Represents a resource category and its distinct group names in first-seen order.
@@ -46,8 +44,12 @@ export interface CategoryGroups {
 }
 
 /**
- * Validated input fields from the machine configuration dialog.
- * Used by saveMachine to create or update a machine.
+ * Validated input fields from the machine configuration dialog, as `validateMachineForm`
+ * (`ui/machine-form.ts`) produces them. Used by `saveMachine` to create or update a machine.
+ *
+ * Field names mirror the `Machine` wire shape they end up written to (`cat`/`redu`/`maint`
+ * — PRINCIPLES.md E9's wire-naming exemption) rather than a "nicer" alias, so there's exactly
+ * one name for each piece of data from the form to the stored machine.
  */
 export interface MachineForm {
   /** Display name of the machine (e.g. "5-Achs Fräse DMU 50"). */
@@ -55,22 +57,14 @@ export interface MachineForm {
   /** Group / department name the machine belongs to (e.g. "Fräsen", "Drehen"). */
   group: string;
   /** Category: 'messtechnik' for measurement devices, or 'maschine' for standard machines. */
-  category?: string;
-  /** Legacy property alias for category */
   cat?: string;
   /** Optional free-form description or notes about the machine. */
   info: string;
   /** Optional redundancy group marker/label (used for automatic device substitution). */
-  redundancyGroup?: string;
-  /** Legacy property alias for redundancyGroup */
   redu?: string;
   /** 7-character Mo..So availability mask (e.g. '1111100' for Mo-Fr), or null for all days. */
-  weekdayAvailabilityMask?: string | null;
-  /** Legacy property alias for weekdayAvailabilityMask */
   daysMask?: string | null;
   /** Active maintenance and defect date ranges for this machine. */
-  maintenanceSlots?: MaintenanceSlot[];
-  /** Legacy property alias for maintenanceSlots */
   maint?: MaintenanceSlot[];
 }
 
@@ -259,27 +253,23 @@ export function applyFormFieldsToMachine(machine: Machine, form: MachineForm): v
   machine.group = form.group;
   machine.info = form.info;
 
-  // 1. Redundancy Group
-  const redundancyGroup = form.redundancyGroup || form.redu;
-  if (redundancyGroup) {
-    machine.redu = redundancyGroup;
+  // 1. Redundancy group
+  if (form.redu) {
+    machine.redu = form.redu;
   } else {
     delete machine.redu;
   }
 
-  // 2. Weekday Availability Mask
-  const weekdayMask =
-    form.weekdayAvailabilityMask !== undefined ? form.weekdayAvailabilityMask : form.daysMask;
-  if (weekdayMask) {
-    machine.days = weekdayMask;
+  // 2. Weekday availability mask
+  if (form.daysMask) {
+    machine.days = form.daysMask;
   } else {
     delete machine.days;
   }
 
-  // 3. Maintenance Slots
-  const activeMaintenanceSlots = form.maintenanceSlots || form.maint;
-  if (activeMaintenanceSlots && activeMaintenanceSlots.length > 0) {
-    machine.maint = activeMaintenanceSlots;
+  // 3. Maintenance slots
+  if (form.maint && form.maint.length > 0) {
+    machine.maint = form.maint;
   } else {
     delete machine.maint;
   }
@@ -291,8 +281,7 @@ export function applyFormFieldsToMachine(machine: Machine, form: MachineForm): v
   delete machine.statusUntil;
 
   // 5. Category ('messtechnik' vs default 'maschine')
-  const category = form.category || form.cat;
-  if (category === 'messtechnik') {
+  if (form.cat === 'messtechnik') {
     machine.cat = 'messtechnik';
   } else {
     delete machine.cat;
@@ -458,8 +447,7 @@ export function moveMachine(
     return { abort: true };
   }
 
-  const stepOffset = direction === 'up' || direction === -1 ? -1 : 1;
-  const targetNeighborIndex = currentIndex + stepOffset;
+  const targetNeighborIndex = currentIndex + direction;
 
   // 1. Boundary check: ensure target index is within array range
   const isOutOfBounds = targetNeighborIndex < 0 || targetNeighborIndex >= machines.length;

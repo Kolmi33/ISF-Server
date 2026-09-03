@@ -7,7 +7,8 @@
 // 1. Read-only queries (looking up a cell, finding a same-name run of workdays, collecting
 //    every cell in a booking group).
 // 2. Write-path reducers (booking cells, deleting cells — by clicked cell, by owner, by
-//    marquee selection, or by whole group).
+//    marquee selection, or by whole group — each one sweeping any weekend bridge day its
+//    deletion orphaned; see `sweepWeekends` below).
 //
 // Key Principles:
 // - PURE FUNCTIONS: the reducers take the FRESH server data and mutate it in place,
@@ -18,9 +19,13 @@
 //   wall-clock timestamp and the group-id factory — are passed in as `BookOptions` fields
 //   rather than read from `Date.now()`/a random-id call directly, so the reducers stay
 //   deterministic functions of their inputs and are trivially unit-testable.
-// - DOMAIN LOGIC LIVES IN core/, NOT ui/: this module (like `sweepWeekends`) has no DOM
-//   dependency, so it's exhaustively unit-tested here rather than only exercised through a
-//   production-write browser smoke test (ARCHITECTURE §15).
+// - DOMAIN LOGIC LIVES IN core/, NOT ui/: this module has no DOM dependency, so it's
+//   exhaustively unit-tested here rather than only exercised through a production-write
+//   browser smoke test (ARCHITECTURE §15).
+// - WEEKEND BRIDGING LIVES HERE, NOT IN ITS OWN FILE: `sweepWeekends` is only ever called
+//   from this module's own delete reducers (four call sites, no other consumer) — it's an
+//   internal rule of the booking domain, not a separate domain, so it belongs in the same
+//   file rather than a single-purpose module one import hop away (PRINCIPLES.md E10).
 //
 // =======================================================================================
 
@@ -30,8 +35,13 @@ import {
   isMachineBlockedOnDate,
   getMaintenanceSlotAtDate,
 } from './machines.ts';
-import { nextWeekday, previousWeekday } from '../../../shared/dates.ts';
-import { sweepWeekends } from './weekend.ts';
+import {
+  nextWeekday,
+  previousWeekday,
+  parseIsoDateString,
+  formatDateAsIsoString,
+  addDays,
+} from '../../../shared/dates.ts';
 
 // ---------------------------------------------------------------------------------------
 // 1. Types
@@ -86,6 +96,13 @@ export interface BookingGroup {
   machineIds: Set<string>;
   /** Every date in the group, sorted ascending. */
   dates: string[];
+}
+
+/** An orphaned weekend day `sweepWeekends` removed, with the previous value for undo. */
+export interface WeekendUndo {
+  machineId: string;
+  date: string;
+  prev: { name: string; ts?: string };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -295,6 +312,45 @@ export function bookCells(
   const conflicts = findBookingConflicts(freshServerData, machineIds, dates);
   if (conflicts.length && !options.skipConflicts) return { abort: true, conflicts };
   return applyBooking(freshServerData, machineIds, dates, options);
+}
+
+/**
+ * Removes orphaned Sat/Sun entries for `machineId`: a weekend day survives only while both
+ * the Friday before and the Monday after are booked (by anyone). A weekend day belongs in
+ * the plan only as part of a continuous Fri→Mon booking series — every delete reducer below
+ * calls this on each machine it touched, so removing a Friday or Monday booking also drops
+ * the now-orphaned Sat/Sun bridge day next to it.
+ *
+ * How it works, for each booked day on the machine:
+ * 1. Skips anything that isn't a Saturday or Sunday — this rule only ever removes weekend
+ *    entries, never a weekday booking.
+ * 2. Finds that weekend day's bridging Friday and Monday (Saturday's Friday is 1 day back
+ *    and its Monday 2 days forward; Sunday's Friday is 2 days back and its Monday 1 day
+ *    forward).
+ * 3. If both bridging days are still booked, the weekend entry stays. Otherwise it's
+ *    deleted and recorded as an undo entry.
+ *
+ * Mutates `freshServerData.bookings[machineId]` in place; returns the removed entries.
+ */
+export function sweepWeekends(freshServerData: BookingData, machineId: string): WeekendUndo[] {
+  const machineBookings = freshServerData.bookings[machineId];
+  if (!machineBookings) return [];
+  const undo: WeekendUndo[] = [];
+  for (const [isoDate, previousValue] of Object.entries(machineBookings)) {
+    const date = parseIsoDateString(isoDate);
+    const weekday = date.getUTCDay();
+    const isSaturday = weekday === 6;
+    const isSunday = weekday === 0;
+    if (!isSaturday && !isSunday) continue;
+    const fridayIsoDate = formatDateAsIsoString(addDays(date, isSaturday ? -1 : -2));
+    const mondayIsoDate = formatDateAsIsoString(addDays(date, isSaturday ? 2 : 1));
+    const bridgeStillHolds = machineBookings[fridayIsoDate] && machineBookings[mondayIsoDate];
+    if (!bridgeStillHolds) {
+      undo.push({ machineId, date: isoDate, prev: { ...previousValue } });
+      delete machineBookings[isoDate];
+    }
+  }
+  return undo;
 }
 
 /**
