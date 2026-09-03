@@ -539,75 +539,79 @@ re-derived here — this backlog is the executable summary.
   description containing a comma broke the parse and was fixed), and `@apidevtools/swagger-cli
   validate` confirms it's schema-valid OpenAPI 3.0, not just parseable YAML.
 
-**Phase 10 — Repo-wide comment/readability sweep (user-requested 2026-09-03)**
-Rewrite every source file's comments (file header + per-function docs) to match the style
+**Phase 10 — Repo-wide comment/readability sweep (user-requested 2026-09-03) — SOURCE FILES
+COMPLETE, superseded by Phase 11 for everything else.**
+Rewrote every source file's comments (file header + per-function docs) to the verbose style
 established when `web/js/core/machines.ts` was hand-rewritten: a banner file header, a "Key
 Principles" summary, and per-function JSDoc with a one-line summary plus a numbered "How it
-works"/"Logic:" walkthrough of the behavior and edge cases — a deliberate, user-directed
-departure from this project's previous terser comment convention. No behavior changes; each
-item is comments-only, verified green and committed before moving to the next. Grouped by
-directory into one commit per group (not literally one commit per file — matches how this
-project's own "one module, one commit" convention has always been applied to a batch of related
-files, e.g. Phase 9's slices).
-- [x] 10a `shared/` — `dates.ts`, `types.ts` rewritten to the verbose style; also fixed a
-  stale `catOf` reference in `MachineCategory`'s doc comment (renamed twice since: to
-  `categoryOf` in Phase 7, then `getMachineCategory`). `dates.test.ts` left as-is — already
-  description-driven, no function-level prose to expand; `types.ts` has no test file.
-- [x] 10b `web/js/core/` — `assistant.ts`, `bookings.ts`, `weekend.ts` rewritten to the verbose
-  style. Also fixed stale legacy.js attributions (deleted whole in Phase 7) in `bookings.ts`'s
-  header and several docstrings, and in `assistant.ts`'s header/per-function comments — same
-  category of fix as `machines.ts`'s. Test files (`*.test.ts`) left as-is: already
-  description-driven, no stale references found.
-- [x] 10c `web/js/` root + `web/js/net/` — `app.ts`, `state.ts`, `store-instance.ts`, `api.ts`,
-  `sse.ts` rewritten to the verbose style; also dropped `app.ts`'s stale "Faithful port of
-  legacy `X`" tails (4 functions) and `state.ts`'s outdated "not yet wired to render()" note
-  (subscribe/notify has been wired since Phase 7). Tests left as-is; `app.ts` has no test
-  file (boot orchestration, covered by the smoke test).
-- [x] 10d `web/js/ui/` top-level, part 1 (18 files: `assistant-checklist.ts` through
-  `machine-lookup.ts`) — landed as 3 commits (10 smaller files, then grid/lookup/filter/form,
-  then grid-scroll.ts + grid-interaction.ts). Removed one genuinely stale block comment in
-  grid-interaction.ts claiming `refreshCell`/`refreshDot`/`patchCells` weren't ported yet and
-  `mutate()` was "still entirely legacy" — both had been true for a while by the time this
-  sweep reached it. `live-connection.test.ts` got the first "What/How" test-comment pass
-  (see 10e's note).
-- [x] 10e `web/js/ui/` top-level, part 2 (8 files: `machine-text.ts` through `mutate.ts`) —
-  also fixed stale claims in `user-chip.ts` ("click/dblclick wiring stays in legacy.js" —
-  it's `app.ts`'s `wireUserChip` now) and `theme.ts` ("boot init stays in legacy.js for
-  now" — absorbed into `app.ts` since Phase 7). Test files for 10a–10e still need the
-  "What/How" retrofit `live-connection.test.ts` established — tracked as a follow-up, not
-  blocking the source-file sweep's progress.
-- [x] 10f `web/js/ui/components/` part 1 (15 files: `ActiveUsersModal.tsx` through
-  `GroupOptions.tsx`) — landed as 4 commits. Also fixed a stale "the (still-legacy)
-  assistant" mention in `BookingForm.tsx`'s header (`AssistantModal.tsx` is fully React
-  now). Tests still need the "What/How" retrofit.
-- [x] 10g `web/js/ui/components/` part 2 (13 files: `HelpModal.tsx` through
-  `StatsOverviews.tsx`) — landed as 3 commits. This completes all 28 files in
-  `web/js/ui/components/` (10f+10g). Also cleaned up an ambiguous "Legacy resets a stale
-  drilldown selection" comment in `StatsModal.tsx` to describe the current behavior
-  directly. Tests still need the "What/How" retrofit.
-- [x] 10h `web/js/ui/views/` — `admin.ts`, `all-bookings.ts`, `my-bookings.ts`, `stats.ts`.
-  Banner headers + per-function docblocks; fixed several "Faithful port of legacy X"
-  tails while preserving `stats.ts`'s substantive category+group-bucketing bug-history
-  note (reworded off "legacy" framing, kept the actual rationale). Completes
-  `web/js/ui/views/`. Tests still need the "What/How" retrofit.
-- [x] 10i `server/` part 1 — `api-*.ts` (routing/response/read/write endpoint modules): all 8
-  files (`api-router.ts`, `api-response.ts`, `api-write-helpers.ts`, `api-activity.ts`,
-  `api-bookings.ts`, `api-machines.ts`, `api-machines-write.ts`, `api-bookings-write.ts`) got
-  banner headers and doc comments on previously-undocumented internal helpers; these files were
-  already fairly well commented from Phase 9, so this was lighter-touch than earlier sub-items.
-  Tests still need the "What/How" retrofit.
-- [x] 10j `server/` part 2 — `backfill.ts`, `bridge.ts`, `db.ts`, `import.ts`, `model.ts`,
-  `mutate.ts`, `server.ts`, `types.ts`: banner headers on all 8, plus doc comments on
-  previously-undocumented internal helpers (`openDb`, `getMeta`/`setMeta`/`bumpRev`,
-  `applyStructural`/`applyCells`, and most of `server.ts`'s route-handler-adjacent
-  functions). This completes Phase 10's full pass over `server/`. `npm run build:server`
-  + `npm run verify` both green. Tests still need the "What/How" retrofit.
+works" walkthrough. Landed as 10 sub-items (10a–10j, ~14 commits), one directory group at a
+time, each comments-only and verify-green before moving on:
+`shared/` → `core/` → `js/` root + `net/` → `ui/` top-level (2 parts) → `ui/components/`
+(2 parts, all 28 files) → `ui/views/` → `server/api-*.ts` → `server/` the rest. Along the way,
+fixed every stale "stays in legacy.js" / "faithful port of legacy X" comment left over from
+Phase 7 deleting that file (grepped clean at the end — see Phase 11's audit below), while
+preserving substantive historical notes (e.g. `stats.ts`'s category+group-bucketing bug-history
+rationale) just reworded off "legacy" framing.
+**What Phase 10 did NOT do — carried into Phase 11 below:** the "What/How" test-comment
+convention it established (in `live-connection.test.ts`, the one file that got it) was never
+retrofitted onto the other 67 test files, and Phase 10's brief was comments-only — it
+deliberately left naming/structure/dead-code issues alone even when noticed. Full sub-item
+history (10a–10j write-ups) is preserved in git history (`72c27b7`'s parent and earlier) rather
+than repeated here.
 
-**Phase 10 (source files) is now COMPLETE — every file under `web/js/` and `server/` has
-been rewritten to the machines.ts comment style.** What remains for Phase 10 is the
-"What/How" test-comment retrofit across every `.test.ts`/`.test.tsx` file (established in
-`web/js/ui/live-connection.test.ts`, flagged as owed in every sub-item above) — not yet
-started for any module except that one template file.
+**Phase 11 — Deep code-quality pass: naming, structure, dead code, and the test-comment
+retrofit (user-requested 2026-09-03)**
+Broader and stricter than Phase 10: not just comments, but the code itself — self-explanatory
+names, no unexplained abbreviations, no "historic remnant" API surface (dead aliases, a
+re-export nothing imports, a file split with one consumer), *and* finishes the "What/How"
+test-comment retrofit Phase 10 left owed. See "Phase 11 methodology" below for how each item
+is scoped, decided, and verified before it lands — the short version: every structural change
+must be evidence-based (grep every real call site first) and behavior-preserving (tests still
+pin the old behavior, `verify` green, one commit per module).
+- [x] 11a `web/js/core/machines.ts` + `weekend.ts` (the user's three flagged examples,
+  confirmed by tracing every real call site — full reasoning in commit `72c27b7`):
+  merged `weekend.ts` into `bookings.ts` (`sweepWeekends` had exactly one consumer — E10);
+  removed the dead `MaintenanceSlot` re-export (zero importers; `shared/types.ts` already
+  exports it directly); simplified `MoveDirection` from `'up'|'down'|-1|1` to just `-1|1`
+  (the string form was never produced by any real caller, only by tests); removed
+  `MachineForm`'s four dead "nicer alias" fields (`category`/`redundancyGroup`/
+  `weekdayAvailabilityMask`/`maintenanceSlots` — the real form-builder never constructs
+  them, only the wire-named `cat`/`redu`/`daysMask`/`maint` siblings). `npm run verify`
+  green: 889/889 tests unchanged, 68 test files (one merged in).
+- [ ] 11b Grep-based naming/dead-code audit across the rest of `web/js/` and `server/` —
+  systematic search for abbreviation smells (E9), leftover re-exports, and single-consumer
+  file splits, beyond the three examples already fixed in 11a. (11a's own audit found the
+  rest of the tree already clean — no further short-name or dead-re-export hits outside
+  CSS class-name string literals, which are out of scope; recorded here so the check itself
+  is on record, not just its one positive result.)
+- [ ] 11c–11? "What/How" test-comment retrofit, one directory group per commit (mirrors
+  Phase 10's own grouping): `shared/`, `web/js/core/`, `web/js/` root + `net/`, `web/js/ui/`
+  top-level, `web/js/ui/components/` (28 files, likely 3–4 commits), `web/js/ui/views/`,
+  `server/`. Every `it(...)` gets a `// What: <behavior/invariant this pins>` / `// How:
+  <setup/action/assertion approach>` pair above it, per the template in
+  `web/js/ui/live-connection.test.ts`. Comments-only; no behavior change; verify-green each
+  commit.
+
+**Phase 11 methodology** (how a structural finding gets decided, not just a comment rewrite):
+1. **Notice** — a name, split, or export that doesn't explain itself, found either by a grep
+   sweep (abbreviation patterns, `legacy` mentions, `export type {` re-exports) or by reading
+   a file closely while doing the test-comment pass.
+2. **Trace every real call site** (`grep`, not assumption) before deciding it's dead or
+   redundant — a field/export used only by its own test file is dead in production even if a
+   test exercises it; a field used by exactly one other file is a merge candidate, not
+   automatically wrong (CLI entry points, cross-cutting helpers like
+   `server/api-write-helpers.ts`, and genuinely-distinct single-purpose UI widgets are
+   legitimate one-consumer files — E10 is about a *domain* split into pieces, not "every
+   small file is suspect").
+3. **Decide against the wire-naming exemption (E9) and the domain-file rule (E10)** before
+   touching anything — both are already-settled project rules, not this pass's to
+   re-litigate.
+4. **Fix with tests first when behavior could change**; comment-only and dead-code-removal
+   changes still get a full `verify` run (and `build:server` when `server/` is touched)
+   before committing, same gate as every other module.
+5. **One commit per finding or small group of related findings**, explaining the evidence
+   (not just the conclusion) in the commit message — so a future reader can check the
+   reasoning without re-deriving it.
 
 ## Done log (newest first)
 - **2026-09-02 — Code-review fixes**: undo's CAS-check bug and `machById`'s stale-cache bug
