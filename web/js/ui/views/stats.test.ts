@@ -201,6 +201,30 @@ describe('buildResourceRows', () => {
     expect(rows.map((r) => r.kind)).toEqual(['category', 'category', 'group', 'machine']);
   });
 
+  // What: a category's stale "collapsed" fold state must not hide its rows once it becomes
+  // the only visible category — with just one category, no header renders at all (see "skips
+  // the category header..." above), so honoring a leftover closed key would make the whole
+  // list disappear with no way back. Real bug: collapsing "Maschinen" via its header, then
+  // toggling the "Messtechnik" chip off, used to leave the "Maschinen" list gone entirely
+  // until Messtechnik was toggled back on and its header clicked again to re-expand it.
+  // How: folds 'maschine' with both categories visible (its header renders, collapsed) —
+  // confirms the existing behavior above still holds — then rebuilds with only 'maschine'
+  // visible and the same stale closed key, and checks its rows show despite it.
+  it('ignores a stale collapsed fold once its category becomes the only one visible', () => {
+    const bothVisible = buildResourceRows(
+      [row({ id: 'm1' }), row({ id: 'm2', cat: 'messtechnik' })],
+      { ...noFilter, closedKeys: new Set(['c:maschine']) },
+    );
+    expect(bothVisible.map((r) => r.kind)).toEqual(['category', 'category', 'group', 'machine']);
+
+    const onlyMaschineVisible = buildResourceRows([row({ id: 'm1' })], {
+      ...noFilter,
+      visibleCategories: new Set(['maschine']),
+      closedKeys: new Set(['c:maschine']), // same stale fold key as above
+    });
+    expect(onlyMaschineVisible.map((r) => r.kind)).toEqual(['group', 'machine']); // no header, rows visible
+  });
+
   // What: within a group, machines are ranked by utilisation percent descending (most-used
   // first), with German name order as the tiebreak.
   // How: builds two machines with different percents in scrambled order and checks the

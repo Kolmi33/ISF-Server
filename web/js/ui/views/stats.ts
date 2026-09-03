@@ -231,7 +231,13 @@ export function buildResourceRows(
     const allRowsInCategory = groupsInCategory.flatMap((group) =>
       rowsByGroupInCategory.get(`${category}::${group}`)!,
     );
-    const categoryClosed = closedKeys.has(`c:${category}`);
+    // Only honor a "closed" fold when its header actually renders — with `showCategoryHeaders`
+    // false (down to one visible category), there's no header left to click to re-expand it,
+    // so a stale collapsed key from before would hide the whole list with no way back (a real
+    // bug: collapse "Maschinen", toggle "Messtechnik" off, and the "Maschinen" list vanished
+    // entirely). The state itself is left untouched — closedKeys isn't reset here — so the
+    // collapse resumes correctly once a second category becomes visible again.
+    const categoryClosed = showCategoryHeaders && closedKeys.has(`c:${category}`);
     if (showCategoryHeaders) {
       rows.push({
         kind: 'category',
