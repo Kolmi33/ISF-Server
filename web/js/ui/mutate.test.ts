@@ -117,12 +117,23 @@ describe('mutate — optimistic apply + logging', () => {
     expect(window.S.data!.log[0]!.action).toBe('newest');
   });
 
+  // What: a reducer result with no `undo` array (a structural change — machine add/edit/
+  // reorder, not a cell booking) triggers a full store notify() to repaint everything, since
+  // there's no cell-level patch list to apply instead.
+  // How: runs a reducer returning a plain result with no undo array and checks notify fired once.
   it('notify()s directly for a structural change (no undo array)', async () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     await mutate(() => ({ abort: false }), 'Maschine verschoben');
     expect(notifySpy).toHaveBeenCalledOnce();
   });
 
+  // What: because saveMachine/deleteMachine/moveMachine mutate `data.machines` in place
+  // (invisible to machById's own reference-equality cache — see machine-lookup.test.ts),
+  // mutate() must explicitly invalidate that cache after any structural change so a
+  // subsequent lookup sees the update.
+  // How: builds the machById cache first, confirms a not-yet-added machine isn't found, runs
+  // a structural mutate that pushes a new machine into the array in place, and checks the
+  // new machine IS now found (proving the cache was invalidated, not just stale-but-lucky).
   it('invalidates the machine lookup cache for a structural change (no undo array)', async () => {
     // saveMachine/deleteMachine/moveMachine (core/machines.ts) mutate `data.machines` in place
     // — machById's own reference-equality cache can't see that on its own (machine-lookup
@@ -136,6 +147,13 @@ describe('mutate — optimistic apply + logging', () => {
     expect(machById('new-machine')?.name).toBe('Neu');
   });
 
+  // What: a booking-cell change (an undo array present, meaning this is NOT a structural
+  // machine-list change) must NOT invalidate the machine lookup cache — that cache tracks
+  // machines, not bookings, so touching it here would be pointless work on the hot cell-write path.
+  // How: builds the cache, mutates the underlying machines array in place WITHOUT going
+  // through mutate() (simulating a change mutate() shouldn't need to know about), then runs a
+  // cell-booking mutate (undo array present) and checks the cache still doesn't see the new
+  // machine — proving mutate() correctly left the cache alone.
   it('does NOT invalidate the machine lookup cache for a booking-cell change (undo array present)', async () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     machById('m1'); // builds the cache
@@ -147,6 +165,11 @@ describe('mutate — optimistic apply + logging', () => {
     expect(machById('new-machine')).toBeUndefined(); // cache correctly left alone
   });
 
+  // What: for a small booking change (an undo array present, under the size threshold),
+  // mutate patches only the affected cells directly rather than triggering a full-grid
+  // notify() repaint — the cheaper, more surgical path for the common case.
+  // How: runs a cell-booking reducer with one undo entry and checks notify was NOT called
+  // (the patch path was used instead).
   it('a small undo list patches cells instead of a full notify()', async () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     document.body.innerHTML += '<table id="grid"><tbody></tbody></table>';
@@ -157,6 +180,11 @@ describe('mutate — optimistic apply + logging', () => {
     expect(notifySpy).not.toHaveBeenCalled();
   });
 
+  // What: once the undo list grows past 500 entries, mutate abandons the per-cell patch
+  // approach and falls back to one full notify() — patching 500+ individual cells would cost
+  // more than just repainting everything.
+  // How: builds an undo array of 501 entries and checks notify fired exactly once (the
+  // fallback), rather than the patch path from the previous test.
   it('an undo list over 500 falls back to a full notify()', async () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     const undo = Array.from({ length: 501 }, (_, i) => ({
@@ -168,6 +196,12 @@ describe('mutate — optimistic apply + logging', () => {
     expect(notifySpy).toHaveBeenCalledOnce();
   });
 
+  // What: mutate resolves and returns control to the caller as soon as the optimistic local
+  // apply is done — it does NOT wait for the background server persist (the POST) to
+  // complete, keeping the UI responsive.
+  // How: stubs fetch to return a promise that's deliberately left unresolved, awaits mutate()
+  // anyway, and checks it already resolved with the reducer's result before the fetch promise
+  // is ever settled (settled manually afterward, just to clean up).
   it('returns before persist (the background fetch) settles', async () => {
     let resolveFetch: (value: unknown) => void = () => {};
     vi.stubGlobal(
@@ -185,6 +219,11 @@ describe('mutate — optimistic apply + logging', () => {
 });
 
 describe('mutate — persist (background)', () => {
+  // What: the background persist for a cell-booking change POSTs a cell-delta body (one
+  // prev/val pair per changed cell, derived from the undo entries) plus the log/user fields,
+  // and once the server confirms, the local revision number updates to match.
+  // How: books a cell, runs mutate with an undo entry for it, waits for the revision to
+  // update, then inspects the actual POST body sent and checks its cells/log/user fields.
   it('posts a cell delta with prev/val per entry, and updates the revision on success', async () => {
     window.S.data!.bookings.m1 = { '2021-01-04': booking({ name: 'anna' }) };
     const fetchSpy = fetchReturning({ rev: 7 });
@@ -203,6 +242,10 @@ describe('mutate — persist (background)', () => {
     expect(body.user).toBe('anna');
   });
 
+  // What: the background persist for a structural change POSTs the whole machines/groups
+  // list (not a cell delta), since a structural change is a full-list replace, not per-cell.
+  // How: runs a structural mutate, waits for fetch to be called, and checks the POST body's
+  // machines/groups match the current local state.
   it('posts machines/groups for a structural change (no undo array)', async () => {
     const fetchSpy = fetchReturning({ rev: 3 });
     vi.stubGlobal('fetch', fetchSpy);
@@ -214,6 +257,12 @@ describe('mutate — persist (background)', () => {
     expect(body.groups).toEqual(window.S.data!.groups);
   });
 
+  // What: when the server reports the write partially conflicted (someone else took a cell
+  // concurrently), the client shows the collision banner AND re-fetches the authoritative
+  // state from the server, since the optimistic local apply may now be wrong.
+  // How: stubs the server response with a conflicts array, runs mutate, waits for the
+  // collision banner to show, and checks a second fetch (the refresh GET) followed the
+  // original POST.
   it('on a partial conflict: shows the collision banner and refreshes from the server', async () => {
     vi.stubGlobal(
       'fetch',
@@ -230,6 +279,11 @@ describe('mutate — persist (background)', () => {
     await vi.waitFor(() => expect((fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2));
   });
 
+  // What: a server-reported error (a 500-shaped `{error}` body) surfaces as a toast
+  // containing the server's own error text, and the client still refreshes from the server
+  // afterward so the local optimistic state doesn't silently drift from reality.
+  // How: stubs the server response with an error message, runs mutate, and checks the toast
+  // eventually shows both the generic "save failed" text and the specific server message.
   it('on a server error response: toasts, and refreshes from the server', async () => {
     vi.stubGlobal('fetch', fetchReturning({ error: 'db locked' }));
     await mutate(
@@ -242,6 +296,12 @@ describe('mutate — persist (background)', () => {
     expect(document.getElementById('toast')!.textContent).toContain('db locked');
   });
 
+  // What: a genuine network failure (the fetch call itself rejecting, not just a bad HTTP
+  // response) is handled the same way as a server error — a toast naming the failure, and a
+  // refresh attempt afterward (which may itself succeed once connectivity returns).
+  // How: stubs fetch to reject once (simulating "offline") then succeed on the next call
+  // (the refresh), runs mutate, and checks the toast shows both the generic failure text and
+  // the specific "offline" error message.
   it('when the POST itself throws (network failure): toasts, and still tries to refresh', async () => {
     vi.stubGlobal(
       'fetch',
@@ -265,6 +325,11 @@ describe('mutate — persist (background)', () => {
 });
 
 describe('refreshNow', () => {
+  // What: a normal (non-silent) refresh reloads the full server state, triggers a repaint,
+  // records when the refresh happened, and confirms success with a toast.
+  // How: stubs the server to return a known revision, calls refreshNow(false), and checks
+  // the local revision updated, notify fired, the timestamp indicator got some text, and the
+  // toast shows the success message.
   it('reloads S.data, notifies, stamps the time, and toasts unless silent', async () => {
     vi.stubGlobal('fetch', fetchReturning(serverData({ rev: 42 } as unknown as ServerData)));
     await refreshNow(false);
@@ -274,12 +339,19 @@ describe('refreshNow', () => {
     expect(document.getElementById('toast')!.textContent).toBe('Aktualisiert ✓');
   });
 
+  // What: a silent refresh (e.g. a periodic background poll) does its job without bothering
+  // the user with a success toast.
+  // How: calls refreshNow(true) and checks the toast element stayed empty.
   it('does not toast when silent', async () => {
     vi.stubGlobal('fetch', fetchReturning(serverData()));
     await refreshNow(true);
     expect(document.getElementById('toast')!.textContent).toBe('');
   });
 
+  // What: a failed (non-silent) refresh flips the timestamp indicator to an explicit offline
+  // warning (rather than leaving stale/misleading text) and toasts the specific error.
+  // How: stubs fetch to reject, calls refreshNow(false), and checks both the indicator text
+  // and the toast content.
   it('on failure: flips the offline indicator, and toasts unless silent', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('down')));
     await refreshNow(false);
@@ -287,6 +359,11 @@ describe('refreshNow', () => {
     expect(document.getElementById('toast')!.textContent).toContain('down');
   });
 
+  // What: a failed SILENT refresh still flips the offline indicator (the user should still
+  // see connectivity is lost) but suppresses the toast, same silent behavior as a successful
+  // silent refresh.
+  // How: stubs fetch to reject, calls refreshNow(true), and checks the indicator shows
+  // offline while the toast stays empty.
   it('on failure, silent: flips the offline indicator without toasting', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('down')));
     await refreshNow(true);
@@ -296,11 +373,15 @@ describe('refreshNow', () => {
 });
 
 describe('stampRef', () => {
+  // What: stampRef writes a readable current-time label into the #lastRef indicator element.
+  // How: calls stampRef() and checks the element's text matches an HH:MM-shaped pattern.
   it('writes the current time into #lastRef', () => {
     stampRef();
     expect(document.getElementById('lastRef')!.textContent).toMatch(/\d{1,2}:\d{2}/);
   });
 
+  // What: calling stampRef when the #lastRef element isn't in the DOM is a safe no-op.
+  // How: empties the document body and checks calling stampRef() doesn't throw.
   it('is a no-op (not a throw) when #lastRef is absent', () => {
     document.body.innerHTML = '';
     expect(() => stampRef()).not.toThrow();

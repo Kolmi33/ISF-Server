@@ -24,10 +24,15 @@ import {
 } from './grid-scroll.ts';
 
 describe('canStillGrowWindow', () => {
+  // What: the auto-grow-window feature can still add more weeks while under its cap.
+  // How: checks a fresh window (0) and one just below the cap (11) both allow growth.
   it('allows growth under the cap', () => {
     expect(canStillGrowWindow(0, false)).toBe(true);
     expect(canStillGrowWindow(11, false)).toBe(true);
   });
+  // What: at the cap, growth normally stops — UNLESS a drag (e.g. a marquee selection) is in
+  // progress, in which case it's allowed anyway so the grid doesn't cut off mid-drag.
+  // How: checks the cap value (12) refuses growth without a drag, but allows it with one.
   it('stops growth at the cap unless a drag is in progress', () => {
     expect(canStillGrowWindow(12, false)).toBe(false);
     expect(canStillGrowWindow(12, true)).toBe(true);
@@ -35,10 +40,16 @@ describe('canStillGrowWindow', () => {
 });
 
 describe('isNearRightEdge / isNearLeftEdge', () => {
+  // What: "near the right edge" means the visible right boundary is within 250px of the
+  // content's actual end.
+  // How: checks a scroll position that's within the 250px threshold and one that isn't.
   it('is near the right edge within 250px of the end', () => {
     expect(isNearRightEdge(750, 250, 1000)).toBe(true); // 750+250 > 1000-250
     expect(isNearRightEdge(400, 250, 1000)).toBe(false);
   });
+  // What: "near the left edge" means within 150px of scrollLeft 0 — checked as a strict
+  // less-than, so exactly 150px does NOT count as near.
+  // How: checks 100px (near), and both 150px and 200px (not near, including the boundary itself).
   it('is near the left edge within 150px of the start', () => {
     expect(isNearLeftEdge(100)).toBe(true);
     expect(isNearLeftEdge(150)).toBe(false);
@@ -47,15 +58,25 @@ describe('isNearRightEdge / isNearLeftEdge', () => {
 });
 
 describe('isScrollingLeft', () => {
+  // What: a plain negative horizontal wheel delta is scrolling left.
+  // How: checks a negative deltaX with no shift key.
   it('is true for a plain negative horizontal delta', () => {
     expect(isScrollingLeft(-10, 0, false)).toBe(true);
   });
+  // What: holding shift while scrolling vertically is the standard convention for horizontal
+  // scroll on a mouse wheel — a negative vertical delta WITH shift also counts as scrolling left.
+  // How: checks a negative deltaY with shiftKey:true.
   it('is true for a shift-modified negative vertical delta (the horizontal-scroll convention)', () => {
     expect(isScrollingLeft(0, -10, true)).toBe(true);
   });
+  // What: without shift, a negative vertical delta is just normal vertical scrolling, not
+  // "scrolling left".
+  // How: checks a negative deltaY with shiftKey:false.
   it('is false for a negative vertical delta without shift', () => {
     expect(isScrollingLeft(0, -10, false)).toBe(false);
   });
+  // What: a positive delta in either axis is never "scrolling left".
+  // How: checks a positive deltaX and a positive shift-modified deltaY.
   it('is false when scrolling right or down', () => {
     expect(isScrollingLeft(10, 0, false)).toBe(false);
     expect(isScrollingLeft(0, 10, true)).toBe(false);
@@ -63,10 +84,18 @@ describe('isScrollingLeft', () => {
 });
 
 describe('needsOverflowGrowth', () => {
+  // What: the grid needs more weeks appended when its content isn't yet wider than the
+  // viewport (with a small slack margin) AND it hasn't hit the absolute week ceiling yet.
+  // How: checks content exactly as wide as the viewport (needs growth to create scroll room)
+  // and content just 50px wider (still within the 60px slack, so still needs growth).
   it('needs growth when under the 100-week ceiling and not yet wider than the viewport', () => {
     expect(needsOverflowGrowth(5, 800, 800)).toBe(true); // exactly equal
     expect(needsOverflowGrowth(5, 850, 800)).toBe(true); // within the 60px slack
   });
+  // What: growth stops once the content is genuinely wider than the viewport, or once the
+  // week count has passed its ceiling regardless of width.
+  // How: checks content well past the slack margin, and a week count past the ceiling with a
+  // narrow width that would otherwise need growth.
   it('does not need growth once wider than the viewport, or past the ceiling', () => {
     expect(needsOverflowGrowth(5, 900, 800)).toBe(false);
     expect(needsOverflowGrowth(100, 500, 800)).toBe(false);
@@ -74,6 +103,9 @@ describe('needsOverflowGrowth', () => {
 });
 
 describe('computeWeekPixelWidth', () => {
+  // What: a week's total pixel width is (cell width + 1px border) per day, plus a fixed 9px
+  // gap column between weeks.
+  // How: checks the formula against both a 5-day and a 7-day week at the same cell width.
   it('is (cellWidth+1) per day, plus a 9px gap column', () => {
     expect(computeWeekPixelWidth(99, 5)).toBe(100 * 5 + 9);
     expect(computeWeekPixelWidth(99, 7)).toBe(100 * 7 + 9);
@@ -86,12 +118,20 @@ describe('pickVisibleDateColumn', () => {
     { rightEdge: 150, date: '2021-01-05' },
     { rightEdge: 250, date: '2021-01-06' },
   ];
+  // What: given the current scroll position, picks the first column whose right edge is
+  // still ahead of it — i.e. the first column actually visible at the left of the viewport.
+  // How: scrolls to a position past the first column's edge but before the second's, and
+  // checks the second column's date is picked.
   it('picks the first column whose right edge extends past the left edge', () => {
     expect(pickVisibleDateColumn(columns, 100)).toBe('2021-01-05');
   });
+  // What: scrolled past every column's edge, the function falls back to the very last column
+  // rather than returning nothing.
+  // How: scrolls far past all three columns' edges and checks the last one's date is picked.
   it('picks the last column once scrolled past every one of them', () => {
     expect(pickVisibleDateColumn(columns, 999)).toBe('2021-01-06');
   });
+  // What: with no columns at all, there's nothing to pick — returns null, not a crash.
   it('is null for an empty column list', () => {
     expect(pickVisibleDateColumn([], 0)).toBeNull();
   });
@@ -99,6 +139,10 @@ describe('pickVisibleDateColumn', () => {
 
 describe('daysPerWeek', () => {
   beforeEach(() => localStorage.clear());
+  // What: the grid shows 5 days (workweek) by default, or 7 once the "show weekends" setting
+  // is turned on.
+  // How: checks the default with nothing in localStorage, then sets the weekends flag and
+  // checks it switches to 7.
   it('is 5 by default and 7 once weekends are on', () => {
     expect(daysPerWeek()).toBe(5);
     localStorage.setItem('mb_weekends', 'on');
