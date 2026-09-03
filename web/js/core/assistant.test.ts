@@ -11,7 +11,6 @@ import {
   effectiveNeed,
   isNodeSatisfiable,
   isTreeSatisfiableOnDay,
-  hasAnyRedundancy,
   freeDays,
   groupRuns,
   extendOpenRuns,
@@ -242,27 +241,6 @@ describe('isTreeSatisfiableOnDay', () => {
     const root: AssistContainer = { children: [dev('a', 'A'), dev('b', 'B')] };
     expect(isTreeSatisfiableOnDay(root, 'X', freeOn(['A@X', 'B@X']))).toBe(true);
     expect(isTreeSatisfiableOnDay(root, 'X', freeOn(['A@X']))).toBe(false); // B not free
-  });
-});
-
-describe('hasAnyRedundancy', () => {
-  // What: a group has redundancy when it has more children than its effective need requires;
-  // an exactly-matched group, or a tree with no groups at all, has none.
-  // How: checks a 3-child group needing only 1 (redundant), the same group needing all 3 (not
-  // redundant), and a tree with a bare device (no groups to be redundant at all).
-  it('detects a group with more children than it needs', () => {
-    expect(hasAnyRedundancy({ children: [mkGrp(1, ['A', 'B', 'C'])] })).toBe(true);
-    expect(hasAnyRedundancy({ children: [mkGrp(3, ['A', 'B', 'C'])] })).toBe(false);
-    expect(hasAnyRedundancy({ children: [dev('a', 'A')] })).toBe(false); // no groups
-  });
-  // What: redundancy anywhere in the tree counts, even nested inside a group that is itself
-  // exactly matched (not redundant on its own).
-  // How: builds an outer group with exact need (not redundant) containing an inner group that
-  // IS redundant, and checks the tree-wide check still reports redundancy.
-  it('detects redundancy nested inside a non-redundant group', () => {
-    const inner = mkGrp(1, ['B', 'C']); // 2 > need 1 → redundant
-    const outer: AssistGrp = { uid: 'o', type: 'grp', need: 2, children: [dev('a', 'A'), inner] };
-    expect(hasAnyRedundancy({ children: [outer] })).toBe(true); // outer not redundant, inner is
   });
 });
 

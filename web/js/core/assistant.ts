@@ -171,17 +171,6 @@ export function isTreeSatisfiableOnDay(
 }
 
 /**
- * Returns true if any group in the tree has redundant backup capacity (`children.length > need`).
- */
-export function hasAnyRedundancy(node: AssistContainer): boolean {
-  return node.children.some(
-    (child) =>
-      child.type === 'grp' &&
-      (child.children.length > effectiveNeed(child) || hasAnyRedundancy(child)),
-  );
-}
-
-/**
  * Filters an array of ISO dates, returning only the days where the requirement tree is satisfiable.
  */
 export function freeDays(root: AssistContainer, days: string[], isFree: IsFree): string[] {

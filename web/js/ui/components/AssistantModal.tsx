@@ -36,7 +36,6 @@ import {
   freeDays,
   groupNodeOnto,
   groupRuns,
-  hasAnyRedundancy,
   joinNode,
   moveNodeToRoot,
   removeNode,
@@ -116,16 +115,18 @@ interface AssistantSearchState {
 }
 
 /**
- * Validates the search inputs, confirms redundancy if any exists, then searches for free
- * windows and freezes a tree snapshot for the result (see the file header's note on why the
- * result is frozen rather than reading the live tree).
+ * Validates the search inputs, then searches for free windows and freezes a tree snapshot for
+ * the result (see the file header's note on why the result is frozen rather than reading the
+ * live tree). Used to also confirm before searching when a group had redundancy (need < member
+ * count) — removed (user request): the results/suggestion pills already surface a group's
+ * structure without an extra blocking dialog in front of every such search.
  */
-async function runAssistantSearch(
+function runAssistantSearch(
   tree: AssistContainer,
   from: string,
   to: string,
   minDays: number,
-): Promise<AssistantSearchState | null> {
+): AssistantSearchState | null {
   if (!tree.children.length) {
     toast('Bitte oben Geräte übernehmen.');
     return null;
@@ -133,16 +134,6 @@ async function runAssistantSearch(
   if (!from || !to || from > to) {
     toast('Bitte gültigen Zeitraum wählen.');
     return null;
-  }
-  if (hasAnyRedundancy(tree)) {
-    const confirmed = await window.askConfirm({
-      title: 'Alle gleichwertigen Geräte erfasst?',
-      yes: 'Ja, Termine suchen',
-      no: 'Zurück',
-      danger: false,
-      body: 'In mindestens einer Bedarfsgruppe brauchst du weniger Geräte, als enthalten sind (Redundanz). Sind dort alle gleichwertigen Geräte enthalten? Fehlende ggf. oben zur Auswahl hinzufügen.',
-    });
-    if (!confirmed) return null;
   }
   const frozenTree = structuredClone(tree);
   const days = getWeekdaysInRange(from, to);
@@ -268,8 +259,8 @@ export function AssistantModal() {
   const [minDays, setMinDays] = useState(1);
   const [searchState, setSearchState] = useState<AssistantSearchState | null>(null);
 
-  async function search(): Promise<void> {
-    const outcome = await runAssistantSearch(assistant.tree, from, to, minDays);
+  function search(): void {
+    const outcome = runAssistantSearch(assistant.tree, from, to, minDays);
     if (outcome) setSearchState(outcome);
   }
 
@@ -301,7 +292,7 @@ export function AssistantModal() {
           onFromChange={setFrom}
           onToChange={setTo}
           onMinDaysChange={setMinDays}
-          onSearch={() => void search()}
+          onSearch={search}
         />
       </div>
       {searchState && (

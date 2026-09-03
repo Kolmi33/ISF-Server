@@ -372,17 +372,14 @@ describe('AssistantModal — search results', () => {
     expect(document.getElementById('modalReopen')!.classList.contains('show')).toBe(true);
     expect(document.getElementById('modal')!.textContent).not.toBe(''); // still mounted
   });
-});
 
-describe('AssistantModal — redundancy confirm', () => {
-  // What: when the work tree contains a group with real redundancy (need < member count —
-  // the search could substitute between equivalent devices), the assistant asks for
-  // confirmation before running the search at all ("did you really add every equivalent
-  // device?"), and declining that confirmation cancels the search entirely.
-  // How: checks two devices, drags one onto the other to form a redundant group, declines
-  // the confirmation, and checks the confirm dialog's title plus that no results appeared.
-  it('asks for confirmation before searching when a group has redundancy, and respects "no"', async () => {
-    window.askConfirm = vi.fn().mockResolvedValue(false);
+  // What: a group with real redundancy (need < member count — the search could substitute
+  // between equivalent devices) no longer blocks the search behind a confirmation dialog
+  // (user request: the extra question every time a group exists was unwanted friction) — the
+  // search just runs immediately, and the results still show a suggestion pill for the group.
+  // How: forms a need-1-of-2 group, searches with no confirm mock involved at all, and checks
+  // both that results appeared and that a suggested-device pill is shown.
+  it('searches immediately with no confirmation when a group has redundancy, showing suggestion pills', async () => {
     act(() => openAssistant());
     openChecklistCategory();
     act(() => {
@@ -398,39 +395,10 @@ describe('AssistantModal — redundancy confirm', () => {
     });
     expect(document.querySelectorAll('.asgrp')).toHaveLength(1);
 
-    await act(async () => {
-      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
-      await Promise.resolve();
-    });
-    expect(window.askConfirm).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Alle gleichwertigen Geräte erfasst?' }),
-    );
-    expect(screen.queryByText('Passende Termine:')).not.toBeInTheDocument(); // declined → no search
-  });
-
-  // What: accepting the redundancy confirmation lets the search actually run, and now that a
-  // group exists in the tree, the results show a "suggestion" line (the mirror case of the
-  // no-group test earlier).
-  // How: forms the same redundant group, accepts the confirmation, and checks a suggested-
-  // device pill now appears.
-  it('runs the search once confirmed, and shows suggestion pills (a group exists)', async () => {
-    window.askConfirm = vi.fn().mockResolvedValue(true);
-    act(() => openAssistant());
-    openChecklistCategory();
     act(() => {
-      screen.getByRole('checkbox', { name: /Fräse/ }).click();
-      screen.getByRole('checkbox', { name: /^Presse/ }).click();
-    });
-    const dt = dataTransferStub();
-    act(() => {
-      const devNodes = document.querySelectorAll('.asdev');
-      fireEvent.dragStart(devNodes[1]!, { dataTransfer: dt });
-      fireEvent.drop(devNodes[0]!, { dataTransfer: dt });
-    });
-    await act(async () => {
       screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
-      await Promise.resolve();
     });
+    expect(screen.getByText('Passende Termine:')).toBeInTheDocument();
     expect(document.querySelector('.aspill')).toBeInTheDocument();
   });
 });
