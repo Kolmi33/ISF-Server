@@ -27,6 +27,8 @@ import {
   isMine,
   maintenanceKindToday,
   nameColor,
+  weekBookingBarSegments,
+  type BookingBarSegment,
   type GridRow,
 } from '../grid.ts';
 import { Icon } from './Icon.tsx';
@@ -121,13 +123,30 @@ function BlockedCell({ machine, isoDate, isToday, weekend, dateLabel }: CellAttr
   );
 }
 
-/** One data cell, already classified as booked (and not blocked). */
-function BookedCell({ machine, isoDate, isToday, weekend, dateLabel }: CellAttrs) {
+/** One data cell, already classified as booked (and not blocked). `segment` is this cell's
+ *  position within its consolidated multi-day booking bar (`weekBookingBarSegments`,
+ *  computed once per week by `MachineRow`): a cell that continues into its neighbor drops
+ *  that border so the two visually merge, and only the bar's one "showName" cell prints the
+ *  booker's name — everywhere else in the same run stays just the shared background color. */
+function BookedCell({
+  machine,
+  isoDate,
+  isToday,
+  weekend,
+  dateLabel,
+  segment,
+}: CellAttrs & { segment: BookingBarSegment }) {
   const booking = getBooking(store.get('data')!.bookings, machine.id, isoDate)!;
   const mine = isMine(store.get('user'), booking.name);
   return (
     <td
-      className={cellClass('booked', { mine, today: isToday, weekend })}
+      className={cellClass('booked', {
+        mine,
+        today: isToday,
+        weekend,
+        mergeLeft: segment.continuesLeft,
+        mergeRight: segment.continuesRight,
+      })}
       role="gridcell"
       data-machine-id={machine.id}
       data-date={isoDate}
@@ -135,7 +154,7 @@ function BookedCell({ machine, isoDate, isToday, weekend, dateLabel }: CellAttrs
       aria-label={`${machine.name}, ${dateLabel}, belegt von ${booking.name}`}
       title={bookedCellTitle(booking)}
     >
-      {booking.name}
+      {segment.showName ? booking.name : ''}
     </td>
   );
 }
@@ -148,7 +167,8 @@ function GridCell({
   isoDate,
   today,
   dateLabel,
-}: Omit<CellAttrs, 'isToday' | 'weekend'> & { today: string }) {
+  segment,
+}: Omit<CellAttrs, 'isToday' | 'weekend'> & { today: string; segment: BookingBarSegment }) {
   const isToday = isoDate === today;
   const weekend = isWeekend(parseIsoDateString(isoDate));
   const booking = getBooking(store.get('data')!.bookings, machine.id, isoDate);
@@ -160,7 +180,7 @@ function GridCell({
   const cellProps = { machine, isoDate, isToday, weekend, dateLabel };
 
   if (state === 'blocked') return <BlockedCell {...cellProps} />;
-  if (state === 'booked') return <BookedCell {...cellProps} />;
+  if (state === 'booked') return <BookedCell {...cellProps} segment={segment} />;
   if (state === 'unavail') {
     return (
       <td
@@ -287,23 +307,33 @@ function MachineRow({
   today: string;
   dateLabels: ReadonlyMap<string, string>;
 }) {
+  // Booking-bar segmentation is computed once per displayed week (not per cell) — each week
+  // is its own independent "row" of the merge since a week's own "gap" column already breaks
+  // any bar visually, so there's nothing to carry over from one week to the next.
+  const bookings = store.get('data')!.bookings;
+  const nameAt = (isoDate: string) => getBooking(bookings, machine.id, isoDate)?.name ?? null;
+
   return (
     <tr role="row">
       <MachineRowHeaderCell machine={machine} today={today} />
-      {weeks.map((week, weekIndex) => (
-        <Fragment key={week[0]}>
-          {weekIndex > 0 && <td className="gap" aria-hidden="true" />}
-          {week.map((isoDate) => (
-            <GridCell
-              machine={machine}
-              isoDate={isoDate}
-              today={today}
-              dateLabel={dateLabels.get(isoDate)!}
-              key={isoDate}
-            />
-          ))}
-        </Fragment>
-      ))}
+      {weeks.map((week, weekIndex) => {
+        const barSegments = weekBookingBarSegments(week, nameAt);
+        return (
+          <Fragment key={week[0]}>
+            {weekIndex > 0 && <td className="gap" aria-hidden="true" />}
+            {week.map((isoDate) => (
+              <GridCell
+                machine={machine}
+                isoDate={isoDate}
+                today={today}
+                dateLabel={dateLabels.get(isoDate)!}
+                segment={barSegments.get(isoDate)!}
+                key={isoDate}
+              />
+            ))}
+          </Fragment>
+        );
+      })}
     </tr>
   );
 }

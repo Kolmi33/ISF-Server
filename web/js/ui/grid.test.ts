@@ -12,6 +12,7 @@ import {
   nameColor,
   maintenanceKindToday,
   buildGridRows,
+  weekBookingBarSegments,
   FAVORITES_GROUP_LABEL,
   type GridRow,
 } from './grid.ts';
@@ -91,6 +92,15 @@ describe('cellClass', () => {
     );
     expect(cellClass('free', { today: true })).toBe('cell free today');
     expect(cellClass('free', { weekend: true })).toBe('cell free wknd');
+  });
+  // What: the merge-left/merge-right modifiers, like mine, only apply to booked cells — a
+  // free/blocked/unavail cell never has a booking run to merge into.
+  // How: checks both on 'booked' add their classes, but both on 'free' have no effect.
+  it('adds merge-left/merge-right only for booked cells', () => {
+    expect(cellClass('booked', { mergeLeft: true, mergeRight: true })).toBe(
+      'cell booked merge-left merge-right',
+    );
+    expect(cellClass('free', { mergeLeft: true, mergeRight: true })).toBe('cell free');
   });
 });
 
@@ -348,5 +358,98 @@ describe('buildGridRows', () => {
       isFavoritesGroup: true,
     });
     expect(rows.map((r) => r.kind)).toEqual(['group', 'machine', 'category', 'group', 'machine']);
+  });
+});
+
+describe('weekBookingBarSegments', () => {
+  const week = ['2021-01-04', '2021-01-05', '2021-01-06', '2021-01-07', '2021-01-08'];
+
+  // What: an unbooked day never continues in either direction and never shows a name.
+  // How: a week with no bookings at all — checks every day's segment is all-false.
+  it('is all-false for a day with no booking', () => {
+    const segments = weekBookingBarSegments(week, () => null);
+    for (const date of week) {
+      expect(segments.get(date)).toEqual({
+        continuesLeft: false,
+        continuesRight: false,
+        showName: false,
+      });
+    }
+  });
+
+  // What: a single isolated booked day (different names on both sides, or no neighbor at all)
+  // neither continues left nor right, but does show its own name — a run of exactly one day
+  // is still its own run, with itself as the midpoint.
+  // How: books only the middle day of the week under 'anna', leaving every other day free.
+  it('a lone booked day shows its name but continues neither direction', () => {
+    const nameAt = (date: string) => (date === '2021-01-06' ? 'anna' : null);
+    const segment = weekBookingBarSegments(week, nameAt).get('2021-01-06');
+    expect(segment).toEqual({ continuesLeft: false, continuesRight: false, showName: true });
+  });
+
+  // What: a run of several consecutive same-name days merges into one bar — every interior
+  // day continues both directions, the two ends continue only inward, and only the
+  // (floor-rounded) middle day is marked to show the name, so it's printed once, not per day.
+  // How: books all 5 days under 'anna' and checks each day's segment individually.
+  it('merges a full-week run into one bar, naming only its middle day', () => {
+    const segments = weekBookingBarSegments(week, () => 'anna');
+    expect(segments.get('2021-01-04')).toEqual({
+      continuesLeft: false,
+      continuesRight: true,
+      showName: false,
+    });
+    expect(segments.get('2021-01-05')).toEqual({
+      continuesLeft: true,
+      continuesRight: true,
+      showName: false,
+    });
+    expect(segments.get('2021-01-06')).toEqual({
+      // floor((4-0)/2) = 2 → index 2, the exact middle of 5 days
+      continuesLeft: true,
+      continuesRight: true,
+      showName: true,
+    });
+    expect(segments.get('2021-01-07')).toEqual({
+      continuesLeft: true,
+      continuesRight: true,
+      showName: false,
+    });
+    expect(segments.get('2021-01-08')).toEqual({
+      continuesLeft: true,
+      continuesRight: false,
+      showName: false,
+    });
+  });
+
+  // What: a name change or a free-day gap both break a run — the day after either one starts
+  // a fresh run of its own, not a continuation.
+  // How: books days 1–2 as 'anna', day 3 free, days 4–5 as 'bob' — checks the run boundaries
+  // land exactly where the name/gap changes.
+  it('breaks the run on a name change or a free-day gap', () => {
+    const names: Record<string, string | null> = {
+      '2021-01-04': 'anna',
+      '2021-01-05': 'anna',
+      '2021-01-06': null,
+      '2021-01-07': 'bob',
+      '2021-01-08': 'bob',
+    };
+    const segments = weekBookingBarSegments(week, (date) => names[date] ?? null);
+    expect(segments.get('2021-01-05')).toMatchObject({ continuesRight: false });
+    expect(segments.get('2021-01-06')).toEqual({
+      continuesLeft: false,
+      continuesRight: false,
+      showName: false,
+    });
+    expect(segments.get('2021-01-07')).toMatchObject({ continuesLeft: false });
+  });
+
+  // What: two consecutive days booked by two DIFFERENT people never merge, even though
+  // they're adjacent and both booked — only a matching name continues a bar.
+  // How: books day 1 as 'anna' and day 2 as 'bob' and checks neither continues toward the other.
+  it('does not merge adjacent days booked by different people', () => {
+    const names: Record<string, string> = { '2021-01-04': 'anna', '2021-01-05': 'bob' };
+    const segments = weekBookingBarSegments(week.slice(0, 2), (date) => names[date] ?? null);
+    expect(segments.get('2021-01-04')).toMatchObject({ continuesRight: false });
+    expect(segments.get('2021-01-05')).toMatchObject({ continuesLeft: false });
   });
 });

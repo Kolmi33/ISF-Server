@@ -55,6 +55,10 @@ export interface CellClassOpts {
   today?: boolean;
   /** Marks Saturday and Sunday columns. */
   weekend?: boolean;
+  /** This booked cell merges into its left/right neighbor's same-name run — drops that side's
+   *  border so the two visually join into one continuous bar (`weekBookingBarSegments`). */
+  mergeLeft?: boolean;
+  mergeRight?: boolean;
 }
 
 /**
@@ -65,7 +69,62 @@ export function cellClass(state: CellState, opts: CellClassOpts = {}): string {
   if (state === 'booked' && opts.mine) c += ' mine';
   if (opts.today) c += ' today';
   if (opts.weekend) c += ' wknd';
+  if (state === 'booked' && opts.mergeLeft) c += ' merge-left';
+  if (state === 'booked' && opts.mergeRight) c += ' merge-right';
   return c;
+}
+
+/** One booked cell's position within the continuous "bar" of same-name bookings it's part of
+ *  (`weekBookingBarSegments`). */
+export interface BookingBarSegment {
+  /** This cell visually merges with the previous day (same run) — drop the seam between them. */
+  continuesLeft: boolean;
+  /** This cell visually merges with the next day (same run) — drop the seam between them. */
+  continuesRight: boolean;
+  /** This is the one cell in its run that prints the booker's name (centered in the bar). */
+  showName: boolean;
+}
+
+/**
+ * Computes, for every day of one displayed week, its position within the "booking bar" it's
+ * part of — the maximal run of calendar-consecutive days in this same week booked under the
+ * exact same name. Consolidates what would otherwise be N identically-colored, individually
+ * bordered, individually-labeled cells into a single continuous bar: a day continuing a run
+ * into its left/right neighbor drops that border (so the two cells visually merge), and only
+ * the run's middle day is marked to show the name — printed once, centered in the bar,
+ * instead of once per day.
+ *
+ * Deliberately scoped to one displayed week, not the longer workday-skipping run
+ * `core/bookings.ts`'s `findSameNameWorkdayRun` computes for the "delete whole series" flow:
+ * weeks are separated by their own "gap" column in the grid (`GridBody.tsx`'s `MachineRow`),
+ * so a bar can never visually continue past that gap anyway, and comparing by calendar day
+ * here (not workday-skip) means a shown weekend cell merges into its visible neighbors
+ * exactly like any other day, matching what's actually drawn next to it.
+ */
+export function weekBookingBarSegments(
+  week: readonly string[],
+  nameAt: (isoDate: string) => string | null,
+): Map<string, BookingBarSegment> {
+  const segments = new Map<string, BookingBarSegment>();
+  let index = 0;
+  while (index < week.length) {
+    const runStart = index;
+    const name = nameAt(week[runStart]!);
+    let runEnd = runStart;
+    while (runEnd + 1 < week.length && name !== null && nameAt(week[runEnd + 1]!) === name) {
+      runEnd++;
+    }
+    const middle = runStart + Math.floor((runEnd - runStart) / 2);
+    for (let i = runStart; i <= runEnd; i++) {
+      segments.set(week[i]!, {
+        continuesLeft: name !== null && i > runStart,
+        continuesRight: name !== null && i < runEnd,
+        showName: name !== null && i === middle,
+      });
+    }
+    index = runEnd + 1;
+  }
+  return segments;
 }
 
 /** Visual status dot state displayed in the machine row header. */

@@ -173,6 +173,37 @@ describe('Grid', () => {
     expect(cell.textContent).toBe('bob');
   });
 
+  // What: a multi-day booking under one name merges into a single continuous bar — the run's
+  // interior/end cells drop the border toward whichever neighbor shares their run (so the two
+  // visually join), and only the run's middle cell prints the booker's name; the others stay
+  // blank rather than repeating it.
+  // How: books "m-favorite" solid across three consecutive days (Mon–Wed, all in week 1) and
+  // checks each of the three cells' text and merge-left/merge-right classes individually.
+  it('merges a multi-day booking into one continuous bar, naming only its middle cell', () => {
+    window.S.data!.bookings['m-favorite'] = {
+      '2021-01-04': { name: 'carla' }, // Mon
+      '2021-01-05': { name: 'carla' }, // Tue — the run's middle day
+      '2021-01-06': { name: 'carla' }, // Wed
+    };
+    const { container } = renderGridIntoTable();
+    const cellFor = (date: string) =>
+      container.querySelector(`td[data-machine-id="m-favorite"][data-date="${date}"]`)!;
+    const mon = cellFor('2021-01-04');
+    const tue = cellFor('2021-01-05');
+    const wed = cellFor('2021-01-06');
+
+    expect(mon.textContent).toBe('');
+    expect(tue.textContent).toBe('carla');
+    expect(wed.textContent).toBe('');
+
+    expect(mon.className).not.toContain('merge-left');
+    expect(mon.className).toContain('merge-right');
+    expect(tue.className).toContain('merge-left');
+    expect(tue.className).toContain('merge-right');
+    expect(wed.className).toContain('merge-left');
+    expect(wed.className).not.toContain('merge-right');
+  });
+
   // What: a cell blocked by an active maintenance slot renders as "blocked" with the slot's
   // note visible as a hover title.
   // How: renders the fixture's "m-blocked" cell (an active 'defekt' slot with a note) and
