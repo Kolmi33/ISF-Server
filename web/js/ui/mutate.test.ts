@@ -46,6 +46,10 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('mutate — read-only guard', () => {
+  // What: in read-only mode, mutate refuses the write entirely — the reducer function never
+  // even runs, and the user sees a toast explaining why.
+  // How: sets readOnly:true, calls mutate with a spy reducer, and checks the result is null,
+  // the spy was never invoked, and the toast mentions read-only mode.
   it('toasts, never calls fn, and returns null in read-only mode', async () => {
     window.S.readOnly = true;
     const fn = vi.fn();
@@ -57,6 +61,11 @@ describe('mutate — read-only guard', () => {
 });
 
 describe('mutate — abort', () => {
+  // What: when the reducer itself reports an abort (e.g. a conflict the caller decided not
+  // to force through), mutate leaves the local state completely untouched and never even
+  // attempts to persist to the server — an abort is a true no-op, not a partial write.
+  // How: stubs fetch to prove it's never called, runs a reducer that returns {abort:true},
+  // and checks the local log length is unchanged, notify never fired, and fetch was never invoked.
   it('leaves S.data and the log untouched, and never calls persist (no fetch)', async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
@@ -71,6 +80,12 @@ describe('mutate — abort', () => {
 });
 
 describe('mutate — optimistic apply + logging', () => {
+  // What: mutate applies the reducer to the local data SYNCHRONOUSLY (optimistic UI update,
+  // before the server round-trip completes), records a log entry for the action, and returns
+  // whatever the reducer itself returned.
+  // How: runs a reducer that both mutates the fresh data and returns a result object, then
+  // checks the local data reflects the mutation, the returned value matches the reducer's
+  // result, and a log entry was added with the right user/action.
   it("applies fn to S.data synchronously, logs the action, and returns fn's result", async () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     const fn = vi.fn((fresh) => {
@@ -86,6 +101,10 @@ describe('mutate — optimistic apply + logging', () => {
     expect(window.S.data!.log[0]).toMatchObject({ user: 'anna', action: 'Gebucht: Anna' });
   });
 
+  // What: the in-memory activity log never grows past 500 entries — older entries are
+  // dropped as new ones are added at the front.
+  // How: seeds exactly 500 existing log entries, adds one more via mutate, and checks the
+  // log is still 500 long with the new entry now at the front.
   it('caps the log at 500 entries', async () => {
     vi.stubGlobal('fetch', fetchReturning({ rev: 2 }));
     window.S.data!.log = Array.from({ length: 500 }, (_, i) => ({

@@ -175,16 +175,24 @@ describe('refreshDot', () => {
     return document.querySelector('.dot')!;
   }
 
+  // What: refreshing a machine row's dot when that row isn't in the DOM at all is a safe no-op.
+  // How: empties the document body entirely and checks calling refreshDot doesn't throw.
   it('is a no-op when the row has no cell rendered at all', () => {
     document.body.innerHTML = '';
     expect(() => refreshDot('m1')).not.toThrow();
   });
 
+  // What: a row that exists but has no `.dot` element (a maintenance/stats row uses
+  // `.statdot` for a different purpose instead) is also a safe no-op.
+  // How: removes the `.dot` element from the fixture and checks refreshDot doesn't throw.
   it('is a no-op when the row has no .dot element (a maintenance row uses .statdot instead)', () => {
     document.querySelector('.dot')!.remove();
     expect(() => refreshDot('m1')).not.toThrow();
   });
 
+  // What: a machine booked today shows the "busy" dot state, with the booker's name as the
+  // hover title.
+  // How: books today, refreshes the dot, and checks both the class and title.
   it("shows busy with the booker's name when booked today", () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
     refreshDot('m1');
@@ -192,12 +200,16 @@ describe('refreshDot', () => {
     expect(dot().title).toContain('anna');
   });
 
+  // What: a machine closed today (per its days mask) shows the "unavail" dot state.
+  // How: gives the machine a mask with today's weekday off and checks the dot class.
   it('shows unavailable when the machine is closed today', () => {
     window.S.data!.machines = [machine({ days: '0111111' })];
     refreshDot('m1');
     expect(dot().className).toBe('dot unavail');
   });
 
+  // What: with no booking, block, or unavailability, the dot shows "free".
+  // How: refreshes the dot against the default fixture state and checks the class.
   it('shows free otherwise', () => {
     refreshDot('m1');
     expect(dot().className).toBe('dot free');
@@ -205,6 +217,10 @@ describe('refreshDot', () => {
 });
 
 describe('patchCells', () => {
+  // What: patching a batch of cells updates each named cell's own styling AND refreshes the
+  // today-dot for every row those cells belong to — a single call covers both levels.
+  // How: books today, marks the machine visible, patches that one cell, and checks both the
+  // cell's class and the row's dot reflect the new booked state.
   it("patches every named cell and refreshes each affected row's dot", () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
     window.S.visM = ['m1'];
@@ -213,6 +229,13 @@ describe('patchCells', () => {
     expect(document.querySelector('.dot')!.className).toBe('dot busy');
   });
 
+  // What: since patching a cell overwrites its whole className (wiping any `.sel`/`.kfocus`
+  // selection-highlight classes it had), patchCells must repaint the current selection
+  // afterward so a selected cell doesn't silently lose its highlight.
+  // How: pre-marks the cell as selected, patches it (with nothing actually anchored/focused
+  // in this fixture), and checks the stray `.sel` class was correctly cleared by the
+  // post-patch selection repaint — proving that repaint step really ran, not just that the
+  // patch itself happened to drop the class.
   it("repaints the selection afterward, since patching a cell's className wipes .sel/.kfocus", () => {
     cell().classList.add('sel');
     window.S.visM = ['m1'];
