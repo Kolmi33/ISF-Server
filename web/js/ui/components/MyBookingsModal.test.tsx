@@ -57,6 +57,21 @@ afterEach(() => {
 });
 
 describe('MyBookingsModal', () => {
+  // What: a run's row uses the same card layout as AllBookingsModal's own run rows (user
+  // request: "copy the display style from Alle Buchungen") — the machine name bold with its
+  // department group next to it on its own line (`.abmach`), the date/tag line below it
+  // (`.abdate`), rather than the old single run-on-sentence line with no group shown at all.
+  // How: books one day and checks both the `.abmach`/`.abdate` structure and the group text
+  // (never shown by the old layout) are present.
+  it("uses AllBookingsModal's card style: machine+group on top, date below", () => {
+    window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
+    render(<MyBookingsModal />);
+    const machLine = document.querySelector('.mybk .abmach')!;
+    expect(machLine.textContent).toContain('Fräse');
+    expect(machLine.textContent).toContain('Halle 1');
+    expect(document.querySelector('.mybk .abdate')).not.toBeNull();
+  });
+
   // What: with no future bookings for the current user, the modal shows an explanatory
   // placeholder rather than an empty list.
   // How: renders with no bookings set up and checks the placeholder text appears.

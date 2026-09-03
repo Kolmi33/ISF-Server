@@ -99,6 +99,59 @@ interface RunRowProps {
   onDeleteDates: (dates: readonly string[]) => void;
 }
 
+/** The `.abmach`/`.abdate` card body — copied from AllBookingsModal's `AllBookingsRow` layout
+ *  for a consistent look between the two "list of runs" modals: bold machine name + group hint
+ *  on top, the date range (with the expand chip and day-count tag folded in) below. Split out
+ *  of `RunHead` purely to stay under the function-length budget. The third `.abdate`-style
+ *  "who booked it" line All Bookings has is skipped here — every run in this modal is already
+ *  known to be the current user's own, so naming them again would be redundant; the day-level
+ *  note (`DayNote`) takes that line's place for a single-day run instead. */
+function RunCardBody({
+  run,
+  isSeries,
+  isExpanded,
+  onToggleExpand,
+}: {
+  run: LiveRun;
+  isSeries: boolean;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+}) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div className="abmach">
+        <b>{run.machine.name}</b>{' '}
+        <span className="hint" style={{ margin: 0 }}>
+          · {run.machine.group}
+        </span>
+      </div>
+      <div className="abdate">
+        {isSeries && (
+          <span
+            className="chip"
+            title={`Tage ${isExpanded ? 'einklappen' : 'ausklappen'}`}
+            onClick={onToggleExpand}
+          >
+            {isExpanded ? '▾' : '▸'}
+          </span>
+        )}{' '}
+        {isSeries ? (
+          <>
+            {formatDateLong(run.liveDates[0]!)} –{' '}
+            {formatDateLong(run.liveDates[run.liveDates.length - 1]!)}{' '}
+            <span className="tag">{run.liveDates.length} Tage</span>
+          </>
+        ) : (
+          <>
+            {formatDateLong(run.liveDates[0]!)}
+            <DayNote machine={run.machine} date={run.liveDates[0]!} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function RunHead({ run, isExpanded, onToggleExpand, onDeleteDates }: RunRowProps) {
   const isSeries = run.liveDates.length > 1;
 
@@ -116,29 +169,12 @@ function RunHead({ run, isExpanded, onToggleExpand, onDeleteDates }: RunRowProps
 
   return (
     <div className="mybk">
-      <div>
-        {isSeries && (
-          <span
-            className="chip"
-            title={`Tage ${isExpanded ? 'einklappen' : 'ausklappen'}`}
-            onClick={onToggleExpand}
-          >
-            {isExpanded ? '▾' : '▸'}
-          </span>
-        )}{' '}
-        {isSeries ? (
-          <>
-            {formatDateLong(run.liveDates[0]!)} –{' '}
-            {formatDateLong(run.liveDates[run.liveDates.length - 1]!)}{' '}
-            <span className="tag">{run.liveDates.length} Tage</span>
-          </>
-        ) : (
-          formatDateLong(run.liveDates[0]!)
-        )}
-        {' — '}
-        <b>{run.machine.name}</b>
-        {!isSeries && <DayNote machine={run.machine} date={run.liveDates[0]!} />}
-      </div>
+      <RunCardBody
+        run={run}
+        isSeries={isSeries}
+        isExpanded={isExpanded}
+        onToggleExpand={onToggleExpand}
+      />
       <div style={{ display: 'flex', gap: 6 }}>
         <button
           className="btn small"
@@ -167,7 +203,7 @@ function DayList({
     <div className="daylist">
       {run.liveDates.map((date) => (
         <div className="mybk" key={date}>
-          <div>
+          <div className="abdate">
             {formatDateLong(date)}
             <DayNote machine={run.machine} date={date} />
           </div>
