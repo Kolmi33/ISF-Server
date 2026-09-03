@@ -118,6 +118,10 @@ function renderGridIntoTable() {
 }
 
 describe('Grid', () => {
+  // What: before the first server data load (S.data is null), the grid renders neither a
+  // header nor a body — matching the store-subscription guard that keeps it from painting
+  // against nonexistent data.
+  // How: sets S.data to null before rendering and checks neither thead nor tbody exist.
   it('renders nothing before the first data load, matching the store-subscription guard', () => {
     window.S.data = null;
     const { container } = renderGridIntoTable();
@@ -125,6 +129,8 @@ describe('Grid', () => {
     expect(container.querySelector('tbody')).toBeNull();
   });
 
+  // What: the header shows the ISO week number and marks today's own weekday column.
+  // How: renders and checks the "KW 1" text and a `th.today` element both appear.
   it('renders the date header: one KW column and a today-marked weekday column', () => {
     const { container } = renderGridIntoTable();
     expect(container.textContent).toContain('KW 1');
@@ -132,6 +138,9 @@ describe('Grid', () => {
     expect(todayHeader).not.toBeNull();
   });
 
+  // What: both category rows (one per category present) and group rows (one per group)
+  // render as their own distinct table rows.
+  // How: renders (two categories, at least one group) and checks each expected row exists.
   it('renders a category header row and a group header row', () => {
     const { container } = renderGridIntoTable();
     expect(container.querySelector('tr[data-catgroup="maschine"]')).not.toBeNull();
@@ -139,6 +148,10 @@ describe('Grid', () => {
     expect(container.querySelector('tr[data-group="Halle 1"]')).not.toBeNull();
   });
 
+  // What: a cell booked by the current logged-in user gets the "mine" class in addition to
+  // "booked", shows the booker's name as text, and carries the note/group title in its hover title.
+  // How: renders the fixture's "m-mine" cell (booked by 'anna', the logged-in user) and
+  // checks the class, text, and title.
   it('renders a booked cell owned by the current user as "mine"', () => {
     const { container } = renderGridIntoTable();
     const cell = container.querySelector(`td[data-machine-id="m-mine"][data-date="${TODAY}"]`)!;
@@ -149,6 +162,9 @@ describe('Grid', () => {
     expect(cell.getAttribute('title')).toContain('Projekt X');
   });
 
+  // What: a cell booked by someone else than the current user shows "booked" but never "mine".
+  // How: renders the fixture's "m-other" cell (booked by 'bob', not the logged-in 'anna') and
+  // checks the class and text.
   it('renders a booked cell owned by someone else without the "mine" class', () => {
     const { container } = renderGridIntoTable();
     const cell = container.querySelector(`td[data-machine-id="m-other"][data-date="${TODAY}"]`)!;
@@ -157,6 +173,10 @@ describe('Grid', () => {
     expect(cell.textContent).toBe('bob');
   });
 
+  // What: a cell blocked by an active maintenance slot renders as "blocked" with the slot's
+  // note visible as a hover title.
+  // How: renders the fixture's "m-blocked" cell (an active 'defekt' slot with a note) and
+  // checks the class and title.
   it('renders a blocked cell with the maintenance note as its title', () => {
     const { container } = renderGridIntoTable();
     const cell = container.querySelector(`td[data-machine-id="m-blocked"][data-date="${TODAY}"]`)!;
@@ -164,18 +184,29 @@ describe('Grid', () => {
     expect(cell.getAttribute('title')).toContain('Achse fest');
   });
 
+  // What: a cell on a weekday the machine isn't scheduled to work renders as "unavail".
+  // How: renders the fixture's "m-unavail" cell (a mask with Monday off, and today is Monday)
+  // and checks the class.
   it('renders an unavailable cell for a machine closed on that weekday', () => {
     const { container } = renderGridIntoTable();
     const cell = container.querySelector(`td[data-machine-id="m-unavail"][data-date="${TODAY}"]`)!;
     expect(cell.className).toContain('unavail');
   });
 
+  // What: a cell with none of the blocking conditions (not booked, not blocked, available
+  // that weekday) renders "free".
+  // How: renders the fixture's "m-favorite" cell (unbooked, unblocked, no mask restriction)
+  // and checks the class.
   it('renders a free cell for an otherwise-unencumbered machine', () => {
     const { container } = renderGridIntoTable();
     const cell = container.querySelector(`td[data-machine-id="m-favorite"][data-date="${TODAY}"]`)!;
     expect(cell.className).toContain('free');
   });
 
+  // What: a favorited machine's row shows a filled favorite star, and one with an info note
+  // also shows an info icon (distinct row-decoration concerns, both checked in the same row).
+  // How: renders and checks the fixture's favorited, info-bearing machine row has both a
+  // filled favstar and a machinfo icon.
   it('shows the filled star and info icon for a favorited machine with an info note', () => {
     const { container } = renderGridIntoTable();
     const row = container.querySelector('td[title*="Bohrer"]')!;
@@ -183,11 +214,19 @@ describe('Grid', () => {
     expect(row.querySelector('.machinfo')).not.toBeNull();
   });
 
+  // What: a machine with a maintenance slot scheduled for the future (not covering today
+  // yet) shows a "block planned" indicator, distinct from an actually-active block.
+  // How: renders the fixture's machine with a far-future maintenance slot and checks the
+  // "Sperre geplant" text appears somewhere in the render.
   it('shows "Sperre geplant" for a machine whose maintenance slot is not active yet', () => {
     const { container } = renderGridIntoTable();
     expect(container.textContent).toContain('Sperre geplant');
   });
 
+  // What: the "jump back" (undo the last next-free jump) button only appears once a jump has
+  // actually been made for that machine AND there's somewhere to jump back to.
+  // How: seeds a pending forward pointer and stubs the "is there an earlier free day" check
+  // to return one, then checks the jump-back button renders for that machine.
   it('shows the "jump back" button once a next-free jump has been made and can be undone', () => {
     nextFreePtr['m-favorite'] = '2021-01-05';
     vi.mocked(prevFreeBefore).mockReturnValue(TODAY);
@@ -195,6 +234,11 @@ describe('Grid', () => {
     expect(container.querySelector('span.nextfree.back[data-nb="m-favorite"]')).not.toBeNull();
   });
 
+  // What: clicking a category toggle button (rendered by Grid itself) toggles that category
+  // after the debounce delay — the same debounced toggle behavior tested at the category-fold
+  // module level, exercised here through the actual rendered button.
+  // How: clicks the category button, checks it's still shown right away (debounced), then
+  // advances past the delay and checks it's hidden.
   it('a single click on a category button toggles it off after the debounce delay', () => {
     vi.useFakeTimers();
     const { container } = renderGridIntoTable();
@@ -208,6 +252,12 @@ describe('Grid', () => {
     vi.useRealTimers();
   });
 
+  // What: double-clicking the same category button cancels the pending single-click toggle
+  // and instead expands every group in that category — the same distinct double-click
+  // behavior tested at the module level, here through the real rendered button.
+  // How: pre-collapses a group, single-clicks then double-clicks the category button,
+  // advances well past the debounce window, and checks the category is still shown (pending
+  // toggle canceled) while the group expanded.
   it('a double click cancels the pending single-click toggle and expands every group in the category', () => {
     vi.useFakeTimers();
     window.S.collapsed = new Set(['Halle 1']);
@@ -223,6 +273,11 @@ describe('Grid', () => {
     vi.useRealTimers();
   });
 
+  // What: rendering the grid writes back which machines/dates it actually rendered into
+  // S.visM/S.visD — a contract other modules (selection, navigation, jump-to-free) rely on to
+  // know what's currently visible, without needing their own separate visibility computation.
+  // How: renders and checks S.visD covers the full rendered week's dates and S.visM includes
+  // machines known to be in that render.
   it("mutates S.visM/S.visD to the machines and dates it actually rendered (legacy's contract)", () => {
     renderGridIntoTable();
     expect(window.S.visD).toEqual([TODAY, '2021-01-05', '2021-01-06', '2021-01-07', '2021-01-08']);
@@ -230,6 +285,10 @@ describe('Grid', () => {
     expect(window.S.visM).toContain('m-blocked');
   });
 
+  // What: after rendering, Grid runs its post-render side effects — the real
+  // paintSelection() (no separate mock; just checked for not throwing) plus the still
+  // window-bridged syncJumpControls/ensureOverflow calls.
+  // How: renders and checks it doesn't throw, plus that both bridged functions were called.
   it('calls the post-render side effects: real paintSelection (no throw) + the still-bridged syncJumpControls/ensureOverflow', () => {
     expect(() => renderGridIntoTable()).not.toThrow();
     expect(syncJumpControls).toHaveBeenCalled();
@@ -238,10 +297,18 @@ describe('Grid', () => {
 });
 
 describe('render (bridged as window.render)', () => {
+  // What: calling the bridged render() function before any Grid instance has mounted is a
+  // safe no-op (there's nothing to re-render yet).
+  // How: calls renderGrid() with no prior render and checks it doesn't throw.
   it('is a no-op before any Grid has mounted', () => {
     expect(() => renderGrid()).not.toThrow();
   });
 
+  // What: once a Grid is mounted, calling the bridged render() re-renders it to reflect
+  // whatever's currently on window.S — the escape hatch legacy-style imperative code (outside
+  // React's normal render cycle) uses to force a repaint after mutating state directly.
+  // How: renders, mutates a machine's days mask directly on window.S (bypassing React state),
+  // calls renderGrid(), and checks the affected cell's class updated to reflect the mutation.
   it('re-renders the mounted grid to reflect a fresh window.S mutation', () => {
     const { container } = renderGridIntoTable();
     expect(
