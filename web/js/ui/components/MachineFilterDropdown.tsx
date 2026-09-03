@@ -1,12 +1,18 @@
-// The toolbar "Filtern ▾" resource-filter dropdown (Phase 7 slice B10e). Faithful port of
-// legacy `fillMachSel`/`updateMachBtn`/`saveFilters` (the machine half — `saveFilters` also
-// persists the group filter, shared with `GroupFilterDropdown.tsx`). Mounted once at boot onto
-// `#machDrop`, same pattern as `ContextMenu.tsx` onto `#ctxMenu`; open/close mechanics are
-// `ui/toolbar-dropdown.ts`, shared with `GroupFilterDropdown.tsx`.
+// =======================================================================================
+// MACHINE FILTER DROPDOWN COMPONENT (web/js/ui/components/MachineFilterDropdown.tsx)
+// =======================================================================================
 //
-// The row-building/visibility rules are pure (`ui/machine-filter.ts`); this component owns the
-// interactive fold/search/category-shown state, all local — legacy's own `mfOpenCat`/
-// `mfOpenGrp`/`mfShow` reset every time the dropdown is opened, never persisted.
+// The toolbar "Filtern ▾" resource-filter dropdown. Mounted once at boot onto `#machDrop`,
+// the same pattern `ContextMenu.tsx` uses onto `#ctxMenu`; open/close mechanics are the
+// shared `ui/toolbar-dropdown.ts` hook, the same one `GroupFilterDropdown.tsx` uses.
+//
+// Key Principles:
+// - RENDERING ONLY, ROW LOGIC LIVES ELSEWHERE: row structure/visibility is pure
+//   (`ui/machine-filter.ts`); this component owns the interactive fold/search/
+//   category-shown state, all local and reset every time the dropdown reopens — never
+//   persisted across opens.
+//
+// =======================================================================================
 
 import { useEffect, useReducer, useRef, useState } from 'react';
 import type { MachineCategory } from '../../../../shared/types.ts';
@@ -17,17 +23,17 @@ import { useToolbarDropdown } from '../toolbar-dropdown.ts';
 import { Icon } from './Icon.tsx';
 import { store } from '../../store-instance.ts';
 
-/** Persist the machine AND group filter selections. Faithful port of legacy `saveFilters` —
- *  shared by `GroupFilterDropdown.tsx` and three already-gated callers (AllBookingsModal's/
- *  AssistantResults's/MyBookingsModal's "only my machines" shortcuts). */
+/** Persists the machine AND group filter selections — shared by `GroupFilterDropdown.tsx`
+ *  and three other callers (`AllBookingsModal`'s/`AssistantResults`'s/`MyBookingsModal`'s
+ *  "only my machines" shortcuts). */
 export function saveFilters(): void {
   localStorage.setItem('mb_machsel', JSON.stringify([...store.get('machSel')]));
   localStorage.setItem('mb_groupssel', JSON.stringify([...store.get('groupsSel')]));
 }
 
-/** Refresh the toolbar button's label/highlight from `S.machSel`. `#machBtn` is static
- *  markup, not React-rendered (it sits outside `#machDrop`) — mutated directly, matching
- *  legacy. Faithful port of legacy `updateMachBtn`. */
+/** Refreshes the toolbar button's label/highlight from the current machine selection.
+ *  `#machBtn` is static markup, not React-rendered (it sits outside `#machDrop`) — mutated
+ *  directly rather than through JSX. */
 export function updateMachBtn(): void {
   const button = document.getElementById('machBtn');
   if (!button) return;
@@ -150,8 +156,8 @@ function MachineFilterRowView({
   );
 }
 
-/** The bump-and-persist actions checkbox changes/"Filter löschen" take on `S.machSel`. Split
- *  out from `MachineFilterDropdown` only to stay under the line budget. */
+/** The bump-and-persist actions checkbox changes / "Filter löschen" take on the machine
+ *  selection. */
 function useMachineSelectionActions(bumpTick: () => void) {
   function handleMachineToggle(machineId: string, isChecked: boolean): void {
     if (isChecked) store.get('machSel').add(machineId);

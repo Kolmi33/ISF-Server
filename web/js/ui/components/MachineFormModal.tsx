@@ -1,14 +1,20 @@
-// The machine form (Phase 7 slice B6): create/edit a resource, and delete. Faithful port of
-// legacy `openMachineForm`. State shape, defaults and validation live in `ui/machine-form.ts`;
-// the fields and the maintenance-slot list are split into `MachineFormFields.tsx`/
-// `MaintenanceSlotEditor.tsx` — all purely to stay under the file-length/function-length
-// budgets, and all one form conceptually. The actual save/delete reducers already live in
-// `core/machines.ts` (`saveMachine`/`deleteMachine`, Phase 5.1; moved out of `core/booking.ts`
-// in the Phase 8 naming/structure cleanup — PRINCIPLES.md E10).
+// =======================================================================================
+// MACHINE FORM MODAL COMPONENT (web/js/ui/components/MachineFormModal.tsx)
+// =======================================================================================
 //
-// "Zurück" and a successful save/delete all route to `openAdmin()`, a direct import from
-// `AdminModal.tsx` (B5) that closes a real three-way cycle with it and `LogModal.tsx` — see
-// `AdminModal.tsx`'s header comment for why that's safe here.
+// The machine form: create/edit a resource, and delete.
+//
+// Key Principles:
+// - RENDERING ONLY, LOGIC LIVES ELSEWHERE: state shape, defaults and validation live in
+//   `ui/machine-form.ts`; the actual save/delete reducers live in `core/machines.ts`
+//   (`saveMachine`/`deleteMachine`). The fields and the maintenance-slot list are further
+//   split into `MachineFormFields.tsx`/`MaintenanceSlotEditor.tsx`, purely to stay under
+//   the file-length/function-length budgets — all one form conceptually.
+// - A SAFE IMPORT CYCLE: "Zurück" and a successful save/delete all route to `openAdmin()`,
+//   a direct import from `AdminModal.tsx` that closes a real three-way cycle with it and
+//   `LogModal.tsx` — see `AdminModal.tsx`'s header comment for why that's safe.
+//
+// =======================================================================================
 
 import { useState } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
@@ -34,9 +40,9 @@ interface SaveMachineFormInput {
   state: MachineFormState;
 }
 
-/** Validate, then create/update the machine and return to Admin. Faithful port of legacy
- *  `mfSave`. `saveMachine` returns void (not a truthy result) on success — only
- *  `{abort: true}` is truthy — so the success path is unconditional except on that one case. */
+/** Validates, then creates/updates the machine and returns to Admin. `saveMachine` returns
+ *  void (not a truthy result) on success — only `{abort: true}` is truthy — so the success
+ *  path below is unconditional except on that one case. */
 async function saveMachineForm({ machineId, state }: SaveMachineFormInput): Promise<void> {
   const validated = validateMachineForm(state);
   if ('error' in validated) {
@@ -55,8 +61,7 @@ async function saveMachineForm({ machineId, state }: SaveMachineFormInput): Prom
   toast('Gespeichert ✓');
 }
 
-/** Confirm, then delete the machine (and its bookings) and return to Admin. Faithful port of
- *  legacy `mfDel`. */
+/** Confirms, then deletes the machine (and its bookings) and returns to Admin. */
 async function deleteMachineForm(machineId: string, machine: Machine): Promise<void> {
   const confirmed = await window.askConfirm({
     title: 'Maschine löschen?',
@@ -127,8 +132,7 @@ export function MachineFormModal({ machineId }: MachineFormModalProps) {
   );
 }
 
-/** Open the machine form: `machineId` to edit that machine, `null` for a new one. Faithful port
- *  of legacy `openMachineForm`. */
+/** Opens the machine form: `machineId` to edit that machine, `null` for a new one. */
 export function openMachineForm(machineId: string | null): void {
   openReactModal(<MachineFormModal machineId={machineId} />);
 }

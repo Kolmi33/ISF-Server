@@ -1,7 +1,12 @@
-// The machine form's static fields (Phase 7 slice B6) — everything except the dynamic
-// maintenance-slot list (`MaintenanceSlotEditor.tsx`). Split out of `MachineFormModal.tsx`
-// purely to stay under the file-length/function-length budgets; part of the same form
-// conceptually.
+// =======================================================================================
+// MACHINE FORM FIELDS COMPONENT (web/js/ui/components/MachineFormFields.tsx)
+// =======================================================================================
+//
+// The machine form's static fields — everything except the dynamic maintenance-slot list
+// (`MaintenanceSlotEditor.tsx`). Split out of `MachineFormModal.tsx` purely to stay under
+// the file-length/function-length budgets — part of the same form conceptually.
+//
+// =======================================================================================
 
 import type { ChangeEvent } from 'react';
 import { CATEGORIES, groupsByCategory } from '../../core/machines.ts';
