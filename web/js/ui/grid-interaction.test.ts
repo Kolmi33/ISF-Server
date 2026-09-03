@@ -627,3 +627,29 @@ describe('drag auto-scroll at the grid edges', () => {
     expect(document.getElementById('gridWrap')!.scrollLeft).toBe(0); // never started dragging
   });
 });
+
+describe('GridInteractionHandlers — before initGridInteraction()', () => {
+  // What: pins a deliberate design decision — every call site that invokes an injected
+  // handler (clearSelection's handlers.hideCtx(), the click/drag/keyboard handlers' own
+  // handlers.showCtx()/toggleFav()/etc.) must THROW if initGridInteraction() hasn't run yet,
+  // not silently do nothing. initGridInteraction() is called exactly once, synchronously, at
+  // boot (app.ts), before any of its own event listeners exist to be triggered — so this null
+  // case is architecturally unreachable in the real app; the only way to hit it is a genuine
+  // programming error (calling an exported function before boot, or a future refactor that
+  // breaks the init-before-listeners ordering). A silent no-op would swallow exactly that
+  // error — a click that quietly does nothing, no console line, no stack trace — which is the
+  // failure mode PRINCIPLES.md P0 ("never swallow failures") exists to rule out. Throwing
+  // surfaces it immediately, at the exact call site, the moment it happens.
+  // How: resets the module registry and dynamically re-imports a fresh instance of this
+  // module (so its module-private `handlers` variable starts at its true uninitialized
+  // `null`, independent of the shared instance every other test in this file already
+  // initialized via the top-level `initGridInteraction(handlers)` call above), then calls the
+  // fresh instance's exported `clearSelection()` — the simplest handler-invoking entry point,
+  // needing no DOM event simulation — without ever calling `initGridInteraction`, and checks
+  // it throws rather than returning normally.
+  it('throws rather than silently no-opping when a handler is invoked', async () => {
+    vi.resetModules();
+    const fresh = await import('./grid-interaction.ts');
+    expect(() => fresh.clearSelection()).toThrow();
+  });
+});

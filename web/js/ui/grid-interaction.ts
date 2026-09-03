@@ -1,30 +1,16 @@
 // =======================================================================================
-// GRID SELECTION & KEYBOARD NAVIGATION MODULE (web/js/ui/grid-interaction.ts)
+// GRID SELECTION & USER INTERACTION MODULE (web/js/ui/grid-interaction.ts)
 // =======================================================================================
 //
-// Grid cell selection (click, shift+click, drag) and keyboard navigation.
-// This module:
-// 1. Owns the live `selection` state (anchor/focus/covered cells/drag flag).
-// 2. Paints the selection by toggling DOM classes directly on the exact cells that changed.
-// 3. Handles drag-to-select with auto-scroll at the grid's edges.
-// 4. Handles keyboard navigation: arrows move, Shift+arrows extend, Enter opens, Escape clears.
+// Manages interactive mouse, drag, and keyboard gestures on the scheduling grid.
 //
-// Key Principles:
-// - TARGETED DOM PATCHING, NOT REACT STATE: `paintSelection`'s whole reason to exist is to
-//   update only the cells whose selection state actually changed, by toggling classes on
-//   the exact DOM nodes the React Grid already renders with a stable
-//   `data-machine-id`/`data-date` contract. Routing selection through React state would
-//   mean re-rendering the whole grid on every mouseover during a drag; this module instead
-//   reads/writes the DOM directly and stays a plain gated module — the same shape
-//   `modal.tsx`'s document-level dismissal listeners already use alongside React content.
-// - HANDLERS ARE INJECTED, NOT IMPORTED: booking actions the selection hands off to
-//   (opening the context menu, the single-cell booking action, the next-free jump, growing
-//   the grid) are each gated components/modules of their own — but this module is a
-//   dependency-graph "hub" several of them import FROM (`selection`/`paintSelection`/
-//   `clearSelection`), so a direct import back into any of them would cycle.
-//   `initGridInteraction` takes them as an injected `GridInteractionHandlers` struct
-//   instead — `app.ts`, which already imports every module with no cycle risk of its own,
-//   wires the real implementations in once at boot.
+// Responsibilities:
+// 1. Marquee Cell Selection: Coordinates click, drag-to-select, and Shift+click multi-cell ranges.
+// 2. Targeted DOM Highlighting (`paintSelection`): Efficiently toggles `.sel` and `.kfocus` CSS classes
+//    directly on selected table cells without triggering expensive React full-table re-renders.
+// 3. Edge Auto-Scrolling: Smoothly scrolls horizontally and vertically when dragging near container borders.
+// 4. Keyboard Navigation: Arrow keys move focus across cells, Shift+arrows expand selection bounds,
+//    Enter opens booking modals or context menus, and Escape clears active selections.
 //
 // =======================================================================================
 
@@ -33,10 +19,7 @@ import { categoryTap, categoryTapCancel, toggleAllGroupsInCategory } from './cat
 import { store } from '../store-instance.ts';
 import { triggerGridRender } from './grid-render-bridge.ts';
 
-/** Everything this module hands off to a higher-level component/module — injected once at
- *  boot (`initGridInteraction`) rather than imported directly, since each of these modules
- *  already imports something from this one (`selection`/`paintSelection`/`clearSelection`),
- *  which would make the reverse a real import cycle. */
+/** Handlers injected by app bootstrap to decouple grid interactions from modal controllers. */
 export interface GridInteractionHandlers {
   showCtx: (x: number, y: number) => void;
   hideCtx: () => void;
@@ -49,19 +32,15 @@ export interface GridInteractionHandlers {
 
 let handlers: GridInteractionHandlers | null = null;
 
-/** The current selection: an anchor/focus pair spanning a rectangle, the cells it covers,
- *  and whether a drag is in progress. */
+/** Active grid selection state. */
 interface SelectionState {
   anchor: Cell | null;
   focus: Cell | null;
   cells: Cell[];
   dragging: boolean;
-  /** True once a drag has actually moved to a different cell (vs. a plain click). */
   didDrag: boolean;
 }
 
-// `ui/grid-scroll.ts` (B3) and `ui/components/Grid.tsx` (B1) import this directly (both
-// already gated) — they need the SAME object this module also mutates, not a copy.
 export const selection: SelectionState = {
   anchor: null,
   focus: null,
@@ -70,8 +49,9 @@ export const selection: SelectionState = {
   didDrag: false,
 };
 
-/** Finds the live grid cell for `machineId`×`date`, or null if it isn't currently rendered
- *  (its week scrolled out, its machine filtered away). */
+/**
+ * Finds the DOM cell element corresponding to `machineId` and `date`.
+ */
 function findCellElement(machineId: string, date: string): HTMLElement | null {
   return document.querySelector(
     `td.cell[data-machine-id="${CSS.escape(machineId)}"][data-date="${date}"]`,
@@ -79,11 +59,7 @@ function findCellElement(machineId: string, date: string): HTMLElement | null {
 }
 
 /**
- * Repaints the selection.
- *
- * How it works: clears the previous `.sel`/`.kfocus` marks, recomputes the covered cells
- * from the current anchor/focus against the store's visible rows/columns, and marks them.
- * The focus cell also gets a roving `tabindex` so keyboard navigation has somewhere to land.
+ * Updates visual selection classes (`.sel` and `.kfocus`) on DOM cells.
  */
 export function paintSelection(): void {
   document.querySelectorAll('td.cell.sel').forEach((el) => {
@@ -116,7 +92,9 @@ export function paintSelection(): void {
   }
 }
 
-/** Clears the selection and hides the context menu. */
+/**
+ * Clears the active selection rectangle and hides any open context menu.
+ */
 export function clearSelection(): void {
   selection.anchor = null;
   selection.focus = null;
@@ -125,7 +103,7 @@ export function clearSelection(): void {
   handlers!.hideCtx();
 }
 
-// ---- Drag-to-select, with auto-scroll at the grid's edges ------------------------------
+// ---------------- Drag-to-Select & Edge Auto-Scrolling ----------------
 
 let dragPointer: { x: number; y: number } | null = null;
 let dragScrollTimer: ReturnType<typeof setInterval> | null = null;
@@ -143,9 +121,9 @@ function stopDragScroll(): void {
 
 const DRAG_SCROLL_EDGE_PX = 45;
 
-/** Scroll `wrap` horizontally if the drag pointer sits near its left/right edge; growing a new
- *  week on the left (via `prependWeek`) once there's nothing left to scroll to. Returns whether
- *  it scrolled or grew. */
+/**
+ * Scrolls the grid horizontally if the mouse pointer is near the left or right edge.
+ */
 function autoScrollHorizontally(
   wrap: HTMLElement,
   rect: DOMRect,
@@ -163,7 +141,9 @@ function autoScrollHorizontally(
   return false;
 }
 
-/** Scroll `wrap` vertically if the drag pointer sits near its top/bottom edge. */
+/**
+ * Scrolls the grid vertically if the mouse pointer is near the top or bottom edge.
+ */
 function autoScrollVertically(wrap: HTMLElement, rect: DOMRect): boolean {
   if (dragPointer!.y > rect.bottom - DRAG_SCROLL_EDGE_PX) {
     wrap.scrollTop += 24;
@@ -176,9 +156,9 @@ function autoScrollVertically(wrap: HTMLElement, rect: DOMRect): boolean {
   return false;
 }
 
-/** After an auto-scroll, the pointer itself hasn't moved but the cell underneath it has —
- *  re-derive the cell at the (clamped-inside-the-grid) pointer position and extend the drag
- *  to it if it's different from the current focus. */
+/**
+ * Re-derives the focused cell under the pointer after auto-scrolling shifts the viewport.
+ */
 function extendFocusToPointerAfterScroll(rect: DOMRect, machineColumnWidth: number): void {
   if (!selection.focus) return;
   const x = Math.min(Math.max(dragPointer!.x, rect.left + machineColumnWidth + 6), rect.right - 6);
@@ -199,13 +179,7 @@ function extendFocusToPointerAfterScroll(rect: DOMRect, machineColumnWidth: numb
 }
 
 /**
- * While dragging, scrolls the grid when the pointer sits near an edge (and grows the grid —
- * a new week on the left, via `prependWeek` — when the edge is also the grid's actual
- * start), then re-derives the focus cell under the now-stationary pointer.
- *
- * A real-browser-only behavior: geometry this DOM-timing-dependent isn't meaningfully
- * unit-testable in jsdom, so this function itself has no direct test — `autoScrollHorizontally`/
- * `autoScrollVertically` below carry the testable logic.
+ * Performs periodic edge auto-scroll while a drag selection is active.
  */
 function dragAutoScroll(): void {
   if (!selection.dragging || !dragPointer) return;
@@ -230,7 +204,6 @@ function handleGridMouseDown(event: MouseEvent): void {
   if (!cell) return;
   handlers!.hideCtx();
   if (event.shiftKey && selection.anchor) {
-    // Shift+click: span the selection from the existing anchor to this cell.
     selection.dragging = true;
     selection.didDrag = true;
     selection.focus = { machineId: cell.dataset.machineId!, date: cell.dataset.date! };
@@ -244,7 +217,7 @@ function handleGridMouseDown(event: MouseEvent): void {
   selection.anchor = { machineId: cell.dataset.machineId!, date: cell.dataset.date! };
   selection.focus = { ...selection.anchor };
   paintSelection();
-  event.preventDefault(); // no text selection while dragging
+  event.preventDefault();
   startDragScroll();
 }
 
@@ -270,8 +243,9 @@ function handleDocumentMouseUp(event: MouseEvent): void {
     handlers!.showCtx(event.clientX, event.clientY);
 }
 
-/** Toggles one group's collapsed state and persists it — for a clicked group-header row
- *  that isn't a category header (those go through `categoryTap` instead). */
+/**
+ * Toggles a group's collapsed state in the store and persists it to localStorage.
+ */
 function toggleGroupCollapse(group: string): void {
   const collapsed = store.get('collapsed');
   if (collapsed.has(group)) collapsed.delete(group);
@@ -307,10 +281,9 @@ function handleGridClick(event: MouseEvent): void {
     return;
   }
   if (selection.didDrag) {
-    selection.didDrag = false; // this click ended a drag, not a plain click
+    selection.didDrag = false;
     return;
   }
-  // A plain click only selects the cell (handled by mousedown) — booking opens on double-click.
 }
 
 function handleGridDoubleClick(event: MouseEvent): void {
@@ -326,7 +299,7 @@ function handleGridDoubleClick(event: MouseEvent): void {
   handlers!.openCellAction(cell.dataset.machineId!, cell.dataset.date!);
 }
 
-// ---- Keyboard navigation: arrows move, Shift+arrows extend, Enter opens, Escape clears ---
+// ---------------- Keyboard Navigation Engine ----------------
 
 const ARROW_DELTAS: Record<string, [rowDelta: number, colDelta: number]> = {
   ArrowLeft: [0, -1],
@@ -338,11 +311,7 @@ const ARROW_DELTAS: Record<string, [rowDelta: number, colDelta: number]> = {
 const MAX_EXTRA_WEEKS_FOR_GROWTH = 150;
 
 /**
- * Moves the focus cell by one arrow-key step, growing the grid at either edge as needed:
- * past the right edge appends a week directly (bypassing the store, the same way
- * `ensureOverflow` does its own direct repaint); past the left edge calls `prependWeek()`,
- * which re-renders synchronously — the column index is re-read afterward since the
- * prepend may have replaced `visD` with a new array.
+ * Moves the focused cell by arrow key delta, growing visible calendar weeks when reaching grid edges.
  */
 function moveFocusByArrowKey(key: string, extendSelection: boolean): void {
   const [rowDelta, colDelta] = ARROW_DELTAS[key]!;
@@ -354,16 +323,11 @@ function moveFocusByArrowKey(key: string, extendSelection: boolean): void {
   let row = store.get('visM').indexOf(selection.focus.machineId) + rowDelta;
   let col = store.get('visD').indexOf(selection.focus.date) + colDelta;
   if (col >= store.get('visD').length && store.get('extraWeeks') < MAX_EXTRA_WEEKS_FOR_GROWTH) {
-    // Direct field mutation, deliberately NOT store.set() — a store.set() here would notify
-    // (→ the subscribed render()) AND the direct triggerGridRender() right below would run too,
-    // double-rendering. Same bypass ensureOverflow's own direct render() call uses.
     store.state.extraWeeks++;
     triggerGridRender();
   }
   if (col < 0 && store.get('extraWeeks') < MAX_EXTRA_WEEKS_FOR_GROWTH) {
     handlers!.prependWeek();
-    // prependWeek() re-renders synchronously and may replace visD with a new array
-    // (a fresh week prepended) — re-read it now rather than reuse an earlier value.
     col = store.get('visD').indexOf(selection.focus.date) + colDelta;
   }
   row = clampIndex(row, store.get('visM').length);
@@ -382,8 +346,9 @@ function handleArrowKey(key: string, extendSelection: boolean): void {
   });
 }
 
-/** Enter opens the context menu for a multi-cell selection, or the single-cell booking
- *  action otherwise (`selection.focus` is guaranteed set by the caller before this runs). */
+/**
+ * Handles Enter key presses to open booking modals or context menus on selected cells.
+ */
 function handleEnterKey(): void {
   const focus = selection.focus!;
   if (selection.cells.length > 1) {
@@ -415,9 +380,7 @@ function handleDocumentKeyDown(event: KeyboardEvent): void {
 }
 
 /**
- * Wires up the grid's selection/keyboard-navigation listeners, and registers
- * `injectedHandlers` for the higher-level actions this module hands off to (see
- * `GridInteractionHandlers` above). Called once at boot.
+ * Initializes DOM event listeners for mouse selection and keyboard navigation on the grid.
  */
 export function initGridInteraction(injectedHandlers: GridInteractionHandlers): void {
   handlers = injectedHandlers;
