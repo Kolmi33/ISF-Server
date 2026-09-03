@@ -1,23 +1,32 @@
-// Grid selection & keyboard navigation (Phase 7 slice B2). Faithful port of legacy's `Sel`
-// object and its mouse/keyboard event handlers.
+// =======================================================================================
+// GRID SELECTION & KEYBOARD NAVIGATION MODULE (web/js/ui/grid-interaction.ts)
+// =======================================================================================
 //
-// This is deliberately NOT a React component. `paintSel()`'s whole reason to exist — legacy's
-// own comment calls it "GEZIELTES ZELL-PATCHING (Performance)" — is to update only the cells
-// whose selection state actually changed, by toggling classes on the exact DOM nodes the React
-// Grid (B1) already renders with a stable `data-machine-id`/`data-date` contract. Routing selection
-// through React state would mean re-rendering the whole grid on every mouseover during a drag;
-// this module instead reads/writes the DOM directly, exactly as legacy did, and stays a plain
-// gated TypeScript module — the same shape `modal.tsx`'s document-level dismissal listeners
-// already use alongside their React content.
+// Grid cell selection (click, shift+click, drag) and keyboard navigation.
+// This module:
+// 1. Owns the live `selection` state (anchor/focus/covered cells/drag flag).
+// 2. Paints the selection by toggling DOM classes directly on the exact cells that changed.
+// 3. Handles drag-to-select with auto-scroll at the grid's edges.
+// 4. Handles keyboard navigation: arrows move, Shift+arrows extend, Enter opens, Escape clears.
 //
-// Everything genuinely part of selection/navigation is ported here. Booking actions the
-// selection hands off to (opening the context menu, the single-cell booking action, the
-// next-free jump, growing the grid) are each gated components/modules of their own — but this
-// module is a dependency-graph "hub" several of them import FROM (`selection`/`paintSelection`/
-// `clearSelection`), so a direct import back into any of them would cycle. `initGridInteraction`
-// takes them as an injected `GridInteractionHandlers` struct instead (F8 cleanup,
-// ARCHITECTURE_AUDIT.md) — app.ts, which already imports every module with no cycle risk of
-// its own, wires the real implementations in once at boot.
+// Key Principles:
+// - TARGETED DOM PATCHING, NOT REACT STATE: `paintSelection`'s whole reason to exist is to
+//   update only the cells whose selection state actually changed, by toggling classes on
+//   the exact DOM nodes the React Grid already renders with a stable
+//   `data-machine-id`/`data-date` contract. Routing selection through React state would
+//   mean re-rendering the whole grid on every mouseover during a drag; this module instead
+//   reads/writes the DOM directly and stays a plain gated module — the same shape
+//   `modal.tsx`'s document-level dismissal listeners already use alongside React content.
+// - HANDLERS ARE INJECTED, NOT IMPORTED: booking actions the selection hands off to
+//   (opening the context menu, the single-cell booking action, the next-free jump, growing
+//   the grid) are each gated components/modules of their own — but this module is a
+//   dependency-graph "hub" several of them import FROM (`selection`/`paintSelection`/
+//   `clearSelection`), so a direct import back into any of them would cycle.
+//   `initGridInteraction` takes them as an injected `GridInteractionHandlers` struct
+//   instead — `app.ts`, which already imports every module with no cycle risk of its own,
+//   wires the real implementations in once at boot.
+//
+// =======================================================================================
 
 import { computeSelCells, clampIndex, type Cell } from './selection.ts';
 import { categoryTap, categoryTapCancel, toggleAllGroupsInCategory } from './category-fold.ts';
@@ -40,8 +49,8 @@ export interface GridInteractionHandlers {
 
 let handlers: GridInteractionHandlers | null = null;
 
-/** The current selection: an anchor/focus pair spanning a rectangle, the cells it covers, and
- *  whether a drag is in progress. Faithful port of legacy's module-level `Sel` object. */
+/** The current selection: an anchor/focus pair spanning a rectangle, the cells it covers,
+ *  and whether a drag is in progress. */
 interface SelectionState {
   anchor: Cell | null;
   focus: Cell | null;
@@ -61,18 +70,21 @@ export const selection: SelectionState = {
   didDrag: false,
 };
 
-/** The live grid cell for `machineId`×`date`, or null if it isn't currently rendered (its week
- *  scrolled out, its machine filtered away). Faithful port of legacy `cellEl`. */
+/** Finds the live grid cell for `machineId`×`date`, or null if it isn't currently rendered
+ *  (its week scrolled out, its machine filtered away). */
 function findCellElement(machineId: string, date: string): HTMLElement | null {
   return document.querySelector(
     `td.cell[data-machine-id="${CSS.escape(machineId)}"][data-date="${date}"]`,
   );
 }
 
-/** Repaint the selection: clears the previous `.sel`/`.kfocus` marks, recomputes the covered
- *  cells from the current anchor/focus against the store's visible rows/columns, and marks
- *  them. The focus cell also gets a roving `tabindex` so keyboard nav has somewhere to land.
- *  Faithful port of legacy `paintSel`. */
+/**
+ * Repaints the selection.
+ *
+ * How it works: clears the previous `.sel`/`.kfocus` marks, recomputes the covered cells
+ * from the current anchor/focus against the store's visible rows/columns, and marks them.
+ * The focus cell also gets a roving `tabindex` so keyboard navigation has somewhere to land.
+ */
 export function paintSelection(): void {
   document.querySelectorAll('td.cell.sel').forEach((el) => {
     el.classList.remove('sel');
@@ -104,7 +116,7 @@ export function paintSelection(): void {
   }
 }
 
-/** Clear the selection and hide the context menu. Faithful port of legacy `clearSel`. */
+/** Clears the selection and hides the context menu. */
 export function clearSelection(): void {
   selection.anchor = null;
   selection.focus = null;
@@ -112,11 +124,6 @@ export function clearSelection(): void {
   paintSelection();
   handlers!.hideCtx();
 }
-
-// Note: legacy's `refreshCell`/`refreshDot`/`patchCells` (targeted DOM patching after a
-// booking/delete, so a single write doesn't trigger a full grid re-render) are NOT ported
-// here — their only caller is `mutate()`'s success path, which is still entirely legacy.
-// They belong with whichever slice ports the booking form (B4), not this one.
 
 // ---- Drag-to-select, with auto-scroll at the grid's edges ------------------------------
 
@@ -191,11 +198,15 @@ function extendFocusToPointerAfterScroll(rect: DOMRect, machineColumnWidth: numb
   }
 }
 
-/** While dragging, scroll the grid when the pointer sits near an edge (and grow the grid — a
- *  new week on the left, via `prependWeek` — when the edge is also the grid's actual start),
- *  then re-derive the focus cell under the now-stationary pointer. Faithful port of legacy
- *  `dragAutoScroll`; a real-browser-only behavior (E5) — geometry this DOM-timing-dependent
- *  isn't meaningfully unit-testable in jsdom. */
+/**
+ * While dragging, scrolls the grid when the pointer sits near an edge (and grows the grid —
+ * a new week on the left, via `prependWeek` — when the edge is also the grid's actual
+ * start), then re-derives the focus cell under the now-stationary pointer.
+ *
+ * A real-browser-only behavior: geometry this DOM-timing-dependent isn't meaningfully
+ * unit-testable in jsdom, so this function itself has no direct test — `autoScrollHorizontally`/
+ * `autoScrollVertically` below carry the testable logic.
+ */
 function dragAutoScroll(): void {
   if (!selection.dragging || !dragPointer) return;
   const wrap = document.getElementById('gridWrap');
@@ -259,8 +270,8 @@ function handleDocumentMouseUp(event: MouseEvent): void {
     handlers!.showCtx(event.clientX, event.clientY);
 }
 
-/** Toggle one group's collapsed state and persist it (mirrors legacy's inline handler for a
- *  clicked group-header row that isn't a category header). */
+/** Toggles one group's collapsed state and persists it — for a clicked group-header row
+ *  that isn't a category header (those go through `categoryTap` instead). */
 function toggleGroupCollapse(group: string): void {
   const collapsed = store.get('collapsed');
   if (collapsed.has(group)) collapsed.delete(group);
@@ -326,10 +337,13 @@ const ARROW_DELTAS: Record<string, [rowDelta: number, colDelta: number]> = {
 
 const MAX_EXTRA_WEEKS_FOR_GROWTH = 150;
 
-/** Move the focus cell by one arrow-key step, growing the grid at either edge exactly as
- *  legacy did: past the right edge appends a week directly (bypassing the store, like
- *  `ensureOverflow`'s own direct `render()` call); past the left edge calls `prependWeek()`,
- *  which re-renders synchronously, so the column index is re-read afterward. */
+/**
+ * Moves the focus cell by one arrow-key step, growing the grid at either edge as needed:
+ * past the right edge appends a week directly (bypassing the store, the same way
+ * `ensureOverflow` does its own direct repaint); past the left edge calls `prependWeek()`,
+ * which re-renders synchronously — the column index is re-read afterward since the
+ * prepend may have replaced `visD` with a new array.
+ */
 function moveFocusByArrowKey(key: string, extendSelection: boolean): void {
   const [rowDelta, colDelta] = ARROW_DELTAS[key]!;
   if (!selection.focus) {
@@ -368,8 +382,8 @@ function handleArrowKey(key: string, extendSelection: boolean): void {
   });
 }
 
-/** Enter opens the context menu for a multi-cell selection, or the single-cell booking action
- *  otherwise. Faithful port of legacy's `Enter` branch (`Sel.focus` is guaranteed by the caller). */
+/** Enter opens the context menu for a multi-cell selection, or the single-cell booking
+ *  action otherwise (`selection.focus` is guaranteed set by the caller before this runs). */
 function handleEnterKey(): void {
   const focus = selection.focus!;
   if (selection.cells.length > 1) {
@@ -401,11 +415,9 @@ function handleDocumentKeyDown(event: KeyboardEvent): void {
 }
 
 /**
- * Wire up the grid's selection/keyboard-navigation listeners, and register `injectedHandlers`
- * for the higher-level actions this module hands off to (see `GridInteractionHandlers` above).
- * Called once at boot (app.ts) — mirrors legacy's top-level
- * `gridEl.addEventListener(...)`/`document.addEventListener(...)` calls, which also ran
- * exactly once, at script-load time.
+ * Wires up the grid's selection/keyboard-navigation listeners, and registers
+ * `injectedHandlers` for the higher-level actions this module hands off to (see
+ * `GridInteractionHandlers` above). Called once at boot.
  */
 export function initGridInteraction(injectedHandlers: GridInteractionHandlers): void {
   handlers = injectedHandlers;

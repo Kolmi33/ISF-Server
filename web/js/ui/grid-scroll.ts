@@ -1,11 +1,22 @@
-// Infinite scroll / week growth, and month-jump (Phase 7 slice B3). Faithful port of legacy's
-// `prependWeek`, its `gridWrap` scroll/wheel listeners, `ensureOverflow`, and the month/year
-// jump controls that stay in sync with the leftmost visible column while scrolling.
+// =======================================================================================
+// GRID SCROLL MODULE (web/js/ui/grid-scroll.ts)
+// =======================================================================================
 //
-// Like B2 (`grid-interaction.ts`), this is a plain gated TypeScript module, not a React
-// component — it manages real scroll position and a real DOM element's actual width, which
-// React doesn't own or need to know about. A "pure `useGridScroll` hook" would still end up
-// doing exactly this underneath; keeping it a plain module avoids pretending otherwise.
+// Infinite scroll / week growth, and the month-jump controls that stay in sync with the
+// leftmost visible column while scrolling.
+// This module:
+// 1. Grows the grid's visible week window as the user scrolls toward either edge.
+// 2. Keeps the grid always wider than the viewport, so there's perpetually room to scroll.
+// 3. Drives the month/year jump controls, both ways: reading them to jump the grid, and
+//    updating them to reflect wherever the grid has scrolled to.
+//
+// Key Principles:
+// - PLAIN MODULE, NOT REACT: manages real scroll position and a real DOM element's actual
+//   measured width, which React doesn't own or need to know about — a "pure `useGridScroll`
+//   hook" would still end up doing exactly this underneath, so a plain module avoids
+//   pretending otherwise.
+//
+// =======================================================================================
 
 import {
   addDays,
@@ -31,22 +42,22 @@ export function daysPerWeek(): number {
 
 /** The grid's week-window cap: beyond this many extra weeks, scrolling further shifts the
  *  window (drops a week off the far side) instead of growing it, keeping the DOM small and
- *  every render fast. A drag in progress (B2) is exempt, so the anchor cell never scrolls
- *  out mid-selection. Faithful port of legacy `MAXW`. */
+ *  every render fast. A drag in progress is exempt, so the anchor cell never scrolls out
+ *  from under an in-progress selection. */
 const MAX_GROWN_WEEKS = 12;
 
 /** The hard ceiling on total extra weeks — reachable only by someone scrolling relentlessly
  *  or an automated test; growth (and `ensureOverflow`'s own growth loop) simply stops here. */
 const ABSOLUTE_MAX_EXTRA_WEEKS = 150;
 
-/** Whether growing the window (vs. shifting it) is still allowed right now. Faithful port of
- *  legacy's repeated `S.extraWeeks<MAXW || Sel.dragging` check. */
+/** Whether growing the window (vs. shifting it) is still allowed right now: either there's
+ *  still room under the cap, or a drag is in progress (which always gets to grow, cap or not). */
 export function canStillGrowWindow(extraWeeks: number, isDragging: boolean): boolean {
   return extraWeeks < MAX_GROWN_WEEKS || isDragging;
 }
 
-/** Whether the scroll position is close enough to the right edge to need more content ahead.
- *  Faithful port of legacy's scroll-handler threshold (250px lookahead). */
+/** Whether the scroll position is close enough to the right edge (250px lookahead) to need
+ *  more content ahead. */
 export function isNearRightEdge(
   scrollLeft: number,
   clientWidth: number,
@@ -55,22 +66,21 @@ export function isNearRightEdge(
   return scrollLeft + clientWidth > scrollWidth - 250;
 }
 
-/** Whether the scroll position is close enough to the left edge to need a week prepended.
- *  Faithful port of legacy's scroll-handler threshold (150px lookahead). */
+/** Whether the scroll position is close enough to the left edge (150px lookahead) to need a
+ *  week prepended. */
 export function isNearLeftEdge(scrollLeft: number): boolean {
   return scrollLeft < 150;
 }
 
-/** Whether a wheel/trackpad gesture is scrolling toward the left (a plain horizontal scroll,
- *  or a shift-modified vertical one — the common "shift+wheel = horizontal" convention).
- *  Faithful port of legacy's wheel-listener condition. */
+/** Whether a wheel/trackpad gesture is scrolling toward the left: a plain horizontal scroll,
+ *  or a shift-modified vertical one — the common "shift+wheel = horizontal" convention. */
 export function isScrollingLeft(deltaX: number, deltaY: number, shiftKey: boolean): boolean {
   return deltaX < 0 || (shiftKey && deltaY < 0);
 }
 
 /** Whether the grid should grow another week to stay wider than the viewport (so there's
- *  always room to scroll right, which is what triggers further growth). Faithful port of
- *  legacy `ensureOverflow`'s condition (a 60px slack to absorb rounding). */
+ *  always room to scroll right, which is what triggers further growth) — a 60px slack
+ *  absorbs sub-pixel rounding so this doesn't flip-flop right at the threshold. */
 export function needsOverflowGrowth(
   extraWeeks: number,
   scrollWidth: number,
@@ -79,18 +89,18 @@ export function needsOverflowGrowth(
   return extraWeeks < 100 && scrollWidth <= clientWidth + 60;
 }
 
-/** One rendered week's pixel width: `daysPerWeek` day columns plus their borders, plus the
- *  gap column between weeks. Faithful port of legacy `weekWidth`'s formula (the `+1` per cell
- *  accounts for a shared border, the trailing `+9` for the gap column). */
+/** Computes one rendered week's pixel width: `daysPerWeek` day columns plus their borders
+ *  (the `+1` per cell), plus the gap column between weeks (the trailing `+9`). */
 export function computeWeekPixelWidth(cellWidth: number, daysInWeek: number): number {
   return (cellWidth + 1) * daysInWeek + 9;
 }
 
 /**
- * Which date column should drive the month/year jump controls while scrolling: the first
- * column (by its right edge) that extends past `leftEdge`, or the last column if none does
- * (fully scrolled to the end). Faithful port of legacy `updateJumpFromScroll`'s picking loop,
- * extracted as pure geometry so the DOM measurement (reading every `<th>`'s
+ * Picks which date column should drive the month/year jump controls while scrolling: the
+ * first column (by its right edge) that extends past `leftEdge`, or the last column if none
+ * does (fully scrolled to the end).
+ *
+ * Extracted as pure geometry so the DOM measurement (reading every `<th>`'s
  * `getBoundingClientRect`) and this decision are two separate, separately testable steps.
  */
 export function pickVisibleDateColumn(
@@ -104,35 +114,37 @@ export function pickVisibleDateColumn(
 // ---- DOM wiring -------------------------------------------------------------------------
 
 /** Guards `prependWeek`/the scroll handler's own growth against re-entrancy: each sets this,
- *  does its work, and clears it shortly after (legacy used two separate `setTimeout` delays —
- *  80ms after a prepend, 100ms after a scroll-triggered grow/shift — kept as-is). */
+ *  does its work, and clears it shortly after (80ms after a prepend, 100ms after a
+ *  scroll-triggered grow/shift — different delays for the two different DOM operations
+ *  each is compensating for). */
 let extendPending = false;
 
 /** The last time this module scrolled `#gridWrap` itself (`performance.now()`). The scroll
  *  handler ignores growth for 350ms after, so setting `scrollLeft` programmatically (a jump,
- *  a prepend's compensation) doesn't immediately re-trigger more growth — legacy's comment
- *  calls this out explicitly as the fix for a "snaps back" bug. */
+ *  a prepend's compensation) doesn't immediately re-trigger more growth — the fix for a
+ *  "scroll position snaps back" bug a programmatic scroll would otherwise cause. */
 let lastProgrammaticScrollAt = 0;
 
 function gridWrapElement(): HTMLElement {
   return document.getElementById('gridWrap')!;
 }
 
-/** One week's pixel width, measured from an actual rendered cell (falling back to a plausible
- *  default before anything has rendered yet). Faithful port of legacy `weekWidth`. */
+/** One week's pixel width, measured from an actual rendered cell (falling back to a
+ *  plausible default before anything has rendered yet). */
 function measuredWeekWidth(): number {
   const cell = document.querySelector<HTMLElement>('td.cell');
   return cell ? computeWeekPixelWidth(cell.offsetWidth, daysPerWeek()) : 500;
 }
 
 /**
- * Prepend one week of history: moves `startMonday` back 7 days and, window-cap allowing, grows
- * `extraWeeks` (otherwise the window slides — see the scroll handler for the "already at the
- * cap" case, which shifts forward instead of growing). Compensates `scrollLeft` by however much
- * the grid actually grew, so the visible content doesn't jump. Faithful port of legacy
- * `prependWeek`; `grid-interaction.ts` (B2) calls this via its injected
- * `GridInteractionHandlers` for drag-auto-scroll and arrow-key growth — a direct import would
- * cycle, since this module already imports `selection` from `grid-interaction.ts`.
+ * Prepends one week of history: moves `startMonday` back 7 days and, window-cap allowing,
+ * grows `extraWeeks` (otherwise the window slides — see the scroll handler for the
+ * "already at the cap" case, which shifts forward instead of growing). Compensates
+ * `scrollLeft` by however much the grid actually grew, so the visible content doesn't jump.
+ *
+ * `grid-interaction.ts` calls this via its injected `GridInteractionHandlers` struct (for
+ * drag-auto-scroll and arrow-key growth) rather than a direct import — a direct import
+ * would cycle, since this module already imports `selection` from `grid-interaction.ts`.
  */
 export function prependWeek(): void {
   if (extendPending) return;
@@ -177,8 +189,7 @@ function handleGridWrapScroll(): void {
 }
 
 /** At the absolute left edge, scrolling fires no `scroll` event at all — a `wheel` listener
- *  catches the gesture that a `scroll` handler would otherwise miss. Faithful port of legacy's
- *  own comment and listener. */
+ *  catches the gesture that a `scroll` handler would otherwise miss entirely. */
 function handleGridWrapWheel(event: WheelEvent): void {
   if (
     isScrollingLeft(event.deltaX, event.deltaY, event.shiftKey) &&
@@ -189,24 +200,24 @@ function handleGridWrapWheel(event: WheelEvent): void {
 }
 
 /**
- * Keep the grid wider than the viewport so there's always room to scroll right (which is what
- * triggers `handleGridWrapScroll`'s own growth). Faithful port of legacy `ensureOverflow`;
- * imported directly by the React Grid's (B1) post-render effect. Grows directly, bypassing
- * the store, exactly as legacy's own comment calls out.
+ * Keeps the grid wider than the viewport so there's always room to scroll right (which is
+ * what triggers `handleGridWrapScroll`'s own growth) — imported directly by the React
+ * Grid's post-render effect, so it runs after every paint.
  */
 export function ensureOverflow(): void {
   const wrap = gridWrapElement();
   if (wrap.style.display === 'none') return;
   if (needsOverflowGrowth(store.get('extraWeeks'), wrap.scrollWidth, wrap.clientWidth)) {
-    // Direct field mutation, deliberately NOT store.set() — bypasses the store's notify
-    // exactly as legacy's own comment calls out; triggerGridRender() below repaints directly.
+    // Direct field mutation, deliberately NOT store.set(): this can fire on every post-render
+    // effect, so notifying (and re-rendering) on every single growth here would fight with
+    // the render that just finished; triggerGridRender() below repaints directly instead.
     store.state.extraWeeks++;
     triggerGridRender();
   }
 }
 
-/** Scroll so `isoDate`'s column sits at the grid's visual center. Faithful port of legacy
- *  `centerCol`, imported directly by `favorite-jump.ts`'s (B10a) "jump to this date". */
+/** Scrolls so `isoDate`'s column sits at the grid's visual center — imported directly by
+ *  `favorite-jump.ts`'s "jump to this date". */
 export function centerColumn(isoDate: string): void {
   const cell = document.querySelector<HTMLElement>(`td.cell[data-date="${isoDate}"]`);
   const wrap = document.getElementById('gridWrap');
@@ -215,8 +226,7 @@ export function centerColumn(isoDate: string): void {
   lastProgrammaticScrollAt = performance.now();
 }
 
-/** Center on today, once the grid has actually painted (so the cell exists to measure).
- *  Faithful port of legacy `centerToday`. */
+/** Centers on today, once the grid has actually painted (so the cell exists to measure). */
 export function centerToday(): void {
   requestAnimationFrame(() => centerColumn(todayAsIsoDateString()));
 }
@@ -225,9 +235,9 @@ function machineColumnWidth(): number {
   return parseInt(getComputedStyle(document.documentElement).getPropertyValue('--machw')) || 230;
 }
 
-/** Scroll so `isoDate`'s column sits at the grid's visual *start* (just right of the machine
- *  column) — used for the month-jump, which wants the 1st of the month leading the view rather
- *  than centered. Faithful port of legacy `gotoDate`. */
+/** Scrolls so `isoDate`'s column sits at the grid's visual *start* (just right of the
+ *  machine column) — used for the month-jump, which wants the 1st of the month leading the
+ *  view rather than centered. */
 export function gotoDate(isoDate: string): void {
   requestAnimationFrame(() => {
     const cell = document.querySelector<HTMLElement>(`td.cell[data-date="${isoDate}"]`);
@@ -238,10 +248,10 @@ export function gotoDate(isoDate: string): void {
   });
 }
 
-/** Reset the month/year jump controls to reflect the week block currently at the grid's start
- *  (its Wednesday, so e.g. a Monday-29th week still reads as the following month). Faithful
- *  port of legacy `syncJumpControls`, imported directly by the React Grid's (B1) post-render
- *  effect. */
+/** Resets the month/year jump controls to reflect the week block currently at the grid's
+ *  start — reads its Wednesday, not its Monday, so e.g. a week starting Monday the 29th
+ *  still reads as the following month once most of the visible week belongs to it. Imported
+ *  directly by the React Grid's post-render effect. */
 export function syncJumpControls(): void {
   const midWeek = addDays(store.get('startMonday'), 3);
   const monthSelect = document.getElementById('jumpMonth') as HTMLSelectElement | null;
@@ -250,9 +260,8 @@ export function syncJumpControls(): void {
   if (yearInput) yearInput.value = String(midWeek.getUTCFullYear() % 100);
 }
 
-/** Re-sync the jump controls to whichever date column is now leftmost, while scrolling (does
- *  not itself trigger a jump — only updates the displayed values). Faithful port of legacy
- *  `updateJumpFromScroll`. */
+/** Re-syncs the jump controls to whichever date column is now leftmost, while scrolling —
+ *  does not itself trigger a jump, only updates the displayed month/year values to match. */
 function updateJumpControlsFromScroll(): void {
   const wrap = document.getElementById('gridWrap');
   const headers = document.querySelectorAll<HTMLElement>('#grid thead th[data-date]');
@@ -273,8 +282,9 @@ function updateJumpControlsFromScroll(): void {
 
 let scheduledJumpControlsSync = 0;
 
-/** rAF-throttle `updateJumpControlsFromScroll` — scroll fires far more often than once per
- *  frame. Faithful port of legacy `scheduleJumpSync`. */
+/** rAF-throttles `updateJumpControlsFromScroll` — a `scroll` event fires far more often than
+ *  once per frame, and re-measuring every header's bounding rect on every single one would
+ *  be wasted work between paints. */
 function scheduleJumpControlsSync(): void {
   if (scheduledJumpControlsSync) return;
   scheduledJumpControlsSync = requestAnimationFrame(() => {
@@ -283,17 +293,17 @@ function scheduleJumpControlsSync(): void {
   });
 }
 
-/** Reset the grid to its base week window (used by "Heute" before re-centering, and by the
- *  still-legacy "jump to this result" actions in the assistant/stats/my-bookings views).
- *  Faithful port of legacy `resetView`. */
+/** Resets the grid to its base week window — used by "Heute" before re-centering, and by
+ *  the "jump to this result" actions in the Assistant/All Bookings/My Bookings views before
+ *  they scroll to a specific date. */
 export function resetView(): void {
   store.state.extraWeeks = 0; // silent — every caller notifies once, after its own related writes
   gridWrapElement().scrollLeft = 0;
 }
 
-/** Jump to the 1st of whichever month/year the jump controls are set to. Faithful port of
- *  legacy `jumpToMonth` (a two-digit year like "26" means 2026; a four-digit one is taken
- *  as-is). Wired to both controls' `change` events. */
+/** Jumps to the 1st of whichever month/year the jump controls are set to — a two-digit year
+ *  like "26" means 2026; a four-digit one is taken as-is. Wired to both controls' `change`
+ *  events. */
 function jumpToMonth(): void {
   const yearInput = document.getElementById('jumpYear') as HTMLInputElement;
   const monthSelect = document.getElementById('jumpMonth') as HTMLSelectElement;
@@ -315,9 +325,8 @@ function jumpToMonth(): void {
 }
 
 /**
- * Wire up the grid's scroll/wheel listeners, the month/year jump controls, and the Heute/◀/▶
- * toolbar buttons. Called once at boot (app.ts) — mirrors legacy's own top-level
- * `addEventListener`/`.onclick=` assignments, which also ran exactly once, at script-load time.
+ * Wires up the grid's scroll/wheel listeners, the month/year jump controls, and the
+ * Heute/◀/▶ toolbar buttons. Called once at boot.
  */
 export function initGridScroll(): void {
   const wrap = gridWrapElement();
