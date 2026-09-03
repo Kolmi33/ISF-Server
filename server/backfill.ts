@@ -1,9 +1,16 @@
-// backfill.ts — one-time weekend-bridge backfill CLI (Phase 6.3).
-// Usage:  node dist/server/backfill.js
-// Inserts every missing Sat/Sun bridge across the DB in a single transaction (internal SQL,
-// not the 1000-cell API cap). This is a PRODUCTION DATA WRITE when pointed at the live DB —
-// run it deliberately (a daily VACUUM backup exists; the client sweep removes bridges again
-// if a series later breaks).
+// =======================================================================================
+// BACKFILL CLI (server/backfill.ts)
+// =======================================================================================
+//
+// One-time weekend-bridge backfill. Usage: `node dist/server/backfill.js`.
+//
+// Inserts every missing Sat/Sun bridge across the DB in a single transaction (internal
+// SQL, not subject to the REST API's 1000-cell batch cap) via `bridge.ts`'s
+// `backfillBridges`. This is a PRODUCTION DATA WRITE when pointed at the live DB — run it
+// deliberately (a daily VACUUM backup exists; the client sweep removes bridges again if a
+// series later breaks).
+//
+// =======================================================================================
 import { openDb } from './db.js';
 import { backfillBridges } from './bridge.js';
 import { join, dirname } from 'node:path';

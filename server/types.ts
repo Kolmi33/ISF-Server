@@ -1,6 +1,13 @@
-// Backend-internal row shapes (the SQLite column layout) and the mutate request body.
-// The *wire* shapes the API emits (Machine/Booking/ServerData) live in shared/types.ts;
-// these are the storage-side types, kept faithful to the columns in db.ts's SCHEMA.
+// =======================================================================================
+// SERVER TYPES MODULE (server/types.ts)
+// =======================================================================================
+//
+// Backend-internal row shapes (the SQLite column layout) and the mutate request/result
+// types. The *wire* shapes the API emits (Machine/Booking/ServerData) live in
+// shared/types.ts; these are the storage-side types, kept faithful to the columns in
+// db.ts's SCHEMA.
+//
+// =======================================================================================
 
 /** A row of the `machines` table. Column `grp` is the group (SQL-reserved `group`). */
 export interface MachineRow {

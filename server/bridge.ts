@@ -1,11 +1,18 @@
-// bridge.ts — server-authoritative weekend auto-bridging (Phase 6.3, the ADD direction).
+// =======================================================================================
+// BRIDGE MODULE (server/bridge.ts)
+// =======================================================================================
 //
-// A weekend day (Sat/Sun) belongs in the plan as part of a continuous Fri→Mon series.
-// core/weekend.ts already REMOVES orphaned weekend days on the client (the sweep). This
-// is the mirror: it ADDS the Sat/Sun between a booked Friday and a booked Monday, carrying
-// the Friday's name — a faithful port of the baseline `missingWeekendBridges`, made pure
-// and server-side. Used two ways: `maintainBridges` (inside the mutate transaction, going
-// forward) and `backfillBridges` (a one-time pass over the whole DB).
+// Server-authoritative weekend auto-bridging: a weekend day (Sat/Sun) belongs in the plan
+// as part of a continuous Fri→Mon series. `core/weekend.ts` already REMOVES orphaned
+// weekend days on the client (the sweep) — this is the mirror, ADDING the Sat/Sun between
+// a booked Friday and a booked Monday, carrying the Friday's name.
+//
+// This module provides:
+// 1. `missingBridges` — the pure computation: which weekend days are missing.
+// 2. `maintainBridges` — applies it going forward, inside an already-open mutate transaction.
+// 3. `backfillBridges` — applies it once, in its own transaction, across the whole DB.
+//
+// =======================================================================================
 import type { Db } from './db.js';
 import { parseIsoDateString, formatDateAsIsoString, addDays } from '../shared/dates.js';
 

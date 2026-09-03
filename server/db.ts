@@ -1,7 +1,21 @@
-// db.ts — SQLite (built-in node:sqlite) open + schema + meta helpers + import.
-// Zero external dependencies. All writes go through the single server process, so
-// SQLite serialises them for us (no client-side lock/merge logic needed). Faithful
-// port of the former src/db.mjs.
+// =======================================================================================
+// DATABASE MODULE (server/db.ts)
+// =======================================================================================
+//
+// SQLite (built-in node:sqlite) open + schema + meta helpers + JSON seed import.
+// This module provides:
+// 1. `openDb` — opens/creates the DB file, applies the schema, and runs column migrations.
+// 2. `getMeta`/`setMeta`/`bumpRev` — the `meta` key-value table (revision, groups, ...).
+// 3. `importFromJson` — one-time seed of an empty DB from an existing buchungen.json.
+//
+// Key Principles:
+// - ZERO EXTERNAL DEPENDENCIES: node:sqlite is loaded via `createRequire`, not a static
+//   import, so neither Vite nor a bundler tries to resolve it as a package — Node loads it
+//   natively at runtime.
+// - SINGLE WRITER: all writes go through this one server process, so SQLite serialises
+//   them for us — no client-side lock/merge logic needed.
+//
+// =======================================================================================
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -51,6 +65,17 @@ CREATE TABLE IF NOT EXISTS log(
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 `;
 
+/**
+ * Opens (or creates) the SQLite database at `path`, applies the schema, and retro-fits any
+ * columns added since an older DB file was created — never destructive, always additive.
+ *
+ * How it works: creates the containing directory if needed, opens the DB with WAL journaling
+ * (concurrent readers + durable writes) and a busy timeout (so a brief lock contention waits
+ * instead of erroring), runs the full `CREATE TABLE IF NOT EXISTS` schema (a no-op on an
+ * existing DB), then checks `machines`' actual columns against the ones added after the
+ * original schema (`redu`/`days`/`maint`) and `ALTER TABLE ADD COLUMN`s in whichever are
+ * still missing. Finally seeds the `meta` table's `revision`/`schema_version` keys if unset.
+ */
 export function openDb(path: string): Db {
   mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
@@ -72,16 +97,19 @@ export function openDb(path: string): Db {
   return db;
 }
 
+/** The `meta` table's value for `key`, or null if unset (e.g. `revision`, `groups`, `schema_version`). */
 export function getMeta(db: Db, key: string): string | null {
   const row = db.prepare('SELECT value FROM meta WHERE key=?').get(key) as
     { value: string } | undefined;
   return row ? row.value : null;
 }
+/** Sets the `meta` table's `key` to `value` (insert or update, whichever applies). */
 export function setMeta(db: Db, key: string, value: string | number): void {
   db.prepare(
     'INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
   ).run(key, String(value));
 }
+/** Increments and persists the `revision` counter every write bumps; returns the new value. */
 export function bumpRev(db: Db): number {
   // `|| '0'` guards a never-set meta row; `|| 0` guards parseInt returning NaN on a
   // corrupt/non-numeric value — either way we fall back to revision 0 before bumping.

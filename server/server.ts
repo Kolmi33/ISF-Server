@@ -1,8 +1,26 @@
-// server.ts — zero-dependency HTTP API + Server-Sent-Events for the machine plan.
-// Node >= 22 (uses the built-in node:sqlite). This is the impure entry shell: HTTP,
-// SSE, the daily backup, and the first-run seed. All domain logic lives in the pure
-// modules it imports (db / model / mutate), which are unit-tested; this shell is
-// verified by running it (E5). Faithful port of the top-level of src/server.mjs.
+// =======================================================================================
+// SERVER ENTRY MODULE (server/server.ts)
+// =======================================================================================
+//
+// Zero-dependency HTTP API + Server-Sent-Events for the machine plan (Node >= 22, using
+// the built-in node:sqlite).
+//
+// This is the impure entry shell: HTTP routing, SSE, the daily backup, and the first-run
+// seed. All domain logic lives in the pure modules it imports (db / model / mutate /
+// api-*), which are unit-tested; this shell itself is verified by running it (E5).
+//
+// This module provides:
+// 1. The `/api/v1/*` REST route table (`apiV1Routes`) — see api-router.ts/api-*.ts.
+// 2. The existing `/api/state`/`/api/mutate`/`/api/stream` trio the live grid itself uses.
+// 3. SSE client bookkeeping (presence, broadcast) and the daily VACUUM-into backup.
+// 4. Static file serving for the built frontend.
+//
+// Key Principles:
+// - ONE AUTHORITATIVE WRITE PATH: `/api/mutate` and every `/api/v1/*` write route funnel
+//   into `mutate.ts`'s single `applyMutate` — see PROGRESS.md's Phase 9 plan for why the
+//   REST API is a second entrance onto the same data, not a second write engine.
+//
+// =======================================================================================
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
@@ -133,10 +151,14 @@ try {
 // ---------- SSE clients ----------
 const clients = new Set<ServerResponse>();
 const clientNames = new Map<ServerResponse, string>(); // res -> user name (for presence)
+/** The distinct, non-empty client user names currently connected, German-sorted — the
+ *  "who's online" list the presence indicator shows. */
 function presenceUsers(): string[] {
   const distinctNames = [...new Set([...clientNames.values()].filter(Boolean))];
   return distinctNames.sort((nameA, nameB) => nameA.localeCompare(nameB, 'de'));
 }
+/** Sends one SSE event to every connected client (the `Broadcast` sink `mutate.ts`/the REST
+ *  write handlers are given); a write failure just drops that one client, not the loop. */
 function broadcast(event: string, data: unknown): void {
   const line = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const res of clients) {
@@ -147,9 +169,12 @@ function broadcast(event: string, data: unknown): void {
     }
   }
 }
+/** Broadcasts the current client count + presence list — called whenever a client connects
+ *  or disconnects. */
 function sendPresence(): void {
   broadcast('presence', { clientCount: clients.size, users: presenceUsers() });
 }
+/** Appends one row to the `log` table (best-effort — a logging failure never fails the request). */
 function log(user: string, action: string): void {
   try {
     db.prepare('INSERT INTO log(ts,user,action) VALUES(?,?,?)').run(
@@ -163,6 +188,12 @@ function log(user: string, action: string): void {
 }
 
 // ---------- daily backup (protects against corruption / mass-delete) ----------
+/**
+ * Writes one consistent snapshot of the DB per calendar day (skips if today's file already
+ * exists — safe to call more often than daily), then prunes down to the newest `BACKUP_KEEP`
+ * files. Uses SQLite's `VACUUM INTO`, which produces a clean copy safely even while the DB
+ * is live. Called once at startup and then every 6h (so a restart doesn't miss the day's backup).
+ */
 function runBackup(): void {
   try {
     mkdirSync(BACKUP_DIR, { recursive: true });
@@ -201,6 +232,8 @@ const MIME: Record<string, string> = {
   '.json': 'application/json',
   '.svg': 'image/svg+xml',
 };
+/** Writes a JSON (or, if already a string, verbatim) response with the given status/headers —
+ *  the one place every route in this file sends its response through. */
 function send(
   res: ServerResponse,
   code: number,
@@ -235,6 +268,12 @@ function readBody(req: IncomingMessage): Promise<unknown | null> {
   });
 }
 
+/**
+ * `GET /api/stream` — opens one client's SSE connection. Sends the current revision as a
+ * `hello` event so the client can detect whether it missed anything while disconnected,
+ * registers the client for `broadcast`/presence, and pings every 25s to keep the connection
+ * alive through intermediate proxies. Cleans up (and re-broadcasts presence) on disconnect.
+ */
 function openStream(req: IncomingMessage, res: ServerResponse, url: URL): void {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -264,6 +303,8 @@ function openStream(req: IncomingMessage, res: ServerResponse, url: URL): void {
   });
 }
 
+/** Serves the built frontend from `PUBLIC_DIR` (`/` → `index.html`); 400 on a path-traversal
+ *  attempt (`..`), 404 when the file doesn't exist — the catch-all once no API route matched. */
 async function serveStatic(res: ServerResponse, urlPath: string): Promise<void> {
   const filePath = urlPath === '/' ? '/index.html' : urlPath;
   if (filePath.includes('..')) return send(res, 400, { error: 'bad path' });
@@ -280,6 +321,8 @@ async function serveStatic(res: ServerResponse, urlPath: string): Promise<void> 
   }
 }
 
+/** `POST /api/mutate` — the legacy (non-REST) write endpoint the live grid itself still
+ *  uses; parses the body and hands it straight to `mutate.ts`'s `applyMutate`. */
 async function handleMutatePost(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const body = await readBody(req);
   if (body === null) return send(res, 400, { error: 'Ungültige oder zu große Anfrage' });
@@ -339,6 +382,8 @@ server.listen(PORT, HOST, () =>
 );
 
 // graceful shutdown so the DB closes cleanly
+/** Stops accepting new connections, closes the DB, and exits — with a 3s hard-exit fallback
+ *  in case an open SSE connection keeps `server.close`'s callback from ever firing. */
 function shutdown(): void {
   console.log('Shutdown …');
   server.close(() => {

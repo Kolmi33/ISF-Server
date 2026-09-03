@@ -1,6 +1,15 @@
-// import.ts — one-off seed of the SQLite DB from an existing buchungen.json.
-// Usage:  node dist/server/import.js [path/to/buchungen.json] [--force]
-// Faithful port of src/import.mjs.
+// =======================================================================================
+// IMPORT CLI (server/import.ts)
+// =======================================================================================
+//
+// One-off seed of the SQLite DB from an existing buchungen.json.
+// Usage: `node dist/server/import.js [path/to/buchungen.json] [--force]`.
+//
+// Resolves the seed path (CLI arg, then `IMPORT_JSON`, then the conventional path next to
+// the DB) and hands it to `db.ts`'s `importFromJson`, which is idempotent by default
+// (skips a DB that already has machines) unless `--force` is given.
+//
+// =======================================================================================
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb, importFromJson } from './db.js';

@@ -1,7 +1,23 @@
-// model.ts — the read model: pure row → wire-shape mappers + the full state read.
-// No HTTP, no globals; every function takes the db (or a row) explicitly, so the
-// mapping logic is unit-testable against an in-memory DB. Faithful port of the
-// machineOut/bookingOut/getState/isBlocked helpers from src/server.mjs.
+// =======================================================================================
+// MODEL MODULE (server/model.ts)
+// =======================================================================================
+//
+// The read model: pure row → wire-shape mappers, the availability/block rules the mutate
+// write path enforces server-side, and the full state read `/api/state` serves.
+//
+// This module provides:
+// 1. `blockReason`/`isBlocked`/`isDayAvailable` — server-side mirrors of the client's own
+//    availability predicates (`core/machines.ts`), so a direct write can't bypass what the
+//    UI already refuses to show as bookable.
+// 2. `machineOut`/`bookingOut` — row → wire-shape mappers, shared by `/api/state` and every
+//    `/api/v1/*` read/write endpoint.
+// 3. `getState` — the full team-wide read `/api/state` serves.
+//
+// Key Principles:
+// - PURE, NO I/O BEYOND THE DB: no HTTP, no globals; every function takes the db (or a row)
+//   explicitly, so the mapping/rule logic is unit-testable against an in-memory DB.
+//
+// =======================================================================================
 import type { Db } from './db.js';
 import { getMeta } from './db.js';
 import { mondayFirstWeekdayIndex, parseIsoDateString } from '../shared/dates.js';

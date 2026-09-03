@@ -1,11 +1,25 @@
-// mutate.ts — the SINGLE write path. The client sends either a cell-delta
-// (prev+val per cell → compare-and-set; foreign bookings are never overwritten) OR,
-// for management changes, the complete machine/group list. Every input is validated
-// here server-side — the client is NOT trusted (there is no login in front of it).
+// =======================================================================================
+// MUTATE MODULE (server/mutate.ts)
+// =======================================================================================
 //
-// Faithful port of applyMutate from src/server.mjs, split into structural/cells paths
-// (and per-cell/per-machine helpers) to keep each function within the lint budgets.
-// The SSE broadcast is injected (E4) so the reducer is testable without a live server.
+// The SINGLE write path (CLAUDE.md's "one authoritative server write path"). The client
+// sends either a cell-delta (prev+val per cell → compare-and-set; foreign bookings are
+// never overwritten) OR, for management changes, the complete machine/group list. Every
+// input is validated here server-side — the client is NOT trusted (there is no login in
+// front of it).
+//
+// This module provides:
+// 1. `applyMutate` — the single entry point; dispatches to whichever path below applies.
+// 2. The structural (management) path — replaces the whole machine list in one transaction.
+// 3. The cell-delta (booking/deletion) path — applies a batch of per-cell writes/deletes.
+//
+// Key Principles:
+// - SERVER VALIDATES EVERYTHING: every field from an untrusted client body is clamped,
+//   type-checked, or rejected before it reaches the database.
+// - INJECTED BROADCAST: the SSE `broadcast` sink is a parameter, not a global import, so
+//   the reducer is unit-testable without a live server.
+//
+// =======================================================================================
 import type { Db } from './db.js';
 import { bumpRev, setMeta } from './db.js';
 import { maintainBridges } from './bridge.js';
@@ -125,6 +139,17 @@ function insertMachine(insertStatement: Stmt, machine: InMachine, sortIndex: num
   );
 }
 
+/**
+ * Replaces the whole machine list (and, if given, the group list) in one transaction —
+ * management writes (add/edit/delete/reorder a machine) never patch a single row, they
+ * resend the full list with their one change already applied.
+ *
+ * How it works: validates the whole list first (bails before touching the DB on any
+ * error), then inside one transaction deletes every machine row and re-inserts the given
+ * list in order (so `sort` always matches array order), updates `groups` if given, and
+ * finally deletes any booking whose machine no longer exists (orphan cleanup after a
+ * delete). Bumps the revision and broadcasts a `structural` event only on success.
+ */
 function applyStructural(
   db: Db,
   machines: InMachine[],
@@ -259,6 +284,18 @@ function addWeekendBridges(db: Db, changes: MutateChange[]): void {
   }
 }
 
+/**
+ * Applies a batch of per-cell booking writes/deletes in one transaction — this is the path
+ * every grid click and every REST booking write funnels through.
+ *
+ * How it works: validates the whole batch against the current machine list first (an
+ * unknown machine id or malformed cell fails the entire batch before any of it writes),
+ * then inside one transaction runs {@link writeCell} per cell, collecting `changes`
+ * (applied) and `conflicts` (refused — blocked day, wrong weekday, or a foreign booking)
+ * separately so the caller can report both. Optionally extends the transaction with
+ * {@link addWeekendBridges} before logging and committing. Bumps the revision and
+ * broadcasts an `update` event only when at least one cell actually changed.
+ */
 function applyCells(
   db: Db,
   cells: CellDelta[],

@@ -596,8 +596,18 @@ files, e.g. Phase 9's slices).
   banner headers and doc comments on previously-undocumented internal helpers; these files were
   already fairly well commented from Phase 9, so this was lighter-touch than earlier sub-items.
   Tests still need the "What/How" retrofit.
-- [ ] 10j `server/` part 2 — `backfill.ts`, `bridge.ts`, `db.ts`, `import.ts`, `model.ts`,
-  `mutate.ts`, `server.ts`, `types.ts` (+ tests)
+- [x] 10j `server/` part 2 — `backfill.ts`, `bridge.ts`, `db.ts`, `import.ts`, `model.ts`,
+  `mutate.ts`, `server.ts`, `types.ts`: banner headers on all 8, plus doc comments on
+  previously-undocumented internal helpers (`openDb`, `getMeta`/`setMeta`/`bumpRev`,
+  `applyStructural`/`applyCells`, and most of `server.ts`'s route-handler-adjacent
+  functions). This completes Phase 10's full pass over `server/`. `npm run build:server`
+  + `npm run verify` both green. Tests still need the "What/How" retrofit.
+
+**Phase 10 (source files) is now COMPLETE — every file under `web/js/` and `server/` has
+been rewritten to the machines.ts comment style.** What remains for Phase 10 is the
+"What/How" test-comment retrofit across every `.test.ts`/`.test.tsx` file (established in
+`web/js/ui/live-connection.test.ts`, flagged as owed in every sub-item above) — not yet
+started for any module except that one template file.
 
 ## Done log (newest first)
 - **2026-09-02 — Code-review fixes**: undo's CAS-check bug and `machById`'s stale-cache bug
