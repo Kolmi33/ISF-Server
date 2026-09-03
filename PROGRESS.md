@@ -4,7 +4,11 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-09-02 — **The architecture audit (`docs/ARCHITECTURE_AUDIT.md`) is now
+_Last updated: 2026-09-03 — **Phase 12 (user-requested feature/UX batch) COMPLETE** — 8
+commits, one module each, full detail in the Phase 12 section below. `npm run verify` green
+at 906 tests / 68 files throughout._
+
+_Previously: 2026-09-02 — **The architecture audit (`docs/ARCHITECTURE_AUDIT.md`) is now
 fully resolved except F7's full-merge option (open by design) and F10 (checked, not worth
 doing).** F1–F7(minimal) landed earlier same-day; **F9** (the `window.S` → `store` migration)
 and **F8** (the "4 React roots" window cross-talk) both landed since, in F8's case after a
@@ -624,6 +628,57 @@ directive the user gave is fully executed end to end.
 5. **One commit per finding or small group of related findings**, explaining the evidence
    (not just the conclusion) in the commit message — so a future reader can check the
    reasoning without re-deriving it.
+
+**Phase 12 — User-requested feature/UX batch (2026-09-03) — COMPLETE**
+Seven items from a single user request (numbered 1–7 in the request, "item 5" arrived as a
+follow-up German-language spec mid-turn), each its own commit via the normal per-module loop
+(test-first where behavior changed, full `verify` + browser-reasoning before every commit).
+- [x] 12.1 `MyBookingsModal.tsx` restyled to match `AllBookingsModal`'s row card layout
+  (`.abmach`/`.abdate` inside `.mybk`): bold machine name + group on top, date range below —
+  the group was never shown at all in the old single-line layout. `RunHead` split into
+  `RunHead`/`RunCardBody` to stay under the function-length budget. Commit `115de80`.
+- [x] 12.2 `AllBookingsModal`'s "Bereich" filter can now select a whole top-level category
+  (`Maschinen (alle Bereiche)` / `Messtechnik (alle Bereiche)`), not just one department
+  group — a `cat:<id>` prefix on `AllBookingsFilter.group` (`CATEGORY_FILTER_PREFIX`,
+  `views/all-bookings.ts`), dispatched in `filterAllRuns` via `getMachineCategory`. Commit
+  `939a925`.
+- [x] 12.3 `BookingDetailModal`'s "Statistik" button moved from the "Gebucht von" row to the
+  "Maschine" row (same behavior, different placement). Commit `600fbdd`.
+- [x] 12.4 Stats' "Personen" mode tab hidden (commented out in `StatsControls.tsx`, not
+  deleted) — still reachable via a booking's Statistik button (`openStats(presetPerson)`)
+  straight into a person's drilldown, and from there "← Übersicht" reaches the bare overview.
+  Commit `098e01d`.
+- [x] 12.5 Assistant redesign (5 sub-items from the user's own itemized German spec): a
+  two-column desktop layout (`#modal:has(.assist-columns)` widens only this modal); drag
+  handles (⋮⋮) + dashed drop-zone highlights replacing all explanatory drag-and-drop prose;
+  demand groups restyled as neutral cards (the old per-group `AS_HUES` color palette removed
+  outright — `AssistGrp.color`, `groupNodeOnto`'s `newColor` param — not just hidden), need
+  label shortened to "Benötigt: N von M", dissolve button switched to icon-only; the
+  checklist's already-whole-row-clickable `<label>` rows got more generous padding; suggested
+  devices in results render as colored pill badges (`nameColor`-derived) directly under the
+  date instead of a "Vorschlag: …" text line. Extracted `ui/theme.ts`'s `isDarkTheme()` (read
+  side of `applyTheme`) so `AssistantResults.tsx` and `GridBody.tsx` share one implementation
+  instead of a second private copy. Commit `4fe5064`.
+- [x] 12.6 Stats visual upgrade: `StatBar`'s new `colorByUtilization` prop traffic-lights the
+  Ressourcen overview's machine bars (yellow <60%, green 60–85%, red >85%) — deliberately not
+  applied to the other `StatBar` usages, which show a percent relative to the list's own top
+  scorer rather than a genuine utilisation rate. Category filter switched from the `seg`
+  segmented-control style to a new `pillrow` style, visually separating it from the primary
+  Ressourcen/Wartung tab row. `.statgrp` (group headers) gained background/text contrast;
+  `.pct`/`.statgrp` gained `tabular-nums`. Commit `5049748`.
+- [x] 12.7 Main grid: (a) a new Settings toggle ("Rasterlinien abschwächen", off by default)
+  swaps the cell grid's border color to a much lighter grey via a new `--gridline` token,
+  independent of and separate from (b) the always-on consolidation of continuous same-name
+  multi-day bookings into one seamless bar with the name centered once — new pure
+  `weekBookingBarSegments` (`ui/grid.ts`), scoped to one displayed week (weeks are already
+  visually separated by their own gap column). Every cell keeps its own `data-machine-id`/
+  `data-date`/click handling — only the border and the printed name change, nothing about the
+  grid's DOM/interaction contract. Commits `ad17713` (toggle), `da8fb2c` (merge).
+
+`npm run verify` green after every commit; 68 files / 906 tests at the end of the batch (up
+from 891 at the start — Phase 11's parting count plus the `grid-interaction.ts` fix commit
+`eb0165a` and the externally-edited-comment commit `f9c58cd`, both from the session
+immediately before this phase).
 
 ## Done log (newest first)
 - **2026-09-02 — Code-review fixes**: undo's CAS-check bug and `machById`'s stale-cache bug
