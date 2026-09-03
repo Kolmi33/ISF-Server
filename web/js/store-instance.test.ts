@@ -11,6 +11,10 @@ describe('store-instance', () => {
     vi.resetModules();
   });
 
+  // What: with nothing in localStorage, every persisted preference field hydrates to its
+  // documented default, and startMonday always lands on a real Monday.
+  // How: imports a fresh module instance against empty localStorage and checks every field
+  // of the resulting store's state against its expected default.
   it('hydrates defaults when localStorage is empty', async () => {
     const { store } = await import('./store-instance.ts');
     expect(store.state.data).toBeNull();
@@ -30,6 +34,10 @@ describe('store-instance', () => {
     expect(store.state.startMonday.getUTCDay()).toBe(1); // always a real Monday
   });
 
+  // What: every persisted preference key is read back from localStorage into its matching
+  // state field on hydration, with the right type conversion (JSON arrays into Sets, etc.).
+  // How: seeds localStorage with one value per persisted key, imports a fresh module
+  // instance, and checks each resulting state field matches what was seeded.
   it('hydrates persisted prefs from localStorage', async () => {
     localStorage.setItem('mb_user', 'Anna');
     localStorage.setItem('mb_machsel', JSON.stringify(['m1', 'm2']));
@@ -51,6 +59,10 @@ describe('store-instance', () => {
     expect(store.state.favs).toEqual(new Set(['m3']));
   });
 
+  // What: the personOnly flag only reads as true for the exact stored string "on" — any other
+  // truthy-looking string (even "true") stays false, so a stray or malformed value can't
+  // silently enable the filter.
+  // How: seeds localStorage with the string "true" (not "on") and checks it hydrates to false.
   it('personOnly is false for any localStorage value other than the literal "on"', () => {
     localStorage.setItem('mb_persononly', 'true');
     return import('./store-instance.ts').then(({ store }) => {
@@ -58,6 +70,11 @@ describe('store-instance', () => {
     });
   });
 
+  // What: the module's exported `store` is a genuinely working Store instance, not just a
+  // hydrated plain object — get/set/subscribe/notify/unsubscribe all function against it.
+  // How: reads a field via get(), subscribes a listener, sets a field and checks both the
+  // state update and the listener firing, then unsubscribes and checks a further notify()
+  // no longer reaches it.
   it('exposes a real Store: get/set/subscribe/notify all work against the same instance', async () => {
     const { store } = await import('./store-instance.ts');
     expect(store.get('user')).toBe(store.state.user);
