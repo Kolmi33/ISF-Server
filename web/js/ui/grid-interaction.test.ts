@@ -132,6 +132,11 @@ beforeEach(() => {
 });
 
 describe('paintSelection / clearSelection', () => {
+  // What: painting a selection marks every cell in the anchor↔focus rectangle with the
+  // selected class, and additionally gives the FOCUS cell (only) the roving tabindex/aria
+  // treatment that makes it the one real keyboard-focus target in the whole grid.
+  // How: sets a 2×2 rectangle's opposite corners as anchor/focus, paints, and checks all four
+  // cells got the sel class while only the focus cell got kfocus/aria-selected/tabindex=0.
   it('paints the anchor↔focus rectangle and gives the focus cell a roving tabindex', () => {
     selection.anchor = { machineId: 'm1', date: '2021-01-04' };
     selection.focus = { machineId: 'm2', date: '2021-01-05' };
@@ -144,6 +149,10 @@ describe('paintSelection / clearSelection', () => {
     expect(cell('m2', '2021-01-05').getAttribute('tabindex')).toBe('0');
   });
 
+  // What: repainting a smaller selection actually clears the marks on cells no longer
+  // included — a stale .sel class from the previous, larger selection doesn't linger.
+  // How: paints a 2×2 rectangle, then shrinks the selection to a single cell and repaints,
+  // checking a cell outside the new selection lost both its class and aria attribute.
   it('clears previous marks before repainting a smaller selection', () => {
     selection.anchor = { machineId: 'm1', date: '2021-01-04' };
     selection.focus = { machineId: 'm2', date: '2021-01-05' };
@@ -154,6 +163,10 @@ describe('paintSelection / clearSelection', () => {
     expect(cell('m2', '2021-01-05').getAttribute('aria-selected')).toBeNull();
   });
 
+  // What: clearSelection resets both the selection state and the painted classes, and also
+  // hides any open context menu (a selection and its context menu are always dismissed together).
+  // How: paints a single-cell selection, clears it, and checks the selection state reset, the
+  // cell's class is clean, and the hideCtx handler was called.
   it('clearSelection resets the selection and hides the context menu', () => {
     selection.anchor = { machineId: 'm1', date: '2021-01-04' };
     selection.focus = { machineId: 'm1', date: '2021-01-04' };
@@ -167,6 +180,11 @@ describe('paintSelection / clearSelection', () => {
 });
 
 describe('drag-to-select', () => {
+  // What: a mousedown on a cell (with no modifier) starts a brand-new single-cell selection —
+  // anchor and focus both land on that cell, a drag begins, but no actual drag movement has
+  // happened yet.
+  // How: fires a plain mousedown on one cell and checks the selection state and that the cell
+  // got the sel class.
   it('mousedown on a cell starts a new single-cell selection', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     expect(selection.anchor).toEqual({ machineId: 'm1', date: '2021-01-04' });
@@ -176,6 +194,9 @@ describe('drag-to-select', () => {
     expect(cell('m1', '2021-01-04')).toHaveClass('sel');
   });
 
+  // What: only the primary (left) mouse button starts a selection — a right-click, say,
+  // doesn't accidentally begin dragging.
+  // How: fires a mousedown with button:2 (right) and checks no selection started.
   it('ignores a non-primary mouse button', () => {
     mousedownOn(cell('m1', '2021-01-04'), { button: 2 });
     expect(selection.anchor).toBeNull();

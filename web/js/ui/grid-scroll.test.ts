@@ -234,6 +234,10 @@ beforeEach(() => {
 });
 
 describe('prependWeek', () => {
+  // What: prepending a week moves the grid's start date back 7 days and grows the extra-weeks
+  // counter, triggering exactly one repaint.
+  // How: calls prependWeek() once and checks the new startMonday, the extraWeeks count, and
+  // that notify fired once.
   it('moves startMonday back a week and grows extraWeeks, notifying once', () => {
     prependWeek();
     expect(window.S.startMonday.toISOString().slice(0, 10)).toBe('2020-12-28');
@@ -241,12 +245,19 @@ describe('prependWeek', () => {
     expect(notifySpy).toHaveBeenCalledOnce();
   });
 
+  // What: calling prependWeek twice in quick succession only actually prepends once — the
+  // second call within the debounce window returns immediately, guarding against the scroll
+  // handler firing it repeatedly for one continuous scroll gesture.
+  // How: calls prependWeek twice back-to-back (no time advance) and checks extraWeeks only grew by 1.
   it('is re-entrancy-guarded: a second call within the debounce window is a no-op', () => {
     prependWeek();
     prependWeek();
     expect(window.S.extraWeeks).toBe(1); // not 2 — the second call returned immediately
   });
 
+  // What: once the debounce window has actually elapsed, a genuinely new prepend call is allowed.
+  // How: prepends once, advances the fake clock past the debounce window, prepends again, and
+  // checks extraWeeks grew a second time.
   it('allows another prepend once the debounce window has elapsed', () => {
     prependWeek();
     vi.advanceTimersByTime(80);
@@ -260,6 +271,10 @@ describe('handleGridWrapScroll (via a real scroll event)', () => {
     document.getElementById('gridWrap')!.dispatchEvent(new Event('scroll'));
   }
 
+  // What: scrolling near the right edge, while still under the week-window cap, grows the
+  // window (adds more weeks) and repaints.
+  // How: sets up scroll metrics that put the viewport near the right edge, fires a real
+  // scroll event, and checks extraWeeks grew and notify fired once.
   it('grows extraWeeks when scrolled near the right edge and still under the window cap', () => {
     const wrap = document.getElementById('gridWrap')!;
     Object.defineProperty(wrap, 'scrollWidth', { value: 1000, configurable: true });
@@ -270,6 +285,11 @@ describe('handleGridWrapScroll (via a real scroll event)', () => {
     expect(notifySpy).toHaveBeenCalledOnce();
   });
 
+  // What: once the week-window cap is reached, scrolling near the right edge no longer grows
+  // the window (adds weeks) — instead it SHIFTS the whole window forward by a week, keeping
+  // the total week count fixed.
+  // How: sets extraWeeks to the cap, scrolls near the right edge, and checks extraWeeks stayed
+  // the same while startMonday advanced by 7 days.
   it('shifts the window forward instead of growing once past the week-window cap', () => {
     window.S.extraWeeks = 12; // at MAX_GROWN_WEEKS
     const wrap = document.getElementById('gridWrap')!;
@@ -281,6 +301,10 @@ describe('handleGridWrapScroll (via a real scroll event)', () => {
     expect(window.S.startMonday.toISOString().slice(0, 10)).toBe('2021-01-11'); // +7 days
   });
 
+  // What: scrolling near the left edge (with plenty of room on the right) prepends a week,
+  // the mirror of the right-edge growth behavior.
+  // How: sets up scroll metrics near the left edge only, fires a scroll event, and checks
+  // both extraWeeks grew and startMonday moved back a week.
   it('prepends a week when scrolled near the left edge', () => {
     const wrap = document.getElementById('gridWrap')!;
     Object.defineProperty(wrap, 'scrollWidth', { value: 2000, configurable: true });
@@ -291,6 +315,8 @@ describe('handleGridWrapScroll (via a real scroll event)', () => {
     expect(window.S.startMonday.toISOString().slice(0, 10)).toBe('2020-12-28');
   });
 
+  // What: scrolling in the middle of the range (neither edge) does nothing at all.
+  // How: sets scrollLeft to a middle value, fires a scroll event, and checks notify never fired.
   it('does nothing in the middle of the scroll range', () => {
     const wrap = document.getElementById('gridWrap')!;
     Object.defineProperty(wrap, 'scrollWidth', { value: 2000, configurable: true });
@@ -300,6 +326,11 @@ describe('handleGridWrapScroll (via a real scroll event)', () => {
     expect(notifySpy).not.toHaveBeenCalled();
   });
 
+  // What: right after code itself scrolls the grid (e.g. centering on a date), an immediately
+  // following scroll event is ignored for a short window — otherwise the programmatic scroll
+  // could be misread as the user scrolling near an edge and trigger an unwanted growth/snap.
+  // How: calls centerColumn (a programmatic scroll) to set the "just scrolled" timestamp, then
+  // fires a scroll event that would normally prepend, and checks nothing happened.
   it('ignores growth for a short window after a programmatic scroll (no snap-back)', () => {
     centerColumn('2021-01-04'); // sets lastProgrammaticScrollAt = now
     document.getElementById('gridWrap')!.scrollLeft = 50; // would otherwise prepend
@@ -307,6 +338,11 @@ describe('handleGridWrapScroll (via a real scroll event)', () => {
     expect(notifySpy).not.toHaveBeenCalled();
   });
 
+  // What: even at the left edge (which would normally prepend), growth stops entirely once
+  // the absolute 150-extra-week ceiling is reached — an outer safety limit beyond the
+  // 12-week "grow vs shift" cap tested earlier.
+  // How: sets extraWeeks to 150, scrolls near the left edge, fires a scroll event, and checks
+  // nothing happened.
   it('stops growing once the absolute 150-extra-week ceiling is reached', () => {
     window.S.extraWeeks = 150;
     document.getElementById('gridWrap')!.scrollLeft = 50;
@@ -316,6 +352,12 @@ describe('handleGridWrapScroll (via a real scroll event)', () => {
 });
 
 describe('the wheel listener at the left edge', () => {
+  // What: a horizontal wheel-scroll-left gesture while already at the very start (scrollLeft
+  // 0) prepends a week — a mouse-wheel-specific trigger distinct from the scroll-event-based
+  // edge detection tested above (a trackpad/scrollbar drag never reaches scrollLeft 0 exactly
+  // while still scrolling left, but a wheel tick easily does).
+  // How: sets scrollLeft to 0, dispatches a wheel event with a negative deltaX, and checks
+  // extraWeeks grew.
   it('prepends a week when scrolling left while already at scrollLeft 0', () => {
     document.getElementById('gridWrap')!.scrollLeft = 0;
     document
@@ -324,6 +366,10 @@ describe('the wheel listener at the left edge', () => {
     expect(window.S.extraWeeks).toBe(1);
   });
 
+  // What: the same wheel gesture does nothing if the grid isn't actually scrolled all the
+  // way to the left already.
+  // How: sets scrollLeft to a nonzero value, dispatches the same left-scroll wheel event, and
+  // checks notify never fired.
   it('does nothing when not at the left edge', () => {
     document.getElementById('gridWrap')!.scrollLeft = 50;
     document
@@ -334,6 +380,11 @@ describe('the wheel listener at the left edge', () => {
 });
 
 describe('ensureOverflow', () => {
+  // What: right after data loads (or the window resizes), if the rendered grid isn't yet
+  // wide enough to fill the viewport, ensureOverflow grows the week window and triggers a
+  // DIRECT render (not the debounced notify path) to close the gap immediately.
+  // How: sets scroll metrics narrower than the viewport, calls ensureOverflow(), and checks
+  // extraWeeks grew and the render trigger fired once.
   it('grows extraWeeks and calls render() directly when narrower than the viewport', () => {
     const wrap = document.getElementById('gridWrap')!;
     Object.defineProperty(wrap, 'scrollWidth', { value: 500, configurable: true });
@@ -343,6 +394,9 @@ describe('ensureOverflow', () => {
     expect(renderTrigger).toHaveBeenCalledOnce();
   });
 
+  // What: once the grid is already wider than the viewport, ensureOverflow has nothing to do.
+  // How: sets scroll metrics wider than the viewport, calls ensureOverflow(), and checks the
+  // render trigger was never called.
   it('does nothing once already wider than the viewport', () => {
     const wrap = document.getElementById('gridWrap')!;
     Object.defineProperty(wrap, 'scrollWidth', { value: 1000, configurable: true });
@@ -351,6 +405,10 @@ describe('ensureOverflow', () => {
     expect(renderTrigger).not.toHaveBeenCalled();
   });
 
+  // What: before the first data load, the grid wrapper is hidden (display:none) and
+  // ensureOverflow correctly skips its work rather than measuring a hidden, meaningless layout.
+  // How: hides the wrapper element, calls ensureOverflow(), and checks the render trigger
+  // never fired.
   it('does nothing while the grid is hidden (before the first data load)', () => {
     document.getElementById('gridWrap')!.style.display = 'none';
     ensureOverflow();
@@ -359,6 +417,10 @@ describe('ensureOverflow', () => {
 });
 
 describe('centerColumn / centerToday / gotoDate', () => {
+  // What: centerColumn finds the named date's column and scrolls it to the middle of the wrapper.
+  // How: calls centerColumn on a known rendered date; since jsdom reports 0 for every layout
+  // metric (no real geometry to measure), this mostly proves it doesn't throw and finds the
+  // right cell rather than checking real centering math (that's browser-verified, E5).
   it('centerColumn scrolls the named date to the middle of the wrapper', () => {
     centerColumn('2021-01-04');
     // jsdom reports 0 for every layout metric, so this mostly proves it doesn't throw and
@@ -366,10 +428,16 @@ describe('centerColumn / centerToday / gotoDate', () => {
     expect(document.getElementById('gridWrap')!.scrollLeft).toBe(0);
   });
 
+  // What: a date with no rendered cell (not currently in the visible grid) is a safe no-op.
+  // How: calls centerColumn with a date far outside the fixture's rendered range.
   it('centerColumn is a no-op for a date with no rendered cell', () => {
     expect(() => centerColumn('1999-01-01')).not.toThrow();
   });
 
+  // What: centerToday is a thin wrapper that defers to centerColumn, scheduled for the next
+  // animation frame (so it runs after any pending layout/render settles).
+  // How: stubs requestAnimationFrame to run its callback synchronously and checks calling
+  // centerToday() doesn't throw.
   it('centerToday defers to centerColumn on the next frame', () => {
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
       cb(0);
@@ -378,6 +446,8 @@ describe('centerColumn / centerToday / gotoDate', () => {
     expect(() => centerToday()).not.toThrow();
   });
 
+  // What: gotoDate scrolls to an arbitrary date, also deferred to the next animation frame.
+  // How: stubs requestAnimationFrame the same way and checks calling gotoDate() doesn't throw.
   it('gotoDate scrolls (on the next frame) without throwing', () => {
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
       cb(0);
@@ -388,6 +458,11 @@ describe('centerColumn / centerToday / gotoDate', () => {
 });
 
 describe('syncJumpControls', () => {
+  // What: the month/year jump dropdown+input are kept in sync with whichever week block the
+  // grid is currently scrolled to (read from S.startMonday, offset a few days to land
+  // reliably within the intended month).
+  // How: sets a known startMonday, calls syncJumpControls(), and checks both controls'
+  // values match that date's month/year.
   it('sets the month/year controls from the week-block currently at the grid start', () => {
     window.S.startMonday = new Date('2021-01-25T00:00:00Z'); // Monday; +3 days = Thursday Jan 28
     syncJumpControls();
@@ -397,6 +472,14 @@ describe('syncJumpControls', () => {
 });
 
 describe('the month/year jump controls (change event)', () => {
+  // What: pins a specific, easy-to-miss legacy-faithful side effect: choosing a month/year
+  // computes that month's target date, then calls prependWeek() as a scroll-buffer step —
+  // and prependWeek() itself shifts S.startMonday back another 7 days. The real scroll target
+  // is handled separately by gotoDate() (browser-verified), so S.startMonday legitimately
+  // ends up one week earlier than the jump target itself.
+  // How: selects February 2021 via the month dropdown's change event and checks startMonday
+  // landed one week before what a naive "first Monday of February" calculation would give,
+  // with extraWeeks reflecting resetView() zeroing it then prependWeek() growing it back to 1.
   it('jumping to a month scrolls there, one week further back than the target itself', () => {
     // Faithful to legacy: jumpToMonth() computes the target month's first Monday, then calls
     // prependWeek() as a scroll-buffer step — which itself shifts S.startMonday back another
@@ -410,6 +493,11 @@ describe('the month/year jump controls (change event)', () => {
     expect(notifySpy).toHaveBeenCalled();
   });
 
+  // What: a full four-digit year typed into the year field is read as that literal year, not
+  // misinterpreted as a two-digit shorthand (e.g. "99" meaning 1999).
+  // How: types the literal year 1999 and checks the resulting startMonday's year/month —
+  // since Jan 1 1999 was a Friday, that week's Monday actually falls in December 1998, which
+  // only happens if 1999 was parsed as a real four-digit year and not some other encoding.
   it('treats a four-digit year as-is rather than as a two-digit offset from 2000', () => {
     (document.getElementById('jumpMonth') as HTMLSelectElement).value = '0';
     (document.getElementById('jumpYear') as HTMLInputElement).value = '1999';
@@ -420,6 +508,12 @@ describe('the month/year jump controls (change event)', () => {
     expect(window.S.startMonday.getUTCMonth()).toBe(11); // December
   });
 
+  // What: a non-numeric year field value falls back to using the actual current year,
+  // rather than producing NaN or throwing.
+  // How: types a non-numeric string into the year field, computes what the current-year
+  // fallback SHOULD produce (independently, using the same Jan-1st→Monday transform the code
+  // under test uses — since Jan 1st doesn't always fall on a Monday, the expected result can
+  // itself land in the preceding year), and checks the actual result matches that computation.
   it('falls back to the current year when the year field is not a number', () => {
     (document.getElementById('jumpMonth') as HTMLSelectElement).value = '0';
     (document.getElementById('jumpYear') as HTMLInputElement).value = 'abc';
@@ -433,18 +527,26 @@ describe('the month/year jump controls (change event)', () => {
 });
 
 describe('the Heute/◀/▶ toolbar buttons', () => {
+  // What: the "Heute" (today) button resets the view to the current week, same
+  // zero-then-regrow extraWeeks behavior as the month/year jump.
+  // How: clicks the button and checks extraWeeks ended at 1 (reset to 0, then prependWeek's
+  // scroll-buffer step grew it back) and that a repaint was triggered.
   it('Heute resets the view and jumps to the current week', () => {
     document.getElementById('btnToday')!.click();
     expect(window.S.extraWeeks).toBe(1); // resetView() zeroes it, then prependWeek() grows it back
     expect(notifySpy).toHaveBeenCalled();
   });
 
+  // What: the ◀ (previous) button steps the grid one week earlier.
+  // How: clicks the button and checks startMonday moved back exactly 7 days, with one notify.
   it('◀ moves startMonday back a week', () => {
     document.getElementById('btnPrev')!.click();
     expect(window.S.startMonday.toISOString().slice(0, 10)).toBe('2020-12-28');
     expect(notifySpy).toHaveBeenCalledOnce();
   });
 
+  // What: the ▶ (next) button steps the grid one week later.
+  // How: clicks the button and checks startMonday moved forward exactly 7 days, with one notify.
   it('▶ moves startMonday forward a week', () => {
     document.getElementById('btnNext')!.click();
     expect(window.S.startMonday.toISOString().slice(0, 10)).toBe('2021-01-11');
@@ -453,6 +555,10 @@ describe('the Heute/◀/▶ toolbar buttons', () => {
 });
 
 describe('resetView', () => {
+  // What: resetView clears the grown week-window state and scrolls back to the start —
+  // the shared "go back to a clean baseline" step both Heute and the month/year jump build on.
+  // How: sets a nonzero extraWeeks and scroll position, calls resetView(), and checks both
+  // reset to zero.
   it('zeroes extraWeeks and scrolls back to the start', () => {
     window.S.extraWeeks = 5;
     document.getElementById('gridWrap')!.scrollLeft = 200;
