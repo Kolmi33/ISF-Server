@@ -585,8 +585,11 @@ files, e.g. Phase 9's slices).
   `web/js/ui/components/` (10f+10g). Also cleaned up an ambiguous "Legacy resets a stale
   drilldown selection" comment in `StatsModal.tsx` to describe the current behavior
   directly. Tests still need the "What/How" retrofit.
-- [ ] 10h `web/js/ui/views/` — `admin.ts`, `all-bookings.ts`, `my-bookings.ts`, `stats.ts`
-  (+ tests)
+- [x] 10h `web/js/ui/views/` — `admin.ts`, `all-bookings.ts`, `my-bookings.ts`, `stats.ts`.
+  Banner headers + per-function docblocks; fixed several "Faithful port of legacy X"
+  tails while preserving `stats.ts`'s substantive category+group-bucketing bug-history
+  note (reworded off "legacy" framing, kept the actual rationale). Completes
+  `web/js/ui/views/`. Tests still need the "What/How" retrofit.
 - [ ] 10i `server/` part 1 — `api-*.ts` (routing/response/read/write endpoint modules, + tests)
 - [ ] 10j `server/` part 2 — `backfill.ts`, `bridge.ts`, `db.ts`, `import.ts`, `model.ts`,
   `mutate.ts`, `server.ts`, `types.ts` (+ tests)

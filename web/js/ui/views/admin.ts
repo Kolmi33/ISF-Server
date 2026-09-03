@@ -1,8 +1,12 @@
-// The admin (Verwalten) list view model (Phase 4.3). The modal's add/edit/reorder wiring, the
-// per-row status/maintenance badges and the row markup stay in the legacy adapter; what moves here
-// is the pure list kernel: order the machines (manual = source order, or by name / by group→name)
-// and filter them by a case-insensitive search over "name group". Faithful port of the admin
-// `renderList` head; the machines and the (DOM-read) sort/query are injected (E4).
+// =======================================================================================
+// ADMIN VIEW MODEL MODULE (web/js/ui/views/admin.ts)
+// =======================================================================================
+//
+// The admin (Verwalten) list's pure view-model kernel: orders the machines (manual = source
+// order, or by name / by group→name) and filters them by a case-insensitive search over
+// "name group".
+//
+// =======================================================================================
 
 import type { Machine } from '../../../../shared/types.ts';
 
@@ -10,9 +14,9 @@ import type { Machine } from '../../../../shared/types.ts';
 export type AdminSort = 'manual' | 'name' | 'group';
 
 /**
- * Order and filter the machine list for the admin modal. `sort` is `name` (A–Z, German collation),
- * `group` (by group then name), or anything else = `manual` (stored order). `query` matches a
- * case-insensitive substring of `"<name> <group>"`. Returns a new array. Faithful to legacy.
+ * Orders and filters the machine list for the admin modal. `sort` is `name` (A–Z, German
+ * collation), `group` (by group then name), or anything else = `manual` (stored order).
+ * `query` matches a case-insensitive substring of `"<name> <group>"`. Returns a new array.
  */
 export function filterAdminMachines(
   machines: readonly Machine[],

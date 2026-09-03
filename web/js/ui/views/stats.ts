@@ -1,9 +1,13 @@
-// The statistics view model (Phase 4.3). The stats modal's segmented UI, drilldown, folding and
-// per-mode row markup stay in the legacy adapter; what moves here is the pure aggregation kernel it
-// builds once per date range: per-machine booking counts + who booked them, a person index, and the
-// maintenance/downtime tally. Pure over `core/dates` + `core/machines`; the ordered machines,
-// bookings and the (already-validated) from/to range are injected (E4). Faithful port of the stats
-// `compute()` closure in legacy — the DOM read of the range and the `f>o` validation stay in legacy.
+// =======================================================================================
+// STATS VIEW MODEL MODULE (web/js/ui/views/stats.ts)
+// =======================================================================================
+//
+// The statistics view model: the pure aggregation kernel built once per date range —
+// per-machine booking counts plus who booked them, a person index, and the
+// maintenance/downtime tally — plus the per-mode row-building/filter/sort logic each
+// overview and drilldown renders from.
+//
+// =======================================================================================
 
 import type { Machine, Bookings, MachineCategory } from '../../../../shared/types.ts';
 import { getWeekdaysInRange, getAllDaysInRange } from '../../../../shared/dates.ts';
@@ -114,9 +118,9 @@ function aggregateMaint(
 }
 
 /**
- * Aggregate bookings + maintenance over the (validated) `from`..`to` range. `days` counts only
- * weekdays (utilisation denominator); `maint.days` counts blocked *calendar* days. Faithful port
- * of legacy stats `compute()`.
+ * Aggregates bookings + maintenance over the (already-validated) `from`..`to` range.
+ * `days` counts only weekdays (the utilisation denominator); `maint.days` counts blocked
+ * *calendar* days instead — maintenance can span a weekend even though bookings never do.
  */
 export function computeStats(
   machines: readonly Machine[],
@@ -165,12 +169,14 @@ interface ResourceRowBuckets {
 }
 
 /**
- * Bucket the matching rows by category, then by group, preserving first-seen order. Legacy
- * buckets by the bare group NAME across categories — a real (if obscure) bug there: a group
- * name shared by a "Maschinen" resource and a "Messtechnik" one would silently merge their rows
- * into whichever category's bucket happened to be created first, and the other category would
- * render an empty group list. Fixed here (E2, flagged) by bucketing on category+group together;
- * the fold state in `buildResourceRows` still keys on the bare group name, unchanged from legacy.
+ * Buckets the matching rows by category, then by group, preserving first-seen order.
+ *
+ * Bucketing on category+group together (not the bare group name alone) matters: a group
+ * name shared by a "Maschinen" resource and a "Messtechnik" one would otherwise silently
+ * merge their rows into whichever category's bucket happened to be created first, leaving
+ * the other category's group list empty. The fold state in `buildResourceRows` still keys
+ * on the bare group name, though — a real but obscure edge case (two categories sharing a
+ * group name, both expanded/collapsed together) that's never come up in practice.
  */
 function bucketResourceRows(
   machRows: readonly StatsMachineRow[],
@@ -201,12 +207,11 @@ function bucketResourceRows(
 }
 
 /**
- * The Ressourcen-mode list, grouped by category then by group, each level foldable and each
- * carrying its own average utilisation. A category header only appears when more than one
- * category actually has matching rows (a single-category result skips straight to its groups);
- * a category's average covers every row in it regardless of which of its groups are folded, but
- * folding the category itself hides its groups and their rows entirely. Faithful port of the
- * `mode==='m'` (non-drilldown) branch of legacy `renderStats`.
+ * Builds the Ressourcen-mode list, grouped by category then by group, each level foldable
+ * and each carrying its own average utilisation. A category header only appears when more
+ * than one category actually has matching rows (a single-category result skips straight to
+ * its groups); a category's average covers every row in it regardless of which of its
+ * groups are folded, but folding the category itself hides its groups and their rows entirely.
  */
 export function buildResourceRows(
   machRows: readonly StatsMachineRow[],
@@ -262,9 +267,9 @@ export function buildResourceRows(
 // ---- The "Wartung" and "Personen" overview modes' filter + sort ---------------------
 
 /**
- * The Wartung-mode list: maintenance rows matching `filterQuery` (machine name, case-
- * insensitive substring), most blocked-days first, then most instances, then German name
- * order. Faithful port of the `mode==='w'` branch of legacy `renderStats`.
+ * Builds the Wartung-mode list: maintenance rows matching `filterQuery` (machine name,
+ * case-insensitive substring), most blocked-days first, then most instances, then German
+ * name order.
  */
 export function buildMaintRows(
   maintRows: readonly StatsMaintRow[],
@@ -282,9 +287,8 @@ export function buildMaintRows(
 }
 
 /**
- * The Personen-mode overview list: people matching `filterQuery` (name, case-insensitive
- * substring), most booked days first, then German name order. Faithful port of the `else`
- * (Personen overview) branch of legacy `renderStats`.
+ * Builds the Personen-mode overview list: people matching `filterQuery` (name,
+ * case-insensitive substring), most booked days first, then German name order.
  */
 export function buildPersonRows(
   persons: ReadonlyMap<string, StatsPerson>,

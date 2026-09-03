@@ -1,8 +1,12 @@
-// The "All bookings" view model (Phase 4.3). The modal's inputs, the go-to wiring and the row
-// markup stay in the legacy adapter; the two pure kernels move here: grouping every future booking
-// into per-person consecutive-workday runs (`computeAllRuns`), and the filter/sort/cap that the
-// list controls drive (`filterAllRuns`). Pure over `core/dates`; machines, bookings, today and the
-// filter criteria are injected (E4). Faithful port of legacy `computeAllRuns` + the list `renderList`.
+// =======================================================================================
+// ALL BOOKINGS VIEW MODEL MODULE (web/js/ui/views/all-bookings.ts)
+// =======================================================================================
+//
+// The "All bookings" view model's two pure kernels: grouping every future booking into
+// per-person consecutive-workday runs (`computeAllRuns`), and the filter/sort/cap that the
+// list controls drive (`filterAllRuns`).
+//
+// =======================================================================================
 
 import type { Machine, Bookings } from '../../../../shared/types.ts';
 import { parseIsoDateString, isWeekend, nextWeekday } from '../../../../shared/dates.ts';
@@ -16,9 +20,9 @@ export interface AllRun {
 }
 
 /**
- * Group every future booking (from `today`, weekdays only) into runs that break on a change of
- * person or a non-consecutive workday. Each run carries the earliest creation timestamp of its
- * days. Runs are returned sorted by first date. Faithful port of legacy `computeAllRuns`.
+ * Groups every future booking (from `today`, weekdays only) into runs that break on a
+ * change of person or a non-consecutive workday. Each run carries the earliest creation
+ * timestamp of its days. Runs are returned sorted by first date.
  */
 export function computeAllRuns(
   machines: readonly Machine[],
@@ -83,7 +87,7 @@ export interface AllBookingsFilter {
   sort: string;
 }
 
-/** The sort comparators, keyed by the modal's sort dropdown values. Faithful to legacy `sorters`. */
+/** The sort comparators, keyed by the modal's sort dropdown values. */
 const sorters: Record<string, (runA: AllRun, runB: AllRun) => number> = {
   termin: (runA, runB) =>
     runA.dates[0]! < runB.dates[0]! ? -1 : runA.dates[0]! > runB.dates[0]! ? 1 : 0,
@@ -101,9 +105,9 @@ const sorters: Record<string, (runA: AllRun, runB: AllRun) => number> = {
 };
 
 /**
- * Filter, sort and cap (300) the runs for the list. Person/machine are case-insensitive substring
- * matches; the date window keeps runs that overlap `[from, to]`; an unknown sort key falls back to
- * `termin`. Faithful port of the filter+sort+slice in legacy `renderList`.
+ * Filters, sorts and caps (300) the runs for the list. Person/machine are case-insensitive
+ * substring matches; the date window keeps runs that overlap `[from, to]`; an unknown sort
+ * key falls back to `termin`.
  */
 export function filterAllRuns(
   runs: readonly AllRun[],

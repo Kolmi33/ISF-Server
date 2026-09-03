@@ -1,8 +1,11 @@
-// The "My bookings" view model (Phase 4.3). The modal itself — the `openModal(html)` shell, the
-// expand/goto/delete wiring — stays in the legacy adapter; what moves here is the pure kernel that
-// turns the raw state into the list the modal draws: the current user's future bookings, grouped
-// into consecutive-workday runs (series). Pure over `core/dates`; the machine order, bookings, user
-// and today are injected (E4). Faithful port of legacy `computeMyRuns`.
+// =======================================================================================
+// MY BOOKINGS VIEW MODEL MODULE (web/js/ui/views/my-bookings.ts)
+// =======================================================================================
+//
+// The "My bookings" view model's pure kernel: turns the raw state into the list the modal
+// draws — the current user's future bookings, grouped into consecutive-workday runs (series).
+//
+// =======================================================================================
 
 import type { Machine, Bookings } from '../../../../shared/types.ts';
 import { parseIsoDateString, isWeekend, nextWeekday } from '../../../../shared/dates.ts';
@@ -14,10 +17,12 @@ export interface BookingRun {
 }
 
 /**
- * Group the user's future bookings into consecutive-workday runs. For each machine (in the given
- * display order) it takes that user's bookings from `today` onward, drops weekends, and splits the
- * sorted days into runs where each day is the next workday after the previous one (so Fri→Mon is
- * one run). Runs are returned sorted by their first date. Faithful port of legacy `computeMyRuns`.
+ * Groups the user's future bookings into consecutive-workday runs.
+ *
+ * How it works: for each machine (in the given display order), takes that user's bookings
+ * from `today` onward, drops weekends, and splits the sorted days into runs where each day
+ * is the next workday after the previous one (so Fri→Mon is one continuous run, not two).
+ * Runs are returned sorted by their first date.
  */
 export function computeMyRuns(
   machines: readonly Machine[],
