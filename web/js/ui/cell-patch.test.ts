@@ -38,16 +38,26 @@ beforeEach(() => {
 });
 
 describe('refreshCell', () => {
+  // What: patching a cell that isn't currently in the DOM (e.g. scrolled out of view) is a
+  // safe no-op — it doesn't need to exist for the patch to be attempted.
+  // How: calls refreshCell for a date not in the built DOM fixture and checks it doesn't throw.
   it('is a no-op when the cell is not currently rendered', () => {
     expect(() => refreshCell('m1', '2099-01-01')).not.toThrow();
   });
 
+  // What: if the machine itself no longer exists in the loaded data (e.g. deleted
+  // concurrently), the cell is left exactly as it was rather than erroring.
+  // How: empties the machines list, patches the cell, and checks its class is unchanged.
   it('is a no-op when the machine no longer exists', () => {
     window.S.data!.machines = [];
     refreshCell('m1', TODAY);
     expect(cell().className).toBe('cell free'); // unchanged
   });
 
+  // What: a cell blocked by maintenance renders with the "blocked" class and shows the
+  // maintenance text (including its note) as a hover title.
+  // How: gives the machine a maintenance slot covering today with a note, patches, and checks
+  // both the class and the title.
   it('renders a blocked cell with the maintenance text as its title', () => {
     window.S.data!.machines = [
       machine({ maint: [{ type: 'defekt', from: TODAY, until: TODAY, note: 'kaputt' }] }),
@@ -57,6 +67,11 @@ describe('refreshCell', () => {
     expect(cell().title).toContain('kaputt');
   });
 
+  // What: a booked cell shows "booked", plus "mine" when the booker matches the current user
+  // case-insensitively (not an exact-case match), the booker's name as text, and the note as
+  // the hover title.
+  // How: books today under a differently-cased version of the logged-in user's name, patches,
+  // and checks the class, text, and title.
   it('renders a booked cell, marking it "mine" case-insensitively', () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'Anna', note: 'wichtig' } } };
     refreshCell('m1', TODAY);
@@ -66,12 +81,20 @@ describe('refreshCell', () => {
     expect(cell().title).toContain('wichtig');
   });
 
+  // What: a cell on a weekday the machine doesn't work renders as "unavail", distinct from
+  // blocked or booked.
+  // How: gives the machine a days mask with today's weekday off and checks the class.
   it('renders an unavailable cell for a machine closed on that weekday', () => {
     window.S.data!.machines = [machine({ days: '0111111' })]; // Monday off
     refreshCell('m1', TODAY);
     expect(cell().className).toContain('unavail');
   });
 
+  // What: with none of the other conditions applying (not booked, not blocked, available),
+  // the cell renders "free" with empty text — and re-patching after a booking is removed
+  // correctly reverts it back to free rather than leaving stale booked styling.
+  // How: books the cell, patches, then clears the booking and patches again, checking the
+  // final state is free with empty text.
   it('renders free when nothing else applies', () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
     refreshCell('m1', TODAY);
@@ -100,17 +123,26 @@ describe('refreshCell', () => {
       return document.querySelector(`td.cell[data-machine-id="m1"][data-date="${SATURDAY}"]`)!;
     }
 
+    // What: a free weekend cell keeps its "wknd" styling class through a patch.
+    // How: patches a Saturday cell with nothing else going on and checks the class survives.
     it('keeps wknd on a free weekend cell', () => {
       refreshCell('m1', SATURDAY);
       expect(satCell().className).toContain('wknd');
     });
 
+    // What: the wknd class survives even when the cell is ALSO booked — the bug this whole
+    // describe block pins was refreshCell dropping wknd regardless of which other state applied.
+    // How: books the Saturday cell, patches, and checks wknd is still present alongside the
+    // booked state.
     it('keeps wknd on a booked weekend cell', () => {
       window.S.data!.bookings = { m1: { [SATURDAY]: { name: 'anna' } } };
       refreshCell('m1', SATURDAY);
       expect(satCell().className).toContain('wknd');
     });
 
+    // What: the wknd class survives when the cell is ALSO blocked by maintenance.
+    // How: blocks the Saturday cell with a maintenance slot, patches, and checks wknd is
+    // still present alongside the blocked state.
     it('keeps wknd on a blocked weekend cell', () => {
       window.S.data!.machines = [
         machine({ maint: [{ type: 'defekt', from: SATURDAY, until: SATURDAY }] }),
@@ -119,12 +151,18 @@ describe('refreshCell', () => {
       expect(satCell().className).toContain('wknd');
     });
 
+    // What: the wknd class survives when the cell is ALSO unavailable per the days mask.
+    // How: gives the machine a mask with Saturday off, patches, and checks wknd is still
+    // present alongside the unavailable state.
     it('keeps wknd on an unavailable weekend cell', () => {
       window.S.data!.machines = [machine({ days: '1111101' })]; // Mo..So mask, Saturday off
       refreshCell('m1', SATURDAY);
       expect(satCell().className).toContain('wknd');
     });
 
+    // What: conversely, an ordinary weekday cell never gets the wknd class added — the fix
+    // must apply only to actual weekend columns.
+    // How: patches a Monday cell and checks the class does NOT contain wknd.
     it('does not add wknd to a weekday cell', () => {
       refreshCell('m1', TODAY); // a Monday
       expect(cell().className).not.toContain('wknd');
