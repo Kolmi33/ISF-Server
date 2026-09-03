@@ -14,6 +14,10 @@ function tmp(): string {
 }
 
 describe('openDb', () => {
+  // What: opening a fresh DB applies the full schema and seeds the default meta values
+  // (revision 0, schema_version 1).
+  // How: opens an in-memory DB and checks both meta values and that the newer optional
+  // columns (redu/days/maint) exist on the machines table.
   it('creates the schema and seeds default meta', () => {
     const db = openDb(':memory:');
     expect(getMeta(db, 'revision')).toBe('0');
@@ -24,6 +28,10 @@ describe('openDb', () => {
     expect(cols).toEqual(expect.arrayContaining(['redu', 'days', 'maint']));
   });
 
+  // What: opening an EXISTING database file created before redu/days/maint existed
+  // retro-fits those columns onto it, without touching or losing the DB's other data.
+  // How: creates a raw SQLite file with the pre-migration schema (no redu/days/maint), then
+  // opens it through openDb() and checks the columns now exist.
   it('migrates an old machines table by adding redu/days/maint', () => {
     const dir = tmp();
     const path = join(dir, 'old.db');
@@ -44,6 +52,11 @@ describe('openDb', () => {
 });
 
 describe('meta helpers', () => {
+  // What: getMeta/setMeta round-trip values (coercing a number to its string form), and
+  // bumpRev always increments correctly, even starting from a completely absent revision row.
+  // How: checks an unset key reads null, a set-then-get round-trips a string, a numeric value
+  // gets stringified, then deletes the meta table entirely and checks bumpRev still correctly
+  // starts from 0 (→1) and continues incrementing (→2) from there.
   it('get/set round-trips and bumpRev increments from any state', () => {
     const db = openDb(':memory:');
     expect(getMeta(db, 'nope')).toBeNull();
@@ -74,6 +87,11 @@ describe('importFromJson', () => {
     bookings: { a: { '2021-01-04': { name: 'Alice', ts: 't', note: 'n' } } },
   };
 
+  // What: a first import populates machines, bookings, and groups from the seed JSON,
+  // reporting the counts it inserted, and correctly writes optional fields (cat, maint as a
+  // JSON-serialized array).
+  // How: imports a seed with 2 machines/1 booking/1 group into a fresh DB and checks the
+  // reported counts, the persisted groups meta, and one machine's cat/maint fields.
   it('seeds machines, bookings, and groups from a JSON file', () => {
     const dir = tmp();
     const path = join(dir, 'seed.json');
@@ -94,6 +112,11 @@ describe('importFromJson', () => {
     }
   });
 
+  // What: if any part of the seed insert fails partway through, the whole import rolls back
+  // — no partial data is left behind — and the failure propagates to the caller as a thrown error.
+  // How: drops the bookings table before importing (so the booking insert inside the
+  // transaction throws), checks importFromJson itself throws, and checks the machines table
+  // ended up empty (the machine inserts that happened before the failure were rolled back too).
   it('rolls back and rethrows when a seed insert fails', () => {
     const dir = tmp();
     const path = join(dir, 'seed.json');
@@ -108,6 +131,11 @@ describe('importFromJson', () => {
     }
   });
 
+  // What: importing into a DB that already has machines is a no-op UNLESS `force` is given —
+  // and with force, the existing data is wiped and replaced by the new seed entirely.
+  // How: imports once (populates the DB), imports again without force (checks it's skipped,
+  // reporting the existing count), then writes a different seed file and imports with
+  // force:true, checking the DB now reflects only the new seed's single machine.
   it('skips a non-empty DB unless forced', () => {
     const dir = tmp();
     const path = join(dir, 'seed.json');
