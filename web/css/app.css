@@ -241,19 +241,37 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 #ctxMenu button:hover{background:var(--hover)}
 .machinfo{color:var(--muted);cursor:pointer}
 /* ---------- Assistent: Bedarfs-Baukasten (Drag & Drop) ---------- */
+/* Zwei-Spalten-Layout auf Desktop-Breiten: Geräteauswahl links, Versuchsaufbau rechts, beide
+   dauerhaft sichtbar. `:has()` weitet #modal nur für den Assistenten selbst — jedes andere
+   Modal behält seine normale max-width. Schmalere Breiten stapeln beide Spalten wie zuvor. */
+.assist-columns{display:flex;flex-direction:column;gap:4px}
+@media (min-width:860px){
+  #modal:has(.assist-columns){max-width:920px}
+  .assist-columns{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  .assist-columns .aswork{max-height:320px;overflow:auto}
+}
 .aswork{border:1px dashed var(--border);border-radius:10px;padding:8px;min-height:54px;margin:6px 0;background:var(--panel)}
-.aswork.dragover-root{border-color:var(--accent);background:var(--accent-light)}
+.aswork.dragover-root{border-color:var(--accent);border-style:dashed;background:var(--accent-light)}
 .aswork .catlbl{font-weight:700;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:6px 2px 3px}
 .asnode{border-radius:8px}
-.asdev{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;margin:3px;border:1px solid var(--border);border-radius:8px;background:var(--panel);cursor:grab;font-size:13px}
+/* Drag-Handle (⋮⋮): die einzige visuelle Erklärung, dass ein Knoten ziehbar ist — ersetzt den
+   früheren Fließtext dazu (siehe AssistantTree.tsx) */
+.draghandle{color:var(--muted);cursor:grab;letter-spacing:-2px;font-size:13px;line-height:1}
+.asdev{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;margin:3px;border:1px solid var(--border);border-radius:8px;background:var(--panel);cursor:grab;font-size:13px;transition:background .12s,border-color .12s}
+.asdev:hover{background:var(--hover)}
 .asdev:active{cursor:grabbing}
 .asdev.dragging,.asgrp.dragging{opacity:.45}
-.asdev.dragover{outline:2px solid var(--accent);outline-offset:1px}
-.asdev .rm,.asgrp .rm{cursor:pointer;color:var(--muted);font-weight:700;line-height:1;padding:0 2px}
+/* Reaktive gestrichelte Drop-Zone: löst den früheren durchgezogenen Fokus-Outline-Look ab, damit
+   ein aktives Ziehziel eindeutig als „hier ablegen" statt als reiner Hover-Zustand liest */
+.asdev.dragover{outline:2px dashed var(--accent);outline-offset:2px;background:var(--accent-light)}
+.asdev .rm,.asgrp .rm{cursor:pointer;color:var(--muted);font-weight:700;line-height:1;padding:0 2px;
+  border:none;background:none;font-size:inherit}
 .asdev .rm:hover,.asgrp .rm:hover{color:var(--danger,#c0392b)}
 .asdev .machinfo{display:inline-flex}
-.asgrp{border:2px solid var(--border);border-radius:10px;padding:5px 7px 7px;margin:5px 3px;background:var(--panel)}
-.asgrp.dragover{outline:2px solid var(--accent);outline-offset:1px}
+/* Bedarfsgruppen als ruhige, neutrale Karte statt verschachtelter bunter Rahmen (die frühere
+   Palette pro Gruppe ist mit dieser Umstellung komplett entfernt, nicht nur ausgeblendet) */
+.asgrp{border:1px solid var(--border);border-radius:10px;padding:7px 9px 9px;margin:5px 3px;background:var(--headbg)}
+.asgrp.dragover{outline:2px dashed var(--accent);outline-offset:2px;background:var(--accent-light)}
 .asgrp-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:2px;cursor:grab}
 .asgrp-head b{color:var(--text)}
 .asgrp-need{display:inline-flex;align-items:center;gap:2px}
@@ -262,6 +280,9 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .asstep:hover{background:var(--hover)}
 .asgrp-kids{display:flex;flex-wrap:wrap;align-items:flex-start;min-height:30px;padding:2px;border-radius:6px}
 .asgrp-kids.dragover{background:var(--accent-light)}
+/* Vorschlags-Badges in den Suchergebnissen: farbige "Pillen" statt Fließtext-Aufzählung */
+.aspills{display:flex;flex-wrap:wrap;gap:4px;margin:3px 0}
+.aspill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;color:var(--text)}
 #modalReopen{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:90;display:none;flex-direction:column;align-items:center;gap:3px;background:var(--accent);color:#fff;border:none;border-radius:0 12px 12px 0;padding:12px 8px;box-shadow:0 4px 18px rgba(0,0,0,.28);cursor:pointer;font-size:11px;font-weight:600;letter-spacing:.02em}
 #modalReopen.show{display:flex}
 #modalReopen .ic{width:18px;height:18px;stroke:#fff}
@@ -282,7 +303,9 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .hint{font-size:12px;color:var(--muted);margin:6px 0}
 .conflictbox{background:var(--confbg);color:var(--confink);border:1px solid var(--confbrd);border-radius:6px;padding:8px;font-size:12px;margin:8px 0;max-height:120px;overflow:auto}
 .mlist{max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:6px;margin:6px 0}
-.mlist label{display:block;padding:3px 4px;cursor:pointer;border-radius:4px}
+/* Großzügigeres Padding + Übergang: die ganze Zeile ist bereits per <label> klickbar (Fitts's
+   Law), dieser Wert macht das beim Scannen auch spürbar statt nur technisch wahr */
+.mlist label{display:block;padding:7px 8px;cursor:pointer;border-radius:4px;transition:background .12s}
 .mlist label:hover{background:var(--hover)}
 .mlist .grp{font-weight:700;margin-top:6px;color:var(--muted);font-size:12px}
 .resultlist{max-height:300px;overflow:auto}

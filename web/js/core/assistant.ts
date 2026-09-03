@@ -28,8 +28,6 @@ export interface AssistGrp {
   type: 'grp';
   /** Number of children required to be simultaneously available (1 <= need <= children.length). */
   need: number;
-  /** Palette color index for visual grouping in the UI. */
-  color?: number;
   children: AssistNode[];
 }
 
@@ -295,7 +293,6 @@ export function groupNodeOnto(
   dragUid: string,
   targetUid: string,
   newUid: () => string,
-  newColor: () => number,
 ): void {
   if (dragUid === targetUid || treeIsAncestor(tree, dragUid, targetUid)) return;
   const dragNode = treeDetach(tree, dragUid);
@@ -311,7 +308,6 @@ export function groupNodeOnto(
     uid: newUid(),
     type: 'grp',
     need: 1,
-    color: newColor(),
     children: [targetNode, dragNode],
   });
   treeCleanup(tree);

@@ -24,6 +24,8 @@ import { chooseDevicesForTree, type AssistContainer, type IsFree } from '../../c
 import type { AssistantResultRow } from '../assistant-results.ts';
 import { clearSelection } from '../grid-interaction.ts';
 import { gotoDate, prependWeek, resetView } from '../grid-scroll.ts';
+import { nameColor } from '../grid.ts';
+import { isDarkTheme } from '../theme.ts';
 import { collapseReactModal } from '../modal.tsx';
 import { openBookingForm } from './BookingForm.tsx';
 import { Icon } from './Icon.tsx';
@@ -85,6 +87,33 @@ function useClampedDays(maxDays: number, initialDays: number) {
   return { days, tip, onChange };
 }
 
+/** The system's suggested devices for this run, as prominent colored pills directly under the
+ *  date range — replacing the old plain-text "Vorschlag: A, B, C" hint line (user request: no
+ *  longer hidden in fine print). Each pill's color comes from the same deterministic
+ *  name→hue hash the grid's own booking cells use (`nameColor`), so a device's color stays
+ *  recognizable if it also shows up as a booking elsewhere. */
+function SuggestedDevicePills({ names }: { names: readonly string[] }) {
+  if (!names.length) {
+    return (
+      <div className="aspills">
+        <span className="hint" style={{ margin: 0 }}>
+          —
+        </span>
+      </div>
+    );
+  }
+  const dark = isDarkTheme();
+  return (
+    <div className="aspills">
+      {names.map((name) => (
+        <span key={name} className="aspill" style={{ background: nameColor(name, dark) }}>
+          {name}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 interface ResultInfoProps {
   selectedDates: readonly string[];
   windowText: string;
@@ -92,24 +121,17 @@ interface ResultInfoProps {
   pickedNames: readonly string[];
 }
 
-/** The run's date range, free-window description, and (mode-dependent) suggested devices.
- *  Split out of `AssistantResultItem` purely to stay under the function-length budget. */
+/** The run's date range, (mode-dependent) suggested-device pills, and the free-window
+ *  description. Split out of `AssistantResultItem` purely to stay under the function-length
+ *  budget. */
 function ResultInfo({ selectedDates, windowText, hasGroup, pickedNames }: ResultInfoProps) {
   return (
     <div>
       <b className="asRange">{rangeText(selectedDates)}</b>
-      <br />
-      <span className="hint" style={{ margin: 0 }}>
+      {hasGroup && <SuggestedDevicePills names={pickedNames} />}
+      <span className="hint" style={{ margin: 0, display: 'block' }}>
         {windowText}
       </span>
-      {hasGroup && (
-        <>
-          <br />
-          <span className="hint" style={{ margin: 0 }}>
-            Vorschlag: {pickedNames.length ? pickedNames.join(', ') : '—'}
-          </span>
-        </>
-      )}
     </div>
   );
 }

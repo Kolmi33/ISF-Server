@@ -365,19 +365,18 @@ describe('isSatisfiableAcrossWindow / chooseDevicesForNode / chooseDevicesForTre
 
 describe('groupNodeOnto', () => {
   const newUid = () => 'new';
-  const newColor = () => 999;
 
   // What: dragging one node onto another wraps both into a brand-new need-1-of-2 group (at
   // the target's old position), with the target listed first and the dragged node appended.
   // How: drags a root-level device onto a device nested inside an existing group, and checks
-  // the new group's shape/color, its children order, that the dragged node now resolves
-  // inside the new group, and that root no longer lists it directly.
-  it('wraps the drag node and target in a new need-1-of-2 group with the next color', () => {
+  // the new group's shape, its children order, that the dragged node now resolves inside the
+  // new group, and that root no longer lists it directly.
+  it('wraps the drag node and target in a new need-1-of-2 group', () => {
     const tree = sample();
-    groupNodeOnto(tree, 'n1', 'n3', newUid, newColor); // n1 (root) onto n3 (inside n2)
+    groupNodeOnto(tree, 'n1', 'n3', newUid); // n1 (root) onto n3 (inside n2)
     const n2 = treeFind(tree, 'n2') as AssistGrp;
     const newGroup = n2.children[0] as AssistGrp;
-    expect(newGroup).toMatchObject({ uid: 'new', type: 'grp', need: 1, color: 999 });
+    expect(newGroup).toMatchObject({ uid: 'new', type: 'grp', need: 1 });
     expect(newGroup.children).toEqual([dev('n3', 'B'), dev('n1', 'A')]);
     expect(treeFind(tree, 'n1')).not.toBeNull(); // n1 now lives inside the new group
     expect(tree.children.map((c) => c.uid)).toEqual(['n2']); // gone from root
@@ -388,7 +387,7 @@ describe('groupNodeOnto', () => {
   // tree is byte-identical to a fresh sample.
   it('is a no-op when dragging a node onto itself', () => {
     const tree = sample();
-    groupNodeOnto(tree, 'n1', 'n1', newUid, newColor);
+    groupNodeOnto(tree, 'n1', 'n1', newUid);
     expect(tree).toEqual(sample());
   });
 
@@ -397,7 +396,7 @@ describe('groupNodeOnto', () => {
   // nothing changed.
   it('is a no-op when dragging a group onto its own descendant', () => {
     const tree = sample();
-    groupNodeOnto(tree, 'n2', 'n3', newUid, newColor);
+    groupNodeOnto(tree, 'n2', 'n3', newUid);
     expect(tree).toEqual(sample());
   });
 
@@ -407,7 +406,7 @@ describe('groupNodeOnto', () => {
   // among the root's children.
   it('falls back to pushing the drag node to root when the target has no parent (not found)', () => {
     const tree = sample();
-    groupNodeOnto(tree, 'n1', 'missing', newUid, newColor);
+    groupNodeOnto(tree, 'n1', 'missing', newUid);
     expect(tree.children.some((c) => c.uid === 'n1')).toBe(true);
   });
 
@@ -415,7 +414,7 @@ describe('groupNodeOnto', () => {
   // How: calls groupNodeOnto with a nonexistent drag uid and checks nothing changed.
   it('no-ops when the drag node does not exist', () => {
     const tree = sample();
-    groupNodeOnto(tree, 'missing', 'n3', newUid, newColor);
+    groupNodeOnto(tree, 'missing', 'n3', newUid);
     expect(tree).toEqual(sample());
   });
 });

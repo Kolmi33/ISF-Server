@@ -97,12 +97,13 @@ function openChecklistCategory(): void {
 }
 
 describe('AssistantModal — checklist → work area', () => {
-  // What: with no devices checked yet, the work area shows a hint prompting the user to
-  // check some devices above, rather than an empty/confusing blank area.
-  // How: opens the assistant with nothing checked and checks the hint text appears.
-  it('shows the empty-work hint until a device is checked', () => {
+  // What: with no devices checked yet, the work area shows a bare empty-state status line
+  // (not instructional prose — drag-and-drop is communicated visually now) rather than a
+  // blank, ambiguous-looking area.
+  // How: opens the assistant with nothing checked and checks the status text appears.
+  it('shows the empty-work status until a device is checked', () => {
     act(() => openAssistant());
-    expect(screen.getByText(/Oben Geräte anhaken/)).toBeInTheDocument();
+    expect(screen.getByText(/Keine Geräte ausgewählt/)).toBeInTheDocument();
   });
 
   // What: checking a device's checklist checkbox adds it to the work area (and clears the
@@ -115,13 +116,13 @@ describe('AssistantModal — checklist → work area', () => {
     act(() => {
       screen.getByRole('checkbox', { name: /Fräse/ }).click();
     });
-    expect(screen.queryByText(/Oben Geräte anhaken/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Keine Geräte ausgewählt/)).not.toBeInTheDocument();
     expect(document.querySelector('.asdev[title^="Fräse"]')).toBeInTheDocument();
 
     act(() => {
       screen.getByRole('checkbox', { name: /Fräse/ }).click();
     });
-    expect(screen.getByText(/Oben Geräte anhaken/)).toBeInTheDocument();
+    expect(screen.getByText(/Keine Geräte ausgewählt/)).toBeInTheDocument();
   });
 });
 
@@ -193,11 +194,11 @@ describe('AssistantModal — search validation', () => {
 
 describe('AssistantModal — search results', () => {
   // What: a successful search shows the results header, and with no redundancy group in the
-  // work tree (just a bare device), there's no "suggestion" line — that only appears when a
-  // group's own structure suggests something.
-  // How: checks one device, searches, and checks the results header appears while the
-  // suggestion text is absent.
-  it('finds a free run and shows it with no suggestion line (no group in the tree)', async () => {
+  // work tree (just a bare device), there's no suggested-device pill row — that only appears
+  // when a group's own structure suggests something.
+  // How: checks one device, searches, and checks the results header appears while no pill
+  // row is rendered.
+  it('finds a free run and shows it with no suggestion pills (no group in the tree)', async () => {
     act(() => openAssistant());
     openChecklistCategory();
     act(() => {
@@ -208,7 +209,7 @@ describe('AssistantModal — search results', () => {
       await Promise.resolve();
     });
     expect(screen.getByText('Passende Termine:')).toBeInTheDocument();
-    expect(screen.queryByText(/Vorschlag:/)).not.toBeInTheDocument();
+    expect(document.querySelector('.aspills')).toBeNull();
   });
 
   // What: when the searched machine has no free days anywhere in the requested range, the
@@ -351,9 +352,9 @@ describe('AssistantModal — redundancy confirm', () => {
   // What: accepting the redundancy confirmation lets the search actually run, and now that a
   // group exists in the tree, the results show a "suggestion" line (the mirror case of the
   // no-group test earlier).
-  // How: forms the same redundant group, accepts the confirmation, and checks the suggestion
-  // text now appears.
-  it('runs the search once confirmed, and shows the suggestion line (a group exists)', async () => {
+  // How: forms the same redundant group, accepts the confirmation, and checks a suggested-
+  // device pill now appears.
+  it('runs the search once confirmed, and shows suggestion pills (a group exists)', async () => {
     window.askConfirm = vi.fn().mockResolvedValue(true);
     act(() => openAssistant());
     openChecklistCategory();
@@ -371,7 +372,7 @@ describe('AssistantModal — redundancy confirm', () => {
       screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
       await Promise.resolve();
     });
-    expect(screen.getByText(/Vorschlag:/)).toBeInTheDocument();
+    expect(document.querySelector('.aspill')).toBeInTheDocument();
   });
 });
 
@@ -391,37 +392,37 @@ describe('AssistantModal — the work-area group node', () => {
     });
   }
 
-  // What: a freshly-formed group (drag one device onto another) shows a redundancy hint
-  // asking "are all equivalent devices here?" and defaults its need-count stepper to 1 (of
-  // however many members the group has — 2 here).
-  // How: forms a 2-device group and checks the hint text and the stepper's default value.
-  it('shows the redundancy hint and the stepper defaults to need 1 of 2', () => {
+  // What: a freshly-formed group (drag one device onto another) shows the terse "Benötigt: N
+  // von M" need label — rigorously shortened from the old "Bedarf: brauche N von M – alle
+  // gleichwertigen Geräte hier?" wording (user request) — and its stepper defaults to
+  // needing 1 (of however many members the group has — 2 here).
+  // How: forms a 2-device group and checks the "Benötigt:" label and the stepper's default value.
+  it('shows the terse "Benötigt" need label, stepper defaulting to 1 of 2', () => {
     addGroupedPair();
-    expect(screen.getByText(/alle gleichwertigen Geräte hier\?/)).toBeInTheDocument();
+    expect(screen.getByText('Benötigt:')).toBeInTheDocument();
     expect((document.querySelector('.asNeed') as HTMLInputElement).value).toBe('1');
   });
 
-  // What: incrementing the need stepper raises the group's need, and once need equals the
-  // member count (no more redundancy — every device is required), the redundancy hint disappears.
+  // What: incrementing the need stepper raises the group's need.
   // How: clicks the "+" stepper once (need 1→2, matching the group's 2 members) and checks
-  // the value updated and the hint is gone.
-  it('the "+" stepper increases need and hides the redundancy hint once need meets the count', () => {
+  // the value updated.
+  it('the "+" stepper increases need', () => {
     addGroupedPair();
     act(() => {
       document.querySelector<HTMLButtonElement>('.asstep[title="mehr"]')!.click();
     });
     expect((document.querySelector('.asNeed') as HTMLInputElement).value).toBe('2');
-    expect(screen.queryByText(/alle gleichwertigen Geräte hier\?/)).not.toBeInTheDocument();
   });
 
-  // What: the "✕ auflösen" (dissolve) button breaks a group apart, returning its member
-  // devices to being loose devices directly in the work area.
-  // How: clicks dissolve on a 2-device group and checks no groups remain while both devices
-  // now exist as standalone nodes.
-  it('"✕ auflösen" dissolves the group back into loose devices', () => {
+  // What: the dissolve button (icon-only now, no "✕ auflösen" text — user request) breaks a
+  // group apart, returning its member devices to being loose devices directly in the work area.
+  // How: clicks the "Gruppe auflösen"-labeled button (by its accessible name, not visible
+  // text) on a 2-device group and checks no groups remain while both devices now exist as
+  // standalone nodes.
+  it('the dissolve button breaks the group back into loose devices', () => {
     addGroupedPair();
     act(() => {
-      screen.getByText('✕ auflösen').click();
+      screen.getByRole('button', { name: 'Gruppe auflösen' }).click();
     });
     expect(document.querySelectorAll('.asgrp')).toHaveLength(0);
     expect(document.querySelectorAll('.asdev')).toHaveLength(2);

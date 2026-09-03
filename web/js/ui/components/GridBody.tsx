@@ -34,15 +34,12 @@ import {
 import { Icon } from './Icon.tsx';
 import { store } from '../../store-instance.ts';
 import { nextFreePtr, prevFreeBefore } from '../favorite-jump.ts';
+import { isDarkTheme } from '../theme.ts';
 
 const CATEGORY_LABELS: Record<string, string> = {
   maschine: 'Maschinen',
   messtechnik: 'Messtechnik',
 };
-
-function isDarkTheme(): boolean {
-  return document.documentElement.dataset.theme === 'dark';
-}
 
 /** The today-indicator dot (or maintenance icon) at the start of a machine's row. */
 function TodayDot({ machine, today }: { machine: Machine; today: string }) {

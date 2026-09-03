@@ -57,8 +57,6 @@ import { Icon } from './Icon.tsx';
 import { store } from '../../store-instance.ts';
 import { machById } from '../machine-lookup.ts';
 
-const AS_HUES = [210, 150, 275, 32, 344, 190, 95, 258];
-
 function isFreeDevice(id: string, day: string): boolean {
   const machine = machById(id);
   return (
@@ -75,9 +73,7 @@ function useAssistantTree() {
   const treeRef = useRef<AssistContainer>({ children: [] });
   const [, forceRerender] = useState(0);
   const uidCounter = useRef(0);
-  const colorIndex = useRef(0);
   const newUid = () => 'n' + ++uidCounter.current;
-  const newColor = () => AS_HUES[colorIndex.current++ % AS_HUES.length]!;
 
   function withRerender(mutate: () => void): void {
     mutate();
@@ -100,7 +96,7 @@ function useAssistantTree() {
     addedIds: new Set(treeDevs(treeRef.current)),
     toggleDevice,
     onGroupOnto: (dragUid: string, targetUid: string) =>
-      withRerender(() => groupNodeOnto(treeRef.current, dragUid, targetUid, newUid, newColor)),
+      withRerender(() => groupNodeOnto(treeRef.current, dragUid, targetUid, newUid)),
     onJoin: (dragUid: string, groupUid: string) =>
       withRerender(() => joinNode(treeRef.current, dragUid, groupUid)),
     onToRoot: (dragUid: string) => withRerender(() => moveNodeToRoot(treeRef.current, dragUid)),
@@ -213,15 +209,14 @@ function AssistantSearchForm({
   );
 }
 
-/** The "Ausgewählte Geräte" heading plus the work-area tree. */
+/** The "Ausgewählte Geräte" heading plus the work-area tree. No explanatory drag-and-drop
+ *  copy here (or in `AssistantTree`'s empty state) by design — the interaction is communicated
+ *  purely visually now (drag handles, dashed drop zones), per the redesign in `AssistantTree`. */
 function AssistantWorkSection({ assistant }: { assistant: ReturnType<typeof useAssistantTree> }) {
   return (
     <>
       <div className="catlbl" style={{ marginTop: 4 }}>
-        Ausgewählte Geräte{' '}
-        <span className="hint" style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
-          – gleichwertige aufeinander ziehen = Bedarfsgruppe
-        </span>
+        Ausgewählte Geräte
       </div>
       <AssistantTree
         tree={assistant.tree}
@@ -258,13 +253,18 @@ export function AssistantModal() {
       <h2>
         <Icon name="compass" /> Buchungsassistent
       </h2>
-      <AssistantChecklist
-        machines={machines}
-        favoriteIds={store.get('favs')}
-        addedIds={assistant.addedIds}
-        onToggle={assistant.toggleDevice}
-      />
-      <AssistantWorkSection assistant={assistant} />
+      {/* Two-column side-by-side on desktop (app.css, ".assist-columns"): device search stays
+          on the left, the configured setup on the right, both permanently visible without
+          their own scrolling getting in each other's way. Narrower viewports stack them. */}
+      <div className="assist-columns">
+        <AssistantChecklist
+          machines={machines}
+          favoriteIds={store.get('favs')}
+          addedIds={assistant.addedIds}
+          onToggle={assistant.toggleDevice}
+        />
+        <AssistantWorkSection assistant={assistant} />
+      </div>
       <AssistantSearchForm
         from={from}
         to={to}

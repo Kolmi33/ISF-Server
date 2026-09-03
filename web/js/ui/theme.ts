@@ -17,3 +17,10 @@ export function applyTheme(): void {
     (preference === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
 }
+
+/** Reads back what `applyTheme` last applied — the counterpart read side of that write, for
+ *  the few places (a booking cell's name-derived background, a result pill's device-derived
+ *  background) that need to pick a light- or dark-tuned color at render time. */
+export function isDarkTheme(): boolean {
+  return document.documentElement.dataset.theme === 'dark';
+}

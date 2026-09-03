@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { applyTheme } from './theme.ts';
+import { applyTheme, isDarkTheme } from './theme.ts';
 
 function stubMatchMedia(matches: boolean): void {
   vi.stubGlobal(
@@ -62,5 +62,27 @@ describe('applyTheme', () => {
     stubMatchMedia(true);
     applyTheme();
     expect(document.documentElement.dataset.theme).toBe('dark');
+  });
+});
+
+describe('isDarkTheme', () => {
+  // What: isDarkTheme reads back exactly what applyTheme wrote to the DOM — the read side of
+  // that write, not a separate computation of its own.
+  // How: applies dark then light via applyTheme and checks isDarkTheme agrees each time.
+  it('reflects whatever applyTheme last applied', () => {
+    localStorage.setItem('mb_theme', 'dark');
+    applyTheme();
+    expect(isDarkTheme()).toBe(true);
+
+    localStorage.setItem('mb_theme', 'light');
+    applyTheme();
+    expect(isDarkTheme()).toBe(false);
+  });
+
+  // What: with no theme attribute set at all (before the first applyTheme call), isDarkTheme
+  // reads as light — never throws on the missing attribute.
+  // How: checks isDarkTheme with a completely bare <html> element.
+  it('is false when no theme attribute is set yet', () => {
+    expect(isDarkTheme()).toBe(false);
   });
 });

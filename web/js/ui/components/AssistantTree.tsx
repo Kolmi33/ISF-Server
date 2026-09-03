@@ -45,6 +45,18 @@ interface NodeHandlers {
   onRemove: (uid: string) => void;
 }
 
+/** The drag handle (⋮⋮) that's now the sole visual cue a node is draggable — replacing the
+ *  file header era's explanatory prose (removed per the redesign: drag-and-drop is
+ *  communicated purely visually, via this handle and the dashed drop-zone highlight
+ *  `useTreeDragAndDrop` paints below, not through instructional text). */
+function DragHandle() {
+  return (
+    <span className="draghandle" aria-hidden="true">
+      ⋮⋮
+    </span>
+  );
+}
+
 function DevNodeView({ node, handlers }: { node: AssistDev; handlers: NodeHandlers }) {
   const machine = handlers.machineById(node.id);
   if (!machine) return null;
@@ -55,6 +67,7 @@ function DevNodeView({ node, handlers }: { node: AssistDev; handlers: NodeHandle
       data-uid={node.uid}
       title={`${machine.name} (${machine.group})`}
     >
+      <DragHandle />
       {machine.name}
       {machine.info && (
         <span
@@ -80,13 +93,16 @@ function DevNodeView({ node, handlers }: { node: AssistDev; handlers: NodeHandle
   );
 }
 
-/** The "brauche N von M" stepper: -/+ buttons and the direct-entry number input. Split out of
- *  `GroupNodeView` purely to stay under the function-length budget. */
+/** The "Benötigt: N von M" stepper: -/+ buttons and the direct-entry number input, rigorously
+ *  shortened from the old "Bedarf: brauche N von M – alle gleichwertigen Geräte hier?" wording
+ *  down to just the number itself (user request). Split out of `GroupNodeView` purely to stay
+ *  under the function-length budget. */
 function GroupNeedStepper({ node, handlers }: { node: AssistGrp; handlers: NodeHandlers }) {
   const childCount = node.children.length;
   const need = effectiveNeed(node);
   return (
     <>
+      <b>Benötigt:</b>
       <span className="asgrp-need">
         <button
           className="asstep"
@@ -119,43 +135,35 @@ function GroupNeedStepper({ node, handlers }: { node: AssistGrp; handlers: NodeH
         >
           +
         </button>
-      </span>{' '}
+      </span>
       von {childCount}
-      {childCount > need && (
-        <span className="hint" style={{ margin: 0 }}>
-          {' '}
-          – alle gleichwertigen Geräte hier?
-        </span>
-      )}
     </>
   );
 }
 
+/** A demand group as a soft neutral card — deliberately no per-group border color any more
+ *  (the old `AS_HUES`/`newColor` palette, removed with it): nested groups each picking their
+ *  own hue produced exactly the "verschachtelte, bunte Rahmen" (nested, colorful borders) the
+ *  redesign calls out as visual noise. One calm card style for every group instead. */
 function GroupNodeView({ node, handlers }: { node: AssistGrp; handlers: NodeHandlers }) {
   return (
-    <div
-      className="asnode asgrp"
-      draggable
-      data-uid={node.uid}
-      style={{
-        borderColor: `hsl(${node.color} 60% 55%)`,
-        background: `hsla(${node.color},60%,55%,.10)`,
-      }}
-    >
+    <div className="asnode asgrp" draggable data-uid={node.uid}>
       <div className="asgrp-head" title="Gruppe ziehen zum Verschachteln">
-        <b>Bedarf:</b> brauche
+        <DragHandle />
         <GroupNeedStepper node={node} handlers={handlers} />
-        <span
+        <button
+          type="button"
           className="rm"
           title="Gruppe auflösen"
+          aria-label="Gruppe auflösen"
           style={{ marginLeft: 'auto' }}
           onClick={(event) => {
             event.stopPropagation();
             handlers.onDissolve(node.uid);
           }}
         >
-          ✕ auflösen
-        </span>
+          <Icon name="trash" />
+        </button>
       </div>
       <div className="asgrp-kids" data-dropgrp={node.uid}>
         {node.children.map((child) => (
@@ -285,11 +293,13 @@ export function AssistantTree({
   const { containerRef, handleDragStart, handleDragEnd, handleDragOver, handleDrop } =
     useTreeDragAndDrop(onGroupOnto, onJoin, onToRoot);
 
+  // A bare status line, not instructional copy — how drag-and-drop actually works is
+  // communicated visually now (each node's own drag handle, the dashed drop-zone highlight
+  // below), not explained in prose here (user request).
   if (!tree.children.length) {
     return (
       <span className="hint" style={{ margin: 0 }}>
-        Oben Geräte anhaken – sie erscheinen hier. Gleichwertige per Drag &amp; Drop aufeinander
-        ziehen = Bedarfsgruppe (dann genügt „N von … frei").
+        Keine Geräte ausgewählt.
       </span>
     );
   }
