@@ -25,12 +25,19 @@ beforeEach(() => {
 });
 
 describe('ActiveUsersModal', () => {
+  // What: with nobody active, the modal shows a placeholder message and a bare (no count) heading.
+  // How: renders with an empty rows array and checks both texts.
   it('shows "niemand aktiv" with no rows', () => {
     render(<ActiveUsersModal rows={[]} />);
     expect(screen.getByText('Zurzeit ist niemand aktiv.')).toBeInTheDocument();
     expect(screen.getByRole('heading')).toHaveTextContent('Gerade aktiv');
   });
 
+  // What: each active user renders as its own row, the heading shows the total count, and
+  // each row's activity time renders as a relative label (a special "just now" phrase under a
+  // threshold, a numeric "N s ago" above it).
+  // How: renders two rows with different `ago` values and checks the heading count and both
+  // relative-time label forms.
   it('lists each row with a count in the heading, and a relative-time label', () => {
     render(
       <ActiveUsersModal
@@ -46,16 +53,25 @@ describe('ActiveUsersModal', () => {
     expect(screen.getByText('vor 90 s')).toBeInTheDocument();
   });
 
+  // What: the row belonging to the current logged-in user is marked "(you)", matched
+  // case-insensitively against the store's user name.
+  // How: sets the store's user to lowercase 'anna' and renders a row for differently-cased
+  // 'Anna', checking the "(du)" marker still appears.
   it('marks the current user with "(du)", case-insensitively', () => {
     render(<ActiveUsersModal rows={[{ name: 'Anna', ago: 1 }]} />);
     expect(screen.getByText('(du)')).toBeInTheDocument();
   });
 
+  // What: a row for someone other than the current user never gets the "(du)" marker.
+  // How: renders a row for a different name and checks the marker is absent.
   it('does not mark someone else as "(du)"', () => {
     render(<ActiveUsersModal rows={[{ name: 'bob', ago: 1 }]} />);
     expect(screen.queryByText('(du)')).not.toBeInTheDocument();
   });
 
+  // What: the "Schließen" (close) button closes the shared overlay.
+  // How: renders into the shared #modal container, opens the overlay, clicks close, and
+  // checks the overlay's open class is gone.
   it('"Schließen" closes the modal', () => {
     render(<ActiveUsersModal rows={[]} />, { container: document.getElementById('modal')! });
     document.getElementById('overlay')!.classList.add('open');
@@ -65,6 +81,10 @@ describe('ActiveUsersModal', () => {
 });
 
 describe('openActiveUsers', () => {
+  // What: opening the modal first does a fresh presence check-in, then opens showing
+  // whatever presence data is now current.
+  // How: stubs a working EventSource, seeds one user's presence timestamp, opens the modal,
+  // and checks both the overlay opened and that user's row appears.
   it('refreshes presence, then opens with a snapshot of the current rows', async () => {
     vi.stubGlobal(
       'EventSource',
@@ -79,6 +99,11 @@ describe('openActiveUsers', () => {
     expect(screen.getByText('bob')).toBeInTheDocument();
   });
 
+  // What: if the presence check-in itself fails (e.g. the EventSource can't connect), the
+  // failure is reported through the error handler rather than crashing the open — and the
+  // modal still opens regardless.
+  // How: stubs an EventSource whose constructor throws, opens the modal, and checks
+  // handleError was called with the failure while the overlay still ended up open.
   it('reports (not throws) when presenceTick fails', async () => {
     vi.stubGlobal(
       'EventSource',

@@ -36,10 +36,16 @@ function openDropdown(): void {
 }
 
 describe('GroupFilterDropdown', () => {
+  // What: with no group filter active, the toolbar button reads "Alle Bereiche" (all areas)
+  // right from mount, without needing the dropdown to be opened first.
+  // How: renders and checks the button's text immediately.
   it("initializes #groupBtn's label at mount, with nothing selected", () => {
     expect(document.getElementById('groupBtn')!.textContent).toBe('Alle Bereiche ▾');
   });
 
+  // What: the dropdown starts closed; once opened, it lists an "all areas" option (checked
+  // by default) plus one checkbox per distinct group.
+  // How: checks the closed state, opens it, and checks the "all" checkbox plus both real groups.
   it('is closed by default, listing "Alle Bereiche" (checked) plus one row per group once opened', () => {
     expect(document.getElementById('groupDrop')!.classList.contains('open')).toBe(false);
     openDropdown();
@@ -49,6 +55,10 @@ describe('GroupFilterDropdown', () => {
     expect(screen.getByRole('checkbox', { name: 'Halle 2' })).toBeInTheDocument();
   });
 
+  // What: checking one group's checkbox adds it to the group-filter set, persists that
+  // choice, repaints, and updates the toolbar button to name the single selected group's count.
+  // How: opens the dropdown, checks one group, and checks the store, localStorage, notify,
+  // and the button's updated "1 Bereich" text.
   it('checking a group adds it to S.groupsSel, persists, notifies, and updates the toolbar button', () => {
     openDropdown();
     act(() => fireEvent.click(screen.getByRole('checkbox', { name: 'Halle 1' })));
@@ -58,6 +68,11 @@ describe('GroupFilterDropdown', () => {
     expect(document.getElementById('groupBtn')!.textContent).toBe('1 Bereich ▾');
   });
 
+  // What: the toolbar button's label pluralizes ("Bereiche" not "Bereich") once more than
+  // one group is selected — but crucially, this is a PARTIAL selection (2 of 3 groups here);
+  // selecting literally every group is a different case, covered next.
+  // How: adds a third group so there are 3 total, checks 2 of them, and checks the button
+  // shows the plural "2 Bereiche" form.
   it('pluralizes once more than one group is selected (but not every group — see below)', () => {
     window.S.data!.machines.push(machine({ id: 'm3', name: 'Bohrer', group: 'Halle 3' }));
     openDropdown();
@@ -66,6 +81,11 @@ describe('GroupFilterDropdown', () => {
     expect(document.getElementById('groupBtn')!.textContent).toBe('2 Bereiche ▾');
   });
 
+  // What: checking off EVERY group (with only 2 groups total here) is treated as equivalent
+  // to selecting none — the filter collapses back to "all areas" rather than staying as an
+  // explicit "both of the 2 groups" selection, matching the original app's behavior.
+  // How: checks both existing groups (all of them) and checks the filter set is empty and the
+  // button reads "Alle Bereiche" again.
   it('selecting every group collapses back to "all" (matches legacy\'s "all selected = all")', () => {
     openDropdown();
     act(() => fireEvent.click(screen.getByRole('checkbox', { name: 'Halle 1' })));
@@ -74,6 +94,10 @@ describe('GroupFilterDropdown', () => {
     expect(document.getElementById('groupBtn')!.textContent).toBe('Alle Bereiche ▾');
   });
 
+  // What: explicitly clicking "Alle Bereiche" always resets the filter to empty (showing
+  // every group), regardless of what was previously selected.
+  // How: starts with one group already selected, clicks "Alle Bereiche", and checks the
+  // filter set emptied and notify fired.
   it('"Alle Bereiche" always resets the selection to none, persists, and notifies', () => {
     window.S.groupsSel = new Set(['Halle 1']);
     openDropdown();

@@ -48,6 +48,10 @@ beforeEach(() => {
 });
 
 describe('SettingsModal', () => {
+  // What: the "Neu verbinden" (reconnect) button re-opens the SSE connection and also
+  // triggers a data refresh.
+  // How: clicks the button and checks connectSSE fired once and refreshNow was called with
+  // the exact argument the component passes.
   it('"Neu verbinden" reconnects SSE and silently refreshes', () => {
     render(<SettingsModal />);
     screen.getByRole('button', { name: /Neu verbinden/ }).click();
@@ -55,6 +59,9 @@ describe('SettingsModal', () => {
     expect(refreshNow).toHaveBeenCalledWith(false);
   });
 
+  // What: changing the theme dropdown persists the choice to localStorage, re-applies the
+  // theme immediately, and triggers a repaint.
+  // How: fires a real change event on the select with a new value and checks all three effects.
   it('changing the theme select persists mb_theme and re-applies + notifies', () => {
     render(<SettingsModal />);
     const select = screen.getByRole('combobox') as HTMLSelectElement;
@@ -65,6 +72,12 @@ describe('SettingsModal', () => {
     expect(notifySpy).toHaveBeenCalledOnce();
   });
 
+  // What: the presence-sharing checkbox persists as the literal strings "on"/"off" (not
+  // JS true/false), and toggling it off triggers a presence check-in so peers see the change
+  // promptly.
+  // How: clicks the checkbox (a real click, not a manually-set .checked property + dispatched
+  // event — React's own checkbox value tracker needs the genuine user gesture to register the
+  // change) and checks the persisted value and that presenceTick fired.
   it('toggling presence persists mb_presence (as on/off, not true/false) and reconnects', () => {
     // Unset mb_presence reads as "on" (presence !== 'off'), so the checkbox starts
     // checked; a real click (not a manually-set .checked + dispatched event -- React's
@@ -75,6 +88,10 @@ describe('SettingsModal', () => {
     expect(presenceTick).toHaveBeenCalledOnce();
   });
 
+  // What: toggling the "show weekends" setting resets the grown week-window (extraWeeks) back
+  // to 0 (since the day count per week just changed), triggers a repaint, and re-centers the
+  // view on today so the layout shift doesn't leave the user looking at the wrong dates.
+  // How: clicks the weekends checkbox and checks all three effects.
   it('toggling weekends resets extraWeeks, notifies, and re-centers today', () => {
     render(<SettingsModal />);
     screen.getByLabelText(/Samstag/).click();
@@ -84,6 +101,10 @@ describe('SettingsModal', () => {
     expect(centerToday).toHaveBeenCalledOnce();
   });
 
+  // What: compact mode is applied by toggling a CSS class directly on the body — a pure
+  // styling change that needs no store notify/repaint.
+  // How: clicks the compact-mode checkbox and checks both the persisted setting and the
+  // body's class list, without asserting on notify.
   it('toggling compact mode adds/removes the body class directly (no notify needed)', () => {
     render(<SettingsModal />);
     screen.getByLabelText(/kompakte Zeilen/).click();
@@ -91,11 +112,16 @@ describe('SettingsModal', () => {
     expect(document.body.classList.contains('compact')).toBe(true);
   });
 
+  // What: the settings modal displays the currently logged-in user's name.
+  // How: renders with a known user set in the store and checks the name appears.
   it('shows the current user name and opens the name-prompt on "Ändern…"', () => {
     render(<SettingsModal />);
     expect(screen.getByText('Kolmanovskyi')).toBeInTheDocument();
   });
 
+  // What: toggling the debug-panel setting persists it and re-applies the debug panel's
+  // open/closed state immediately.
+  // How: clicks the debug checkbox and checks both the persisted value and that applyDebug fired.
   it('toggling debug persists mb_debug and re-applies the debug panel', () => {
     render(<SettingsModal />);
     screen.getByLabelText(/Debug-Panel anzeigen/).click();
