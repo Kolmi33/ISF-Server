@@ -1,11 +1,19 @@
-// api-response.ts — Phase 9a: the REST API's response envelope. `/api/v1/*` responses use this
-// consistent shape; the existing `/api/state`/`/api/mutate` trio is untouched and keeps its own
-// `{error: string}`-only shape (see PROGRESS.md's Phase 9 plan for why the two don't merge).
+// =======================================================================================
+// API RESPONSE MODULE (server/api-response.ts)
+// =======================================================================================
 //
-// Success: `{ data: <payload> }`. Error: `{ error: <human message>, code: <machine-readable>,
-// details?: <unknown> }` — `error` stays a plain string so anything that already does
-// `errorMessage(response.error)`-style display keeps working unmodified; `code` is new, for
-// programmatic `/api/v1/*` consumers to branch on without parsing prose.
+// The REST API's response envelope. `/api/v1/*` responses use this consistent shape; the
+// existing `/api/state`/`/api/mutate` trio is untouched and keeps its own `{error: string}`-
+// only shape (see PROGRESS.md's Phase 9 plan for why the two don't merge).
+//
+// This module provides:
+// 1. `apiSuccess` — the `{ data: <payload> }` envelope, `meta` included only when given.
+// 2. `apiError` — the `{ error: <human message>, code: <machine-readable>, details?: <unknown> }`
+//    envelope. `error` stays a plain string so anything that already does
+//    `errorMessage(response.error)`-style display keeps working unmodified; `code` is new, for
+//    programmatic `/api/v1/*` consumers to branch on without parsing prose.
+//
+// =======================================================================================
 
 import type { ApiResponse } from './api-router.js';
 

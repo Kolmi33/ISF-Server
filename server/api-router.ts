@@ -1,11 +1,19 @@
-// api-router.ts — Phase 9a: the REST API's routing plumbing. Pure, no HTTP, no DB — a route
-// table is a plain array the caller owns; matching a request against it is a pure function of
-// (routes, method, pathname). No endpoints are registered here; that starts in 9b. Zero-dependency
-// by design (no router package) — the route table stays small enough that a linear scan with a
-// `:param` segment matcher is simpler and more transparent than pulling in a dependency for it.
+// =======================================================================================
+// API ROUTER MODULE (server/api-router.ts)
+// =======================================================================================
 //
-// This sits alongside the existing `/api/state`/`/api/mutate`/`/api/stream` trio in server.ts,
-// not in place of it — see PROGRESS.md's Phase 9 plan for why the two don't merge.
+// The REST API's routing plumbing: a route table is a plain array the caller owns, and
+// matching a request against it is a pure function of (routes, method, pathname). No
+// endpoints are registered here — that lives in server.ts's `apiV1Routes`, alongside the
+// existing `/api/state`/`/api/mutate`/`/api/stream` trio this sits next to, not in place of
+// (see PROGRESS.md's Phase 9 plan for why the two don't merge).
+//
+// Key Principles:
+// - PURE, NO I/O: No HTTP, no DB. Just matching and typing.
+// - ZERO-DEPENDENCY: No router package — the route table stays small enough that a linear
+//   scan with a `:param` segment matcher is simpler and more transparent than a dependency.
+//
+// =======================================================================================
 
 /** One path segment matched against a `:param` pattern; params are keyed by name, values are
  *  percent-decoded. */

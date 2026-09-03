@@ -1,10 +1,19 @@
-// api-bookings-write.ts — Phase 9f: PUT/DELETE /api/v1/machines/:id/bookings/:date (single-cell
-// writes with an optional `If-Match` CAS precondition), POST /api/v1/bookings/batch, POST
-// /api/v1/bookings/batch-delete. Every write here is one `applyMutate` cell-delta call — the
-// exact path the live grid's own booking clicks use — so the blocked-day check, the
-// never-overwrite-a-foreign-booking rule, weekend bridging, the SSE broadcast, and the activity
-// log all come for free. This module adds only the REST-specific pieces `mutate.ts` has no
-// reason to know about: the `If-Match` precondition, and mapping a batch result onto 200/207/400.
+// =======================================================================================
+// API BOOKINGS WRITE MODULE (server/api-bookings-write.ts)
+// =======================================================================================
+//
+// PUT/DELETE /api/v1/machines/:id/bookings/:date (single-cell writes with an optional
+// `If-Match` CAS precondition), POST /api/v1/bookings/batch, POST /api/v1/bookings/batch-delete.
+//
+// Key Principles:
+// - ONE AUTHORITATIVE WRITE PATH: every write here is one `applyMutate` cell-delta call — the
+//   exact path the live grid's own booking clicks use — so the blocked-day check, the
+//   never-overwrite-a-foreign-booking rule, weekend bridging, the SSE broadcast, and the
+//   activity log all come for free. This module adds only the REST-specific pieces
+//   `mutate.ts` has no reason to know about: the `If-Match` precondition, and mapping a
+//   batch result onto 200/207/400.
+//
+// =======================================================================================
 
 import type { Db } from './db.js';
 import { bookingOut } from './model.js';
@@ -15,10 +24,13 @@ import type { BookingRow, CellDelta } from './types.js';
 import type { ApiResponse, ApiRequestHeaders } from './api-router.js';
 import { apiSuccess, apiError } from './api-response.js';
 
+/** Whether a machine with this id currently exists — the 404 guard every single-cell handler runs first. */
 function machineExists(db: Db, machineId: string): boolean {
   return !!db.prepare('SELECT 1 FROM machines WHERE id=?').get(machineId);
 }
 
+/** The current booking row at one cell, or `undefined` when it's free — the "current state" both
+ *  `checkIfMatch`'s precondition and the post-write response read from. */
 function currentBookingRow(db: Db, machineId: string, date: string): BookingRow | undefined {
   return db.prepare('SELECT * FROM bookings WHERE mid=? AND day=?').get(machineId, date) as
     BookingRow | undefined;
@@ -68,6 +80,8 @@ interface BookingWriteBody {
   log?: unknown;
 }
 
+/** Narrows an untrusted parsed-JSON body to `BookingWriteBody`'s shape (same pattern as
+ *  `api-machines-write.ts`'s `asBody`: a non-object body becomes an empty object). */
 function asBody(body: unknown): BookingWriteBody {
   return (body && typeof body === 'object' ? body : {}) as BookingWriteBody;
 }
@@ -164,6 +178,7 @@ interface BatchBody {
   log?: unknown;
 }
 
+/** Narrows an untrusted parsed-JSON body to `BatchBody`'s shape (same pattern as `asBody` above). */
 function asBatchBody(body: unknown): BatchBody {
   return (body && typeof body === 'object' ? body : {}) as BatchBody;
 }

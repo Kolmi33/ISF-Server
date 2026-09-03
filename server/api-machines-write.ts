@@ -1,18 +1,27 @@
-// api-machines-write.ts — Phase 9e: POST/PUT/DELETE /api/v1/machines[/:id], POST
-// /api/v1/machines/:id/move. Every write here re-derives the FULL machine list (read all,
-// apply one change in memory, hand the whole list to `mutate.ts`'s existing structural path)
-// rather than adding a second write engine — `applyMutate`'s `applyStructural` already owns
-// every validation/clamp/transaction/broadcast/log rule for a machine-list write (CLAUDE.md's
-// "one authoritative server write path"), so routing through it here means these REST handlers
-// don't re-implement — or risk drifting from — it. The in-memory reducers below mirror the
-// client's own `core/machines.ts` (`saveMachine`/`deleteMachine`/`moveMachine`) field-for-field,
-// the same way `model.ts`'s `blockReason`/`isDayAvailable` mirror rather than import them —
-// server code never imports `web/js/*` (frontend/backend stay on their own sides of the wire
-// contract in `shared/types.ts`; see ARCHITECTURE.md §5).
+// =======================================================================================
+// API MACHINES WRITE MODULE (server/api-machines-write.ts)
+// =======================================================================================
 //
-// Each handler reads the current list and re-writes it in one synchronous call (no `await` in
-// between) — `db.ts`'s own note that "SQLite serialises writes for us" only holds because
-// nothing else can run on Node's single thread between the read and the write.
+// POST/PUT/DELETE /api/v1/machines[/:id], POST /api/v1/machines/:id/move.
+//
+// Key Principles:
+// - ONE AUTHORITATIVE WRITE PATH: every handler re-derives the FULL machine list (read all,
+//   apply one change in memory, hand the whole list to `mutate.ts`'s existing structural
+//   path) rather than adding a second write engine — `applyMutate`'s `applyStructural`
+//   already owns every validation/clamp/transaction/broadcast/log rule for a machine-list
+//   write (CLAUDE.md's "one authoritative server write path"), so routing through it here
+//   means these REST handlers don't re-implement — or risk drifting from — it.
+// - MIRROR, NEVER IMPORT: the in-memory reducers below mirror the client's own
+//   `core/machines.ts` (`saveMachine`/`deleteMachine`/`moveMachine`) field-for-field, the
+//   same way `model.ts`'s `blockReason`/`isDayAvailable` mirror rather than import them —
+//   server code never imports `web/js/*` (frontend/backend stay on their own sides of the
+//   wire contract in `shared/types.ts`; see ARCHITECTURE.md §5).
+// - SYNCHRONOUS READ-THEN-WRITE: each handler reads the current list and re-writes it in one
+//   synchronous call (no `await` in between) — `db.ts`'s own note that "SQLite serialises
+//   writes for us" only holds because nothing else can run on Node's single thread between
+//   the read and the write.
+//
+// =======================================================================================
 
 import type { Db } from './db.js';
 import { machineOut } from './model.js';
@@ -37,10 +46,15 @@ interface MachineWriteBody {
   log?: unknown;
 }
 
+/** Narrows an untrusted parsed-JSON body to `MachineWriteBody`'s shape — a non-object body
+ *  (e.g. `null`, an array, a bare string) becomes an empty object so every field read below
+ *  falls through to its own `typeof`/`Array.isArray` check rather than throwing. */
 function asBody(body: unknown): MachineWriteBody {
   return (body && typeof body === 'object' ? body : {}) as MachineWriteBody;
 }
 
+/** The full machine list, in wire shape, in the same order every handler below needs to
+ *  preserve (group-contiguous, `sort, name`) before splicing its one change into it. */
 function currentMachines(db: Db): MachineOut[] {
   return (
     db.prepare('SELECT * FROM machines ORDER BY sort, name').all() as unknown as MachineRow[]
@@ -99,6 +113,8 @@ function slugify(name: string): string {
   return slug || `m_${shortHash(name)}`;
 }
 
+/** `baseSlug`, or `baseSlug-2`/`-3`/… — whichever is the first id not already in `machines` —
+ *  so two machines slugifying to the same base name (e.g. two "Fräse 1"s) still get distinct ids. */
 function findUniqueMachineId(machines: readonly MachineOut[], baseSlug: string): string {
   let candidateId = baseSlug;
   let suffix = 2;

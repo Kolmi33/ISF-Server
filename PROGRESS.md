@@ -590,7 +590,12 @@ files, e.g. Phase 9's slices).
   tails while preserving `stats.ts`'s substantive category+group-bucketing bug-history
   note (reworded off "legacy" framing, kept the actual rationale). Completes
   `web/js/ui/views/`. Tests still need the "What/How" retrofit.
-- [ ] 10i `server/` part 1 — `api-*.ts` (routing/response/read/write endpoint modules, + tests)
+- [x] 10i `server/` part 1 — `api-*.ts` (routing/response/read/write endpoint modules): all 8
+  files (`api-router.ts`, `api-response.ts`, `api-write-helpers.ts`, `api-activity.ts`,
+  `api-bookings.ts`, `api-machines.ts`, `api-machines-write.ts`, `api-bookings-write.ts`) got
+  banner headers and doc comments on previously-undocumented internal helpers; these files were
+  already fairly well commented from Phase 9, so this was lighter-touch than earlier sub-items.
+  Tests still need the "What/How" retrofit.
 - [ ] 10j `server/` part 2 — `backfill.ts`, `bridge.ts`, `db.ts`, `import.ts`, `model.ts`,
   `mutate.ts`, `server.ts`, `types.ts` (+ tests)
 

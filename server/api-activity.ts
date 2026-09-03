@@ -1,7 +1,13 @@
-// api-activity.ts — Phase 9d: GET /api/v1/activity. The `log` table is the one genuinely
-// unbounded, append-only collection in this app (unlike `machines`, bounded at a few hundred
-// rows, or a single machine's bookings, naturally bounded by a date range) — cursor pagination
-// on its own autoincrement `id` is the natural fit, not offset/limit.
+// =======================================================================================
+// API ACTIVITY MODULE (server/api-activity.ts)
+// =======================================================================================
+//
+// GET /api/v1/activity — the activity feed as a REST resource. The `log` table is the one
+// genuinely unbounded, append-only collection in this app (unlike `machines`, bounded at a
+// few hundred rows, or a single machine's bookings, naturally bounded by a date range) —
+// cursor pagination on its own autoincrement `id` is the natural fit, not offset/limit.
+//
+// =======================================================================================
 
 import type { Db } from './db.js';
 import type { LogRow } from './types.js';
@@ -17,6 +23,7 @@ export interface ActivityEntryOut {
   action: string;
 }
 
+/** Maps one `log` row onto its wire shape, coalescing nulls to empty strings. */
 function activityOut(row: LogRow): ActivityEntryOut {
   return { id: row.id, ts: row.ts || '', user: row.user || '', action: row.action || '' };
 }
@@ -37,6 +44,11 @@ function parseOptionalInt(value: string | null): number | null | undefined {
  * `?limit=` (default 50, capped at 200), `?cursor=` (the previous page's `meta.nextCursor` —
  * strictly older entries than that id), `?user=` and `?since=` (ISO timestamp, `ts >= since`)
  * as optional filters. `meta.nextCursor` is present only when there's a next page to fetch.
+ *
+ * How it works: parses and validates `limit`/`cursor` first (400s on a non-integer value for
+ * either), builds a `WHERE` clause from whichever of `cursor`/`user`/`since` were given, then
+ * fetches `limit + 1` rows in one query — the extra row, if it comes back, proves a next page
+ * exists without a second `COUNT` query, and gets sliced back off before the response goes out.
  */
 export function listActivity(db: Db, url: URL): ApiResponse {
   const limitParam = parseOptionalInt(url.searchParams.get('limit'));

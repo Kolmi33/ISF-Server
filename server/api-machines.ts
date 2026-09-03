@@ -1,7 +1,12 @@
-// api-machines.ts — Phase 9b: GET /api/v1/machines, GET /api/v1/machines/:id. The first two
-// real /api/v1/* endpoints — read-only, so no write-path risk. Reuses `model.ts`'s existing
-// `machineOut` wire mapper: a REST machine is the exact same shape `/api/state` already emits,
-// not a new contract to maintain in parallel.
+// =======================================================================================
+// API MACHINES MODULE (server/api-machines.ts)
+// =======================================================================================
+//
+// GET /api/v1/machines, GET /api/v1/machines/:id — read-only, so no write-path risk. Reuses
+// `model.ts`'s existing `machineOut` wire mapper: a REST machine is the exact same shape
+// `/api/state` already emits, not a new contract to maintain in parallel.
+//
+// =======================================================================================
 
 import type { Db } from './db.js';
 import { machineOut } from './model.js';
@@ -9,6 +14,7 @@ import type { MachineOut, MachineRow } from './types.js';
 import type { ApiResponse } from './api-router.js';
 import { apiSuccess, apiError } from './api-response.js';
 
+/** Every machine row, in the same `sort, name` order the client's own Admin manual-sort mode uses. */
 function allMachineRows(db: Db): MachineRow[] {
   return db.prepare('SELECT * FROM machines ORDER BY sort, name').all() as unknown as MachineRow[];
 }

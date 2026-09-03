@@ -1,7 +1,13 @@
-// api-bookings.ts — Phase 9c: GET /api/v1/machines/:id/bookings[/:date], GET
-// /api/v1/bookings?groupId=. Read-only, direct SQL (the `bookings` table is already indexed on
-// `day` and `gid` — no need to route this through the client-side pure `core/bookings.ts`
-// query logic, which operates on an in-memory `Bookings` map the server never builds as such).
+// =======================================================================================
+// API BOOKINGS MODULE (server/api-bookings.ts)
+// =======================================================================================
+//
+// GET /api/v1/machines/:id/bookings[/:date], GET /api/v1/bookings?groupId=. Read-only,
+// direct SQL — the `bookings` table is already indexed on `day` and `gid`, so there's no
+// need to route this through the client-side pure `core/bookings.ts` query logic, which
+// operates on an in-memory `Bookings` map the server never builds as such.
+//
+// =======================================================================================
 
 import type { Db } from './db.js';
 import { bookingOut } from './model.js';
@@ -22,6 +28,7 @@ export interface GroupedBookingOut extends BookingEntryOut {
   machineId: string;
 }
 
+/** Whether a machine with this id currently exists — the 404 guard every endpoint below runs first. */
 function machineExists(db: Db, machineId: string): boolean {
   return !!db.prepare('SELECT 1 FROM machines WHERE id=?').get(machineId);
 }

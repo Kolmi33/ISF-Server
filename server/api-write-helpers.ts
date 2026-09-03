@@ -1,8 +1,14 @@
-// api-write-helpers.ts — Phase 9e/9f: two tiny pieces every REST write handler in
-// `api-machines-write.ts`/`api-bookings-write.ts` needs when reading its untrusted request
-// body's generic `user`/`log` fields (the same two fields `/api/mutate` itself accepts) — pulled
-// out once so neither file repeats the same inline ternary (and so each caller's own cyclomatic
-// complexity stays under budget without the logic actually changing).
+// =======================================================================================
+// API WRITE HELPERS MODULE (server/api-write-helpers.ts)
+// =======================================================================================
+//
+// Two tiny pieces every REST write handler in `api-machines-write.ts`/`api-bookings-write.ts`
+// needs when reading its untrusted request body's generic `user`/`log` fields (the same two
+// fields `/api/mutate` itself accepts) — pulled out once so neither file repeats the same
+// inline ternary, and so each caller's own cyclomatic complexity stays under budget without
+// the logic actually changing.
+//
+// =======================================================================================
 
 /** `value` if it's a non-empty string, else `undefined` — the shape every write handler wants
  *  for an optional passthrough field like `user`. */
