@@ -25,6 +25,9 @@ function insertMachine(
 const url = (query = ''): URL => new URL('http://x/api/v1/machines' + query);
 
 describe('listMachines', () => {
+  // What: with no query filters, every machine comes back in wire shape, ordered by the
+  // DB's own (sort, name) order — the same order the client's admin manual-sort mode uses.
+  // How: inserts two machines out of sort order and checks the response lists them by sort value.
   it('returns every machine, wire-shaped, in DB order (sort, name)', () => {
     const db = mem();
     insertMachine(db, 'b', { name: 'Beta', sort: 1 });
@@ -34,11 +37,17 @@ describe('listMachines', () => {
     expect((res.body as { data: { id: string }[] }).data.map((m) => m.id)).toEqual(['a', 'b']);
   });
 
+  // What: an empty machine table returns an empty array, a normal successful response, not an error.
+  // How: calls listMachines against a fresh empty DB and checks the exact 200/[] response.
   it('is an empty array, not an error, when there are no machines', () => {
     const res = listMachines(mem(), url());
     expect(res).toEqual({ status: 200, body: { data: [] } });
   });
 
+  // What: `?category=` filters correctly, treating a null/absent `cat` column as the
+  // 'maschine' default (the same convention `getMachineCategory` uses everywhere else).
+  // How: inserts one machine with no cat and one with 'messtechnik', and checks each category
+  // filter finds only its own machine.
   it('filters by category, treating a missing cat as maschine', () => {
     const db = mem();
     insertMachine(db, 'a', { cat: null });
@@ -49,6 +58,8 @@ describe('listMachines', () => {
     expect((messtechnik.body as { data: { id: string }[] }).data.map((m) => m.id)).toEqual(['b']);
   });
 
+  // What: `?group=` filters to machines in exactly that group (URL-encoded values decode correctly).
+  // How: inserts machines in two groups and checks the filter finds only the matching one.
   it('filters by group', () => {
     const db = mem();
     insertMachine(db, 'a', { grp: 'Halle 1' });
@@ -57,6 +68,8 @@ describe('listMachines', () => {
     expect((res.body as { data: { id: string }[] }).data.map((m) => m.id)).toEqual(['b']);
   });
 
+  // What: `?status=` filters to machines with exactly that status.
+  // How: inserts an 'ok' and a 'defekt' machine and checks the filter finds only the matching one.
   it('filters by status', () => {
     const db = mem();
     insertMachine(db, 'a', { status: 'ok' });
@@ -65,6 +78,9 @@ describe('listMachines', () => {
     expect((res.body as { data: { id: string }[] }).data.map((m) => m.id)).toEqual(['b']);
   });
 
+  // What: `?sort=name` overrides the default DB order with a German-collated name sort.
+  // How: inserts two machines whose sort-column order is the opposite of their name order,
+  // and checks the name-sorted response comes back alphabetically instead.
   it('sorts by name (German collation) when ?sort=name is given', () => {
     const db = mem();
     insertMachine(db, 'a', { name: 'Zebra', sort: 0 });
@@ -76,6 +92,9 @@ describe('listMachines', () => {
     ]);
   });
 
+  // What: multiple filters combine with AND — a machine must match every given filter, not just one.
+  // How: inserts three machines across two groups/categories and checks a combined
+  // category+group filter finds only the one machine matching both.
   it('combines filters (category AND group)', () => {
     const db = mem();
     insertMachine(db, 'a', { grp: 'Halle 1', cat: null });
@@ -87,6 +106,8 @@ describe('listMachines', () => {
 });
 
 describe('getMachine', () => {
+  // What: fetching a known id returns that machine in wire shape.
+  // How: inserts one machine and checks the response's data matches its id/name.
   it('returns the wire-shaped machine when it exists', () => {
     const db = mem();
     insertMachine(db, 'a', { name: 'Alpha' });
@@ -98,6 +119,10 @@ describe('getMachine', () => {
     });
   });
 
+  // What: an unknown id is a 404 with the NOT_FOUND code, and the error message names the
+  // specific id that wasn't found.
+  // How: fetches a nonexistent id and checks the status, code, and that the error text
+  // includes that id.
   it('is a 404 NOT_FOUND with the id in the message when it does not exist', () => {
     const res = getMachine(mem(), 'ghost');
     expect(res.status).toBe(404);
