@@ -104,16 +104,19 @@ function CompactRow() {
   );
 }
 
-/** The grid's cell/header border widths in pixels, 0 (invisible) to `GRIDLINE_WIDTH_MAX` (bold),
- *  in `GRIDLINE_WIDTH_STEP`-sized increments (sub-pixel — CSS border widths accept fractional
- *  px just fine) — two independent sliders, not one, since the data grid (td) and the header
- *  (th: the "KW X" row + the weekday/date row) are visually distinct regions a user may want
- *  thick/thin differently. Each is a slider, not a threshold: {@link applyGridlineWidth}/
- *  {@link applyGridlineWidthHeader} write straight to their own `--gridline-width`/
- *  `--gridline-width-header` CSS custom property (`app.css`), which `td`'s/`th`'s own
- *  border-width already reads from, so no class toggling or extra CSS state is needed the way
- *  `body.compact` needs a class. Every cell stays exactly where and what it was; only the line
- *  between cells changes. */
+/** The grid's cell/header line thickness in pixels, 0 (invisible) to `GRIDLINE_WIDTH_MAX`
+ *  (bold), in `GRIDLINE_WIDTH_STEP`-sized sub-pixel increments — two independent sliders, not
+ *  one, since the data grid (td) and the header (th: the "KW X" row + the weekday/date row)
+ *  are visually distinct regions a user may want thick/thin differently. Each is a slider, not
+ *  a threshold: {@link applyGridlineWidth}/{@link applyGridlineWidthHeader} write straight to
+ *  their own `--gridline-width`/`--gridline-width-header` CSS custom property, so no class
+ *  toggling or extra CSS state is needed the way `body.compact` needs a class. Every cell stays
+ *  exactly where and what it was; only the line between cells changes.
+ *  Sub-pixel note: the grid renders these lines as `box-shadow`, not `border-width` (see
+ *  `app.css`'s `td.cell`/`th`) — a real fractional-`border-width` value commonly rounds to
+ *  fully invisible on a standard-DPI display (a known CSS limitation), which is exactly why
+ *  sub-1px steps didn't actually render anything before; `box-shadow` anti-aliases fractional
+ *  thickness properly instead. */
 const GRIDLINE_WIDTH_DEFAULT = 1;
 const GRIDLINE_WIDTH_MAX = 4;
 const GRIDLINE_WIDTH_STEP = 0.25;
