@@ -47,6 +47,10 @@ beforeEach(() => {
 });
 
 describe('MachineFormModal — new machine', () => {
+  // What: creating a new machine shows the "new resource" heading, no delete button (nothing
+  // to delete yet), and defaults the group dropdown to the first existing machine's group.
+  // How: opens with machineId null and checks the heading, absent delete button, and the
+  // group select's default value.
   it('shows "Neue Ressource", no delete button, and defaults the group to the first machine\'s', () => {
     act(() => openMachineForm(null));
     expect(screen.getByText('Neue Ressource')).toBeInTheDocument();
@@ -56,6 +60,10 @@ describe('MachineFormModal — new machine', () => {
     );
   });
 
+  // What: submitting with an empty name/group is rejected client-side, with the same
+  // combined validation message the form's own validateMachineForm produces.
+  // How: opens the form, clicks Speichern with nothing filled in, and checks the toast and
+  // that mutate was never called.
   it('rejects an empty name/group and does not mutate', async () => {
     act(() => openMachineForm(null));
     await act(async () => {
@@ -66,6 +74,11 @@ describe('MachineFormModal — new machine', () => {
     expect(window.mutate).not.toHaveBeenCalled();
   });
 
+  // What: saving with a valid name creates the machine, returns to the Admin modal, and
+  // confirms via toast.
+  // How: types a name, saves, and checks the mutate call, that the new machine actually
+  // exists in the data, that the group-select cache was refreshed and Admin was reopened, and
+  // the success toast.
   it('creates a machine on valid input, then returns to Admin and toasts', async () => {
     act(() => openMachineForm(null));
     fireEvent.change(document.querySelectorAll('#modal input[type="text"]')[0]!, {
@@ -85,6 +98,10 @@ describe('MachineFormModal — new machine', () => {
     expect(document.getElementById('toast')!.textContent).toBe('Gespeichert ✓');
   });
 
+  // What: when both a dropdown-selected group and a free-text new-group value are given, the
+  // free-text one wins for the created machine.
+  // How: fills in a name, types a brand-new group into the free-text field (leaving the
+  // dropdown at its default), saves, and checks the created machine's group is the typed one.
   it('a free-text new group is used over the selected one', async () => {
     act(() => openMachineForm(null));
     fireEvent.change(document.querySelectorAll('#modal input[type="text"]')[0]!, {
@@ -101,6 +118,10 @@ describe('MachineFormModal — new machine', () => {
     expect(created?.group).toBe('Ganz neuer Bereich');
   });
 
+  // What: unchecking every weekday (a machine that would never be bookable) blocks saving
+  // with a specific toast, rather than silently creating an unusable machine.
+  // How: fills in a name, unchecks every weekday checkbox, saves, and checks the toast and
+  // that mutate was never called.
   it('unchecking every weekday blocks save with the right toast', async () => {
     act(() => openMachineForm(null));
     fireEvent.change(document.querySelectorAll('#modal input[type="text"]')[0]!, {
@@ -117,6 +138,10 @@ describe('MachineFormModal — new machine', () => {
     expect(window.mutate).not.toHaveBeenCalled();
   });
 
+  // What: the maintenance-slot editor lets the user add a slot and blocks saving when its
+  // date range is invalid (from after until), and a slot can be removed again entirely.
+  // How: adds one slot, fills in an inverted date range, saves and checks the validation
+  // toast, then clicks "delete slot" and checks the editor reverts to its empty-state message.
   it('adds and removes a maintenance slot; an invalid range blocks save', async () => {
     act(() => openMachineForm(null));
     fireEvent.change(document.querySelectorAll('#modal input[type="text"]')[0]!, {
@@ -144,6 +169,9 @@ describe('MachineFormModal — new machine', () => {
 });
 
 describe('MachineFormModal — edit', () => {
+  // What: editing an existing machine pre-fills every field from its current stored values.
+  // How: opens the form for a known machine and checks the heading, its name field's value,
+  // and its category select's value.
   it('pre-fills every field from the existing machine', () => {
     act(() => openMachineForm('m2'));
     expect(screen.getByText('Ressource bearbeiten')).toBeInTheDocument();
@@ -155,6 +183,10 @@ describe('MachineFormModal — edit', () => {
     );
   });
 
+  // What: deleting a machine confirms first, then actually removes it, returns to Admin, and
+  // confirms via toast.
+  // How: opens the edit form, clicks Löschen, and checks the confirm dialog, the mutate call,
+  // that the machine is actually gone from the data, Admin reopened, and the toast.
   it('deleting confirms, then mutates, returns to Admin, and toasts', async () => {
     act(() => openMachineForm('m1'));
     await act(async () => {
@@ -170,6 +202,9 @@ describe('MachineFormModal — edit', () => {
     expect(document.getElementById('toast')!.textContent).toBe('Maschine gelöscht.');
   });
 
+  // What: declining the delete confirmation aborts it entirely — the machine survives.
+  // How: stubs askConfirm to resolve false, clicks Löschen, and checks mutate was never
+  // called and the machine is still present.
   it('declining the delete confirm does not mutate', async () => {
     window.askConfirm = vi.fn().mockResolvedValue(false);
     act(() => openMachineForm('m1'));
@@ -181,6 +216,8 @@ describe('MachineFormModal — edit', () => {
     expect(window.S.data!.machines.some((m) => m.id === 'm1')).toBe(true);
   });
 
+  // What: "Zurück" (back) returns to the Admin modal without saving or deleting anything.
+  // How: opens the edit form, clicks Zurück, and checks Admin reopened while mutate never ran.
   it('"Zurück" returns to Admin without mutating', () => {
     act(() => openMachineForm('m1'));
     act(() => {

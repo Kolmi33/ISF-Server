@@ -38,6 +38,10 @@ afterEach(() => {
 });
 
 describe('StatsModal — Ressourcen overview (default)', () => {
+  // What: the default view shows one category header per category, each category's machines,
+  // and a utilisation (workday) metric per machine.
+  // How: opens stats and checks two category headers, both known machine names, and the
+  // "Werktage" (workdays) label all appear.
   it('shows a category header per category, groups, and each machine with its utilisation', () => {
     act(() => openStats());
     expect(document.querySelectorAll('#stOut .cathead')).toHaveLength(2);
@@ -46,6 +50,9 @@ describe('StatsModal — Ressourcen overview (default)', () => {
     expect(screen.getByText(/Werktage/)).toBeInTheDocument();
   });
 
+  // What: toggling a category's visibility off removes its machines from the list entirely,
+  // leaving the other category's machines untouched.
+  // How: clicks the Messtechnik toggle and checks its machine disappears while Maschinen's stays.
   it('hiding a category via the toggle button removes its machines from the list', () => {
     act(() => openStats());
     act(() => {
@@ -55,6 +62,9 @@ describe('StatsModal — Ressourcen overview (default)', () => {
     expect(screen.getByText('Fräse')).toBeInTheDocument();
   });
 
+  // What: folding a group hides its machine rows but keeps the group's own header visible
+  // (so it can be unfolded again).
+  // How: clicks a group header and checks its machine disappears while the header itself stays.
   it('folding a group hides its machine rows but keeps the group header', () => {
     act(() => openStats());
     act(() => {
@@ -64,6 +74,8 @@ describe('StatsModal — Ressourcen overview (default)', () => {
     expect(screen.getByText(/Halle 1/)).toBeInTheDocument(); // header stays
   });
 
+  // What: the filter box narrows the resource list to machines whose name matches the query.
+  // How: types a partial machine name and checks the matching machine stays while the other disappears.
   it('filters the list by machine name', () => {
     act(() => openStats());
     fireEvent.change(screen.getByPlaceholderText('filtern…'), { target: { value: 'Frä' } });
@@ -73,6 +85,10 @@ describe('StatsModal — Ressourcen overview (default)', () => {
 });
 
 describe('StatsModal — Ressourcen drilldown', () => {
+  // What: clicking a machine row drills into who booked it, and a back button returns to the
+  // overview list.
+  // How: clicks a machine row, checks the drilldown heading and a booker's name appear, then
+  // clicks back and checks the drilldown is gone while the overview list is back.
   it('clicking a machine row shows who booked it, and the back button returns to the overview', () => {
     act(() => openStats());
     act(() => {
@@ -89,6 +105,10 @@ describe('StatsModal — Ressourcen drilldown', () => {
 });
 
 describe('StatsModal — Personen mode', () => {
+  // What: Personen mode lists every person with at least one booking in range, and clicking
+  // a person drills into which machines they used.
+  // How: switches to Personen mode, checks both bookers appear, clicks one, and checks the
+  // drilldown heading and that machine's name appear.
   it('lists everyone with a booking in range; clicking a row drills into their machines', () => {
     act(() => openStats());
     act(() => {
@@ -103,6 +123,10 @@ describe('StatsModal — Personen mode', () => {
     expect(screen.getByText('Fräse')).toBeInTheDocument();
   });
 
+  // What: switching between modes (e.g. Ressourcen → Personen) clears any active drilldown
+  // and filter — the two modes don't share drilldown state.
+  // How: drills into a machine in Ressourcen mode, switches to Personen mode, and checks the
+  // machine drilldown is gone and the Personen overview shows instead.
   it('switching modes resets the filter and any drilldown', () => {
     act(() => openStats());
     act(() => {
@@ -117,6 +141,9 @@ describe('StatsModal — Personen mode', () => {
 });
 
 describe('StatsModal — Wartung mode', () => {
+  // What: with nothing blocked in the current date range, Wartung (maintenance) mode shows an
+  // explanatory empty-state message.
+  // How: switches to Wartung mode (no maintenance seeded) and checks the message appears.
   it('shows a message when nothing is blocked in range', () => {
     act(() => openStats());
     act(() => {
@@ -125,6 +152,11 @@ describe('StatsModal — Wartung mode', () => {
     expect(screen.getByText(/Keine Wartungs-\/Ausfallzeiten/)).toBeInTheDocument();
   });
 
+  // What: Wartung mode shows, per machine, both the count of maintenance instances and the
+  // total blocked-day count in range.
+  // How: gives one machine a 2-day maintenance slot within range, switches to Wartung mode,
+  // and checks the summary paragraph mentions 1 instance and 2 blocked days, with the machine
+  // name shown too.
   it('shows maintenance instance and blocked-day counts per machine', () => {
     window.S.data!.machines[0]!.maint = [
       { type: 'wartung', from: '2021-01-05', until: '2021-01-06' },
@@ -144,6 +176,11 @@ describe('StatsModal — Wartung mode', () => {
 });
 
 describe('StatsModal — date range', () => {
+  // What: setting "Bis" (to) before "Von" (from) is rejected — the modal toasts about the
+  // invalid range and keeps showing whatever result was last valid, rather than clearing to
+  // an empty/broken state.
+  // How: sets the "to" date field to a date before the current "from", and checks the toast
+  // plus that the previously-shown machine is still visible.
   it('toasts and keeps the previous result when "Bis" is set before "Von"', () => {
     act(() => openStats());
     const toInput = document.querySelectorAll('#modal input[type="date"]')[1] as HTMLInputElement;
@@ -154,12 +191,18 @@ describe('StatsModal — date range', () => {
 });
 
 describe('openStats', () => {
+  // What: passing a preset person key opens stats directly into that person's drilldown
+  // (e.g. from a booking detail's "Statistik" button) rather than the default overview.
+  // How: calls openStats('anna') and checks the drilldown heading and a machine that person
+  // used both appear immediately.
   it("opens directly into a person's drilldown when given a preset person key", () => {
     act(() => openStats('anna'));
     expect(screen.getByText('Meistgenutzte Maschinen', { exact: false })).toBeInTheDocument();
     expect(screen.getByText('Fräse')).toBeInTheDocument();
   });
 
+  // What: the "Schließen" (close) button closes the shared overlay.
+  // How: opens the modal, clicks close, and checks the overlay's open class is gone.
   it('closes on "Schließen"', () => {
     act(() => openStats());
     act(() => {
@@ -168,6 +211,9 @@ describe('openStats', () => {
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
   });
 
+  // What: opening stats before any server data has loaded doesn't open a broken/empty modal
+  // — it toasts an explanatory message instead.
+  // How: sets S.data to null and checks the overlay stays closed while a toast explains why.
   it('toasts instead of opening when data has not loaded yet', () => {
     store.set({ data: null } as unknown as Partial<AppState>);
     act(() => openStats());
