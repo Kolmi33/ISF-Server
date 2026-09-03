@@ -202,6 +202,11 @@ describe('drag-to-select', () => {
     expect(selection.anchor).toBeNull();
   });
 
+  // What: while actively dragging (mouse button down, moving over cells), each mouseover
+  // extends the focus corner to the newly-hovered cell, growing the selected rectangle, and
+  // marks the drag as a real drag (didDrag) rather than a plain click.
+  // How: mousedowns on one corner, mouseovers the opposite corner, and checks the focus
+  // updated, didDrag flipped true, and the selection covers the full 2×2 rectangle.
   it('mouseover during a drag extends the focus to the hovered cell', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     mouseoverOn(cell('m2', '2021-01-05'));
@@ -210,11 +215,19 @@ describe('drag-to-select', () => {
     expect(selection.cells).toHaveLength(4); // the full m1..m2 × both-dates rectangle
   });
 
+  // What: a mouseover with no drag currently active (no mousedown happened first) does
+  // nothing — there's no active selection to extend.
+  // How: fires a mouseover with no prior mousedown and checks the focus stayed null.
   it('mouseover before any mousedown is a no-op (no focus to extend)', () => {
     mouseoverOn(cell('m2', '2021-01-05'));
     expect(selection.focus).toBeNull();
   });
 
+  // What: shift+mousedown behaves like a keyboard shift+arrow — it extends the EXISTING
+  // anchor to the newly-clicked cell (spanning a rectangle) rather than starting a fresh
+  // single-cell selection the way a plain mousedown would.
+  // How: makes a normal single-cell selection first, then shift+mousedowns a distant cell,
+  // and checks the original anchor is preserved while focus moved and didDrag is true.
   it('shift+mousedown with an existing anchor spans a rectangle instead of starting fresh', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     mouseupOn(document.body);
@@ -224,6 +237,11 @@ describe('drag-to-select', () => {
     expect(selection.didDrag).toBe(true);
   });
 
+  // What: releasing the mouse ends the drag state, and if the drag actually moved across
+  // multiple cells (a real selection, not just a click), it opens the context menu at the
+  // release point.
+  // How: drags across two cells, releases at a specific screen position, and checks the drag
+  // ended and showCtx was called with that exact position.
   it('mouseup ends the drag and opens the context menu only for a real multi-cell drag', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     mouseoverOn(cell('m2', '2021-01-05'));
@@ -232,12 +250,18 @@ describe('drag-to-select', () => {
     expect(handlers.showCtx).toHaveBeenCalledWith(10, 20);
   });
 
+  // What: a plain click (mousedown then mouseup with no mouseover between) never opens the
+  // context menu — only an actual drag does.
+  // How: mousedowns and immediately mouseups with no movement in between, checking showCtx
+  // was never called.
   it('mouseup after a plain click (no drag movement) does not open the context menu', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     mouseupOn(document.body);
     expect(handlers.showCtx).not.toHaveBeenCalled();
   });
 
+  // What: a mouseup with no drag ever having started is a safe no-op.
+  // How: fires mouseup directly with no prior mousedown and checks showCtx was never called.
   it('mouseup while not dragging is a no-op', () => {
     mouseupOn(document.body);
     expect(handlers.showCtx).not.toHaveBeenCalled();
@@ -245,21 +269,34 @@ describe('drag-to-select', () => {
 });
 
 describe('click handling', () => {
+  // What: clicking a row's favorite star delegates to the toggleFav handler for that machine.
+  // How: clicks the star element carrying data-fav="m1" and checks the handler was called
+  // with that machine id.
   it('clicking a favorite star toggles that machine as a favorite', () => {
     clickOn(document.querySelector('.favstar[data-fav="m1"]')!);
     expect(handlers.toggleFav).toHaveBeenCalledWith('m1');
   });
 
+  // What: clicking a row's "jump back" (previous free day) icon delegates to gotoPrevFree.
+  // How: clicks the element carrying data-nb="m2" and checks the handler was called with
+  // that machine id.
   it('clicking the "jump back" button goes to the previous free day', () => {
     clickOn(document.querySelector('[data-nb="m2"]')!);
     expect(handlers.gotoPrevFree).toHaveBeenCalledWith('m2');
   });
 
+  // What: clicking a row's "jump to next free" icon delegates to gotoNextFree.
+  // How: clicks the element carrying data-nf="m2" and checks the handler was called with
+  // that machine id.
   it('clicking the "jump to next free" button goes to the next free day', () => {
     clickOn(document.querySelector('[data-nf="m2"]')!);
     expect(handlers.gotoNextFree).toHaveBeenCalledWith('m2');
   });
 
+  // What: clicking a category header row toggles that category's visibility, debounced (so a
+  // double-click can be distinguished and handled differently — see the double-click tests below).
+  // How: clicks the category header, checks it's still shown right away (debounced, not yet
+  // applied), advances past the debounce window, and checks it's now hidden.
   it('clicking a category header row toggles that category (debounced)', () => {
     vi.useFakeTimers();
     clickOn(document.querySelector('tr[data-catgroup="maschine"] td')!);
@@ -269,6 +306,11 @@ describe('click handling', () => {
     vi.useRealTimers();
   });
 
+  // What: clicking a group header row toggles its fold state (not debounced, unlike
+  // category), persists the change to localStorage, and repaints — and clicking again toggles
+  // it back.
+  // How: clicks the group header, checks it collapsed and persisted with one notify, then
+  // clicks again and checks it re-expanded.
   it('clicking a group header row toggles and persists its collapsed state', () => {
     const notifySpy = vi.spyOn(store, 'notify');
     clickOn(document.querySelector('tr[data-group="Halle 1"] td')!);
@@ -281,6 +323,11 @@ describe('click handling', () => {
     notifySpy.mockRestore();
   });
 
+  // What: the click event that follows a real drag (mousedown → mouseover → click) doesn't
+  // trigger a cell-open action — the drag itself already did the selecting, so the trailing
+  // click just resets the didDrag flag and otherwise does nothing.
+  // How: performs a real drag (down, over a different cell) then fires click on the ending
+  // cell, checking didDrag reset to false and openCellAction was never called.
   it('a plain click that ends a drag just clears didDrag, without any other action', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     mouseoverOn(cell('m2', '2021-01-05'));
@@ -289,6 +336,11 @@ describe('click handling', () => {
     expect(handlers.openCellAction).not.toHaveBeenCalled();
   });
 
+  // What: a genuine plain click (mousedown then click, no drag at all) doesn't open the
+  // cell's booking action either — a single click only selects (already done on mousedown);
+  // opening the booking action requires a double-click or Enter instead.
+  // How: mousedowns and clicks the same cell with no movement between, and checks
+  // openCellAction was never called.
   it('a plain click that was not a drag does nothing (selection already happened on mousedown)', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     clickOn(cell('m1', '2021-01-04'));
@@ -297,6 +349,13 @@ describe('click handling', () => {
 });
 
 describe('double-click handling', () => {
+  // What: a double-click on a category header is a genuinely distinct gesture from two
+  // separate single clicks — it CANCELS the debounced single-click toggle (which would
+  // otherwise still fire and hide the category) and instead runs toggleAllGroupsInCategory
+  // on that category (here, starting from all-open, so it collapses every group in it).
+  // How: clicks then immediately double-clicks the same category header, advances well past
+  // the single-click debounce window, and checks the category is still shown (the pending
+  // toggle never fired) while its one group is now collapsed (the double-click's own action ran).
   it('double-clicking a category header cancels the pending single-click toggle and expands every group in that category', () => {
     vi.useFakeTimers();
     window.S.collapsed = new Set(); // nothing collapsed → toggleAllGroupsInCategory collapses everything
@@ -309,6 +368,8 @@ describe('double-click handling', () => {
     vi.useRealTimers();
   });
 
+  // What: double-clicking a grid cell (not a header) opens its booking action directly.
+  // How: double-clicks a cell and checks openCellAction was called with its machine/date.
   it('double-clicking a cell opens its booking action', () => {
     dblclickOn(cell('m1', '2021-01-04'));
     expect(handlers.openCellAction).toHaveBeenCalledWith('m1', '2021-01-04');
@@ -316,12 +377,21 @@ describe('double-click handling', () => {
 });
 
 describe('keyboard navigation', () => {
+  // What: an arrow key with no prior selection just establishes focus on the first visible
+  // cell — it doesn't also apply the arrow's own movement on top of that first placement.
+  // How: presses ArrowRight with nothing selected and checks focus/anchor both land on the
+  // grid's first cell (not the second, which a "move right" would have produced).
   it('the first arrow press (nothing focused yet) focuses the first visible cell without moving', () => {
     keydown('ArrowRight');
     expect(selection.focus).toEqual({ machineId: 'm1', date: '2021-01-04' });
     expect(selection.anchor).toEqual({ machineId: 'm1', date: '2021-01-04' });
   });
 
+  // What: with an existing selection, plain (non-shift) arrow keys move BOTH the focus and
+  // the anchor together by one column/row — a plain arrow press moves the whole selection,
+  // it doesn't grow it.
+  // How: selects one cell, presses ArrowRight (checks focus moved and anchor matches focus
+  // again — not left behind), then ArrowDown (checks focus moved down a row too).
   it('ArrowRight/ArrowDown move focus by one column/row and reset the anchor to match', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('ArrowRight');
@@ -331,6 +401,10 @@ describe('keyboard navigation', () => {
     expect(selection.focus).toEqual({ machineId: 'm2', date: '2021-01-05' });
   });
 
+  // What: holding Shift while pressing an arrow key extends the selection (grows the
+  // rectangle) instead of moving it — the anchor stays put, only the focus corner moves.
+  // How: selects one cell, presses Shift+ArrowRight, and checks the anchor is unchanged, the
+  // focus moved right, and the selection now covers 2 cells.
   it('Shift+Arrow extends the selection without moving the anchor', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('ArrowRight', { shiftKey: true });
@@ -339,6 +413,10 @@ describe('keyboard navigation', () => {
     expect(selection.cells).toHaveLength(2);
   });
 
+  // What: pressing an arrow that would move focus past the grid's top or left edge clamps in
+  // place rather than wrapping or going out of bounds.
+  // How: selects the grid's very first cell, presses ArrowLeft then ArrowUp, and checks focus
+  // stays on that same first cell both times.
   it('clamps at the top/left edge instead of moving past it', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('ArrowLeft');
@@ -347,6 +425,11 @@ describe('keyboard navigation', () => {
     expect(selection.focus).toEqual({ machineId: 'm1', date: '2021-01-04' });
   });
 
+  // What: unlike the top/left edges (which clamp), moving right past the grid's LAST visible
+  // column grows the week window directly (a synchronous render, not the debounced notify
+  // path) so the keyboard nav can keep moving forward onto the newly-revealed column.
+  // How: selects the grid's last column, presses ArrowRight, and checks extraWeeks grew and
+  // the render trigger fired.
   it('moving past the right edge grows the grid directly via extraWeeks + render()', () => {
     mousedownOn(cell('m2', '2021-01-05')); // last column
     keydown('ArrowRight');
@@ -354,15 +437,22 @@ describe('keyboard navigation', () => {
     expect(renderTrigger).toHaveBeenCalledOnce();
   });
 
+  // What: moving left past the grid's FIRST visible column calls the injected prependWeek
+  // handler to grow the window backwards, the keyboard-nav counterpart of the right-edge growth.
+  // How: selects the grid's first column, presses ArrowLeft, and checks the prependWeek
+  // handler was called. Only the call itself is checked here, not the resulting column,
+  // because the injected handler is a no-op stub in this fixture — the real handler
+  // (grid-scroll.ts's prependWeek) unshifts S.visD, which this component-level test isn't
+  // wired to observe.
   it('moving past the left edge calls prependWeek() to grow backwards', () => {
-    // handlers.prependWeek is a no-op stub here, so the column index stays -1 and clamps to 0 —
-    // this test only proves the call happens, not the resulting column (that needs a real
-    // prependWeek that actually unshifts S.visD, which is still legacy / out of B2's scope).
     mousedownOn(cell('m1', '2021-01-04')); // first column
     keydown('ArrowLeft');
     expect(handlers.prependWeek).toHaveBeenCalledOnce();
   });
 
+  // What: before any data has loaded (no visible machines or dates), arrow key navigation is
+  // a safe no-op rather than erroring on an empty grid.
+  // How: empties the visible machine/date lists, presses ArrowRight, and checks focus stays null.
   it('does nothing when the grid has no visible rows/columns yet', () => {
     window.S.visM = [];
     window.S.visD = [];
@@ -370,12 +460,19 @@ describe('keyboard navigation', () => {
     expect(selection.focus).toBeNull();
   });
 
+  // What: pressing Enter with a single cell selected opens that cell's booking action —
+  // the keyboard equivalent of double-clicking it.
+  // How: selects one cell, presses Enter, and checks openCellAction was called with it.
   it("Enter on a single-cell selection opens that cell's booking action", () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('Enter');
     expect(handlers.openCellAction).toHaveBeenCalledWith('m1', '2021-01-04');
   });
 
+  // What: with more than one cell selected, Enter opens the context menu instead of a single
+  // cell's booking action — there's no single obvious cell to act on directly.
+  // How: drags to select two cells, presses Enter, and checks showCtx fired while
+  // openCellAction did not.
   it('Enter on a multi-cell selection opens the context menu instead', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     mouseoverOn(cell('m2', '2021-01-05'));
@@ -385,24 +482,36 @@ describe('keyboard navigation', () => {
     expect(handlers.openCellAction).not.toHaveBeenCalled();
   });
 
+  // What: pressing Enter with no active selection at all does nothing.
+  // How: presses Enter with nothing selected and checks neither action handler fired.
   it('Enter with nothing focused does nothing', () => {
     keydown('Enter');
     expect(handlers.openCellAction).not.toHaveBeenCalled();
     expect(handlers.showCtx).not.toHaveBeenCalled();
   });
 
+  // What: Escape clears the current selection.
+  // How: selects a cell, presses Escape, and checks the anchor reset to null.
   it('Escape clears the selection', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('Escape');
     expect(selection.anchor).toBeNull();
   });
 
+  // What: grid keyboard navigation is suppressed while a modal overlay is open — arrow keys
+  // shouldn't move the grid selection behind an open dialog.
+  // How: marks the overlay as open, presses ArrowRight, and checks focus stayed null.
   it('is suppressed while a modal is open', () => {
     document.getElementById('overlay')!.classList.add('open');
     keydown('ArrowRight');
     expect(selection.focus).toBeNull();
   });
 
+  // What: grid keyboard navigation is also suppressed while the keydown originates from a
+  // form input — otherwise typing in a text field elsewhere on the page would hijack the grid
+  // selection with every arrow key press.
+  // How: attaches a real input element, fires the keydown FROM that input (so it bubbles from
+  // there, not from the grid), and checks focus stayed null.
   it('is suppressed while typing into a form field', () => {
     const input = document.createElement('input');
     document.body.appendChild(input); // must be attached for the keydown to bubble to document
@@ -411,6 +520,9 @@ describe('keyboard navigation', () => {
     input.remove(); // the grid DOM built in beforeAll is shared across every test in this file
   });
 
+  // What: any key outside the recognized set (arrows, Enter, Escape) is simply ignored,
+  // leaving the current selection untouched.
+  // How: selects a cell, presses an unrelated key ('a'), and checks focus is unchanged.
   it('ignores keys that are not arrows/Enter/Escape', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     keydown('a');
@@ -445,6 +557,12 @@ describe('drag auto-scroll at the grid edges', () => {
     vi.useRealTimers();
   });
 
+  // What: dragging a selection with the mouse near the grid wrapper's right edge
+  // auto-scrolls the viewport right, and once it scrolls, re-evaluates which cell is now
+  // under the (stationary) mouse position and extends the selection focus to it.
+  // How: starts a drag, moves the mouse near the right edge (stubbed elementFromPoint returns
+  // a specific far cell), advances the auto-scroll's interval timer, and checks both that
+  // scrollLeft increased and the focus extended to the cell now under the mouse.
   it('scrolls right and re-extends the focus when dragging near the right edge', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     document.dispatchEvent(new MouseEvent('mousemove', { clientX: 490, clientY: 200 }));
@@ -453,6 +571,11 @@ describe('drag auto-scroll at the grid edges', () => {
     expect(selection.focus).toEqual({ machineId: 'm2', date: '2021-01-05' });
   });
 
+  // What: dragging near the left edge scrolls left when there's room to scroll, or — if
+  // already scrolled all the way to the start — grows a week backward instead (mirroring the
+  // wheel-listener's left-edge behavior), so a drag never gets stuck unable to reach earlier days.
+  // How: drags near the left edge while at scrollLeft 0 and checks prependWeek was called;
+  // then repeats with a nonzero scrollLeft and checks it actually decreased instead.
   it('scrolls left, or grows a week when already at the start, near the left edge', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     document.dispatchEvent(new MouseEvent('mousemove', { clientX: 110, clientY: 200 }));
@@ -465,6 +588,10 @@ describe('drag auto-scroll at the grid edges', () => {
     expect(document.getElementById('gridWrap')!.scrollLeft).toBeLessThan(50);
   });
 
+  // What: the same auto-scroll behavior applies vertically too — near the bottom edge scrolls
+  // down, and (once there's scroll room to give back) near the top edge scrolls back up.
+  // How: drags near the bottom edge and checks scrollTop increased; then drags near the top
+  // edge and checks scrollTop decreased back down.
   it('scrolls down near the bottom edge and up near the top edge (once already scrolled)', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     document.dispatchEvent(new MouseEvent('mousemove', { clientX: 300, clientY: 390 }));
@@ -476,6 +603,11 @@ describe('drag auto-scroll at the grid edges', () => {
     expect(document.getElementById('gridWrap')!.scrollTop).toBeLessThan(24);
   });
 
+  // What: releasing the mouse (ending the drag) stops the auto-scroll interval — it doesn't
+  // keep scrolling on its own after the drag is over.
+  // How: starts a drag near the right edge, releases the mouse, records the scroll position
+  // at that moment, advances time well past another auto-scroll tick, and checks the position
+  // never moved further.
   it('stops auto-scrolling once the drag ends', () => {
     mousedownOn(cell('m1', '2021-01-04'));
     document.dispatchEvent(new MouseEvent('mousemove', { clientX: 490, clientY: 200 }));
@@ -485,6 +617,10 @@ describe('drag auto-scroll at the grid edges', () => {
     expect(document.getElementById('gridWrap')!.scrollLeft).toBe(scrollLeftAtMouseup);
   });
 
+  // What: a mousemove near the edge with no drag actually in progress doesn't trigger any
+  // auto-scroll — the edge-proximity logic only matters while dragging.
+  // How: fires a mousemove near the right edge with no prior mousedown, advances time, and
+  // checks scrollLeft never moved from its starting 0.
   it('does nothing mid-air when not dragging or the grid wrapper is missing', () => {
     document.dispatchEvent(new MouseEvent('mousemove', { clientX: 490, clientY: 200 }));
     vi.advanceTimersByTime(60);
