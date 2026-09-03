@@ -1,22 +1,25 @@
-// The toolbar "Alle Bereiche ▾" group-filter dropdown (Phase 7 slice B10e). Faithful port of
-// legacy `fillGroupSel`/`updateGroupBtn`/`groupList`. Mounted once at boot onto `#groupDrop`,
-// same pattern as `MachineFilterDropdown.tsx` onto `#machDrop`; open/close mechanics are
-// `ui/toolbar-dropdown.ts`, shared with it.
+// =======================================================================================
+// GROUP FILTER DROPDOWN COMPONENT (web/js/ui/components/GroupFilterDropdown.tsx)
+// =======================================================================================
+//
+// The toolbar "Alle Bereiche ▾" group-filter dropdown. Mounted once at boot onto
+// `#groupDrop`, the same pattern `MachineFilterDropdown.tsx` uses onto `#machDrop`; its
+// open/close mechanics are the shared `ui/toolbar-dropdown.ts` hook.
+//
+// =======================================================================================
 
 import { useEffect, useReducer } from 'react';
 import { saveFilters } from './MachineFilterDropdown.tsx';
 import { useToolbarDropdown } from '../toolbar-dropdown.ts';
 import { store } from '../../store-instance.ts';
 
-/** The distinct group names across every machine, first-seen order. Faithful port of legacy
- *  `groupList`. */
+/** Lists the distinct group names across every machine, in first-seen order. */
 function groupList(): string[] {
   return [...new Set(store.get('data')!.machines.map((m) => m.group))];
 }
 
-/** Refresh `#groupBtn`'s label from `S.groupsSel`. `#groupBtn` is static markup, not
- *  React-rendered — mutated directly, matching legacy. Faithful port of legacy
- *  `updateGroupBtn`. */
+/** Refreshes `#groupBtn`'s label from the current group selection. `#groupBtn` is static
+ *  markup, not React-rendered, so its text is mutated directly rather than through JSX. */
 function updateGroupBtn(): void {
   const button = document.getElementById('groupBtn');
   if (!button) return;
@@ -27,10 +30,10 @@ function updateGroupBtn(): void {
 
 let refreshGroupList: (() => void) | null = null;
 
-/** Force the dropdown to recompute its group list next render — e.g. after a machine form
- *  (B6) save adds/renames/removes a group, or a "structural" SSE update reloads `S.data`.
- *  Faithful port of legacy `fillGroupSel`'s "rebuild the list" half (the checkbox-wiring half
- *  needs no equivalent — React re-derives `checked` from `S.groupsSel` on every render). */
+/** Forces the dropdown to recompute its group list on next render — e.g. after a machine
+ *  form save adds/renames/removes a group, or a "structural" SSE update reloads the
+ *  machine data. The checkbox-wiring side needs no equivalent hook, since React already
+ *  re-derives each `checked` prop from the live selection on every render. */
 export function fillGroupSel(): void {
   refreshGroupList?.();
 }

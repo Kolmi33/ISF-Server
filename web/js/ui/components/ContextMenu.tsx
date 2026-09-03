@@ -1,10 +1,21 @@
-// The grid's right-click / after-drag context menu (Phase 7 slice B10b). Faithful port of
-// legacy `showCtx`/`hideCtx` + the document-level outside-click dismissal. Mounted once at
-// boot onto the static `<div id="ctxMenu">` (same pattern as `Grid.tsx` onto `#grid`);
-// `ui/grid-interaction.ts` (B2) calls `showCtx`/`hideCtx` via its injected
-// `GridInteractionHandlers` (F8 cleanup, ARCHITECTURE_AUDIT.md) rather than a direct import —
-// this module imports `selection`/`clearSelection` FROM grid-interaction.ts, so the reverse
-// would cycle.
+// =======================================================================================
+// CONTEXT MENU COMPONENT (web/js/ui/components/ContextMenu.tsx)
+// =======================================================================================
+//
+// The grid's right-click / after-drag context menu: book the selection, delete any booked
+// cells within it, or cancel.
+//
+// Key Principles:
+// - MOUNTED ONCE, POSITIONED IMPERATIVELY: mounted once at boot onto the static
+//   `<div id="ctxMenu">` (the same pattern `Grid.tsx` uses onto `#grid`) — positioning is
+//   measured after each render (`getBoundingClientRect`, clamped inside the viewport) since
+//   the menu's own size depends on its content.
+// - HANDLERS ARE INJECTED, NOT IMPORTED: `ui/grid-interaction.ts` calls `showCtx`/`hideCtx`
+//   via its injected `GridInteractionHandlers` struct rather than a direct import — this
+//   module imports `selection`/`clearSelection` FROM `grid-interaction.ts`, so the reverse
+//   would cycle.
+//
+// =======================================================================================
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { formatDateLong } from '../../../../shared/dates.ts';
 import { getBooking } from '../../core/bookings.ts';
@@ -29,12 +40,12 @@ interface MenuInfo {
 let showHandler: ((x: number, y: number) => void) | null = null;
 let hideHandler: (() => void) | null = null;
 
-/** Show the menu at `(x, y)` for the current `selection`. Faithful port of legacy `showCtx`. */
+/** Shows the menu at `(x, y)` for the current `selection`. */
 export function showCtx(x: number, y: number): void {
   showHandler?.(x, y);
 }
 
-/** Hide the menu. Faithful port of legacy `hideCtx`. */
+/** Hides the menu. */
 export function hideCtx(): void {
   hideHandler?.();
 }
@@ -74,9 +85,8 @@ async function handleDelete(info: MenuInfo): Promise<void> {
 }
 
 /** Registers `showCtx`/`hideCtx` against local state, dismisses on an outside mousedown, and
- *  shows/positions `#ctxMenu` itself (clamped inside the viewport, measured after each render
- *  — same approach as legacy's own `getBoundingClientRect()` call). Split out from
- *  `ContextMenu` only to stay under the line budget. */
+ *  shows/positions `#ctxMenu` itself, clamped inside the viewport and measured after each
+ *  render (the menu's own size depends on which buttons its content actually renders). */
 function useContextMenuInfo(): MenuInfo | null {
   const [info, setInfo] = useState<MenuInfo | null>(null);
 
@@ -89,8 +99,8 @@ function useContextMenuInfo(): MenuInfo | null {
     };
   }, []);
 
-  // Dismiss on outside mousedown. Faithful port of legacy's document-level listener; registered
-  // once for the component's lifetime (it is mounted exactly once, at boot).
+  // Dismiss on an outside mousedown. Registered once for the component's whole lifetime,
+  // since ContextMenu is mounted exactly once, at boot.
   useEffect(() => {
     function onMouseDown(event: MouseEvent): void {
       const menu = document.getElementById('ctxMenu')!;
@@ -156,10 +166,9 @@ function ContextMenuContent({ info }: { info: MenuInfo }) {
   );
 }
 
-/** Mounted once at boot onto `#ctxMenu`. `#ctxMenu` itself IS the menu box (CSS gives it
- *  `position:fixed; display:none`, matching legacy) — this component only fills its children
- *  and toggles its `display`/position, exactly as legacy's `showCtx`/`hideCtx` did via
- *  `innerHTML`/`style`. */
+/** Mounted once at boot onto `#ctxMenu`. `#ctxMenu` itself IS the menu box — CSS gives it
+ *  `position:fixed; display:none` — this component only fills its children and toggles its
+ *  `display`/position. */
 export function ContextMenu() {
   const info = useContextMenuInfo();
   return info ? <ContextMenuContent info={info} /> : null;

@@ -1,7 +1,15 @@
-// The "what's your name?" modal (Phase 7 slice B9). Faithful port of legacy `askUserName()`.
-// Not sticky even on first run — the original never passed `{sticky:true}` here either, so
-// Escape/outside-click still dismiss it (only the Cancel *button* is hidden on first run,
-// not dismissal itself).
+// =======================================================================================
+// ASK USER NAME MODAL COMPONENT (web/js/ui/components/AskUserNameModal.tsx)
+// =======================================================================================
+//
+// The "what's your name?" modal.
+//
+// Key Principles:
+// - DISMISSIBLE EVEN ON FIRST RUN: Escape/outside-click always dismiss this modal — only
+//   the Cancel *button* is hidden on `firstRun`, not the ability to dismiss it some other
+//   way. A first-time user isn't force-walled behind naming themselves.
+//
+// =======================================================================================
 
 import { useEffect, useRef } from 'react';
 import { closeReactModal, openReactModal } from '../modal.tsx';
@@ -67,7 +75,7 @@ export function AskUserNameModal({ firstRun }: AskUserNameModalProps) {
   );
 }
 
-/** Open the name-prompt modal. Faithful port of legacy `askUserName(firstRun)`. */
+/** Opens the name-prompt modal. */
 export function askUserName(firstRun: boolean): void {
   openReactModal(<AskUserNameModal firstRun={firstRun} />);
 }

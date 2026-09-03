@@ -1,8 +1,10 @@
-// The "active users" popup (Phase 7 slice B10d) — opened by a double-click on the user chip.
-// Faithful port of legacy `openActiveUsers`, now a React modal reusing `openReactModal`/
-// `closeReactModal` (`ui/modal.tsx`) instead of legacy's own `openModal`/`closeModal`. It was
-// their only remaining caller — this slice retires both, along with `modalSticky`/
-// `lastFocusEl` and the already-dead `collapseModal`.
+// =======================================================================================
+// ACTIVE USERS MODAL COMPONENT (web/js/ui/components/ActiveUsersModal.tsx)
+// =======================================================================================
+//
+// The "active users" popup — opened by a double-click on the user chip.
+//
+// =======================================================================================
 
 import { Icon } from './Icon.tsx';
 import { closeReactModal, openReactModal } from '../modal.tsx';
@@ -10,8 +12,7 @@ import { activeUserRows, presenceTick, type ActiveUserRow } from '../live-connec
 import { store } from '../../store-instance.ts';
 import { handleError } from '../debug-panel.ts';
 
-/** Refresh presence, then open the popup with a snapshot of who's active. Faithful port of
- *  legacy `openActiveUsers`. */
+/** Refreshes presence, then opens the popup with a snapshot of who's active right now. */
 export async function openActiveUsers(): Promise<void> {
   try {
     await presenceTick();

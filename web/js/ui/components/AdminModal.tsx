@@ -1,9 +1,18 @@
-// The Admin ("Verwalten") modal (Phase 7 slice B5, 4/4). Faithful port of legacy `openAdmin`.
-// AdminModal, MachineFormModal, and LogModal each import directly from the other two — a real
-// three-way import cycle (F8 cleanup, ARCHITECTURE_AUDIT.md), safe here because every use on
-// all three sides is inside an event handler, never at module top level: by the time any of
-// these functions actually runs (a later click), every module involved has already finished
-// evaluating, so the live ES-module bindings are all resolved.
+// =======================================================================================
+// ADMIN MODAL COMPONENT (web/js/ui/components/AdminModal.tsx)
+// =======================================================================================
+//
+// The Admin ("Verwalten") modal: the machine list with search, sort, manual reordering,
+// and links into the add/edit form and the change log.
+//
+// Key Principles:
+// - A SAFE THREE-WAY IMPORT CYCLE: `AdminModal`, `MachineFormModal`, and `LogModal` each
+//   import directly from the other two. Safe here because every use on all three sides is
+//   inside an event handler, never at module top level — by the time any of these
+//   functions actually runs (a later click), every module involved has already finished
+//   evaluating, so the live ES-module bindings are all resolved.
+//
+// =======================================================================================
 
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
@@ -25,8 +34,7 @@ const SORT_OPTIONS: ReadonlyArray<{ value: AdminSort; label: string }> = [
   { value: 'group', label: 'Nach Bereich' },
 ];
 
-/** The maintenance/defect status tag, when the machine has one. Faithful port of the
- *  `anyMaint(m)?...:''` expression in legacy's row markup. */
+/** The maintenance/defect status tag, shown only when the machine actually has one. */
 function StatusBadge({ machine }: { machine: Machine }) {
   if (!hasAnyMaintenanceSlot(machine)) return null;
   const kind = maintenanceKind(machine);
@@ -145,9 +153,8 @@ export function AdminModal() {
   }
 
   async function move(machineId: string, direction: -1 | 1): Promise<void> {
-    // `moveMachine` returns void (not a truthy result) on success — only `{abort: true}` is
-    // truthy — so the re-render must be unconditional except on that one case. Faithful port
-    // of legacy `moveById`'s own `if(res&&res.abort) return; renderList();`.
+    // moveMachine returns void (not a truthy result) on success — only {abort: true} is
+    // truthy — so the re-render below must be unconditional except on that one abort case.
     const result = await window.mutate(
       (fresh) => moveMachine(fresh, machineId, direction),
       'Reihenfolge geändert',
@@ -194,11 +201,10 @@ export function AdminModal() {
   );
 }
 
-/** Open Admin ("Verwalten"). Faithful port of legacy `openAdmin`. Guarded (E2 — flagged, not
- *  in legacy): the toolbar button this is normally wired to stays hidden until the initial
- *  load succeeds, so this is unreachable in practice, but AdminModal's body unwraps
- *  `store.get('data')` with `!` — cheap defensive-in-depth against a future caller (or a
- *  test) that opens it before data has loaded. */
+/** Opens Admin ("Verwalten"). Guarded even though the toolbar button this is normally wired
+ *  to stays hidden until the initial load succeeds (making this unreachable in practice) —
+ *  cheap defensive-in-depth against a future caller, or a test, that opens it before data
+ *  has loaded; `AdminModal`'s own body unwraps `store.get('data')` with `!`. */
 export function openAdmin(): void {
   if (!store.get('data')) {
     toast('Noch keine Daten geladen — bitte kurz warten.');
