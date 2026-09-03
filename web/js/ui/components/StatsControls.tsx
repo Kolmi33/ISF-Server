@@ -1,8 +1,13 @@
-// The Statistik modal's top controls (Phase 7 slice B5): date range, mode segmented buttons,
-// the category show/hide row (Ressourcen mode only), and the filter input + drilldown back
-// button. Split out of StatsModal.tsx purely to stay under the file-length/function-length
-// budgets — conceptually this is one modal. Faithful port of the top of legacy `openStats`'s
-// `openModal(...)` template.
+// =======================================================================================
+// STATS CONTROLS COMPONENT (web/js/ui/components/StatsControls.tsx)
+// =======================================================================================
+//
+// The Statistik modal's top controls: date range, mode segmented buttons, the category
+// show/hide row (Ressourcen mode only), and the filter input + drilldown back button.
+// Split out of `StatsModal.tsx` purely to stay under the file-length/function-length
+// budgets — conceptually this is one modal.
+//
+// =======================================================================================
 
 import type { ChangeEvent } from 'react';
 import { CATEGORIES } from '../../core/machines.ts';

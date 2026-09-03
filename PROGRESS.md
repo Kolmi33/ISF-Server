@@ -580,8 +580,11 @@ files, e.g. Phase 9's slices).
   `GroupOptions.tsx`) — landed as 4 commits. Also fixed a stale "the (still-legacy)
   assistant" mention in `BookingForm.tsx`'s header (`AssistantModal.tsx` is fully React
   now). Tests still need the "What/How" retrofit.
-- [ ] 10g `web/js/ui/components/` part 2 — `HelpModal.tsx` through `StatsOverviews.tsx`
-  (+ tests)
+- [x] 10g `web/js/ui/components/` part 2 (13 files: `HelpModal.tsx` through
+  `StatsOverviews.tsx`) — landed as 3 commits. This completes all 28 files in
+  `web/js/ui/components/` (10f+10g). Also cleaned up an ambiguous "Legacy resets a stale
+  drilldown selection" comment in `StatsModal.tsx` to describe the current behavior
+  directly. Tests still need the "What/How" retrofit.
 - [ ] 10h `web/js/ui/views/` — `admin.ts`, `all-bookings.ts`, `my-bookings.ts`, `stats.ts`
   (+ tests)
 - [ ] 10i `server/` part 1 — `api-*.ts` (routing/response/read/write endpoint modules, + tests)

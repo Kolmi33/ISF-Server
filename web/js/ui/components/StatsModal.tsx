@@ -1,7 +1,17 @@
-// The Statistik modal (Phase 7 slice B5). Controls live in `StatsControls.tsx`, the three
-// overview modes in `StatsOverviews.tsx`, and the two drilldowns in `StatsDrilldown.tsx` — split
-// out purely to stay under the file-length/function-length budgets; all four are one modal
-// conceptually. Faithful port of legacy `openStats`/`renderStats`.
+// =======================================================================================
+// STATS MODAL COMPONENT (web/js/ui/components/StatsModal.tsx)
+// =======================================================================================
+//
+// The Statistik modal: date-range/mode controls, three overview modes (Ressourcen/
+// Personen/Wartung), and two drilldowns (one machine, one person).
+//
+// Key Principles:
+// - ONE MODAL, FOUR FILES: controls live in `StatsControls.tsx`, the three overview modes
+//   in `StatsOverviews.tsx`, and the two drilldowns in `StatsDrilldown.tsx` — split out
+//   purely to stay under the file-length/function-length budgets; all four are one modal
+//   conceptually, and this file is where they're composed together.
+//
+// =======================================================================================
 
 import { useEffect, useState } from 'react';
 import { todayAsIsoDateString } from '../../../../shared/dates.ts';
@@ -75,10 +85,10 @@ function useStatsSelection(presetPerson: string | undefined, agg: Stats) {
     mode === 'm' && selM ? agg.machRows.find((r) => r.machine.id === selM) : undefined;
   const person = mode === 'p' && selP ? agg.persons.get(selP) : undefined;
 
-  // Legacy resets a stale drilldown selection (its machine/person has no data in the recomputed
-  // range) and falls back to the overview. `machineRow`/`person` already read as `undefined` for
-  // this render, so the overview shows immediately; this just settles `selM`/`selP` so the next
-  // render (and the back button's visibility) agree.
+  // A stale drilldown selection (its machine/person has no data in the recomputed range)
+  // resets and falls back to the overview. `machineRow`/`person` already read as `undefined`
+  // for this render, so the overview shows immediately; this just settles `selM`/`selP` so
+  // the next render (and the back button's visibility) agree.
   useEffect(() => {
     if (selM && !machineRow) setSelM(null);
   }, [selM, machineRow]);
@@ -248,12 +258,11 @@ export function StatsModal({ presetPerson }: StatsModalProps) {
   );
 }
 
-/** Open Statistik, optionally pre-filtered to one person (jumps straight into the Personen-mode
- *  drilldown). Faithful port of legacy `openStats`. Guarded (E2 — flagged, not in legacy): the
- *  toolbar button this is normally wired to stays hidden until the initial load succeeds, so
- *  this is unreachable in practice, but `computeAgg`'s initial-state `useState` unwraps
- *  `store.get('data')` with `!` — cheap defensive-in-depth against a future caller (or a test)
- *  that opens it before data has loaded. */
+/** Opens Statistik, optionally pre-filtered to one person (jumps straight into the
+ *  Personen-mode drilldown). Guarded even though the toolbar button this is normally wired
+ *  to stays hidden until the initial load succeeds (making this unreachable in practice) —
+ *  cheap defensive-in-depth against a future caller, or a test, that opens it before data
+ *  has loaded; `computeAgg`'s initial-state `useState` unwraps `store.get('data')` with `!`. */
 export function openStats(presetPerson?: string): void {
   if (!store.get('data')) {
     toast('Noch keine Daten geladen — bitte kurz warten.');

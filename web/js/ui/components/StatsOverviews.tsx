@@ -1,8 +1,13 @@
-// The Statistik modal's three non-drilldown overview modes (Phase 7 slice B5): Ressourcen (the
-// category/group-folded machine list), Wartung (maintenance/downtime list) and Personen (person
-// overview, row-click drills into `PersonDrilldown`). Split out of StatsModal.tsx purely to stay
-// under the file-length budget. Faithful port of legacy `renderStats`'s `mode==='m'` (non-
-// drilldown), `mode==='w'` and `else` (Personen overview) branches.
+// =======================================================================================
+// STATS OVERVIEWS COMPONENT (web/js/ui/components/StatsOverviews.tsx)
+// =======================================================================================
+//
+// The Statistik modal's three non-drilldown overview modes: Ressourcen (the
+// category/group-folded machine list), Wartung (maintenance/downtime list), and Personen
+// (person overview, row-click drills into `PersonDrilldown`). Split out of
+// `StatsModal.tsx` purely to stay under the file-length budget.
+//
+// =======================================================================================
 
 import { CATEGORIES } from '../../core/machines.ts';
 import type { ResourceRow, StatsMaintRow, StatsPerson } from '../views/stats.ts';
@@ -38,8 +43,9 @@ function ResourceRowView({
   }
   if (row.kind === 'group') {
     return (
-      // `index` disambiguates the key: a group name can repeat across two categories (the same
-      // fold-key collision legacy has — see stats.ts's `buildResourceRows` comment).
+      // `index` disambiguates the key: a group name can repeat across two categories, and
+      // the fold state deliberately keys on the bare group name — see `stats.ts`'s
+      // `buildResourceRows` comment for why.
       <div
         className={`statgrp click ${row.collapsed ? 'closed' : ''}`}
         onClick={() => onToggleFold(`g:${row.group}`)}

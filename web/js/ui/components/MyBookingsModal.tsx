@@ -1,8 +1,17 @@
-// The "My bookings" modal (Phase 7 slice B5). Faithful port of legacy `openMyBookings`/
-// `renderMyBookings`. The run STRUCTURE is frozen at open (`computeMyRuns` runs once, matching
-// legacy's own comment "Struktur einfrieren") but each run's *live* days are re-filtered
-// against the current `store.get('data').bookings` on every render, so a delete just makes a day
-// disappear from its run without recomputing the grouping — exactly legacy's behavior.
+// =======================================================================================
+// MY BOOKINGS MODAL COMPONENT (web/js/ui/components/MyBookingsModal.tsx)
+// =======================================================================================
+//
+// The "My bookings" modal: every future run booked under the current user's name, with a
+// per-run/per-day delete and a "show only my machines" filter shortcut.
+//
+// Key Principles:
+// - STRUCTURE FROZEN, DAYS LIVE: the run STRUCTURE is frozen at open (`computeMyRuns` runs
+//   once via `useState`'s lazy initializer), but each run's *live* days are re-filtered
+//   against the current bookings on every render — so a delete just makes a day disappear
+//   from its run, without recomputing the grouping from scratch.
+//
+// =======================================================================================
 
 import { useState } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
@@ -62,9 +71,8 @@ function DayNote({ machine, date }: { machine: Machine; date: string }) {
   ) : null;
 }
 
-/** Jump to a run's first live day in the grid: expand its category/group first (a filtered-out
- *  target wouldn't be visible otherwise), then scroll there. Faithful port of legacy's
- *  `[data-goto]` handler. */
+/** Jumps to a run's first live day in the grid: expands its category/group first (a
+ *  folded-away target wouldn't be visible otherwise), then scrolls there. */
 function gotoRun(run: LiveRun): void {
   const targetDate = run.liveDates[0]!;
   closeReactModal();
@@ -286,9 +294,8 @@ export function MyBookingsModal() {
   );
 }
 
-/** Open "My bookings". Faithful port of legacy `openMyBookings` — prompts for a name first if
- *  none is set yet (a read-only user with no name browsing straight to this would otherwise see
- *  an empty list that isn't really "theirs"). */
+/** Opens "My bookings" — prompts for a name first if none is set yet (a user with no name
+ *  browsing straight to this would otherwise see an empty list that isn't really "theirs"). */
 export function openMyBookings(): void {
   if (!store.get('user')) {
     askUserName(false);

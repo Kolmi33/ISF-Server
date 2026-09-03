@@ -1,7 +1,13 @@
-// The settings modal (Phase 7 slice B9). Faithful port of legacy `openSettings()`. Every
-// control still reads/writes its exact original localStorage key and calls the same
-// side-effecting functions those keys drove originally (applyTheme, connectSSE, refreshNow,
-// applyDebug, dbgOn, centerToday) — each still its own module, imported directly.
+// =======================================================================================
+// SETTINGS MODAL COMPONENT (web/js/ui/components/SettingsModal.tsx)
+// =======================================================================================
+//
+// The settings modal: theme, presence sharing, compact rows, weekend display, name, and
+// the debug panel toggle. Each control reads/writes its own `localStorage` key directly
+// and calls straight into the module that actually owns that behavior
+// (`applyTheme`/`connectSSE`/`refreshNow`/`applyDebug`/`dbgOn`/`centerToday`).
+//
+// =======================================================================================
 
 import { Icon } from './Icon.tsx';
 import { closeReactModal, openReactModal } from '../modal.tsx';
@@ -173,7 +179,7 @@ export function SettingsModal() {
   );
 }
 
-/** Open the settings modal. Faithful port of legacy `openSettings()`. */
+/** Opens the settings modal. */
 export function openSettings(): void {
   openReactModal(<SettingsModal />);
 }
