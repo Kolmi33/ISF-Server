@@ -1,25 +1,33 @@
+// =======================================================================================
+// APPLICATION ENTRY POINT (web/js/app.ts)
+// =======================================================================================
+//
 // The application's ES-module entry point: boot/orchestration.
+// This module:
+// 1. Hydrates the runtime state and mounts the app's React roots.
+// 2. Wires the few remaining imperative DOM handlers (toolbar buttons, user chip, theme).
+// 3. Loads the initial server state and starts the app (or shows a connection-failed screen).
 //
-// index.html loads this as `type="module"`, so it runs once, after parsing, before
-// anything else. It hydrates the runtime state, mounts the app's React roots, wires the
-// few remaining imperative DOM handlers (toolbar buttons, user chip, boot sequence), and
-// loads the initial server state.
+// Key Principles:
+// - RUNS ONCE, EARLY: `index.html` loads this as `type="module"`, so it executes once,
+//   after parsing, before anything else on the page.
+// - MINIMAL WINDOW BRIDGE: a small `window`-bridge remains below (`declare global`/
+//   `Object.assign`) for two genuinely still-current needs — (1) the runtime state itself
+//   (`S`, shrinking as F9's remaining call sites migrate to importing `store` directly) and
+//   (2) `mutate`/`askConfirm`, kept as a deliberate convenience for their very wide fan-out
+//   across already-gated components (not a coupling problem — see their own modules).
+// - NOT A SHARED-TREE PROBLEM: what looked like "the 4 independently-mounted React roots
+//   (Grid, ContextMenu, the two filter dropdowns) need to talk to each other" turned out on
+//   closer inspection (F8, ARCHITECTURE_AUDIT.md) to be ordinary ES-module coupling with
+//   nothing tree-shaped about it: plain direct imports for the vast majority, an injected
+//   `GridInteractionHandlers` struct (`ui/grid-interaction.ts`) for the handful of cases
+//   where direct imports would cycle, and a tiny `ui/grid-render-bridge.ts` for the one case
+//   (repainting the mounted Grid) that imperative, non-React modules genuinely need a live
+//   registration slot for. Merging the roots into one tree was rejected: nothing here
+//   actually needed shared-tree machinery (context, refs across siblings) — every component
+//   already reads the same module-singleton `store` regardless of where it's mounted.
 //
-// A small `window`-bridge remains below (`declare global`/`Object.assign`) for two genuinely
-// still-current needs: (1) the runtime state itself (`S`, shrinking as F9's remaining
-// call sites migrate to importing `store` directly) and (2) `mutate`/`askConfirm`, kept as a
-// deliberate convenience for their very wide fan-out across already-gated components (not a
-// coupling problem — see their own modules). Everything else that used to route through
-// `window` — including what looked like "the 4 independently-mounted React roots (Grid,
-// ContextMenu, the two filter dropdowns) need to talk to each other" — turned out on closer
-// inspection (F8, ARCHITECTURE_AUDIT.md) to be ordinary ES-module coupling with nothing
-// tree-shaped about it: plain direct imports for the vast majority, an injected
-// `GridInteractionHandlers` struct (`ui/grid-interaction.ts`) for the handful of cases where
-// direct imports would cycle, and a tiny `ui/grid-render-bridge.ts` for the one case
-// (repainting the mounted Grid) that imperative, non-React modules genuinely need a live
-// registration slot for. Merging the roots into one tree was rejected: nothing here actually
-// needed shared-tree machinery (context, refs across siblings) — every component already
-// reads the same module-singleton `store` regardless of where it's mounted.
+// =======================================================================================
 
 import type { AppState } from '../../shared/types.ts';
 import * as api from './net/api.ts';
@@ -163,8 +171,8 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
 });
 if (localStorage.getItem('mb_compact') === 'on') document.body.classList.add('compact');
 
-/** Wire the toolbar's modal-opening buttons + the refresh button. Faithful port of legacy's
- *  scattered top-level `document.getElementById(...).onclick = ...` boot-time bindings. */
+/** Wires each toolbar button to open its own modal, plus the refresh button — one-time
+ *  bindings done at boot, since these elements exist for the app's entire lifetime. */
 function wireToolbarButtons(): void {
   document.getElementById('btnAssist')!.onclick = assistantModal.openAssistant;
   document.getElementById('btnMine')!.onclick = myBookingsModal.openMyBookings;
@@ -176,9 +184,8 @@ function wireToolbarButtons(): void {
   document.getElementById('btnRefresh')!.onclick = () => void mutateModule.refreshNow(false);
 }
 
-/** Wire the user-name chip: a debounced single click changes the name (so a double-click
- *  doesn't also fire it), a double-click shows who's currently active. Faithful port of
- *  legacy's top-level `userChip` bindings. */
+/** Wires the user-name chip: a debounced single click changes the name (so a double-click
+ *  doesn't also fire it), a double-click shows who's currently active. */
 function wireUserChip(): void {
   let userClickTimer: ReturnType<typeof setTimeout> | null = null;
   const chip = document.getElementById('userChip')!;
@@ -196,9 +203,9 @@ function wireUserChip(): void {
 wireToolbarButtons();
 wireUserChip();
 
-/** Finish booting once the initial data load succeeds: reveal the toolbar/grid, prime the
- *  toolbar buttons' labels, prompt for a name on a first run, start the live connection, and
- *  log the boot line. Faithful port of legacy `startUI`. */
+/** Finishes booting once the initial data load succeeds: reveals the toolbar/grid, primes the
+ *  toolbar buttons' labels, prompts for a name on a first run, starts the live connection, and
+ *  logs the boot line. */
 function startUI(): void {
   document.getElementById('startScreen')!.style.display = 'none';
   document.getElementById('toolbar')!.style.display = ''; // CSS layout (Grid) takes over
@@ -224,10 +231,8 @@ function startUI(): void {
 }
 
 /**
- * The real boot entry point: load the initial state, then either finish booting or show a
- * connection-failed message. Faithful port of legacy `init`. (legacy's `start` — a dead
- * near-duplicate with a slightly less complete error path — had zero callers anywhere and was
- * not ported; `init()` was always the one actually wired up, at the bottom of this file.)
+ * The real boot entry point: loads the initial state, then either finishes booting
+ * ({@link startUI}) or shows a connection-failed message.
  */
 async function init(): Promise<void> {
   document.getElementById('startScreen')!.style.display = 'none';

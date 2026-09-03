@@ -1,14 +1,22 @@
-// Pure logic for the live Server-Sent-Events connection (Phase 3.3).
+// =======================================================================================
+// SSE MESSAGE LOGIC (web/js/net/sse.ts)
+// =======================================================================================
 //
-// The EventSource lifecycle and all DOM/toast side effects live in `ui/live-connection.ts`'s
-// `connectSSE`/`applyPresence` adapter (too coupled to move cleanly into this module — E3);
-// this module holds the pieces that are pure functions of their input, so they are
-// unit-tested to 100% (E4/E7). Faithful ports of the handlers' inner logic — behavior
-// unchanged (E1).
+// Pure logic for the live Server-Sent-Events connection's message handling.
+// This module provides:
+// 1. `applyUpdate`: applies an `update` event's changes onto the in-memory bookings.
+// 2. `presenceInfo`: formats the live "who's active" presence list for display.
+// 3. `remoteMessage`/`formatDayMonth`: turns a colleague's raw log action into a one-line
+//    German toast notification.
 //
-// The store's `notify` path (SSE → store.set → notify) is deferred to Phase 4, when
-// `render` actually subscribes (D2/Q2b); wiring it in 3.3 would be a no-op needing an
-// injection harness this adapter doesn't warrant (E8). See ARCHITECTURE §14.
+// Key Principles:
+// - PURE FUNCTIONS OF THEIR INPUT: the EventSource lifecycle and all DOM/toast side effects
+//   live in `ui/live-connection.ts`'s `connectSSE`/`applyPresence` adapter (too coupled to
+//   move cleanly into this module); this module holds only the pieces that are pure
+//   functions of their input, so they're unit-tested to 100% coverage without a live
+//   connection.
+//
+// =======================================================================================
 
 import type { Booking, Bookings } from '../../../shared/types.ts';
 
@@ -42,9 +50,13 @@ export interface UpdateResult {
 }
 
 /**
- * Apply an `update` event's changes to `bookings` in place and return the cells to
- * repaint plus the revision to adopt. Faithful port of the legacy `update` handler's
- * inner loop (a truthy `val` sets the cell, a falsy one deletes it).
+ * Applies an `update` event's changes to `bookings` in place, returning the cells to
+ * repaint plus the revision to adopt.
+ *
+ * How it works, per changed cell: a truthy `val` sets the cell to that new booking; a
+ * falsy `val` (the server's way of saying "this cell is now empty") deletes it. Either way
+ * the cell's address is added to the repaint list, so the caller always knows exactly
+ * which cells to redraw instead of repainting the whole grid.
  */
 export function applyUpdate(event: SseUpdate, bookings: Bookings): UpdateResult {
   const patch: CellRef[] = [];
@@ -58,9 +70,10 @@ export function applyUpdate(event: SseUpdate, bookings: Bookings): UpdateResult 
 }
 
 /**
- * Turn a raw presence user list into the display fields (count badge + tooltip label).
- * Faithful port of `applyPresence`'s formatting; the `presenceData` timestamp map and the
- * `setPresence` DOM write live in `ui/live-connection.ts` (Phase 7 slice B10d).
+ * Turns a raw presence user list into the display fields (count badge + tooltip label).
+ * Falsy entries (a client that hasn't set a name yet) are filtered out first, so they
+ * don't inflate the count or show up as a blank name in the tooltip. The `presenceData`
+ * timestamp map and the actual DOM write live in `ui/live-connection.ts`.
  */
 export function presenceInfo(users: readonly (string | null | undefined)[] | undefined): {
   list: string[];
@@ -83,8 +96,8 @@ export function isForeign(by: string | undefined, me: string): boolean {
   return !!by && String(by).toLowerCase() !== me.toLowerCase();
 }
 
-/** One day, abbreviated `DD.MM.` — falls back to the raw string when it isn't a plain ISO
- *  date (`YYYY-MM-DD`). Faithful port of legacy `fmtDM`. */
+/** Abbreviates one ISO day as `DD.MM.` — falls back to the raw string when it isn't a plain
+ *  ISO date (`YYYY-MM-DD`), so a malformed date degrades gracefully instead of throwing. */
 export function formatDayMonth(isoDate: string): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(isoDate)
     ? `${isoDate.slice(8, 10)}.${isoDate.slice(5, 7)}.`
@@ -98,9 +111,14 @@ export interface RemoteLogEntry {
 }
 
 /**
- * A German one-line summary of a colleague's log action, for the remote-change toast queue.
- * Recognizes booking/delete/area-delete/machine actions by pattern; anything else falls back
- * to `"<user>: <action>"`. Faithful port of legacy `remoteMsg`.
+ * Builds a German one-line summary of a colleague's log action, for the remote-change
+ * toast queue.
+ *
+ * How it works: tries each recognized action pattern in turn — a multi-cell booking (with a
+ * count and date range), a same-name delete, a whole-area delete, a machine action — and
+ * returns a friendlier, person-centric phrasing for whichever one matches. Anything that
+ * doesn't match any pattern falls back to the generic `"<user>: <action>"`, so an
+ * unrecognized (or future) action type still shows something rather than nothing.
  */
 export function remoteMessage(entry: RemoteLogEntry): string {
   const { user, action } = entry;

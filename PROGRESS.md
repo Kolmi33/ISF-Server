@@ -558,8 +558,11 @@ files, e.g. Phase 9's slices).
   header and several docstrings, and in `assistant.ts`'s header/per-function comments — same
   category of fix as `machines.ts`'s. Test files (`*.test.ts`) left as-is: already
   description-driven, no stale references found.
-- [ ] 10c `web/js/` root + `web/js/net/` — `app.ts`, `state.ts`, `store-instance.ts`, `api.ts`,
-  `sse.ts` (+ tests)
+- [x] 10c `web/js/` root + `web/js/net/` — `app.ts`, `state.ts`, `store-instance.ts`, `api.ts`,
+  `sse.ts` rewritten to the verbose style; also dropped `app.ts`'s stale "Faithful port of
+  legacy `X`" tails (4 functions) and `state.ts`'s outdated "not yet wired to render()" note
+  (subscribe/notify has been wired since Phase 7). Tests left as-is; `app.ts` has no test
+  file (boot orchestration, covered by the smoke test).
 - [ ] 10d `web/js/ui/` top-level, part 1 (alphabetical first half) — `assistant-checklist.ts`
   through `machine-lookup.ts` (+ tests)
 - [ ] 10e `web/js/ui/` top-level, part 2 (alphabetical second half) — `machine-text.ts` through
