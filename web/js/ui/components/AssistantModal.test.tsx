@@ -145,6 +145,17 @@ describe('AssistantModal — checklist → work area', () => {
     expect(screen.getByText(/Keine Geräte ausgewählt/)).toBeInTheDocument();
   });
 
+  // What: the empty state is centered with a faint icon (`.aswork-empty`), not a bare left-
+  // aligned line of text, so it reads as an intentional state (user request).
+  // How: opens the assistant with nothing checked and checks the wrapper + icon are present.
+  it('renders the empty-work status centered with an icon, not bare text', () => {
+    act(() => openAssistant());
+    const wrapper = document.querySelector('.aswork-empty')!;
+    expect(wrapper).toBeInTheDocument();
+    expect(wrapper.querySelector('svg.ic')).toBeInTheDocument();
+    expect(wrapper.textContent).toContain('Keine Geräte ausgewählt');
+  });
+
   // What: checking a device's checklist checkbox adds it to the work area (and clears the
   // empty hint); unchecking it removes it again (and the hint reappears).
   // How: opens the checklist, checks a device, checks the hint is gone and the device node
@@ -175,6 +186,15 @@ describe('AssistantModal — checklist details', () => {
     openChecklistCategory();
     expect(document.querySelector('.machinfo')).toBeInTheDocument();
     expect(screen.getByText('Wartung')).toBeInTheDocument();
+  });
+
+  // What: each category header shows a category icon next to its title (user request), to
+  // make it faster to spot "Maschinen" vs. "Messtechnik" while scanning.
+  // How: opens the checklist and checks the "Maschinen" header's own row contains an icon.
+  it('shows a category icon next to each accordion header title', () => {
+    act(() => openAssistant());
+    const maschinenHeader = screen.getByText('Maschinen').closest('.cathead')!;
+    expect(maschinenHeader.querySelector('svg.ic')).toBeInTheDocument();
   });
 
   // What: clicking the info icon shows the info (a tooltip/toast, not asserted here) without

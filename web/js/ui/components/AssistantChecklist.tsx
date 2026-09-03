@@ -70,7 +70,8 @@ function ChecklistHeaderRow({ row, onToggleOpen }: { row: HeaderRow; onToggleOpe
       className={`grp ${row.kind === 'category' ? 'cathead' : 'grpsub'} click`}
       onClick={onToggleOpen}
     >
-      <span className="tarr">{row.open ? '▾' : '▸'}</span> {row.label}
+      <span className="tarr">{row.open ? '▾' : '▸'}</span>{' '}
+      {row.kind === 'category' && <Icon name={row.icon} />} {row.label}
     </div>
   );
 }

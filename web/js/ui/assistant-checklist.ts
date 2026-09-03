@@ -21,9 +21,17 @@ const FAVORITES_KEY = 'fav';
 const FAVORITES_LABEL = '★ Favoriten';
 
 export type ChecklistRow =
-  | { kind: 'category'; key: string; label: string; open: boolean }
+  | { kind: 'category'; key: string; label: string; open: boolean; icon: string }
   | { kind: 'group'; key: string; label: string; open: boolean }
   | { kind: 'machine'; machine: Machine };
+
+/** The `Icon` name for a category header — a star for the favorites bucket, otherwise
+ *  whichever icon `CATEGORIES` (`core/machines.ts`) already carries for that category. */
+function categoryIcon(category: string): string {
+  return category === FAVORITES_KEY
+    ? 'star'
+    : (CATEGORIES.find((c) => c.id === category)?.icon ?? 'factory');
+}
 
 export interface ChecklistOptions {
   favoriteIds: ReadonlySet<string>;
@@ -57,6 +65,7 @@ function pushFavoriteRows(
       key: FAVORITES_KEY,
       label: FAVORITES_LABEL,
       open: openKeys.has(FAVORITES_KEY),
+      icon: categoryIcon(FAVORITES_KEY),
     });
   const categoryOpen = searching || openKeys.has(FAVORITES_KEY);
   for (const machine of favorites) {
@@ -92,6 +101,7 @@ function pushNonFavoriteRows(
           key: category,
           label: categoryLabel(category),
           open: openKeys.has(category),
+          icon: categoryIcon(category),
         });
       }
     }

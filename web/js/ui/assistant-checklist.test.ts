@@ -22,8 +22,29 @@ describe('buildChecklistRows', () => {
   // machine row right after it.
   it('shows a "★ Favoriten" category header (open state reflects openKeys) with no group sub-level', () => {
     const rows = buildChecklistRows(machines, { ...noneOpen, openKeys: new Set(['fav']) });
-    expect(rows[0]).toEqual({ kind: 'category', key: 'fav', label: '★ Favoriten', open: true });
+    expect(rows[0]).toEqual({
+      kind: 'category',
+      key: 'fav',
+      label: '★ Favoriten',
+      open: true,
+      icon: 'star',
+    });
     expect(rows[1]).toEqual({ kind: 'machine', machine: fav });
+  });
+
+  // What: every category header carries an icon name for the checklist to render next to its
+  // title — a star for the favorites bucket, and whichever icon `CATEGORIES` (`core/machines.ts`)
+  // itself defines for a real category (factory for Maschinen, gauge for Messtechnik).
+  // How: opens every category and checks each header row's icon field.
+  it("gives each category header its own icon (star for favorites, the category's own otherwise)", () => {
+    const rows = buildChecklistRows(machines, {
+      ...noneOpen,
+      openKeys: new Set(['fav', 'maschine', 'messtechnik']),
+    });
+    const iconByKey = Object.fromEntries(
+      rows.filter((r) => r.kind === 'category').map((r) => [r.key, r.icon]),
+    );
+    expect(iconByKey).toEqual({ fav: 'star', maschine: 'factory', messtechnik: 'gauge' });
   });
 
   // What: with the favorites header closed (the default state), the favorite machine's row

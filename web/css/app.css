@@ -301,6 +301,34 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 /* Die primäre Aktion, unten in der rechten Spalte verankert — der klare letzte Schritt des
    Ablaufs, nicht lose unter einem unabhängigen Formular (user request) */
 .assist-actions{display:flex;gap:8px;justify-content:flex-end}
+/* "Freie Termine suchen" bleibt die einzige auffällige Aktion (.btn.primary, unverändert) —
+   "Abbrechen" wird bewusst zurückhaltend: randlos, nur ein dezenter Hover-Hintergrund, statt
+   gleichrangig mit der Primäraktion zu wirken (user request). */
+.assist-actions .btn:not(.primary){border-color:transparent;background:transparent}
+.assist-actions .btn:not(.primary):hover{background:var(--hover)}
+/* Einheitliche Feld-/Button-Höhe im ganzen Assistenten (user request: "Mind. Tage am Stück"
+   wirkte gegenüber den Datumsfeldern/Buttons darunter zu niedrig) */
+.assist-card input[type=date],.assist-card input[type=number],.assist-card input[type=text],
+.assist-actions .btn{height:36px;box-sizing:border-box}
+.assist-actions .btn{display:inline-flex;align-items:center;justify-content:center}
+.assist-card input[type=date]::-webkit-calendar-picker-indicator{margin-right:2px}
+/* Das Geräteauswahl-Akkordeon (.mlist, via AssistantChecklist) sitzt bereits in einer Karte mit
+   eigenem Rahmen — der zusätzliche innere Rahmen/das Padding von .mlist ist hier redundant
+   (user request). Nur innerhalb des Assistenten überschrieben (Spezifität), .mlist selbst
+   bleibt für AdminModal/MachineFilterDropdown unverändert. */
+.assist-card .mlist{border:none;border-radius:0;padding:0;margin-top:2px}
+/* Hellere, dezente Akkordeon-Köpfe statt der schweren Volltonfläche (user request) — ebenfalls
+   nur innerhalb des Assistenten, .cathead bleibt anderswo unverändert. */
+.assist-card .grp.cathead{
+  background:transparent;color:var(--muted);border-radius:0;
+  border-bottom:1px solid var(--border);padding:6px 4px;display:flex;align-items:center;gap:5px}
+.assist-card .grp.cathead .ic{flex:0 0 auto}
+.assist-card .grp.cathead:not(:first-child){border-top:none;margin-top:2px;padding-top:6px}
+/* Leerer Warenkorb-Zustand: zentriert statt linksbündig, dezentes Icon + hellere Schrift, damit
+   der Zustand bewusst statt „vergessen" wirkt (user request) */
+.aswork-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;min-height:54px;color:var(--muted)}
+.aswork-empty .ic{width:22px;height:22px;opacity:.5}
 .aswork{border:1px dashed var(--border);border-radius:10px;padding:8px;min-height:54px;background:var(--panel)}
 .aswork.dragover-root{border-color:var(--accent);border-style:dashed;background:var(--accent-light)}
 .aswork .catlbl{font-weight:700;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:6px 2px 3px}

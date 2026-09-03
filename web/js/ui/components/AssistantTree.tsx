@@ -320,12 +320,17 @@ export function AssistantTree({
 
   // A bare status line, not instructional copy — how drag-and-drop actually works is
   // communicated visually now (each node's own drag handle, the dashed drop-zone highlight
-  // below), not explained in prose here (user request).
+  // below), not explained in prose here (user request). Centered with a faint icon rather than
+  // left-aligned plain text, so the empty cart card reads as an intentional state rather than
+  // an afterthought (user request).
   if (!tree.children.length) {
     return (
-      <span className="hint" style={{ margin: 0 }}>
-        Keine Geräte ausgewählt.
-      </span>
+      <div className="aswork-empty">
+        <Icon name="doc" />
+        <span className="hint" style={{ margin: 0 }}>
+          Keine Geräte ausgewählt.
+        </span>
+      </div>
     );
   }
 
