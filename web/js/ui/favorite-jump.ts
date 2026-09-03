@@ -1,14 +1,23 @@
-// Favorites + the next-/previous-free-day jump buttons in the grid's row header (Phase 7 slice
-// B10a). Faithful port of legacy `toggleFav`/`nextFreePtr`/`gotoDateCenter`/`bookable`/
-// `nextFreeAfter`/`prevFreeBefore`/`jumpToSlot`/`gotoNextFree`/`gotoPrevFree`. The day-scan core
-// (`nextFreeDay`/`prevFreeDay`) already lives in `ui/navigation.ts` — this is the DOM/state
-// wiring around it; `ui/grid-interaction.ts` (B2) calls into these via its injected
-// `GridInteractionHandlers` rather than a direct import — this module imports `selection`/
-// `paintSelection` FROM grid-interaction.ts, so the reverse direct import would cycle.
+// =======================================================================================
+// FAVORITES & FREE-DAY JUMP MODULE (web/js/ui/favorite-jump.ts)
+// =======================================================================================
 //
-// `displayGroup`, `FAVGRP`, and legacy's own `orderedMachines()` are NOT ported here: dead code
-// — their only callers were `render()` and this section, both already superseded by
-// `ui/grid.ts`'s `displayGroup`/`orderedMachines` (Phase 7 slice B1).
+// Favorites + the next-/previous-free-day jump buttons in the grid's row header.
+// This module:
+// 1. Toggles a machine's favorite status.
+// 2. Finds and jumps the grid view to a machine's next/previous free working day.
+//
+// Key Principles:
+// - DOM/STATE WIRING AROUND A PURE CORE: the day-scan logic itself (`nextFreeDay`/
+//   `prevFreeDay`) already lives in `ui/navigation.ts`; this module is the DOM/state
+//   plumbing around it — computing "is this machine free on this day" and driving the
+//   actual scroll/selection/toast.
+// - IMPORT DIRECTION AVOIDS A CYCLE: this module imports `selection`/`paintSelection` FROM
+//   `ui/grid-interaction.ts` (rather than the reverse), since `grid-interaction.ts` calls
+//   into this module via its own injected `GridInteractionHandlers` struct instead of a
+//   direct import — a direct import the other way would create a cycle.
+//
+// =======================================================================================
 
 import type { Machine } from '../../../shared/types.ts';
 import {
@@ -31,8 +40,7 @@ import { toast } from './toast.ts';
 import { store } from '../store-instance.ts';
 import { machById } from './machine-lookup.ts';
 
-/** Toggle `machineId`'s favorite status, persist, and repaint. Faithful port of legacy
- *  `toggleFav`. */
+/** Toggles `machineId`'s favorite status, persists it, and repaints. */
 export function toggleFav(machineId: string): void {
   const favs = store.get('favs');
   if (favs.has(machineId)) favs.delete(machineId);
@@ -41,16 +49,17 @@ export function toggleFav(machineId: string): void {
   store.notify();
 }
 
-/** machine id → the last free day jumped to (reset for every OTHER machine on each new jump). Exposed
- *  on `window` (via the module bridge) so the React Grid (B1) can read it for the row header's
- *  "back" button. */
+/** Machine id → the last free day jumped to (reset for every OTHER machine on each new
+ *  jump, so switching machines always starts a fresh search from today). Read directly by
+ *  the React Grid for the row header's "back" button. */
 export const nextFreePtr: Record<string, string> = {};
 
 function centerOnDate(isoDate: string): void {
   requestAnimationFrame(() => centerColumn(isoDate)); // instant, centered — no snap-back
 }
 
-/** Is `machine` bookable on `isoDate`: not booked, not blocked, and available that weekday. */
+/** Builds a `FreeDay` predicate for `machine`: bookable on a given day means not already
+ *  booked, not blocked by maintenance, and available that weekday. */
 function isFreeFor(machine: Machine): FreeDay {
   return (isoDate) =>
     !getBooking(store.get('data')!.bookings, machine.id, isoDate) &&
@@ -58,22 +67,28 @@ function isFreeFor(machine: Machine): FreeDay {
     isMachineAvailableOnWeekday(machine, isoDate);
 }
 
-/** The next free working day for `machine` strictly after `fromIso` (or from today when null).
- *  Faithful port of legacy `nextFreeAfter`. */
+/** Finds the next free working day for `machine` strictly after `fromIso` (or from today
+ *  when `fromIso` is null — the first jump for a machine that has no pointer yet). */
 export function nextFreeAfter(machine: Machine, fromIso: string | null): string | null {
   return nextFreeDay(fromIso, todayAsIsoDateString(), isFreeFor(machine));
 }
 
-/** The previous free working day for `machine` before `fromIso`, not earlier than today.
- *  Faithful port of legacy `prevFreeBefore`. */
+/** Finds the previous free working day for `machine` before `fromIso`, never earlier than
+ *  today — jumping "back" should never land in the past. */
 export function prevFreeBefore(machine: Machine, fromIso: string): string | null {
   return prevFreeDay(fromIso, todayAsIsoDateString(), isFreeFor(machine));
 }
 
 /**
- * Jump the grid to `isoDate` for `machine`: rebuild the visible window centered on it (2 weeks
- * before, 4 after), select the cell, and toast — flagging when nothing is booked/blocked past
- * this point ("dauerhaft frei"). Faithful port of legacy `jumpToSlot`.
+ * Jumps the grid to `isoDate` for `machine`.
+ *
+ * How it works:
+ * 1. Rebuilds the visible window centered on `isoDate` (2 weeks before, 4 after) and
+ *    selects that cell.
+ * 2. Scrolls the grid to actually show it.
+ * 3. Checks whether anything is booked or blocked anywhere past `isoDate` — if not, the
+ *    toast flags the day as "dauerhaft frei" (permanently free from here on), since that's
+ *    meaningfully different from "the next free day happens to be this one".
  */
 function jumpToSlot(machine: Machine, isoDate: string, isBack: boolean): void {
   store.set({
@@ -111,9 +126,8 @@ function jumpToSlot(machine: Machine, isoDate: string, isBack: boolean): void {
 }
 
 /**
- * Jump forward to `machineId`'s next free working day (relative to the last jump).
- * Switching machines resets every other machine's pointer. Faithful port of legacy
- * `gotoNextFree`.
+ * Jumps forward to `machineId`'s next free working day, relative to the last jump (or from
+ * today, for a fresh machine). Switching machines resets every other machine's pointer.
  */
 export function gotoNextFree(machineId: string): void {
   const machine = machById(machineId);
@@ -130,8 +144,8 @@ export function gotoNextFree(machineId: string): void {
   jumpToSlot(machine, found, false);
 }
 
-/** Jump back to `machineId`'s previous free working day, ending at today. Faithful port of
- *  legacy `gotoPrevFree`. */
+/** Jumps back to `machineId`'s previous free working day, stopping at today — repeated
+ *  presses walk backward one free day at a time until there's nowhere earlier left to go. */
 export function gotoPrevFree(machineId: string): void {
   const machine = machById(machineId);
   if (!machine || !nextFreePtr[machineId]) return;

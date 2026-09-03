@@ -1,8 +1,17 @@
-// The Ja/Nein confirm dialog (Phase 7 slice B10c). Faithful port of legacy `askConfirm`.
-// `#confirm2` is fully static markup already in `index.html` (like `#collBanner`, B8) — a
-// plain module targeting it directly, not a React component. Every existing caller (B4/B6/B7/
-// B10b) already depends on the exact `(options) => Promise<boolean>` shape via
-// `window.askConfirm` — preserved verbatim so no call site changes.
+// =======================================================================================
+// CONFIRM DIALOG MODULE (web/js/ui/confirm.ts)
+// =======================================================================================
+//
+// The Ja/Nein confirm dialog every destructive action in the app goes through.
+//
+// Key Principles:
+// - PLAIN MODULE, NOT REACT: `#confirm2` is fully static markup already in `index.html`
+//   (like the collision banner) — a plain module targeting it directly, not a component.
+// - STABLE CONTRACT: every caller across the app depends on the exact
+//   `(options) => Promise<boolean>` shape via `window.askConfirm` — preserved verbatim so
+//   no call site needs to change if this module's internals ever do.
+//
+// =======================================================================================
 
 export interface AskConfirmOptions {
   title?: string;
@@ -14,10 +23,13 @@ export interface AskConfirmOptions {
   danger?: boolean;
 }
 
-/** Show `#confirm2` with `options`, resolving `true`/`false` for Ja/Nein. `opts.body` is raw
- *  HTML (it's set via `innerHTML`, matching legacy) — callers must escape any user-entered
- *  value themselves via `escapeHtml` (`ui/escape-html.ts`) before interpolating it. Faithful
- *  port of legacy `askConfirm`. */
+/**
+ * Shows `#confirm2` populated with `options`, resolving `true`/`false` for Ja/Nein.
+ *
+ * `options.body` is raw HTML (it's set via `innerHTML`) — callers must escape any
+ * user-entered value themselves via `escapeHtml` (`ui/escape-html.ts`) before interpolating
+ * it into `body`; this function does no escaping of its own.
+ */
 export function askConfirm(options: AskConfirmOptions): Promise<boolean> {
   return new Promise((resolve) => {
     document.getElementById('cfTitle')!.textContent = options.title || 'Wirklich löschen?';

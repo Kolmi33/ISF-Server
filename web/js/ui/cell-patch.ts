@@ -1,12 +1,22 @@
-// Targeted cell patching (Phase 7 slice B4). After a booking write or delete, only the
-// affected cells are updated in the DOM instead of rebuilding the whole grid — legacy's own
-// comment calls this out as a deliberate performance choice ("GEZIELTES ZELL-PATCHING").
-// `window.mutate`'s optimistic-apply path (still legacy) calls `patchCells` with the write's
-// undo-entry list, which conveniently already names every cell that changed.
+// =======================================================================================
+// TARGETED CELL PATCHING MODULE (web/js/ui/cell-patch.ts)
+// =======================================================================================
 //
-// A plain gated module, not a component, for the same reason ui/grid-interaction.ts (B2) is:
-// this reads and writes the exact DOM nodes the React Grid (B1) renders, deliberately bypassing
-// a React re-render for a handful of cells.
+// After a booking write or delete, only the affected cells are updated in the DOM instead
+// of rebuilding the whole grid — a deliberate performance choice: rerendering hundreds of
+// unaffected cells for a one- or two-cell change would be wasted work.
+// This module:
+// 1. Repaints one cell's class/background/title/text after its booking state changed.
+// 2. Repaints one machine row's today-dot.
+// 3. `patchCells`: does both for every cell an undo-entries list names, then restores
+//    selection/focus marks the repaint wiped.
+//
+// Key Principles:
+// - PLAIN MODULE, NOT REACT: reads and writes the exact DOM nodes the React Grid renders,
+//   deliberately bypassing a React re-render for a handful of cells — the same reason
+//   `ui/grid-interaction.ts` is a plain module rather than a component.
+//
+// =======================================================================================
 
 import { isMine, nameColor, cellClass, classifyCell, classifyDot } from './grid.ts';
 import { getBooking } from '../core/bookings.ts';
@@ -31,13 +41,16 @@ function isDarkTheme(): boolean {
   return document.documentElement.dataset.theme === 'dark';
 }
 
-/** Update one cell's class/background/title/text after its booking state changed underneath
- *  it, without touching the rest of the grid. Faithful port of legacy `refreshCell`, with one
- *  fix (not a behavior conservation — a real, pre-existing bug, tracked in `PROGRESS.md`'s
- *  Known Bugs and now closed): the patch path used to omit the `wknd` class the full render
- *  sets, so a weekend cell lost its weekend styling on the next targeted patch until the next
- *  full repaint. `patchCells` repaints `.sel`/`.kfocus` right after this, since the `className`
- *  assignments below wipe them. */
+/**
+ * Updates one cell's class/background/title/text after its booking state changed
+ * underneath it, without touching the rest of the grid.
+ *
+ * Every `cellClass` call below must pass `weekend` even though a weekend column is rarely
+ * shown — omitting it once regressed a weekend cell's styling until the next full repaint,
+ * since this patch path is the only place that recomputes the class from scratch.
+ * `patchCells` repaints the selection/focus marks right after calling this, since the
+ * `className` assignments below wipe whatever `.sel`/`.kfocus` classes were on the cell.
+ */
 export function refreshCell(machineId: string, date: string): void {
   const el = findCellElement(machineId, date);
   if (!el) return; // e.g. a weekend column that isn't shown
@@ -78,10 +91,10 @@ export function refreshCell(machineId: string, date: string): void {
   }
 }
 
-/** Update one machine row's today-dot after its booking state changed. Faithful port of
- *  legacy `refreshDot` (the `.statdot` maintenance icon is static — only `.dot` is patched;
- *  a row with an active maintenance slot has no `.dot` element at all, matching legacy calling
- *  `classifyDot(null, …)` — a blocked state never arises here). */
+/** Updates one machine row's today-dot after its booking state changed. Only `.dot` is
+ *  patched — the `.statdot` maintenance icon is static, and a row with an active
+ *  maintenance slot has no `.dot` element at all, which is why this always calls
+ *  `classifyDot(null, …)`: a blocked state can never actually arise here. */
 export function refreshDot(machineId: string): void {
   const anyCellInRow = findCellElement(machineId, store.get('visD')[0] ?? '');
   if (!anyCellInRow) return;
@@ -106,9 +119,9 @@ export function refreshDot(machineId: string): void {
   }
 }
 
-/** Patch every cell an undo-entries list names, refresh their rows' today-dots, then restore
- *  the selection/focus marks (the classNames patched above just wiped them). Faithful port of
- *  legacy `patchCells`, imported directly by `ui/mutate.ts`'s optimistic-apply path. */
+/** Patches every cell an undo-entries list names, refreshes their rows' today-dots, then
+ *  restores the selection/focus marks (the classNames patched above just wiped them).
+ *  Imported directly by `ui/mutate.ts`'s optimistic-apply path. */
 export function patchCells(entries: readonly { machineId: string; date: string }[]): void {
   const machineIds = new Set<string>();
   for (const entry of entries) {

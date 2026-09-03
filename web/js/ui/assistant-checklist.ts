@@ -1,9 +1,18 @@
-// The Assistant's device checklist — pure over `core/machines`; no DOM. Faithful port of
-// legacy `machineChecklist`/`wireChecklistFilter`'s row structure and visibility rules: a
-// collapsible "★ Favoriten" bucket (open by default, no group sub-level) followed by
-// Maschinen/Messtechnik, each split into their groups. While searching, every header vanishes
-// and the list is a flat name/group substring match, bypassing fold state entirely — matching
-// legacy's `searching` branch exactly.
+// =======================================================================================
+// ASSISTANT CHECKLIST MODULE (web/js/ui/assistant-checklist.ts)
+// =======================================================================================
+//
+// The Assistant's device checklist — pure over `core/machines`; no DOM.
+// This module builds the checklist's row list, in a fixed display order:
+// 1. A collapsible "★ Favoriten" bucket (open by default, no group sub-level).
+// 2. Maschinen, then Messtechnik, each split into their own groups.
+//
+// Key Principles:
+// - SEARCH BYPASSES FOLD STATE: while searching, every category/group header vanishes and
+//   the list becomes a flat name/group substring match — a search result should never be
+//   hidden just because its group happens to be collapsed.
+//
+// =======================================================================================
 
 import type { Machine } from '../../../shared/types.ts';
 import { CATEGORIES, getMachineCategory } from '../core/machines.ts';
@@ -31,6 +40,9 @@ function categoryLabel(category: string): string {
   return CATEGORIES.find((c) => c.id === category)?.label ?? category;
 }
 
+/** Appends the favorites bucket's rows: a header (unless searching) followed by every
+ *  favorite machine that's currently visible — visible means "matches the search" while
+ *  searching, or "the favorites bucket is open" otherwise. */
 function pushFavoriteRows(
   rows: ChecklistRow[],
   favorites: readonly Machine[],
@@ -53,6 +65,13 @@ function pushFavoriteRows(
   }
 }
 
+/**
+ * Appends the non-favorite rows, walking `rest` once and emitting a category header each
+ * time the category changes, a group header each time the group changes (only while that
+ * category is open), and each machine row when it should actually be visible — the same
+ * three-level nesting (category > group > machine) the checklist displays, built in a
+ * single linear pass since `rest` is expected pre-sorted by category then group.
+ */
 function pushNonFavoriteRows(
   rows: ChecklistRow[],
   rest: readonly Machine[],
@@ -96,10 +115,10 @@ function pushNonFavoriteRows(
 }
 
 /**
- * The checklist's rows, in legacy's exact display order: favorites (flat, no groups), then
- * Maschinen before Messtechnik, each split into groups. `machines` is expected pre-ordered
- * (favorites first) — pass `orderedMachines()`'s result. Faithful port of
- * `machineChecklist`/`wireChecklistFilter`'s combined structure + visibility.
+ * Builds the checklist's full row list, in display order: favorites (flat, no groups),
+ * then Maschinen before Messtechnik, each split into groups.
+ *
+ * `machines` is expected pre-ordered (favorites first) — pass `orderedMachines()`'s result.
  */
 export function buildChecklistRows(
   machines: readonly Machine[],
