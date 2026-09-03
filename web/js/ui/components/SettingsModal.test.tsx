@@ -112,6 +112,18 @@ describe('SettingsModal', () => {
     expect(document.body.classList.contains('compact')).toBe(true);
   });
 
+  // What: softening the grid lines, like compact mode, is applied by toggling a CSS class
+  // directly on the body — a pure styling change, independent of the always-on booking-bar
+  // consolidation (no store write needed either).
+  // How: clicks the "Rasterlinien abschwächen" checkbox and checks both the persisted setting
+  // and the body's class list.
+  it('toggling grid-line softening adds/removes the body class directly', () => {
+    render(<SettingsModal />);
+    screen.getByLabelText(/Rasterlinien abschwächen/).click();
+    expect(localStorage.getItem('mb_softgrid')).toBe('on');
+    expect(document.body.classList.contains('softgrid')).toBe(true);
+  });
+
   // What: the settings modal displays the currently logged-in user's name.
   // How: renders with a known user set in the store and checks the name appears.
   it('shows the current user name and opens the name-prompt on "Ändern…"', () => {

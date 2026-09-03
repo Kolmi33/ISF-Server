@@ -2,8 +2,8 @@
 // SETTINGS MODAL COMPONENT (web/js/ui/components/SettingsModal.tsx)
 // =======================================================================================
 //
-// The settings modal: theme, presence sharing, compact rows, weekend display, name, and
-// the debug panel toggle. Each control reads/writes its own `localStorage` key directly
+// The settings modal: theme, presence sharing, compact rows, grid-line softening, weekend
+// display, name, and the debug panel toggle. Each control reads/writes its own `localStorage` key directly
 // and calls straight into the module that actually owns that behavior
 // (`applyTheme`/`connectSSE`/`refreshNow`/`applyDebug`/`dbgOn`/`centerToday`).
 //
@@ -103,6 +103,30 @@ function CompactRow() {
   );
 }
 
+/** Toggles `body.softgrid`, which swaps the grid's cell border color (`--gridline`) to a much
+ *  lighter grey (`app.css`) so the colored booking blocks read as the visual focal point
+ *  instead of the cell grid itself. Purely a color preference — every cell stays exactly
+ *  where and what it was; nothing about the grid's layout or interaction changes. */
+function GridLinesRow() {
+  const softGrid = localStorage.getItem('mb_softgrid') === 'on';
+  return (
+    <div className="formrow">
+      <label>Raster</label>
+      <label style={{ minWidth: 'auto' }}>
+        <input
+          type="checkbox"
+          defaultChecked={softGrid}
+          onChange={(event) => {
+            localStorage.setItem('mb_softgrid', event.target.checked ? 'on' : 'off');
+            document.body.classList.toggle('softgrid', event.target.checked);
+          }}
+        />{' '}
+        Rasterlinien abschwächen (Buchungsblöcke stärker betonen)
+      </label>
+    </div>
+  );
+}
+
 function WeekendsRow() {
   const weekends = localStorage.getItem('mb_weekends') === 'on';
   return (
@@ -167,6 +191,7 @@ export function SettingsModal() {
       <ThemeRow />
       <PresenceRow />
       <CompactRow />
+      <GridLinesRow />
       <WeekendsRow />
       <NameRow />
       <DebugRow />

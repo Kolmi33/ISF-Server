@@ -11,7 +11,12 @@
   --dot-free:#2f9e44; --dot-busy:#e03131;
   --wknd:#e9ebef; --wkndhead:#dfe2e8; --wkndtint:rgba(110,116,128,.13);
   --star:#d4a017;
+  /* Raster-Linienfarbe der Buchungstabelle — eigenes Token statt --border, damit die
+     „Raster abschwächen"-Einstellung (SettingsModal.tsx, body.softgrid) nur die Zellgitter
+     aufhellt, ohne Rahmen andernorts (Modals, Buttons, …) mit zu beeinflussen. */
+  --gridline: var(--border);
 }
+body.softgrid{--gridline:#eef0f3}
 html[data-theme="dark"]{
   --bg:#15171a; --panel:#1e2126; --border:#3a3f46; --text:#e8eaed; --muted:#9aa0a6;
   --accent:#5b96e3; --accent-light:#263a52; --danger:#e07b6e; --warn:#d9a441;
@@ -25,7 +30,9 @@ html[data-theme="dark"]{
   --focus:#ffab5e; --selglow:rgba(91,150,227,.32);
   --dot-free:#4cbf63; --dot-busy:#ff6b6b;
   --wknd:#242830; --wkndhead:#1b1e23; --wkndtint:rgba(150,160,180,.10);
+  --gridline: var(--border);
 }
+html[data-theme="dark"] body.softgrid{--gridline:#282c33}
 body.compact td.cell{height:22px;padding:1px 4px;font-size:12px}
 body.compact td.machcol{padding-top:1px;padding-bottom:1px;font-size:12px}
 *{box-sizing:border-box}
@@ -100,7 +107,7 @@ td.cell.booked.dim{opacity:.28;filter:grayscale(.8)}
 /* ---------- Grid ---------- */
 #gridWrap{flex:1;overflow:auto;position:relative}
 table{border-collapse:separate;border-spacing:0;min-width:100%}
-th,td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:0;font-size:13px}
+th,td{border-right:1px solid var(--gridline);border-bottom:1px solid var(--gridline);padding:0;font-size:13px}
 thead th{background:var(--headbg);position:sticky;top:0;z-index:20;padding:4px 6px;font-weight:600;text-align:center;min-width:96px}
 thead th.machcol{left:0;z-index:25;text-align:left;min-width:var(--machw);max-width:var(--machw);padding-left:12px}
 thead th.gap{min-width:8px;background:var(--bg);border-bottom:none}

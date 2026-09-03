@@ -120,6 +120,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
   if (store.get('data')) store.notify();
 });
 if (localStorage.getItem('mb_compact') === 'on') document.body.classList.add('compact');
+if (localStorage.getItem('mb_softgrid') === 'on') document.body.classList.add('softgrid');
 
 /**
  * Wires toolbar buttons to open their respective modal dialogs.
