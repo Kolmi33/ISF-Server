@@ -1,10 +1,24 @@
-// The domain contract: shapes that both the frontend and (from Phase 6) the backend
-// share. Single source of truth (ARCHITECTURE §5). It grows as extraction surfaces more
-// fields — every field here is one the code actually reads, kept faithful to the data.
+// =======================================================================================
+// DOMAIN CONTRACT (shared/types.ts)
+// =======================================================================================
+//
+// The shapes both the frontend and (from Phase 6) the backend share — the single source
+// of truth for the wire/domain contract (see ARCHITECTURE.md §5).
+//
+// Key Principles:
+// - GROWS WITH REAL USAGE: every field here is one the code actually reads somewhere —
+//   this file is kept faithful to the data, not speculatively broadened.
+// - WIRE-FAITHFUL NAMING: a field mirrors its actual persisted/wire name (e.g. `cat`,
+//   `redu`, `maint`) rather than a "nicer" alias, so there is exactly one name for a piece
+//   of data as it crosses the network/storage boundary — no translation layer to keep in
+//   sync on both sides.
+//
+// =======================================================================================
 
 /**
- * A maintenance or defect window on a machine. `from`/`until` are inclusive ISO date
- * strings ('YYYY-MM-DD'); an empty or absent bound means open-ended on that side.
+ * A maintenance or defect window on a machine.
+ * `from`/`until` are inclusive ISO date strings ('YYYY-MM-DD'); an empty or absent bound
+ * means open-ended on that side (no start limit, or no end limit, respectively).
  */
 export interface MaintSlot {
   /** Free-form status, e.g. 'wartung' | 'defekt' — preserved verbatim from the data. */
@@ -14,7 +28,7 @@ export interface MaintSlot {
   note?: string;
 }
 
-/** Explicit domain alias for MaintSlot */
+/** Explicit domain alias for `MaintSlot`, for call sites that prefer the fully-spelled name. */
 export type MaintenanceSlot = MaintSlot;
 
 /** A bookable resource — a machine or a measurement device ('messtechnik'). */
@@ -38,7 +52,7 @@ export interface Machine {
   info?: string;
 }
 
-/** A machine's resource category, as returned by `catOf`. */
+/** A machine's resource category, as returned by `core/machines.ts`'s `getMachineCategory`. */
 export type MachineCategory = 'messtechnik' | 'maschine';
 
 /** A single booked day: who booked it (and when it was written). */
@@ -73,9 +87,11 @@ export interface LogEntry {
 }
 
 /**
- * The team-wide state mirrored from `/api/state`. On the wire the server sends
- * `{ rev, groups, machines, bookings }`; the client normalizes `revision = rev || 0`
- * and carries an in-memory `log` (see legacy `loadState`). Kept faithful to that shape.
+ * The team-wide state mirrored from `/api/state`.
+ *
+ * How it maps onto the wire: the server sends `{ rev, groups, machines, bookings }`; the
+ * client then normalizes `revision = rev || 0` and carries its own in-memory `log` on top
+ * (see legacy `loadState`). Kept faithful to that shape.
  */
 export interface ServerData extends BookingData {
   groups: string[];
@@ -88,9 +104,11 @@ export interface ServerData extends BookingData {
 
 /**
  * The complete frontend runtime state — the object legacy code knows as the global `S`.
- * The store (`web/js/state.ts`) owns it; `app.ts` bridges it as `window.S` during the
- * strangler transition. Kept faithful to legacy `S` (ARCHITECTURE §14 D4); the FS-era
- * `lastRaw` field was removed in Phase 5.2 with the rest of the file-backed dead code.
+ *
+ * Ownership: the store (`web/js/state.ts`) owns this object; `app.ts` bridges it as
+ * `window.S` during the strangler transition. Kept faithful to legacy `S`
+ * (ARCHITECTURE §14 D4); the FS-era `lastRaw` field was removed in Phase 5.2 with the
+ * rest of the file-backed dead code.
  */
 export interface AppState {
   /** Server data (`/api/state`); `null` until the first load completes. */

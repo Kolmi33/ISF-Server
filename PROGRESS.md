@@ -539,6 +539,38 @@ re-derived here — this backlog is the executable summary.
   description containing a comma broke the parse and was fixed), and `@apidevtools/swagger-cli
   validate` confirms it's schema-valid OpenAPI 3.0, not just parseable YAML.
 
+**Phase 10 — Repo-wide comment/readability sweep (user-requested 2026-09-03)**
+Rewrite every source file's comments (file header + per-function docs) to match the style
+established when `web/js/core/machines.ts` was hand-rewritten: a banner file header, a "Key
+Principles" summary, and per-function JSDoc with a one-line summary plus a numbered "How it
+works"/"Logic:" walkthrough of the behavior and edge cases — a deliberate, user-directed
+departure from this project's previous terser comment convention. No behavior changes; each
+item is comments-only, verified green and committed before moving to the next. Grouped by
+directory into one commit per group (not literally one commit per file — matches how this
+project's own "one module, one commit" convention has always been applied to a batch of related
+files, e.g. Phase 9's slices).
+- [x] 10a `shared/` — `dates.ts`, `types.ts` rewritten to the verbose style; also fixed a
+  stale `catOf` reference in `MachineCategory`'s doc comment (renamed twice since: to
+  `categoryOf` in Phase 7, then `getMachineCategory`). `dates.test.ts` left as-is — already
+  description-driven, no function-level prose to expand; `types.ts` has no test file.
+- [ ] 10b `web/js/core/` — `assistant.ts`, `bookings.ts`, `weekend.ts` (+ tests; `machines.ts`
+  already done, the template for this whole phase)
+- [ ] 10c `web/js/` root + `web/js/net/` — `app.ts`, `state.ts`, `store-instance.ts`, `api.ts`,
+  `sse.ts` (+ tests)
+- [ ] 10d `web/js/ui/` top-level, part 1 (alphabetical first half) — `assistant-checklist.ts`
+  through `machine-lookup.ts` (+ tests)
+- [ ] 10e `web/js/ui/` top-level, part 2 (alphabetical second half) — `machine-text.ts` through
+  `user-chip.ts` (+ tests)
+- [ ] 10f `web/js/ui/components/` part 1 — `ActiveUsersModal.tsx` through `GroupOptions.tsx`
+  (+ tests)
+- [ ] 10g `web/js/ui/components/` part 2 — `HelpModal.tsx` through `StatsOverviews.tsx`
+  (+ tests)
+- [ ] 10h `web/js/ui/views/` — `admin.ts`, `all-bookings.ts`, `my-bookings.ts`, `stats.ts`
+  (+ tests)
+- [ ] 10i `server/` part 1 — `api-*.ts` (routing/response/read/write endpoint modules, + tests)
+- [ ] 10j `server/` part 2 — `backfill.ts`, `bridge.ts`, `db.ts`, `import.ts`, `model.ts`,
+  `mutate.ts`, `server.ts`, `types.ts` (+ tests)
+
 ## Done log (newest first)
 - **2026-09-02 — Code-review fixes**: undo's CAS-check bug and `machById`'s stale-cache bug
   (both found by an external review, verified with a failing regression test before fixing —
