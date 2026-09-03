@@ -4,7 +4,11 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-09-03 — **Phase 12 (user-requested feature/UX batch) COMPLETE** — 8
+_Last updated: 2026-09-03 — **Phase 13 (second user-requested feature/UX batch, post-deploy
+feedback) COMPLETE** — 3 commits, full detail in the Phase 13 section below. `npm run verify`
+green at 933 tests / 68 files throughout._
+
+_Previously: 2026-09-03 — **Phase 12 (user-requested feature/UX batch) COMPLETE** — 8
 commits, one module each, full detail in the Phase 12 section below. `npm run verify` green
 at 906 tests / 68 files throughout._
 
@@ -679,6 +683,45 @@ follow-up German-language spec mid-turn), each its own commit via the normal per
 from 891 at the start — Phase 11's parting count plus the `grid-interaction.ts` fix commit
 `eb0165a` and the externally-edited-comment commit `f9c58cd`, both from the session
 immediately before this phase).
+
+**Phase 13 — Second user-requested feature/UX batch, post-deploy feedback (2026-09-03) —
+COMPLETE**
+Phase 12 was deployed to production (`docker compose up -d --build`, user-authorized) and
+tested live; this phase is the user's follow-up feedback from that testing session. Five
+items, landed as 3 commits (some combined where they shared `app.css` and couldn't be usefully
+split further).
+- [x] 13.1 `MyBookingsModal`: booking groups are now detected and displayed (a "Teil einer
+  Buchungsgruppe" hint, mirroring `BookingDetailModal.tsx`, shown only when a run's group
+  genuinely spans more than one machine); the expand chip moved from the date line to the
+  right side, under the pin button; a filter row (Maschine/Bereich/Sortieren/Von/Bis) was
+  added, matching All Bookings' own minus the Person field. The Bereich filter's
+  group-or-category matching rule moved from `views/all-bookings.ts` to
+  `core/machines.ts` (`CATEGORY_FILTER_PREFIX`/`matchesGroupFilter`) as shared groundwork,
+  since both modals now need the identical rule. Commit `0a2bb65`.
+- [x] 13.2 Grid: the "KW X" header is now sticky on the left edge while its own week's columns
+  scroll through — previously it scrolled away with no way to tell which week was in view past
+  the first column. Commit `738bffe`.
+- [x] 13.3 Settings: the grid-line control changed from an on/off "soften" checkbox to a 0–4px
+  thickness slider (`--gridline-width`), replacing the `body.softgrid` mechanism from Phase 12
+  outright. Commit `738bffe`.
+- [x] 13.4 Grid: booking blocks now merge in two dimensions, not just across days — a new
+  `computeBookingBlocks` (`ui/grid.ts`, replacing Phase 12's `weekBookingBarSegments`) finds
+  the maximal rectangle of same-name, same-date-range bookings across BOTH calendar-adjacent
+  days and vertically-adjacent visible machine rows, centering the name once in the whole
+  rectangle; a category/group header row genuinely breaks vertical adjacency (kept in the row
+  list passed to the algorithm with an always-null `nameAt`, specifically so it counts as a
+  real break, not a filtered-out gap a filtered machine correctly WOULD close). Also fixed a
+  real bug this surfaced: the "mine" accent had stayed a plain `outline` (Phase 12), which
+  can't be suppressed per-side, so it drew a full box around every day of an already-merged
+  block — now four independently-overridable box-shadow layers composed through CSS custom
+  properties, which also fixed a latent, unrelated collision with the weekend-tint's own
+  box-shadow that the naive version would have introduced. Commit `738bffe`.
+- [x] 13.5 Assistant: restructured into a card-based dashboard layout (light-grey backdrop,
+  white cards for Geräteauswahl/Buchungsparameter/Ausgewählte Geräte, scoped to just this
+  modal via `#modal:has(.assist-columns)`), with the primary action anchored at the bottom of
+  the right column — per the user's own "modern SaaS dashboard" reference. Commit `7282aeb`.
+
+`npm run verify` green after every commit; 68 files / 933 tests at the end of the batch.
 
 ## Done log (newest first)
 - **2026-09-02 — Code-review fixes**: undo's CAS-check bug and `machById`'s stale-cache bug
