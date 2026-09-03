@@ -482,6 +482,33 @@ describe('AssistantModal — the work-area group node', () => {
     expect(document.querySelectorAll('.asgrp')).toHaveLength(0); // 1 child left → auto-dissolved
     expect(document.querySelectorAll('.asdev')).toHaveLength(1);
   });
+
+  // What: dragging a 3rd device onto one of a group's EXISTING members joins that group
+  // flatly (same as dropping on the group's own background), rather than wrapping just that
+  // one member and the new device in a brand-new nested subgroup — a real bug fix: with 2+
+  // existing members, aiming for one of them (the easiest, biggest target) used to bury it
+  // one level deeper each time, which looked like the drag had silently failed once a group
+  // had more than 2 members.
+  // How: forms a 2-device group, drags a 3rd device onto one of its two existing members, and
+  // checks the result is still exactly one group, now with 3 flat children (no nested .asgrp).
+  it('dropping a 3rd device onto an existing group member joins the group flatly, not nested', () => {
+    addGroupedPair();
+    act(() => {
+      screen.getByRole('checkbox', { name: /Kaputte Presse/ }).click();
+    });
+    const dt = dataTransferStub();
+    act(() => {
+      // The freshly-checked 3rd device is the only .asdev NOT already inside the group.
+      const newDevice = [...document.querySelectorAll<HTMLElement>('.asdev')].find(
+        (el) => !el.closest('.asgrp-kids'),
+      )!;
+      const existingMember = document.querySelector<HTMLElement>('.asgrp-kids .asdev')!;
+      fireEvent.dragStart(newDevice, { dataTransfer: dt });
+      fireEvent.drop(existingMember, { dataTransfer: dt });
+    });
+    expect(document.querySelectorAll('.asgrp')).toHaveLength(1); // still one group, not nested
+    expect(document.querySelectorAll('.asgrp-kids .asdev')).toHaveLength(3);
+  });
 });
 
 describe('AssistantModal — drag-and-drop highlighting', () => {

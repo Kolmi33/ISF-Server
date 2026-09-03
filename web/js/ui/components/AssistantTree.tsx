@@ -203,6 +203,36 @@ function clearHighlights(container: HTMLElement): void {
   container.querySelectorAll('.dragover').forEach((n) => n.classList.remove('dragover'));
 }
 
+/** Resolves a drop event's target into the tree edit it should trigger. Dropping onto a
+ *  device that's ALREADY a member of a group joins that group flatly (same as dropping on the
+ *  group's own background) rather than wrapping just that one device in a brand-new nested
+ *  subgroup — the fix for a real bug: with 2+ existing members, aiming for one of them (the
+ *  easiest, biggest target to hit) used to bury it one level deeper each time instead of
+ *  adding a flat 3rd/4th/... member, which looked broken/like the drag had silently failed
+ *  ("snaps back") once a group had more than 2 members. Split out of `handleDrop` purely to
+ *  stay under the function-length budget. */
+function resolveDrop(
+  target: HTMLElement,
+  drag: string,
+  handlers: {
+    onGroupOnto: (dragUid: string, targetUid: string) => void;
+    onJoin: (dragUid: string, groupUid: string) => void;
+    onToRoot: (dragUid: string) => void;
+  },
+): void {
+  const dev = target.closest<HTMLElement>('.asdev');
+  const kids = target.closest<HTMLElement>('.asgrp-kids');
+  const devsGroup = dev?.closest<HTMLElement>('.asgrp-kids');
+  if (dev && dev.dataset.uid !== drag) {
+    if (devsGroup) handlers.onJoin(drag, devsGroup.dataset.dropgrp!);
+    else handlers.onGroupOnto(drag, dev.dataset.uid!);
+  } else if (kids) {
+    handlers.onJoin(drag, kids.dataset.dropgrp!);
+  } else {
+    handlers.onToRoot(drag);
+  }
+}
+
 /** The delegated drag-and-drop wiring for the work area: highlight classes are toggled
  *  imperatively via direct DOM manipulation (see the file header) rather than React state,
  *  so this hook returns plain event handlers plus the container ref, not any rendered state. */
@@ -256,12 +286,7 @@ function useTreeDragAndDrop(
     const drag = dragUidRef.current;
     dragUidRef.current = null;
     clearHighlights(container);
-    const target = event.target as HTMLElement;
-    const dev = target.closest<HTMLElement>('.asdev');
-    const kids = target.closest<HTMLElement>('.asgrp-kids');
-    if (dev && dev.dataset.uid !== drag) onGroupOnto(drag, dev.dataset.uid!);
-    else if (kids) onJoin(drag, kids.dataset.dropgrp!);
-    else onToRoot(drag);
+    resolveDrop(event.target as HTMLElement, drag, { onGroupOnto, onJoin, onToRoot });
   }
 
   return { containerRef, handleDragStart, handleDragEnd, handleDragOver, handleDrop };
