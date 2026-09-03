@@ -57,11 +57,18 @@ afterEach(() => {
 });
 
 describe('MyBookingsModal', () => {
+  // What: with no future bookings for the current user, the modal shows an explanatory
+  // placeholder rather than an empty list.
+  // How: renders with no bookings set up and checks the placeholder text appears.
   it('shows a message when there are no future bookings', () => {
     render(<MyBookingsModal />);
     expect(screen.getByText(/Keine zukünftigen Buchungen/)).toBeInTheDocument();
   });
 
+  // What: a single-day booking shows its note inline and gets a direct "Löschen" (delete)
+  // button, with no expand chip (there's nothing to expand for one day).
+  // How: books one day with a note and checks the machine name, the note text, no expand
+  // chip, and the delete button.
   it('shows a single-day booking with its note, no expand chip', () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna', note: 'wichtig' } } };
     render(<MyBookingsModal />);
@@ -71,6 +78,12 @@ describe('MyBookingsModal', () => {
     expect(screen.getByRole('button', { name: 'Löschen' })).toBeInTheDocument();
   });
 
+  // What: a multi-day consecutive run shows as a collapsed series by default (day count +
+  // one "delete whole series" button), and clicking the expand chip reveals the individual
+  // days, each with its own delete button.
+  // How: books two consecutive days, checks the collapsed summary and series-delete button,
+  // checks an individual date isn't shown yet, then clicks the expand chip and checks two
+  // individual delete buttons now appear.
   it('shows a multi-day series collapsed by default, expandable via the chip', () => {
     window.S.data!.bookings = {
       m1: { '2021-01-04': { name: 'anna' }, '2021-01-05': { name: 'anna' } },
@@ -86,11 +99,17 @@ describe('MyBookingsModal', () => {
     expect(screen.getAllByRole('button', { name: 'Löschen' })).toHaveLength(2); // one per day
   });
 
+  // What: with no bookings at all, the "show only my machines in the plan" shortcut button
+  // doesn't appear — there'd be nothing meaningful for it to filter to.
+  // How: renders with no bookings and checks the button is absent.
   it('shows no "only my machines" button when there are no runs', () => {
     render(<MyBookingsModal />);
     expect(screen.queryByText(/Nur meine Maschinen/)).not.toBeInTheDocument();
   });
 
+  // What: once at least one run exists, the "only my machines" button appears, labeled with
+  // the actual count of distinct machines involved.
+  // How: books one day on one machine and checks the button's text includes "(1)".
   it('shows the "only my machines" button, with the right count, once a run exists', () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
     render(<MyBookingsModal />);
@@ -99,6 +118,10 @@ describe('MyBookingsModal', () => {
     ).toBeInTheDocument();
   });
 
+  // What: clicking "only my machines" sets the grid's machine filter to exactly this user's
+  // booked machines, persists/repaints that filter, closes this modal, and confirms via toast.
+  // How: books one machine, clicks the button, and checks the filter set, the persisted-filter
+  // and toolbar-update calls, one repaint, the modal closing, and the toast text.
   it('the "only my machines" button filters, persists, notifies, closes, and toasts', () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
     act(() => openMyBookings());
@@ -113,6 +136,12 @@ describe('MyBookingsModal', () => {
     expect(document.getElementById('toast')!.textContent).toContain('nur deine 1 Maschine');
   });
 
+  // What: the "Im Plan anzeigen" (show in plan) action on a run unfolds that machine's
+  // category/group in the grid (so it's actually visible) and scrolls to the run's first
+  // live day, then closes this modal.
+  // How: pre-collapses the machine's group, clicks the goto button, and checks the category
+  // is shown, the group is unfolded, exactly two repaints fired (one from the goto action
+  // itself, one from inside the scroll-to-date sequence it triggers), and the modal closed.
   it('"goto" expands the category/group, scrolls to the first live date, and closes', () => {
     window.S.collapsed = new Set(['Halle 1']);
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
@@ -128,10 +157,15 @@ describe('MyBookingsModal', () => {
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
   });
 
+  // What: deleting a single day writes through mutate, then the list re-filters live to
+  // reflect the deletion (no manual refresh needed), with a confirming toast.
+  // How: stubs mutate to apply its reducer against the real data, books one day, deletes it,
+  // and checks mutate ran, the list now shows the "no bookings" placeholder, and the toast
+  // confirms the deletion.
   it('deleting a single day mutates, then re-filters the run live and offers undo', async () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
     // A faithful-enough mutate stub: apply the reducer to the real window.S.data, exactly as
-    // the real (still-legacy) mutate() does, so the live re-filter has something to see.
+    // the real mutate() does, so the live re-filter has something to see.
     window.mutate = vi.fn((fn) => Promise.resolve(fn(window.S.data)));
     render(<MyBookingsModal />);
     await act(async () => {
@@ -142,6 +176,10 @@ describe('MyBookingsModal', () => {
     expect(document.getElementById('toast')!.textContent).toContain('gelöscht');
   });
 
+  // What: deleting a multi-day series (more than one day) asks for confirmation first,
+  // naming the exact day count in the confirmation prompt, before actually deleting.
+  // How: books two consecutive days, clicks "Serie löschen", and checks the confirm dialog's
+  // title/button-label mention the right count, then that mutate actually ran (confirm defaults to true).
   it('deleting a series with more than one day asks to confirm first', async () => {
     window.S.data!.bookings = {
       m1: { '2021-01-04': { name: 'anna' }, '2021-01-05': { name: 'anna' } },
@@ -156,6 +194,9 @@ describe('MyBookingsModal', () => {
     expect(window.mutate).toHaveBeenCalledOnce();
   });
 
+  // What: declining the series-delete confirmation aborts it entirely — no write happens.
+  // How: stubs askConfirm to resolve false, clicks "Serie löschen", and checks mutate was
+  // never called.
   it('does not delete the series when the confirm is declined', async () => {
     window.askConfirm = vi.fn().mockResolvedValue(false);
     window.S.data!.bookings = {
@@ -168,6 +209,8 @@ describe('MyBookingsModal', () => {
     expect(window.mutate).not.toHaveBeenCalled();
   });
 
+  // What: the "Schließen" (close) button closes the modal without deleting anything.
+  // How: opens the modal, clicks close, and checks the overlay's open class is gone.
   it('Schließen closes without deleting', () => {
     act(() => openMyBookings());
     act(() => {
@@ -178,6 +221,10 @@ describe('MyBookingsModal', () => {
 });
 
 describe('openMyBookings', () => {
+  // What: with no user name set, opening "my bookings" prompts for a name first instead of
+  // showing an empty/meaningless list — there's no "mine" to filter to without a name.
+  // How: clears the store's user, opens the modal, and checks the name-prompt appears while
+  // the bookings modal's own heading does not.
   it('prompts for a name first when none is set, instead of opening', () => {
     window.S.user = '';
     act(() => openMyBookings());
@@ -185,6 +232,8 @@ describe('openMyBookings', () => {
     expect(screen.queryByText('Meine Buchungen (ab heute)')).not.toBeInTheDocument();
   });
 
+  // What: with a user name already set, the modal opens directly.
+  // How: opens with the default seeded user and checks the modal's heading appears.
   it('opens the modal when a name is already set', () => {
     act(() => openMyBookings());
     expect(screen.getByText('Meine Buchungen (ab heute)')).toBeInTheDocument();
