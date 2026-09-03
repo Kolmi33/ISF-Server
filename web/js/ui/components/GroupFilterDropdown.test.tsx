@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, type RenderResult } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
-import { GroupFilterDropdown, fillGroupSel } from './GroupFilterDropdown.tsx';
+import { GroupFilterDropdown, fillGroupSel, clearGroupFilter } from './GroupFilterDropdown.tsx';
 
 function machine(overrides: Partial<Machine> = {}): Machine {
   return { id: 'm1', name: 'Fräse', group: 'Halle 1', ...overrides };
@@ -17,7 +17,7 @@ let mounted: RenderResult;
 const notifySpy = vi.spyOn(store, 'notify');
 
 beforeEach(() => {
-  document.body.innerHTML = `<button id="groupBtn">Alle Bereiche ▾</button><div id="groupDrop"></div>`;
+  document.body.innerHTML = `<button id="groupBtn">Alle Bereiche ▾</button><button id="groupClearBtn" style="display:none">×</button><div id="groupDrop"></div>`;
   store.set({
     data: { machines: [machine(), machine({ id: 'm2', name: 'Presse', group: 'Halle 2' })] },
     groupsSel: new Set(),
@@ -138,5 +138,35 @@ describe('GroupFilterDropdown', () => {
     // (unlikely) case that no instance is currently mounted to receive it.
     act(() => mounted.unmount());
     expect(() => fillGroupSel()).not.toThrow();
+  });
+
+  // What: the toolbar's own quick-clear "×" (next to the button, not inside the dropdown
+  // popover) only shows once a group filter is actually active (user request: clear an
+  // active filter instantly from the main view).
+  // How: checks it's hidden at mount (nothing selected), then selects a group and checks it
+  // becomes visible.
+  it('shows the toolbar quick-clear "×" only while a group filter is active', () => {
+    expect(document.getElementById('groupClearBtn')!.style.display).toBe('none');
+    openDropdown();
+    act(() => {
+      screen.getByRole('checkbox', { name: 'Halle 1' }).click();
+    });
+    expect(document.getElementById('groupClearBtn')!.style.display).not.toBe('none');
+  });
+});
+
+describe('clearGroupFilter', () => {
+  // What: the toolbar quick-clear empties the group selection, persists it, repaints the
+  // grid, and refreshes both the toolbar button's label and its own "×" visibility — the same
+  // effect as checking "Alle Bereiche" inside the popover, just reachable without opening it.
+  // How: seeds a group selection, calls clearGroupFilter(), and checks every one of those effects.
+  it('clears the selection, persists, notifies, and refreshes the toolbar button', () => {
+    window.S.groupsSel = new Set(['Halle 1']);
+    clearGroupFilter();
+    expect(window.S.groupsSel.size).toBe(0);
+    expect(JSON.parse(localStorage.getItem('mb_groupssel')!)).toEqual([]);
+    expect(notifySpy).toHaveBeenCalledOnce();
+    expect(document.getElementById('groupBtn')!.textContent).toBe('Alle Bereiche ▾');
+    expect(document.getElementById('groupClearBtn')!.style.display).toBe('none');
   });
 });

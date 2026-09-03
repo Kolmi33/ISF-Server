@@ -143,6 +143,10 @@ function wireToolbarButtons(): void {
   document.getElementById('btnStats')!.onclick = () => statsModal.openStats();
   document.getElementById('btnAdmin')!.onclick = adminModal.openAdmin;
   document.getElementById('btnRefresh')!.onclick = () => void mutateModule.refreshNow(false);
+  // The toolbar's own quick-clear "×" next to the machine/group filter buttons (user request):
+  // remove an active filter instantly from the main view, no need to open the dropdown first.
+  document.getElementById('machClearBtn')!.onclick = machineFilterDropdown.clearMachineFilter;
+  document.getElementById('groupClearBtn')!.onclick = groupFilterDropdown.clearGroupFilter;
 }
 
 /**

@@ -18,14 +18,30 @@ function groupList(): string[] {
   return [...new Set(store.get('data')!.machines.map((m) => m.group))];
 }
 
-/** Refreshes `#groupBtn`'s label from the current group selection. `#groupBtn` is static
- *  markup, not React-rendered, so its text is mutated directly rather than through JSX. */
+/** Refreshes `#groupBtn`'s label from the current group selection, plus the toolbar's own
+ *  quick-clear "×" (`#groupClearBtn`, a sibling button next to `#groupBtn` — user request:
+ *  clear an active filter instantly from the main view, without opening the dropdown at all).
+ *  Both are static markup, not React-rendered, so mutated directly rather than through JSX. */
 function updateGroupBtn(): void {
   const button = document.getElementById('groupBtn');
-  if (!button) return;
-  const count = store.get('groupsSel').size;
-  button.textContent =
-    count === 0 ? 'Alle Bereiche ▾' : `${count} Bereich${count > 1 ? 'e' : ''} ▾`;
+  if (button) {
+    const count = store.get('groupsSel').size;
+    button.textContent =
+      count === 0 ? 'Alle Bereiche ▾' : `${count} Bereich${count > 1 ? 'e' : ''} ▾`;
+  }
+  const clearButton = document.getElementById('groupClearBtn');
+  if (clearButton) clearButton.style.display = store.get('groupsSel').size ? '' : 'none';
+}
+
+/** Clears the group filter selection — the toolbar quick-clear's own action, reachable
+ *  without opening the dropdown. `handleAllChange` below (the popover's own "Alle Bereiche"
+ *  row) calls this too (plus its local `bumpTick`, needed only while the dropdown is actually
+ *  mounted/open), so both routes stay in lockstep. */
+export function clearGroupFilter(): void {
+  store.get('groupsSel').clear();
+  saveFilters();
+  store.notify();
+  updateGroupBtn();
 }
 
 let refreshGroupList: (() => void) | null = null;
@@ -55,9 +71,7 @@ export function GroupFilterDropdown() {
   if (!isOpen) return null;
 
   function handleAllChange(): void {
-    store.get('groupsSel').clear();
-    saveFilters();
-    store.notify();
+    clearGroupFilter();
     bumpTick();
   }
 

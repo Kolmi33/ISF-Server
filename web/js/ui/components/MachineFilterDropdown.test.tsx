@@ -3,7 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { AppState, Machine } from '../../../../shared/types.ts';
 import { store } from '../../store-instance.ts';
-import { MachineFilterDropdown, saveFilters, updateMachBtn } from './MachineFilterDropdown.tsx';
+import {
+  MachineFilterDropdown,
+  saveFilters,
+  updateMachBtn,
+  clearMachineFilter,
+} from './MachineFilterDropdown.tsx';
 
 function machine(overrides: Partial<Machine> = {}): Machine {
   return { id: 'm1', name: 'Fräse', group: 'Halle 1', ...overrides };
@@ -19,7 +24,7 @@ const meas = machine({ id: 'm3', name: 'Messgerät', group: 'Labor', cat: 'messt
 const notifySpy = vi.spyOn(store, 'notify');
 
 beforeEach(() => {
-  document.body.innerHTML = `<button id="machBtn">Filtern ▾</button><div id="machDrop"></div>`;
+  document.body.innerHTML = `<button id="machBtn">Filtern ▾</button><button id="machClearBtn" style="display:none">×</button><div id="machDrop"></div>`;
   store.set({
     data: { machines: [m1, m2, meas], bookings: {} },
     favs: new Set(),
@@ -186,10 +191,41 @@ describe('updateMachBtn', () => {
     expect(button.style.background).toBe('');
   });
 
+  // What: the toolbar's own quick-clear "×" (next to the button, not inside the dropdown
+  // popover) only shows once a filter is actually active — clicking it removes the filter
+  // instantly without opening the dropdown at all (user request).
+  // How: calls updateMachBtn() with an empty selection (hidden), then with a selection (shown).
+  it('shows the toolbar quick-clear "×" only while a filter is active', () => {
+    updateMachBtn();
+    expect(document.getElementById('machClearBtn')!.style.display).toBe('none');
+    window.S.machSel = new Set(['m1']);
+    updateMachBtn();
+    expect(document.getElementById('machClearBtn')!.style.display).not.toBe('none');
+  });
+
   // What: calling updateMachBtn when the button element isn't in the DOM is a safe no-op.
   // How: removes the button element and checks calling updateMachBtn() doesn't throw.
   it('does nothing when #machBtn is absent', () => {
     document.getElementById('machBtn')!.remove();
     expect(() => updateMachBtn()).not.toThrow();
+  });
+});
+
+describe('clearMachineFilter', () => {
+  // What: the toolbar quick-clear empties the machine selection, persists it, repaints the
+  // grid, and refreshes the toolbar button/its own "×" visibility — the same effect as the
+  // dropdown's own internal "Filter löschen" row, just reachable without opening it.
+  // How: seeds a selection, calls clearMachineFilter(), and checks every one of those effects.
+  it('clears the selection, persists, notifies, and refreshes the toolbar button', () => {
+    window.S.machSel = new Set(['m1', 'm2']);
+    saveFilters();
+    updateMachBtn();
+    clearMachineFilter();
+    expect(window.S.machSel.size).toBe(0);
+    expect(JSON.parse(localStorage.getItem('mb_machsel')!)).toEqual([]);
+    expect(notifySpy).toHaveBeenCalledOnce();
+    const button = document.getElementById('machBtn')!;
+    expect(button.textContent).toContain('Filtern ▾');
+    expect(document.getElementById('machClearBtn')!.style.display).toBe('none');
   });
 });

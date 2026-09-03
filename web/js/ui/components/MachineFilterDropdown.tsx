@@ -31,17 +31,36 @@ export function saveFilters(): void {
   localStorage.setItem('mb_groupssel', JSON.stringify([...store.get('groupsSel')]));
 }
 
-/** Refreshes the toolbar button's label/highlight from the current machine selection.
- *  `#machBtn` is static markup, not React-rendered (it sits outside `#machDrop`) — mutated
- *  directly rather than through JSX. */
+/** Refreshes the toolbar button's label/highlight from the current machine selection, plus
+ *  the toolbar's own quick-clear "×" (`#machClearBtn`, a sibling button next to `#machBtn` —
+ *  user request: clear an active filter instantly from the main view, without opening the
+ *  dropdown at all). Both are static markup, not React-rendered — mutated directly rather
+ *  than through JSX. */
 export function updateMachBtn(): void {
   const button = document.getElementById('machBtn');
-  if (!button) return;
-  const count = store.get('machSel').size;
-  button.innerHTML =
-    '<svg class="ic" aria-hidden="true"><use href="#i-search"/></svg> ' +
-    (count ? `${count} gewählt ▾` : 'Filtern ▾');
-  button.style.background = count ? 'var(--accent-light)' : '';
+  if (button) {
+    const count = store.get('machSel').size;
+    button.innerHTML =
+      '<svg class="ic" aria-hidden="true"><use href="#i-search"/></svg> ' +
+      (count ? `${count} gewählt ▾` : 'Filtern ▾');
+    button.style.background = count ? 'var(--accent-light)' : '';
+  }
+  const clearButton = document.getElementById('machClearBtn');
+  if (clearButton) clearButton.style.display = store.get('machSel').size ? '' : 'none';
+}
+
+/** Clears the machine filter selection — the toolbar quick-clear's own action, reachable
+ *  without opening the dropdown. `useMachineSelectionActions`'s own "Filter löschen" row
+ *  inside the popover calls this too (plus its local `bumpTick`, needed only while the
+ *  dropdown is actually mounted/open), so both routes stay in lockstep. Clicking the toolbar
+ *  button also closes the dropdown first if it happened to be open (`useToolbarDropdown`'s own
+ *  outside-mousedown handling, since `#machClearBtn` sits outside both `#machBtn` and
+ *  `#machDrop`), so there's no mounted popover left to desync from this external clear. */
+export function clearMachineFilter(): void {
+  store.get('machSel').clear();
+  saveFilters();
+  updateMachBtn();
+  store.notify();
 }
 
 const DEFAULT_OPEN_KEYS = new Set(['fav']);
@@ -169,10 +188,7 @@ function useMachineSelectionActions(bumpTick: () => void) {
   }
 
   function handleClear(): void {
-    store.get('machSel').clear();
-    saveFilters();
-    updateMachBtn();
-    store.notify();
+    clearMachineFilter();
     bumpTick();
   }
 
