@@ -17,6 +17,9 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('applyTheme', () => {
+  // What: an explicit "dark" preference wins regardless of what the OS itself prefers.
+  // How: stores "dark" and stubs the OS preference as light (matches:false), then checks the
+  // applied theme is still dark.
   it('applies "dark" explicitly, regardless of the OS preference', () => {
     localStorage.setItem('mb_theme', 'dark');
     stubMatchMedia(false);
@@ -24,6 +27,9 @@ describe('applyTheme', () => {
     expect(document.documentElement.dataset.theme).toBe('dark');
   });
 
+  // What: an explicit "light" preference wins regardless of what the OS itself prefers.
+  // How: stores "light" and stubs the OS preference as dark (matches:true), then checks the
+  // applied theme is still light.
   it('applies "light" explicitly, regardless of the OS preference', () => {
     localStorage.setItem('mb_theme', 'light');
     stubMatchMedia(true);
@@ -31,6 +37,8 @@ describe('applyTheme', () => {
     expect(document.documentElement.dataset.theme).toBe('light');
   });
 
+  // What: the "auto" setting defers to the OS preference, applying dark when the OS prefers dark.
+  // How: stores "auto" and stubs matchMedia to report a dark preference, checking dark is applied.
   it('"auto" follows a dark OS preference', () => {
     localStorage.setItem('mb_theme', 'auto');
     stubMatchMedia(true);
@@ -38,6 +46,8 @@ describe('applyTheme', () => {
     expect(document.documentElement.dataset.theme).toBe('dark');
   });
 
+  // What: the "auto" setting also defers to a light OS preference.
+  // How: stores "auto" and stubs matchMedia to report a light preference, checking light is applied.
   it('"auto" follows a light OS preference', () => {
     localStorage.setItem('mb_theme', 'auto');
     stubMatchMedia(false);
@@ -45,6 +55,9 @@ describe('applyTheme', () => {
     expect(document.documentElement.dataset.theme).toBe('light');
   });
 
+  // What: with nothing stored at all, the theme defaults to "auto" behavior (following the OS).
+  // How: leaves localStorage empty, stubs a dark OS preference, and checks dark is applied
+  // (proving the missing-preference case falls through to the same OS-following logic as "auto").
   it('defaults to "auto" when no preference is stored', () => {
     stubMatchMedia(true);
     applyTheme();
