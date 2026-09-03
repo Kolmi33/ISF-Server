@@ -1,15 +1,20 @@
-// The Assistant's results list (Phase 7 slice B7): free-window runs with an editable "days to
-// book" count (clamped to the run's length), a suggested-devices line, a "pin" that collapses
-// the modal and filters+centers the grid on the run, and "Buchen…" opening the booking form.
-// The scheduling itself (`freeDays`/`groupRuns`/`extendOpenRuns`/`chooseDevicesForTree`) already
-// lives in `core/assistant.ts`; `ui/assistant-results.ts` caps/shapes the list. Faithful port of
-// legacy `runAssistant`'s results-rendering half.
+// =======================================================================================
+// ASSISTANT RESULTS COMPONENT (web/js/ui/components/AssistantResults.tsx)
+// =======================================================================================
 //
-// Shape decision (E2 — flagged): legacy's clamp tooltip is a precisely viewport-positioned
-// floating element (`showAsTip`, measuring `getBoundingClientRect`). This keeps the same
-// message text and ~2s auto-hide, but renders inline next to the input instead of computing an
-// absolute screen position — a cosmetic simplification with no functional difference (the
-// number still clamps identically either way).
+// The Assistant's results list: free-window runs with an editable "days to book" count
+// (clamped to the run's length), a suggested-devices line, a "pin" that collapses the modal
+// and filters+centers the grid on the run, and "Buchen…" opening the booking form.
+//
+// Key Principles:
+// - RENDERING ONLY, SCHEDULING LIVES ELSEWHERE: the scheduling itself
+//   (`freeDays`/`groupRuns`/`extendOpenRuns`/`chooseDevicesForTree`) lives in
+//   `core/assistant.ts`; `ui/assistant-results.ts` caps/shapes the list this component renders.
+// - INLINE CLAMP TOOLTIP: when a requested day count exceeds the run's actual length, a
+//   short-lived hint renders inline next to the input (not a precisely viewport-positioned
+//   floating element) — simpler, with no functional difference in what actually clamps.
+//
+// =======================================================================================
 
 import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
@@ -31,9 +36,9 @@ function rangeText(dates: readonly string[]): string {
     : `${formatDateLong(dates[0]!)} – ${formatDateLong(dates[dates.length - 1]!)}`;
 }
 
-/** Jump to the run's first day, filtered to every device the Assistant considered (not just
- *  this run's picks) — collapsing rather than closing, so the selection/results survive.
- *  Faithful port of legacy's `data-show` handler. */
+/** Jumps to the run's first day, filtered to every device the Assistant considered (not
+ *  just this run's picks) — collapsing rather than closing the modal, so the search
+ *  selection/results survive underneath it for when the user comes back. */
 function gotoRun(firstDate: string, allIds: readonly string[]): void {
   collapseReactModal();
   // Both writes stay silent — saveFilters()/updateMachBtn()/resetView() run before the one

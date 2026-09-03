@@ -1,7 +1,17 @@
-// The "All bookings" modal (Phase 7 slice B5). Faithful port of legacy `openAllBookings`/its
-// `renderList`. Read-only (list + "goto" only, no delete) — unlike My Bookings, the run
-// structure needs no live re-filtering against later mutations: it's frozen at open and never
-// touched again, exactly legacy's own `const runsAll=...` computed once outside `renderList`.
+// =======================================================================================
+// ALL BOOKINGS MODAL COMPONENT (web/js/ui/components/AllBookingsModal.tsx)
+// =======================================================================================
+//
+// The "All bookings" modal: every future booking run, filterable by person/machine/group/
+// date range, with a "show in grid" jump per row.
+//
+// Key Principles:
+// - READ-ONLY, FROZEN AT OPEN: list + "goto" only, no delete. Unlike My Bookings, the run
+//   structure needs no live re-filtering against later mutations — it's computed once when
+//   the modal opens (`useState`'s lazy initializer) and never recomputed for the rest of
+//   this modal's lifetime, even if a write happens elsewhere while it's open.
+//
+// =======================================================================================
 
 import { useState } from 'react';
 import type { ChangeEvent } from 'react';
@@ -36,10 +46,10 @@ const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'person', label: 'Person' },
 ];
 
-/** Jump to a run's first day in the grid, filtered to just its machine — guaranteed visible
- *  even if its category/group is folded (unlike My Bookings' `gotoRun`, which expands them
- *  instead; this modal has no per-user machine set to fall back on). Faithful port of legacy's
- *  `[data-goto]` handler. */
+/** Jumps to a run's first day in the grid, filtered to just its machine — guaranteed
+ *  visible even if its category/group is folded (unlike My Bookings' `gotoRun`, which
+ *  expands them instead; this modal has no per-user machine set to fall back on, so
+ *  filtering to the one machine is the only way to guarantee visibility here). */
 function goto(run: AllRun): void {
   closeReactModal();
   // Both writes stay silent — saveFilters()/updateMachBtn()/resetView() run before the one
@@ -199,11 +209,11 @@ export function AllBookingsModal() {
   );
 }
 
-/** Open "All bookings". Faithful port of legacy `openAllBookings`. Guarded (E2 — flagged, not
- *  in legacy): the toolbar button this is normally wired to stays hidden until the initial
- *  load succeeds, so this is unreachable in practice, but AllBookingsModal's initial-state
- *  `useState` unwraps `store.get('data')` with `!` — cheap defensive-in-depth against a future
- *  caller (or a test) that opens it before data has loaded. */
+/** Opens "All bookings". Guarded even though the toolbar button this is normally wired to
+ *  stays hidden until the initial load succeeds (making this unreachable in practice) —
+ *  cheap defensive-in-depth against a future caller, or a test, that opens it before data
+ *  has loaded; `AllBookingsModal`'s own initial-state `useState` unwraps `store.get('data')`
+ *  with `!`. */
 export function openAllBookings(): void {
   if (!store.get('data')) {
     toast('Noch keine Daten geladen — bitte kurz warten.');

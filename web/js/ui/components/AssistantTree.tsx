@@ -1,13 +1,21 @@
-// The Assistant's "need" tree work area (Phase 7 slice B7): the drag-and-drop canvas where
-// checked devices land, equivalents get dragged onto each other to form "need N of M" groups,
-// and groups nest. Tree mutation is already pure and 100%-tested in `core/assistant.ts` — this
-// is DOM/DnD wiring only. Native `dragstart`/`dragover`/`drop` map directly onto React's
-// `onDragStart`/`onDragOver`/`onDrop`, delegated on the work area exactly like legacy's own
-// `wireWorkDnD`, so the highlight classes (`.dragover`, `.dragover-root`, `.dragging`) are
-// toggled imperatively via direct DOM manipulation rather than React state — re-rendering the
-// whole tree on every `dragover` (which fires continuously) would be wasteful for a purely
-// transient visual cue. Faithful port of legacy `renderWork`/`asDevHTML`/`asGrpHTML`/
-// `wireWorkDnD`.
+// =======================================================================================
+// ASSISTANT TREE COMPONENT (web/js/ui/components/AssistantTree.tsx)
+// =======================================================================================
+//
+// The Assistant's "need" tree work area: the drag-and-drop canvas where checked devices
+// land, equivalents get dragged onto each other to form "need N of M" groups, and groups nest.
+//
+// Key Principles:
+// - DOM/DND WIRING ONLY: tree mutation itself is already pure and 100%-tested in
+//   `core/assistant.ts` — this component is purely the drag-and-drop plumbing around it.
+//   Native `dragstart`/`dragover`/`drop` map directly onto React's
+//   `onDragStart`/`onDragOver`/`onDrop`, delegated on the work area as a whole.
+// - HIGHLIGHT CLASSES ARE IMPERATIVE, NOT REACT STATE: `.dragover`/`.dragover-root`/
+//   `.dragging` are toggled via direct DOM manipulation rather than component state —
+//   re-rendering the whole tree on every `dragover` (which fires continuously while
+//   dragging) would be wasteful for a purely transient visual cue.
+//
+// =======================================================================================
 
 import { useRef } from 'react';
 import type { DragEvent } from 'react';
@@ -166,9 +174,9 @@ function AssistNodeView({ node, handlers }: { node: AssistNode; handlers: NodeHa
   );
 }
 
-/** Loose (ungrouped) devices, reordered so devices sharing a machine group sit adjacently — no
- *  visible header, just display order. Faithful port of legacy's `byG` bucketing in
- *  `renderWork`. */
+/** Reorders loose (ungrouped) devices so devices sharing a machine group sit adjacently —
+ *  no visible header for the grouping, it only affects display order, making it easier to
+ *  spot equivalent devices worth dragging onto each other. */
 function reorderLooseByMachineGroup(
   loose: readonly AssistDev[],
   machineById: (id: string) => Machine | undefined,
@@ -188,10 +196,8 @@ function clearHighlights(container: HTMLElement): void {
 }
 
 /** The delegated drag-and-drop wiring for the work area: highlight classes are toggled
- *  imperatively via direct DOM manipulation (see the file header) rather than React state, so
- *  this hook returns plain event handlers + the container ref, not any rendered state. Split
- *  out of `AssistantTree` purely to stay under the function-length budget. Faithful port of
- *  legacy `wireWorkDnD`. */
+ *  imperatively via direct DOM manipulation (see the file header) rather than React state,
+ *  so this hook returns plain event handlers plus the container ref, not any rendered state. */
 function useTreeDragAndDrop(
   onGroupOnto: (dragUid: string, targetUid: string) => void,
   onJoin: (dragUid: string, groupUid: string) => void,

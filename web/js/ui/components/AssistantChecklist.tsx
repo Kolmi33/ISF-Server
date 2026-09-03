@@ -1,9 +1,16 @@
-// The Assistant's device checklist (Phase 7 slice B7): search + the collapsible fav/category/
-// group tree, its checkboxes toggling a device into/out of the work area immediately. Faithful
-// port of legacy `machineChecklist`/`wireChecklistFilter` — row structure/visibility lives in
-// `ui/assistant-checklist.ts` (`buildChecklistRows`), this is just the rendering. The "Aktuellen
-// Filter übernehmen" button legacy's `wireChecklistFilter` wires conditionally is dead code in
-// practice — the Assistant's own modal template never renders that button — so it's not ported.
+// =======================================================================================
+// ASSISTANT CHECKLIST COMPONENT (web/js/ui/components/AssistantChecklist.tsx)
+// =======================================================================================
+//
+// The Assistant's device checklist: search + the collapsible fav/category/group tree, its
+// checkboxes toggling a device into/out of the work area immediately.
+//
+// Key Principles:
+// - RENDERING ONLY, ROW LOGIC LIVES ELSEWHERE: row structure and visibility (which rows
+//   exist, their fold state, search filtering) are `ui/assistant-checklist.ts`'s
+//   `buildChecklistRows` — this component only renders whatever row list that returns.
+//
+// =======================================================================================
 
 import { useState } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
