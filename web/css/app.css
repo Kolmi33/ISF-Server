@@ -471,10 +471,20 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .mybookings .abfilters input,.mybookings .abfilters select{min-height:36px}
 .mybookings .mybk{padding:12px 10px;align-items:center}
 .mybookings .abmach b{font-size:15px;font-weight:700}
-/* Color-coded pill badge marking runs in the same multi-machine booking group (user request,
-   replacing an earlier left-border accent) — same pill shape as .aspill, background set
-   per-instance from the group's own color (GroupBadge, MyBookingsModal.tsx). */
-.mybookings .grouppill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;color:var(--text);vertical-align:middle}
+/* A small icon (not a colored text pill any more — user request) marking a run as part of a
+   real multi-machine booking group, right next to the machine name. */
+.mybookings .grpicon{display:inline-flex;color:var(--muted);vertical-align:middle}
+/* The "parent card" wrapping every run in the same real booking group ("Experiment Setup"
+   style, user request) — one outer card naming the group, its own member runs nested inside
+   as line items, instead of a flat list of independently-carded rows for each member. Colored
+   per-instance from the group's own hash (GroupCard, MyBookingsRun.tsx) via --groupcolor, the
+   same nameColor mechanism the grid itself uses for booker names — a left accent bar plus a
+   faint tinted header, not a full colored fill (still meant to read as "a card", not "a block
+   of color"). */
+.mybookings .mybk-group{border:1px solid var(--border);border-left:4px solid var(--groupcolor);border-radius:8px;margin:8px 0;overflow:hidden}
+.mybookings .mybk-group-head{display:flex;align-items:center;gap:6px;padding:8px 10px;background:color-mix(in srgb,var(--groupcolor) 20%,var(--panel));font-size:13px}
+.mybookings .mybk-group-item .mybk{border-bottom:1px solid var(--border)}
+.mybookings .mybk-group-item:last-child .mybk{border-bottom:none}
 /* One horizontal row of standardized icon buttons (pin / expand / delete) — replaces the old
    stacked column + separate wide "Serie löschen" button (user request). */
 .mybookings .mybk-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto}

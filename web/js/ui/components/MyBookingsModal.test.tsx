@@ -130,76 +130,74 @@ describe('MyBookingsModal', () => {
     expect(document.querySelector('.abdate')!.textContent).not.toContain('▸');
   });
 
-  // What: a run whose first day belongs to a booking group spanning more than one machine
-  // shows a "Teil einer Buchungsgruppe" hint naming the title and machine count — booking
-  // groups are now detected and displayed, not silently treated as a plain run (user request).
-  // How: seeds two machines sharing one gid/gtitle on the same day and checks the hint appears
-  // on the resulting run with the right title and count.
-  it('detects and displays a booking group spanning multiple machines', () => {
+  // What: runs sharing a real (multi-machine) booking group are bundled into one parent
+  // "GroupCard" naming the group and its machine count, rather than each showing its own
+  // separate "Teil einer Buchungsgruppe" hint — user request ("gemeinsame Buchungsgruppen in
+  // einer Card"). The individual member rows nested inside don't repeat the group name (the
+  // card header already said it once) but still each carry the small group-membership icon.
+  // How: seeds two machines sharing one gid/gtitle on the same day and checks exactly one
+  // `.mybk-group` card renders, naming the title and machine count once, with both machine
+  // names nested inside it and a `.grpicon` on each nested row.
+  it('bundles a booking group spanning multiple machines into one parent card', () => {
     window.S.data!.machines = [machine(), machine({ id: 'm2', name: 'Presse' })];
     window.S.data!.bookings = {
       m1: { [TODAY]: { name: 'anna', gid: 'g1', gtitle: 'Projekt X' } },
       m2: { [TODAY]: { name: 'anna', gid: 'g1' } },
     };
     render(<MyBookingsModal />);
-    // Each machine's own row independently detects and shows the group hint — one per row,
-    // hence two matches, not one shared hint for the whole group.
-    expect(screen.getAllByText(/Teil einer Buchungsgruppe/)).toHaveLength(2);
-    // "Projekt X" appears twice, both on m1's own row: once in the hint's <b>, once in its
-    // pill badge (GroupBadge) — m2's day carries no gtitle, so its own hint/badge don't repeat it.
-    expect(screen.getAllByText('Projekt X')).toHaveLength(2);
-    expect(screen.getAllByText(/2 Maschinen/)).toHaveLength(2);
-  });
-
-  // What: a plain (ungrouped) run, or a "group" of just one machine, shows no group hint at
-  // all — only a genuine multi-machine group is worth calling out.
-  // How: books an ordinary single-machine run and checks the hint never appears.
-  it('shows no group hint for a plain, ungrouped run', () => {
-    window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
-    render(<MyBookingsModal />);
+    const cards = document.querySelectorAll('.mybk-group');
+    expect(cards).toHaveLength(1);
+    const card = cards[0]!;
+    expect(card.querySelector('.mybk-group-head')!.textContent).toContain('Projekt X');
+    expect(card.querySelector('.mybk-group-head')!.textContent).toContain('2 Maschinen');
+    expect(screen.getByText('Fräse')).toBeInTheDocument();
+    expect(screen.getByText('Presse')).toBeInTheDocument();
+    expect(card.querySelectorAll('.grpicon')).toHaveLength(2);
+    // The card's header already names the group once — its nested rows don't repeat it.
     expect(screen.queryByText(/Teil einer Buchungsgruppe/)).not.toBeInTheDocument();
   });
 
-  // What: runs sharing the same multi-machine booking group get a matching color-coded pill
-  // badge next to the machine name (not just the text hint) — user request: a prominent,
-  // color-coded pill badge to show related rows belong together, replacing an earlier
-  // left-border accent that read as an unwanted stray line. Both rows in the same group get
-  // the exact same color, so the badge actually reads as "same group" at a glance. The badge
-  // shows the group's own title when one was given, standing in for a generic "Gruppe" label.
-  // How: seeds the same 2-machine group as the hint test above and reads each row's own
-  // `.grouppill` background color and text.
-  it('gives runs in the same multi-machine group a matching colored pill badge', () => {
-    window.S.data!.machines = [machine(), machine({ id: 'm2', name: 'Presse' })];
-    window.S.data!.bookings = {
-      m1: { [TODAY]: { name: 'anna', gid: 'g1', gtitle: 'Projekt X' } },
-      m2: { [TODAY]: { name: 'anna', gid: 'g1' } },
-    };
-    render(<MyBookingsModal />);
-    const pills = [...document.querySelectorAll<HTMLElement>('.grouppill')];
-    expect(pills).toHaveLength(2);
-    expect(pills[0]!.textContent).toBe('Projekt X');
-    expect(pills[0]!.style.backgroundColor).not.toBe('');
-    expect(pills[0]!.style.backgroundColor).toBe(pills[1]!.style.backgroundColor); // same group -> same color
-  });
-
-  // What: a group with no title falls back to a generic "Gruppe" pill label, still colored.
-  // How: seeds a 2-machine group with no gtitle and checks the pill's fallback text.
-  it('falls back to a generic "Gruppe" pill label when the group has no title', () => {
+  // What: a group with no title falls back to a generic "Buchungsgruppe" card header label.
+  // How: seeds a 2-machine group with no gtitle and checks the card header's fallback text.
+  it('falls back to a generic card header label when the group has no title', () => {
     window.S.data!.machines = [machine(), machine({ id: 'm2', name: 'Presse' })];
     window.S.data!.bookings = {
       m1: { [TODAY]: { name: 'anna', gid: 'g1' } },
       m2: { [TODAY]: { name: 'anna', gid: 'g1' } },
     };
     render(<MyBookingsModal />);
-    expect(document.querySelector('.grouppill')!.textContent).toBe('Gruppe');
+    expect(document.querySelector('.mybk-group-head')!.textContent).toContain('Buchungsgruppe');
   });
 
-  // What: a plain (ungrouped) run shows no pill badge at all.
-  // How: books one ordinary single-machine run and checks no `.grouppill` renders.
-  it('shows no pill badge for a plain, ungrouped run', () => {
+  // What: a plain (ungrouped) run, or a "group" of just one machine, renders as a standalone
+  // row: no parent card and no group-membership icon — only a genuine multi-machine group is
+  // worth calling out.
+  // How: books an ordinary single-machine run and checks neither ever appears.
+  it('shows no parent card or group icon for a plain, ungrouped run', () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
     render(<MyBookingsModal />);
-    expect(document.querySelector('.grouppill')).toBeNull();
+    expect(document.querySelector('.mybk-group')).toBeNull();
+    expect(document.querySelector('.grpicon')).toBeNull();
+  });
+
+  // What: a group whose members are trimmed by the active filter down to just one survivor no
+  // longer earns its own parent card — a lone row gains nothing from being wrapped in a
+  // one-item card (matches the "real group" threshold used elsewhere: >1 machine). The row
+  // still carries its group-membership icon, though — that reflects the underlying data (this
+  // run genuinely belongs to a group), independent of what the current filter happens to show.
+  // How: seeds a real 2-machine group, filters the list down to one of its machines by name,
+  // and checks the surviving row renders standalone (no `.mybk-group` card) but keeps its icon.
+  it('renders a group standalone once the filter leaves only one of its members', () => {
+    window.S.data!.machines = [machine(), machine({ id: 'm2', name: 'Presse' })];
+    window.S.data!.bookings = {
+      m1: { [TODAY]: { name: 'anna', gid: 'g1', gtitle: 'Projekt X' } },
+      m2: { [TODAY]: { name: 'anna', gid: 'g1' } },
+    };
+    render(<MyBookingsModal />);
+    fireEvent.change(screen.getByPlaceholderText('Berger'), { target: { value: 'Fräse' } });
+    expect(screen.getByText('Fräse')).toBeInTheDocument();
+    expect(document.querySelector('.mybk-group')).toBeNull();
+    expect(document.querySelector('.grpicon')).not.toBeNull();
   });
 
   // What: the three per-row actions (jump-to-plan, expand, delete) are standardized icon
@@ -295,6 +293,26 @@ describe('MyBookingsModal', () => {
       .querySelector('select')!;
     fireEvent.change(bereichSelect, { target: { value: 'cat:messtechnik' } });
     expect(screen.getByText('Messgerät')).toBeInTheDocument();
+    expect(screen.queryByText('Fräse')).not.toBeInTheDocument();
+  });
+
+  // What: the Bereich filter also works for a plain department group (not just the
+  // whole-category option) — narrows the list to that one group's machines.
+  // How: seeds two machines in different groups, both booked, picks one group by name, and
+  // checks only that group's machine remains.
+  it('filters by a plain department group via the Bereich select', () => {
+    window.S.data!.machines = [machine(), machine({ id: 'm2', name: 'Presse', group: 'Halle 2' })];
+    window.S.data!.bookings = {
+      m1: { [TODAY]: { name: 'anna' } },
+      m2: { [TODAY]: { name: 'anna' } },
+    };
+    render(<MyBookingsModal />);
+    const bereichSelect = screen
+      .getByText('Bereich', { selector: 'label' })
+      .closest('.fld')!
+      .querySelector('select')!;
+    fireEvent.change(bereichSelect, { target: { value: 'Halle 2' } });
+    expect(screen.getByText('Presse')).toBeInTheDocument();
     expect(screen.queryByText('Fräse')).not.toBeInTheDocument();
   });
 
