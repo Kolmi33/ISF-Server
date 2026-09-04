@@ -1,80 +1,83 @@
 :root{
-  --bg:#f4f5f7; --panel:#fff; --border:#d8dbe0; --text:#1a1d21; --muted:#6b7280;
-  --accent:#1a5fb4; --accent-light:#e8f0fb; --danger:#c0392b; --warn:#b9770e;
+  --app-bg:#f4f5f7; --app-panel:#fff; --app-border:#d8dbe0; --app-text:#1a1d21; --app-muted:#6b7280;
+  --app-accent:#1a5fb4; --app-accent-light:#e8f0fb; --danger:#c0392b; --warn:#b9770e;
   --today:#fff8dc; --free-hover:#e8f5e9; --machw:230px;
   --hover:#f0f2f5; --headbg:#eceff3; --grpbg:#dde3ea; --cellbg:#fff;
   --todayhead:#f5e9b8; --blocked1:#f3f3f3; --blocked2:#e3e3e3;
   --tagbg:#eee; --tagink:#555; --dangerbg:#fde3e0; --warnbg:#fdf0d8;
   --confbg:#fdf3e7; --confink:#5c4a1f; --confbrd:#e6c78a;
-  --toastbg:#333; --toastink:#fff; --accent-hover:#164e94;
+  --toastbg:#333; --toastink:#fff; --app-accent-hover:#164e94;
   --focus:#e67e22; --selglow:rgba(26,95,180,.25);
   --dot-free:#2f9e44; --dot-busy:#e03131;
   --wknd:#e9ebef; --wkndhead:#dfe2e8; --wkndtint:rgba(110,116,128,.13);
   --star:#d4a017;
-  /* Raster-Linienfarbe/-stärke der Buchungstabelle — eigene Tokens statt --border, damit die
+  /* Raster-Linienfarbe/-stärke der Buchungstabelle — eigene Tokens statt --app-border, damit die
      Einstellung (SettingsModal.tsx, zwei unabhängige Schieberegler in Pixeln) nur das
      Zellgitter betrifft, nicht Rahmen andernorts (Modals, Buttons, …). --gridline-width ist die
      Datenzellen (td), --gridline-width-header die Kopfzeile (th: KW-Zeile + Datumszeile) — zwei
      Variablen statt einer, damit beide unabhängig einstellbar sind. Themeunabhängig (reine
      Nutzerpräferenz), deshalb nur einmal hier gesetzt, nicht im dark-Block unten wiederholt. */
-  --gridline: var(--border);
+  --gridline: var(--app-border);
   --gridline-width: 1px;
   --gridline-width-header: 1px;
 }
 html[data-theme="dark"]{
-  --bg:#15171a; --panel:#1e2126; --border:#3a3f46; --text:#e8eaed; --muted:#9aa0a6;
-  --accent:#5b96e3; --accent-light:#263a52; --danger:#e07b6e; --warn:#d9a441;
+  --app-bg:#15171a; --app-panel:#1e2126; --app-border:#3a3f46; --app-text:#e8eaed; --app-muted:#9aa0a6;
+  --app-accent:#5b96e3; --app-accent-light:#263a52; --danger:#e07b6e; --warn:#d9a441;
   --today:#3a3620; --free-hover:#1f3320;
   --hover:#2a2f36; --headbg:#23262b; --grpbg:#2b313a; --cellbg:#1e2126;
   --star:#e0b84a;
   --todayhead:#4a4420; --blocked1:#24272c; --blocked2:#2f333a;
   --tagbg:#33383f; --tagink:#b6bcc4; --dangerbg:#4a2622; --warnbg:#453a1c;
   --confbg:#3b3325; --confink:#e8d9b0; --confbrd:#6b5c33;
-  --toastbg:#e8eaed; --toastink:#1a1d21; --accent-hover:#6ea5e8;
+  --toastbg:#e8eaed; --toastink:#1a1d21; --app-accent-hover:#6ea5e8;
   --focus:#ffab5e; --selglow:rgba(91,150,227,.32);
   --dot-free:#4cbf63; --dot-busy:#ff6b6b;
   --wknd:#242830; --wkndhead:#1b1e23; --wkndtint:rgba(150,160,180,.10);
-  --gridline: var(--border);
+  --gridline: var(--app-border);
 }
 body.compact td.cell{height:22px;padding:1px 4px;font-size:12px}
 body.compact td.machcol{padding-top:1px;padding-bottom:1px;font-size:12px}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;height:100%}
-body{font:14px/1.4 -apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+/* font-family dropped (was -apple-system,"Segoe UI",Roboto,Arial,sans-serif) — Phase 14's
+   revised direction lets the preset's Inter Variable (web/css/tailwind.css's html{@apply
+   font-sans}) cascade app-wide instead; font-size/line-height stay app.css's own. */
+body{font-size:14px;line-height:1.4;background:var(--app-bg);color:var(--app-text);display:flex;flex-direction:column}
 
 /* ---------- Toolbar ---------- */
-header{background:var(--panel);border-bottom:1px solid var(--border);padding:6px 12px 4px;display:grid;grid-template-columns:max-content 1fr max-content;row-gap:6px;column-gap:12px;align-items:center;position:sticky;top:0;z-index:30}
+header{background:var(--app-panel);border-bottom:1px solid var(--app-border);padding:6px 12px 4px;display:grid;grid-template-columns:max-content 1fr max-content;row-gap:6px;column-gap:12px;align-items:center;position:sticky;top:0;z-index:30}
 .l1{grid-column:1;grid-row:1;display:flex;gap:8px;align-items:center;justify-content:flex-start}
 .l2{grid-column:1;grid-row:2;display:flex;gap:8px;align-items:center;justify-content:flex-start}
 .r1{grid-column:3;grid-row:1;display:flex;gap:8px;align-items:center;justify-content:flex-end}
 .r2{grid-column:3;grid-row:2;display:grid;grid-template-columns:repeat(3,1fr) auto;gap:8px;min-width:300px}
 .r2 .btn{width:100%;text-align:center}
 #btnHelp{width:auto;padding:6px 10px} /* klein: nur Fragezeichen, die drei Hauptbuttons rücken auf */
-#presBadge{font-size:10px;vertical-align:sub;color:var(--accent);margin-right:1px;cursor:default;font-weight:700}
+#presBadge{font-size:10px;vertical-align:sub;color:var(--app-accent);margin-right:1px;cursor:default;font-weight:700}
 header h1{font-size:16px;margin:0;white-space:nowrap;padding-left:13px} /* Emoji bündig mit Button-Beschriftung darunter */
 /* Segmentierte Umschalter (Slider) in den Untermenüs: eine Einheit mit sicht-
    baren Trennern zwischen den Segmenten, gleichmäßige Größen, klare Zustände */
-.seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--panel)}
+.seg{display:inline-flex;border:1px solid var(--app-border);border-radius:8px;overflow:hidden;background:var(--app-panel)}
 .seg.fill{display:flex}
 .seg.fill button{flex:1}
 /* Inactive segments get a pale grey fill, not just transparent (user request: transparent read
    as too close to the active blue at a glance — a real fill makes "this one's off" obvious
    on sight, not just on close inspection). */
 .seg button{border:none;padding:6px 14px;min-height:32px;background:var(--hover);cursor:pointer;
-  font-size:13px;font-weight:normal;line-height:1;color:var(--muted);white-space:nowrap;transition:background .12s,color .12s}
-.seg button+button{border-left:1px solid var(--border)}
-.seg button:hover{background:var(--grpbg);color:var(--text)}
-.seg button.on{background:var(--accent);color:#fff;font-weight:600}
-.seg button.on:hover{background:var(--accent);color:#fff}
+  font-size:13px;font-weight:normal;line-height:1;color:var(--app-muted);white-space:nowrap;transition:background .12s,color .12s}
+.seg button+button{border-left:1px solid var(--app-border)}
+.seg button:hover{background:var(--grpbg);color:var(--app-text)}
+.seg button.on{background:var(--app-accent);color:#fff;font-weight:600}
+.seg button.on:hover{background:var(--app-accent);color:#fff}
 /* Pill-Tag-Reihe: sekundäre Filter (z.B. Kategorie-Auswahl in der Statistik), bewusst
    anders als der primäre `.seg`-Tab-Umschalter darüber — lose, abgerundete, einzeln
    umrandete Chips statt einer zusammenhängenden Segment-Leiste */
 .pillrow{display:flex;flex-wrap:wrap;gap:6px}
-.pillrow button{border:1px solid var(--border);border-radius:999px;padding:3px 12px;
-  min-height:26px;background:var(--panel);cursor:pointer;font-size:12px;color:var(--muted);
+.pillrow button{border:1px solid var(--app-border);border-radius:999px;padding:3px 12px;
+  min-height:26px;background:var(--app-panel);cursor:pointer;font-size:12px;color:var(--app-muted);
   white-space:nowrap;transition:background .12s,color .12s,border-color .12s}
-.pillrow button:hover{background:var(--hover);color:var(--text)}
-.pillrow button.on{background:var(--accent-light);color:var(--accent);border-color:var(--accent);font-weight:600}
+.pillrow button:hover{background:var(--hover);color:var(--app-text)}
+.pillrow button.on{background:var(--app-accent-light);color:var(--app-accent);border-color:var(--app-accent);font-weight:600}
 .statrow.click{cursor:pointer}
 .statrow.click:hover{background:var(--hover)}
 @media (max-width:1000px){
@@ -83,18 +86,18 @@ header h1{font-size:16px;margin:0;white-space:nowrap;padding-left:13px} /* Emoji
   .r1,.r2{display:flex;min-width:0}
   .r1 .btn,.r2 .btn{width:auto}
 }
-.btn{border:1px solid var(--border);background:var(--panel);border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px;white-space:nowrap;color:var(--text)}
+.btn{border:1px solid var(--app-border);background:var(--app-panel);border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px;white-space:nowrap;color:var(--app-text)}
 .btn:hover{background:var(--hover)}
-.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
-.btn.primary:hover{background:var(--accent-hover)}
+.btn.primary{background:var(--app-accent);color:#fff;border-color:var(--app-accent)}
+.btn.primary:hover{background:var(--app-accent-hover)}
 .btn.danger{color:var(--danger);border-color:var(--danger)}
 .btn.small{padding:3px 8px;font-size:12px}
-input[type=text],input[type=date],input[type=number],select,textarea{border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;background:var(--panel);color:var(--text)}
-input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-light);border-color:var(--accent)}
+input[type=text],input[type=date],input[type=number],select,textarea{border:1px solid var(--app-border);border-radius:6px;padding:6px 8px;font-size:13px;font-family:inherit;background:var(--app-panel);color:var(--app-text)}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--app-accent-light);border-color:var(--app-accent)}
 .navgroup{display:flex;gap:4px;align-items:center}
 .spacer{flex:1}
-#userChip{background:var(--accent-light);border-color:var(--accent);color:var(--accent);font-weight:600}
-#lastRef{font-size:11px;color:var(--muted);white-space:nowrap}
+#userChip{background:var(--app-accent-light);border-color:var(--app-accent);color:var(--app-accent);font-weight:600}
+#lastRef{font-size:11px;color:var(--app-muted);white-space:nowrap}
 #machWrap{position:relative;display:inline-flex;align-items:center}
 /* Once a filter is active, the quick-clear "×" merges into the same visual box as the filter
    button — one continuous pill, not two separate boxes side by side (user request: "Beim
@@ -102,28 +105,28 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-light);bo
    (no gap, no shared border) rather than nesting a real button inside a button. */
 #machWrap.filtered #machBtn{border-top-right-radius:0;border-bottom-right-radius:0;border-right:none}
 #machWrap.filtered #machClearBtn{border-top-left-radius:0;border-bottom-left-radius:0;border-left:none}
-#machDrop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:8px;z-index:60;min-width:320px}
+#machDrop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:8px;z-index:60;min-width:320px}
 #machDrop.open{display:block}
 /* Taller rows (user request: too tight to comfortably click, especially for long device
    names like the Fire-III pyrometer or the Keyence Highspeed camera) */
 #machDrop label{display:block;padding:8px 6px;cursor:pointer;border-radius:4px;font-size:13px}
 #machDrop label:hover{background:var(--hover)}
-#machDrop .grp{font-weight:700;margin-top:6px;color:var(--muted);font-size:12px}
+#machDrop .grp{font-weight:700;margin-top:6px;color:var(--app-muted);font-size:12px}
 /* The popover's own border/shadow already provides structural containment (user request) —
    the inner scrollable list doesn't need a second nested border around it too. */
 #machDrop .mlist{border:none;padding:0}
-.chip{background:var(--accent-light);color:var(--accent);border:1px solid var(--accent);border-radius:12px;padding:2px 8px;font-size:12px;cursor:pointer;white-space:nowrap}
+.chip{background:var(--app-accent-light);color:var(--app-accent);border:1px solid var(--app-accent);border-radius:12px;padding:2px 8px;font-size:12px;cursor:pointer;white-space:nowrap}
 .chip:hover{filter:brightness(.95)}
 #groupWrap{position:relative;display:inline-flex;align-items:center}
 /* Toolbar quick-clear "×" next to the machine/group filter buttons (user request): remove an
    active filter instantly from the main view, no need to open the dropdown first. Hidden by
    default (JS toggles it via updateMachBtn/updateGroupBtn once a filter is actually active). */
-.clearx{padding:2px 8px;font-size:15px;line-height:1;font-weight:700;color:var(--muted)}
+.clearx{padding:2px 8px;font-size:15px;line-height:1;font-weight:700;color:var(--app-muted)}
 .clearx:hover{color:var(--danger);background:var(--dangerbg);border-color:var(--danger)}
 /* Same box-merging treatment as #machWrap above. */
 #groupWrap.filtered #groupBtn{border-top-right-radius:0;border-bottom-right-radius:0;border-right:none}
 #groupWrap.filtered #groupClearBtn{border-top-left-radius:0;border-bottom-left-radius:0;border-left:none}
-#groupDrop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:8px;z-index:50;min-width:230px;max-height:320px;overflow:auto}
+#groupDrop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:8px;z-index:50;min-width:230px;max-height:320px;overflow:auto}
 #groupDrop.open{display:block}
 #groupDrop label{display:block;padding:4px 6px;cursor:pointer;border-radius:4px;font-size:13px}
 #groupDrop label:hover{background:var(--hover)}
@@ -159,17 +162,17 @@ thead th.machcol{left:0;z-index:25;text-align:left;min-width:var(--machw);max-wi
    whole column span has scrolled past, its <th> naturally stops sticking (bound by its own
    box) and the next week's KW header takes over the pinned spot. */
 thead th.kwhead{position:sticky;left:var(--machw);z-index:22}
-thead th.gap{min-width:8px;background:var(--bg);--grid-bottom-h: 0 0 0 0 transparent}
+thead th.gap{min-width:8px;background:var(--app-bg);--grid-bottom-h: 0 0 0 0 transparent}
 #colResize{position:absolute;top:0;right:-4px;bottom:0;width:8px;cursor:col-resize;z-index:27}
-#colResize:hover{background:var(--accent-light)}
-td.machcol{position:sticky;left:0;background:var(--panel);z-index:10;padding:4px 26px 4px 8px;min-width:var(--machw);max-width:var(--machw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default}
-.nextfree{position:absolute;right:3px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:12px;color:var(--accent);background:var(--panel);padding:1px 4px;border-radius:4px;border:1px solid var(--border);line-height:1.2}
-.nextfree:hover{background:var(--accent-light)}
+#colResize:hover{background:var(--app-accent-light)}
+td.machcol{position:sticky;left:0;background:var(--app-panel);z-index:10;padding:4px 26px 4px 8px;min-width:var(--machw);max-width:var(--machw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default}
+.nextfree{position:absolute;right:3px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:12px;color:var(--app-accent);background:var(--app-panel);padding:1px 4px;border-radius:4px;border:1px solid var(--app-border);line-height:1.2}
+.nextfree:hover{background:var(--app-accent-light)}
 .nextfree.back{right:26px}
 td.machcol.hasback{padding-right:49px}
-td.gap{background:var(--bg);border-bottom:none}
+td.gap{background:var(--app-bg);border-bottom:none}
 /* Bereichszeilen kleben beim vertikalen Scrollen unter der Kopfzeile */
-tr.grouprow td{background:var(--grpbg);font-weight:700;padding:5px 8px;cursor:pointer;border-bottom:1px solid var(--border);position:sticky;top:var(--theadh,47px);z-index:14}
+tr.grouprow td{background:var(--grpbg);font-weight:700;padding:5px 8px;cursor:pointer;border-bottom:1px solid var(--app-border);position:sticky;top:var(--theadh,47px);z-index:14}
 tr.grouprow td:first-child{left:0;z-index:16;min-width:var(--machw);max-width:var(--machw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 tr.grouprow td .arrow{display:inline-block;width:14px;transition:transform .1s}
 tr.grouprow.collapsed td .arrow{transform:rotate(-90deg)}
@@ -178,17 +181,17 @@ tr.grouprow.collapsed td .arrow{transform:rotate(-90deg)}
 /* nicht vertikal kleben (sonst überlappt sie beim Scrollen die Bereichszeile);
    nur die erste Zelle bleibt horizontal fixiert, damit der Kategoriename beim
    Seitwärts-Scrollen sichtbar bleibt */
-tr.grouprow.catrow td{font-weight:800;border-top:2px solid var(--border);position:static;top:auto}
+tr.grouprow.catrow td{font-weight:800;border-top:2px solid var(--app-border);position:static;top:auto}
 tr.grouprow.catrow td:first-child{position:sticky;left:0;top:auto;z-index:15}
 /* Kategorie-Umschalter im Spaltenkopf: „an" = im Raster aufgeklappt.
    Gleiche Bauweise wie die Slider unten (eine Einheit, sichtbare Trenner) */
 .catseg{display:flex;justify-content:flex-start;gap:clamp(2px,1.5%,6px);width:100%;min-width:0}
-.catseg .catbtn{flex:1 1 0;min-width:0;border:1px solid var(--border);background:var(--panel);border-radius:6px;padding:6px 6px;cursor:pointer;font-size:13px;color:var(--text);font-weight:normal;display:inline-flex;align-items:center;justify-content:center;gap:4px}
+.catseg .catbtn{flex:1 1 0;min-width:0;border:1px solid var(--app-border);background:var(--app-panel);border-radius:6px;padding:6px 6px;cursor:pointer;font-size:13px;color:var(--app-text);font-weight:normal;display:inline-flex;align-items:center;justify-content:center;gap:4px}
 .catseg .catbtn>.lbl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .catseg .catbtn .ic{flex:0 0 auto}
 .catseg .catbtn:hover{background:var(--hover)}
-.catseg .catbtn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
-.catseg .catbtn.on:hover{background:var(--accent-hover)}
+.catseg .catbtn.on{background:var(--app-accent);color:#fff;border-color:var(--app-accent)}
+.catseg .catbtn.on:hover{background:var(--app-accent-hover)}
 /* Einklappbare Gruppen in Checklisten (Assistent/Filter) und Statistik */
 .grp.click,.statgrp.click{cursor:pointer;user-select:none}
 .grp .arrow,.statgrp .arrow{display:inline-block;width:13px;transition:transform .1s;font-size:11px}
@@ -196,20 +199,20 @@ tr.grouprow.catrow td:first-child{position:sticky;left:0;top:auto;z-index:15}
 /* Hauptkategorie-Kopf in den Listen: wie die Bereichs-Überschrift im Raster
    (höhere Spezifität als „.mlist .grp", damit Farbe/Hintergrund gewinnen) */
 .mlist .grp.cathead,.resultlist .statgrp.cathead,.grp.cathead,.statgrp.cathead{
-  background:var(--grpbg);color:var(--text);text-transform:uppercase;
+  background:var(--grpbg);color:var(--app-text);text-transform:uppercase;
   letter-spacing:.05em;font-size:11px;font-weight:800;padding:5px 6px;border-radius:5px;margin-top:4px}
 /* leichter grauer Trennstreifen zwischen den beiden Kategorien */
 .mlist .grp.cathead:not(:first-child),.resultlist .statgrp.cathead:not(:first-child){
-  border-top:6px solid var(--border);margin-top:10px;padding-top:9px}
+  border-top:6px solid var(--app-border);margin-top:10px;padding-top:9px}
 /* Klappbaum im Filter-Dropdown: Dreieck, eingerückter Bereichs-Kopf, Geräte */
 .mlist .grp.cathead.click{cursor:pointer}
-.mlist .grpsub{font-weight:600;color:var(--muted);font-size:12px;padding:3px 4px 3px 16px;cursor:pointer;border-radius:4px}
+.mlist .grpsub{font-weight:600;color:var(--app-muted);font-size:12px;padding:3px 4px 3px 16px;cursor:pointer;border-radius:4px}
 .mlist .grpsub:hover,.mlist .grp.cathead.click:hover{background:var(--hover)}
 .mlist label{padding-left:26px}
-.tarr{display:inline-block;width:12px;font-size:9px;color:var(--muted);vertical-align:middle}
+.tarr{display:inline-block;width:12px;font-size:9px;color:var(--app-muted);vertical-align:middle}
 /* „Filter löschen": klar als Button erkennbar (Rahmen + Fläche), kein Toggle-Look */
-.clearbtn{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border);
-  background:var(--panel);color:var(--danger);font-weight:600;border-radius:7px;padding:5px 11px;min-height:30px}
+.clearbtn{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--app-border);
+  background:var(--app-panel);color:var(--danger);font-weight:600;border-radius:7px;padding:5px 11px;min-height:30px}
 .clearbtn:hover{background:var(--dangerbg);border-color:var(--danger)}
 .clearbtn .ic{width:14px;height:14px}
 /* Every cell composes its box-shadow from named layers (weekend tint, the four "mine" accent
@@ -258,8 +261,8 @@ td.cell.booked:not(.merge-right):not(.merge-down){border-bottom-right-radius:4px
    an element's own inline style always wins regardless of what classes it carries, so there's
    no cascade/specificity to get subtly wrong. The base `td.cell` rule above still supplies the
    transparent default for every cell that isn't "mine" at all.*/
-td.cell.blocked{background:repeating-linear-gradient(45deg,var(--blocked1),var(--blocked1) 6px,var(--blocked2) 6px,var(--blocked2) 12px);cursor:not-allowed;color:var(--muted)}
-td.cell.unavail{background:var(--blocked1);cursor:not-allowed;color:var(--muted);opacity:.6}
+td.cell.blocked{background:repeating-linear-gradient(45deg,var(--blocked1),var(--blocked1) 6px,var(--blocked2) 6px,var(--blocked2) 12px);cursor:not-allowed;color:var(--app-muted)}
+td.cell.unavail{background:var(--blocked1);cursor:not-allowed;color:var(--app-muted);opacity:.6}
 th.today{background:var(--todayhead)}
 /* Wochenend-Spalten dezent grau markieren (ganze Spalte) */
 thead th.wknd{background:var(--wkndhead)}
@@ -276,7 +279,7 @@ td.cell.kfocus{outline:2px solid var(--focus);outline-offset:-2px}
 .dot.free{background:var(--dot-free)}
 .dot.busy{background:var(--dot-busy)}
 .dot.block{background:var(--warn);border-radius:2px}
-.dot.unavail{background:transparent;border:2px solid var(--muted);box-sizing:border-box}
+.dot.unavail{background:transparent;border:2px solid var(--app-muted);box-sizing:border-box}
 .statdot{display:inline-block;line-height:0;margin-right:4px;vertical-align:-2px}
 .statdot .ic{width:13px;height:13px}
 .statdot.maint{color:var(--warn)}
@@ -296,18 +299,18 @@ html[data-theme="dark"] tbody tr:not(.grouprow):hover td.cell{filter:brightness(
 tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 /* Dezente Scrollbalken (Chrome/Edge) */
 ::-webkit-scrollbar{width:10px;height:10px}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px}
-::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+::-webkit-scrollbar-thumb{background:var(--app-border);border-radius:5px}
+::-webkit-scrollbar-thumb:hover{background:var(--app-muted)}
 ::-webkit-scrollbar-track{background:transparent}
-#presBadge:hover{background:var(--panel)} /* passiv, kein Button-Hover */
-.gcount{font-size:11px;font-weight:400;color:var(--muted);opacity:.7;margin-left:4px}
+#presBadge:hover{background:var(--app-panel)} /* passiv, kein Button-Hover */
+.gcount{font-size:11px;font-weight:400;color:var(--app-muted);opacity:.7;margin-left:4px}
 /* Kollisionsbanner: bleibt stehen, bis der Nutzer es wegklickt */
 #collBanner{display:none;background:var(--dangerbg);color:var(--danger);border-bottom:1px solid var(--danger);padding:6px 12px;font-size:13px;align-items:center;gap:10px}
 #collBanner.show{display:flex}
 /* Eigener Bestätigungsdialog für destruktive Aktionen (statt native confirm()) */
 #confirm2{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:250;align-items:center;justify-content:center;padding:16px}
 #confirm2.open{display:flex}
-#confirm2 .cbox{background:var(--panel);border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.35);max-width:460px;width:100%;padding:16px 18px}
+#confirm2 .cbox{background:var(--app-panel);border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.35);max-width:460px;width:100%;padding:16px 18px}
 #confirm2 h3{margin:0 0 8px;font-size:15px}
 .btn.dangerfill{background:var(--danger);border-color:var(--danger);color:#fff}
 /* Untergeordnete Listenköpfe (Bereichs-/Gruppen-Überschriften wie "Alte Halle") — deutlich
@@ -315,12 +318,12 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    erkennbar sind, nicht als Zeile mit besonders wenig Inhalt. `.statgrp.cathead` (die
    Hauptkategorie, z.B. "MASCHINEN") überschreibt das unten mit noch mehr Gewicht — höhere
    Selektor-Spezifität gewinnt automatisch. */
-.statgrp{font-weight:700;padding:6px 8px;font-size:12px;color:var(--text);
-  background:var(--headbg);border-bottom:2px solid var(--border);border-radius:4px;margin-top:2px}
-#ctxMenu{position:fixed;z-index:150;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);padding:6px;display:none;min-width:200px}
-#ctxMenu button{display:block;width:100%;text-align:left;border:none;background:none;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text)}
+.statgrp{font-weight:700;padding:6px 8px;font-size:12px;color:var(--app-text);
+  background:var(--headbg);border-bottom:2px solid var(--app-border);border-radius:4px;margin-top:2px}
+#ctxMenu{position:fixed;z-index:150;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);padding:6px;display:none;min-width:200px}
+#ctxMenu button{display:block;width:100%;text-align:left;border:none;background:none;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--app-text)}
 #ctxMenu button:hover{background:var(--hover)}
-.machinfo{color:var(--muted);cursor:pointer}
+.machinfo{color:var(--app-muted);cursor:pointer}
 /* ---------- Assistent: kartenbasiertes Dashboard-Layout ---------- */
 /* Moderner SaaS-Dashboard-Look (user request): ein helles Grau als Seitenhintergrund, jeder
    Abschnitt eine eigene weiße Karte mit dezentem Rahmen — nur für den Assistenten selbst
@@ -328,7 +331,7 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    Desktop-Breiten: Geräteauswahl links, Buchungsparameter + ausgewählte Geräte rechts
    übereinander, beide Spalten dauerhaft sichtbar. Schmalere Breiten stapeln alles in
    derselben Reihenfolge von oben nach unten. */
-#modal:has(.assist-columns){background:var(--bg)}
+#modal:has(.assist-columns){background:var(--app-bg)}
 .assist-columns{display:flex;flex-direction:column;gap:10px}
 @media (min-width:860px){
   #modal:has(.assist-columns){max-width:920px}
@@ -345,8 +348,8 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
     height:min(560px,60vh)}
   .assist-columns .aswork{max-height:260px;overflow:auto}
 }
-.assist-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px}
-.assist-card-title{font-weight:700;font-size:13px;margin-bottom:8px;color:var(--text)}
+.assist-card{background:var(--app-panel);border:1px solid var(--app-border);border-radius:10px;padding:12px}
+.assist-card-title{font-weight:700;font-size:13px;margin-bottom:8px;color:var(--app-text)}
 .assist-col-right{display:flex;flex-direction:column;gap:10px;min-height:0}
 /* flex-grow: 1 on the "Ausgewählte Geräte" cart card specifically (user request) — once the
    column as a whole is stretched to match the left card's height, the cart (not the fixed-size
@@ -391,34 +394,34 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 /* Hellere, dezente Akkordeon-Köpfe statt der schweren Volltonfläche (user request) — ebenfalls
    nur innerhalb des Assistenten, .cathead bleibt anderswo unverändert. */
 .assist-card .grp.cathead{
-  background:transparent;color:var(--muted);border-radius:0;
-  border-bottom:1px solid var(--border);padding:6px 4px;display:flex;align-items:center;gap:5px}
+  background:transparent;color:var(--app-muted);border-radius:0;
+  border-bottom:1px solid var(--app-border);padding:6px 4px;display:flex;align-items:center;gap:5px}
 .assist-card .grp.cathead .ic{flex:0 0 auto}
 .assist-card .grp.cathead:not(:first-child){border-top:none;margin-top:2px;padding-top:6px}
 /* Leerer Warenkorb-Zustand: zentriert statt linksbündig, dezentes Icon + hellere Schrift, damit
    der Zustand bewusst statt „vergessen" wirkt (user request) */
 .aswork-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:6px;min-height:54px;color:var(--muted)}
+  gap:6px;min-height:54px;color:var(--app-muted)}
 .aswork-empty .ic{width:22px;height:22px;opacity:.5}
-.aswork{border:1px dashed var(--border);border-radius:10px;padding:8px;min-height:54px;background:var(--panel)}
-.aswork.dragover-root{border-color:var(--accent);border-style:dashed;background:var(--accent-light)}
-.aswork .catlbl{font-weight:700;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:6px 2px 3px}
+.aswork{border:1px dashed var(--app-border);border-radius:10px;padding:8px;min-height:54px;background:var(--app-panel)}
+.aswork.dragover-root{border-color:var(--app-accent);border-style:dashed;background:var(--app-accent-light)}
+.aswork .catlbl{font-weight:700;font-size:11px;color:var(--app-muted);text-transform:uppercase;letter-spacing:.03em;margin:6px 2px 3px}
 .asnode{border-radius:8px}
 /* Drag-Handle (⋮⋮): die einzige visuelle Erklärung, dass ein Knoten ziehbar ist — ersetzt den
    früheren Fließtext dazu (siehe AssistantTree.tsx) */
-.draghandle{color:var(--muted);cursor:grab;letter-spacing:-2px;font-size:13px;line-height:1}
+.draghandle{color:var(--app-muted);cursor:grab;letter-spacing:-2px;font-size:13px;line-height:1}
 /* background reads from --devcolor (set inline per-device by AssistantTree.tsx, the device's
    category color — user request) rather than a plain inline background, so the :hover/
    .dragover rules below (plain CSS, not inline) can still override it — an inline `background`
    would otherwise permanently win over both regardless of specificity. */
-.asdev{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;margin:3px;border:1px solid var(--border);border-radius:8px;background:var(--devcolor,var(--panel));cursor:grab;font-size:13px;transition:background .12s,border-color .12s}
+.asdev{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;margin:3px;border:1px solid var(--app-border);border-radius:8px;background:var(--devcolor,var(--app-panel));cursor:grab;font-size:13px;transition:background .12s,border-color .12s}
 .asdev:hover{background:var(--hover)}
 .asdev:active{cursor:grabbing}
 .asdev.dragging,.asgrp.dragging{opacity:.45}
 /* Reaktive gestrichelte Drop-Zone: löst den früheren durchgezogenen Fokus-Outline-Look ab, damit
    ein aktives Ziehziel eindeutig als „hier ablegen" statt als reiner Hover-Zustand liest */
-.asdev.dragover{outline:2px dashed var(--accent);outline-offset:2px;background:var(--accent-light)}
-.asdev .rm,.asgrp .rm{cursor:pointer;color:var(--muted);font-weight:700;line-height:1;padding:0 2px;
+.asdev.dragover{outline:2px dashed var(--app-accent);outline-offset:2px;background:var(--app-accent-light)}
+.asdev .rm,.asgrp .rm{cursor:pointer;color:var(--app-muted);font-weight:700;line-height:1;padding:0 2px;
   border:none;background:none;font-size:inherit}
 .asdev .rm:hover,.asgrp .rm:hover{color:var(--danger,#c0392b)}
 .asdev .machinfo{display:inline-flex}
@@ -433,10 +436,10 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    border-box is already a global rule (app.css's own reset), so the padding doesn't push the
    card wider than its siblings. */
 .asgrp{border:1px solid color-mix(in srgb,var(--groupcolor) 55%,black);border-radius:10px;
-  padding:16px;margin:8px;background:color-mix(in srgb,var(--groupcolor) 18%,var(--panel))}
-.asgrp.dragover{outline:2px dashed var(--accent);outline-offset:2px;background:var(--accent-light)}
-.asgrp-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:8px;cursor:grab}
-.asgrp-head b{color:var(--text)}
+  padding:16px;margin:8px;background:color-mix(in srgb,var(--groupcolor) 18%,var(--app-panel))}
+.asgrp.dragover{outline:2px dashed var(--app-accent);outline-offset:2px;background:var(--app-accent-light)}
+.asgrp-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--app-muted);margin-bottom:8px;cursor:grab}
+.asgrp-head b{color:var(--app-text)}
 .asgrp-need{display:inline-flex;align-items:center;gap:2px}
 .asgrp-need input{width:42px;text-align:center}
 /* The "oder" separator between a group's own direct children (user request: "Benötigt: 1 von
@@ -444,15 +447,15 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    chips to just run together). Vertically centered against the chip row regardless of chip
    height, via align-self (the row itself stays align-items: flex-start, unchanged, so nested
    subgroup cards keep aligning to the top like before). */
-.asgrp-or{align-self:center;font-size:11px;font-weight:700;color:var(--muted);
+.asgrp-or{align-self:center;font-size:11px;font-weight:700;color:var(--app-muted);
   text-transform:uppercase;letter-spacing:.03em;padding:0 2px}
-.asstep{border:1px solid var(--border);background:var(--panel);border-radius:6px;width:22px;height:22px;line-height:1;cursor:pointer;color:var(--text);font-weight:700}
+.asstep{border:1px solid var(--app-border);background:var(--app-panel);border-radius:6px;width:22px;height:22px;line-height:1;cursor:pointer;color:var(--app-text);font-weight:700}
 .asstep:hover{background:var(--hover)}
 .asgrp-kids{display:flex;flex-wrap:wrap;align-items:flex-start;min-height:30px;padding:2px;border-radius:6px}
-.asgrp-kids.dragover{background:var(--accent-light)}
+.asgrp-kids.dragover{background:var(--app-accent-light)}
 /* Vorschlags-Badges in den Suchergebnissen: farbige "Pillen" statt Fließtext-Aufzählung */
 .aspills{display:flex;flex-wrap:wrap;gap:4px;margin:3px 0}
-.aspill{position:relative;display:inline-flex;align-items:center;padding:2px 20px 2px 9px;border-radius:999px;font-size:11px;font-weight:600;color:var(--text)}
+.aspill{position:relative;display:inline-flex;align-items:center;padding:2px 20px 2px 9px;border-radius:999px;font-size:11px;font-weight:600;color:var(--app-text)}
 /* Hover-reveal "×" to drop one device from this one result's own booking (user request) — kept
    invisible (not just hidden) until hovered, so the pill row's resting look is unchanged. */
 .aspill-rm{position:absolute;right:3px;top:50%;transform:translateY(-50%);opacity:0;
@@ -460,18 +463,18 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
   color:inherit;transition:opacity .12s}
 .aspill:hover .aspill-rm{opacity:.7}
 .aspill-rm:hover{opacity:1}
-#modalReopen{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:90;display:none;flex-direction:column;align-items:center;gap:3px;background:var(--accent);color:#fff;border:none;border-radius:0 12px 12px 0;padding:12px 8px;box-shadow:0 4px 18px rgba(0,0,0,.28);cursor:pointer;font-size:11px;font-weight:600;letter-spacing:.02em}
+#modalReopen{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:90;display:none;flex-direction:column;align-items:center;gap:3px;background:var(--app-accent);color:#fff;border:none;border-radius:0 12px 12px 0;padding:12px 8px;box-shadow:0 4px 18px rgba(0,0,0,.28);cursor:pointer;font-size:11px;font-weight:600;letter-spacing:.02em}
 #modalReopen.show{display:flex}
 #modalReopen .ic{width:18px;height:18px;stroke:#fff}
 #modalReopen span{writing-mode:vertical-rl}
-#asTip{position:fixed;z-index:300;display:none;max-width:220px;background:var(--text);color:var(--panel);padding:6px 9px;border-radius:7px;font-size:12px;line-height:1.35;box-shadow:0 4px 16px rgba(0,0,0,.3);pointer-events:none}
+#asTip{position:fixed;z-index:300;display:none;max-width:220px;background:var(--app-text);color:var(--app-panel);padding:6px 9px;border-radius:7px;font-size:12px;line-height:1.35;box-shadow:0 4px 16px rgba(0,0,0,.3);pointer-events:none}
 #asTip.show{display:block}
-#asTip::after{content:"";position:absolute;left:var(--tipx,20px);bottom:-5px;border:5px solid transparent;border-top-color:var(--text);border-bottom:0}
+#asTip::after{content:"";position:absolute;left:var(--tipx,20px);bottom:-5px;border:5px solid transparent;border-top-color:var(--app-text);border-bottom:0}
 
 /* ---------- Modal ---------- */
 #overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;z-index:100;align-items:flex-start;justify-content:center;padding:40px 12px;overflow:auto}
 #overlay.open{display:flex}
-#modal{background:var(--panel);border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.25);max-width:640px;width:100%;padding:18px 20px;max-height:85vh;overflow:auto}
+#modal{background:var(--app-panel);border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.25);max-width:640px;width:100%;padding:18px 20px;max-height:85vh;overflow:auto}
 #modal h2{margin:0 0 12px;font-size:16px}
 /* Booking detail modal: title + top-right close "×" share one row (user request — frees the
    bottom action row for just the two destructive actions, no separate "Schließen" needed there). */
@@ -481,34 +484,34 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    left a wide gap after short labels like "Datum"; sizing the column to the longest label
    tightens that up (user request) without touching every other modal's own .formrow rows. */
 .bkdetail-facts{display:grid;grid-template-columns:max-content 1fr;column-gap:10px;row-gap:8px;align-items:center;margin-bottom:8px}
-.bkdetail-facts label{font-size:13px;color:var(--muted)}
+.bkdetail-facts label{font-size:13px;color:var(--app-muted)}
 .iconbtn.small{width:22px;height:22px;font-size:12px;vertical-align:middle}
 .formrow{display:flex;gap:8px;margin:8px 0;align-items:center;flex-wrap:wrap}
-.formrow label{min-width:90px;font-size:13px;color:var(--muted)}
+.formrow label{min-width:90px;font-size:13px;color:var(--app-muted)}
 .formrow input[type=text],.formrow textarea{flex:1;min-width:160px}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
-.hint{font-size:12px;color:var(--muted);margin:6px 0}
+.hint{font-size:12px;color:var(--app-muted);margin:6px 0}
 .conflictbox{background:var(--confbg);color:var(--confink);border:1px solid var(--confbrd);border-radius:6px;padding:8px;font-size:12px;margin:8px 0;max-height:120px;overflow:auto}
-.mlist{max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:6px;margin:6px 0}
+.mlist{max-height:260px;overflow:auto;border:1px solid var(--app-border);border-radius:6px;padding:6px;margin:6px 0}
 /* Großzügigeres Padding + Übergang: die ganze Zeile ist bereits per <label> klickbar (Fitts's
    Law), dieser Wert macht das beim Scannen auch spürbar statt nur technisch wahr */
 .mlist label{display:block;padding:7px 8px;cursor:pointer;border-radius:4px;transition:background .12s}
 .mlist label:hover{background:var(--hover)}
-.mlist .grp{font-weight:700;margin-top:6px;color:var(--muted);font-size:12px}
+.mlist .grp{font-weight:700;margin-top:6px;color:var(--app-muted);font-size:12px}
 .resultlist{max-height:300px;overflow:auto}
 /* Each "Passende Termine" result gets its own standalone white card with a subtle shadow,
    separating it from the modal's grey backdrop instead of being a flat list row sharing borders
    with its neighbors (user request). */
 .resultlist .res{display:flex;justify-content:space-between;align-items:center;gap:8px;
-  padding:10px 12px;margin:8px 4px;background:var(--panel);border:1px solid var(--border);
+  padding:10px 12px;margin:8px 4px;background:var(--app-panel);border:1px solid var(--app-border);
   border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.mybk{display:flex;justify-content:space-between;align-items:flex-start;padding:8px;border-bottom:1px solid var(--border);gap:8px}
+.mybk{display:flex;justify-content:space-between;align-items:flex-start;padding:8px;border-bottom:1px solid var(--app-border);gap:8px}
 .mybk .abmach{font-size:14px;line-height:1.35}
 .mybk .abdate{font-size:13px;line-height:1.5;margin:1px 0}
 .mybk .btn.small{flex:0 0 auto;margin-top:2px}
 .abfilters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:6px 0 6px}
 .abfilters .fld{display:flex;flex-direction:column;gap:2px;min-width:0}
-.abfilters .fld>label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;min-width:auto;font-weight:600}
+.abfilters .fld>label{font-size:11px;color:var(--app-muted);text-transform:uppercase;letter-spacing:.03em;min-width:auto;font-weight:600}
 .abfilters .fld input,.abfilters .fld select{width:100%}
 
 /* ---------- Meine Buchungen (.mybookings) ---------- */
@@ -522,10 +525,10 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    summary auf der neuen Card ... mehr Dashboard-Struktur und Look") — a row of stat tiles, each
    a big bold number over a small muted label, scannable at a glance. */
 .mybk-summary{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 12px}
-.mybk-stat{flex:1;min-width:96px;background:var(--panel);border:1px solid var(--border);
+.mybk-stat{flex:1;min-width:96px;background:var(--app-panel);border:1px solid var(--app-border);
   border-radius:10px;padding:10px 12px;text-align:center}
-.mybk-stat-value{font-size:22px;font-weight:700;line-height:1.2;color:var(--text)}
-.mybk-stat-label{font-size:11px;color:var(--muted);margin-top:2px}
+.mybk-stat-value{font-size:22px;font-weight:700;line-height:1.2;color:var(--app-text)}
+.mybk-stat-label{font-size:11px;color:var(--app-muted);margin-top:2px}
 .mybookings .abfilters{margin:8px 0 10px}
 .mybookings .abfilters .fld>label{text-transform:none;font-size:12px}
 .mybookings .abfilters input,.mybookings .abfilters select{min-height:36px}
@@ -533,7 +536,7 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .mybookings .abmach b{font-size:15px;font-weight:700}
 /* A small icon (not a colored text pill any more — user request) marking a run as part of a
    real multi-machine booking group, right next to the machine name. */
-.mybookings .grpicon{display:inline-flex;color:var(--muted);vertical-align:middle}
+.mybookings .grpicon{display:inline-flex;color:var(--app-muted);vertical-align:middle}
 /* The "parent card" wrapping every run in the same real booking group ("Experiment Setup"
    style, user request) — one outer card naming the group, its own member runs nested inside
    as line items, instead of a flat list of independently-carded rows for each member. Colored
@@ -541,9 +544,9 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    same nameColor mechanism the grid itself uses for booker names — a left accent bar plus a
    faint tinted header, not a full colored fill (still meant to read as "a card", not "a block
    of color"). */
-.mybookings .mybk-group{border:1px solid var(--border);border-left:4px solid var(--groupcolor);border-radius:8px;margin:8px 0;overflow:hidden}
-.mybookings .mybk-group-head{display:flex;align-items:center;gap:6px;padding:8px 10px;background:color-mix(in srgb,var(--groupcolor) 20%,var(--panel));font-size:13px}
-.mybookings .mybk-group-item .mybk{border-bottom:1px solid var(--border)}
+.mybookings .mybk-group{border:1px solid var(--app-border);border-left:4px solid var(--groupcolor);border-radius:8px;margin:8px 0;overflow:hidden}
+.mybookings .mybk-group-head{display:flex;align-items:center;gap:6px;padding:8px 10px;background:color-mix(in srgb,var(--groupcolor) 20%,var(--app-panel));font-size:13px}
+.mybookings .mybk-group-item .mybk{border-bottom:1px solid var(--app-border)}
 .mybookings .mybk-group-item:last-child .mybk{border-bottom:none}
 /* One horizontal row of standardized icon buttons (pin / expand / delete) — replaces the old
    stacked column + separate wide "Serie löschen" button (user request). */
@@ -553,29 +556,29 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    needed the exact same shape for its own top-right close "×" and inline Statistik icon. */
 .iconbtn{
   display:flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;
-  border:1px solid var(--border);border-radius:50%;background:var(--panel);color:var(--text);
+  border:1px solid var(--app-border);border-radius:50%;background:var(--app-panel);color:var(--app-text);
   font-size:14px;cursor:pointer;transition:background .12s,color .12s,border-color .12s}
 .iconbtn:hover{background:var(--hover)}
-.iconbtn.danger{color:var(--muted)}
+.iconbtn.danger{color:var(--app-muted)}
 .iconbtn.danger:hover{color:var(--danger);border-color:var(--danger)}
 /* The "only my machines" shortcut, restyled to read as a toggle switch (user request) — the
    underlying click still just applies the filter and closes the modal in one shot, same as
    before; this only changes what the control looks like. */
 .mybookings .switchbtn{display:inline-flex;align-items:center;gap:8px}
-.mybookings .switchtrack{position:relative;display:inline-block;width:32px;height:18px;flex:0 0 auto;background:var(--border);border-radius:999px}
-.mybookings .switchthumb{position:absolute;top:2px;left:2px;width:14px;height:14px;background:var(--panel);border-radius:50%}
-.daylist{margin-left:26px;border-left:2px solid var(--accent-light)}
-.statrow{display:flex;align-items:center;gap:8px;padding:3px 6px;border-bottom:1px solid var(--border);font-size:12px}
+.mybookings .switchtrack{position:relative;display:inline-block;width:32px;height:18px;flex:0 0 auto;background:var(--app-border);border-radius:999px}
+.mybookings .switchthumb{position:absolute;top:2px;left:2px;width:14px;height:14px;background:var(--app-panel);border-radius:50%}
+.daylist{margin-left:26px;border-left:2px solid var(--app-accent-light)}
+.statrow{display:flex;align-items:center;gap:8px;padding:3px 6px;border-bottom:1px solid var(--app-border);font-size:12px}
 .statrow .nm{flex:0 0 210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .statbar{flex:1;background:var(--headbg);border-radius:4px;height:14px;overflow:hidden}
-.statbar div{height:100%;background:var(--stat-fill,var(--accent))}
+.statbar div{height:100%;background:var(--stat-fill,var(--app-accent))}
 /* The Ressourcen overview's own per-machine bar: three stacked segments side by side (not one
    bar's width like every other .statbar use) — used (the category's own --stat-fill color),
    blocked by maintenance (amber, same token the grid's own maintenance dots use), and idle
    (just the track color showing through, i.e. no fill at all) — user request: "a stacked bar
    chart, e.g. 60% Used, 10% Maintenance, 30% Idle", replacing a single traffic-light bar. */
 .statbar.stacked{display:flex}
-.statbar.stacked .seg-used{height:100%;background:var(--stat-fill,var(--accent))}
+.statbar.stacked .seg-used{height:100%;background:var(--stat-fill,var(--app-accent))}
 .statbar.stacked .seg-maint{height:100%;background:var(--warn)}
 .statbar.stacked .seg-idle{height:100%;background:transparent}
 /* Category color themes (user request): deep blue for Maschinen, teal/slate for Messtechnik —
@@ -587,73 +590,73 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 /* ---------- Statistik dashboard (StatsDashboard.tsx) ---------- */
 /* Light-grey modal ground behind the white cards below, matching the Assistant's own
    card-on-grey treatment (app.css, "#modal:has(.assist-columns)"). */
-#modal:has(.stat-card){background:var(--bg)}
+#modal:has(.stat-card){background:var(--app-bg)}
 /* The KPI tile row: icon + big bold value over a small muted label, four across. Same visual
    language as MyBookingsModal's own summary strip (.mybk-stat), kept as separate classes since
    the two features are otherwise unrelated. */
 .stat-kpis{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
-.stat-kpi{flex:1;min-width:110px;display:flex;align-items:center;gap:8px;background:var(--panel);
-  border:1px solid var(--border);border-radius:10px;padding:10px 12px}
-.stat-kpi .ic{flex:0 0 auto;width:18px;height:18px;color:var(--stat-fill,var(--accent))}
-.stat-kpi-value{font-size:18px;font-weight:700;line-height:1.2;color:var(--text);
+.stat-kpi{flex:1;min-width:110px;display:flex;align-items:center;gap:8px;background:var(--app-panel);
+  border:1px solid var(--app-border);border-radius:10px;padding:10px 12px}
+.stat-kpi .ic{flex:0 0 auto;width:18px;height:18px;color:var(--stat-fill,var(--app-accent))}
+.stat-kpi-value{font-size:18px;font-weight:700;line-height:1.2;color:var(--app-text);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Real machine/person names run much longer than short fixtures (e.g. a "Meistgenutzt" label
    naming an actual resource) — truncated with an ellipsis rather than wrapping across three
    lines and breaking the tile row's height; the label's own title attribute (StatsDashboard.tsx)
    carries the full text as a hover tooltip. */
-.stat-kpi-label{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stat-kpi-label{font-size:11px;color:var(--app-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* The dashboard card itself: a white card on the grey modal ground (user request: match a
    reference card-based dashboard's structure/colour profile). */
-.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+.stat-card{background:var(--app-panel);border:1px solid var(--app-border);border-radius:10px;
   padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .stat-card-head{display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:10px}
-.stat-card-head .ic{color:var(--stat-fill,var(--accent))}
+.stat-card-head .ic{color:var(--stat-fill,var(--app-accent))}
 /* Day-by-day booking chart: one bar per bucket (bucketDailyCounts already caps the bar count
    so it stays legible regardless of range length), height relative to the busiest bucket. */
 .stat-chart{display:flex;align-items:flex-end;gap:3px;height:80px;padding:0 2px}
-.stat-chart-bar{flex:1;min-width:4px;background:var(--stat-fill,var(--accent));border-radius:2px 2px 0 0;
+.stat-chart-bar{flex:1;min-width:4px;background:var(--stat-fill,var(--app-accent));border-radius:2px 2px 0 0;
   opacity:.85;transition:opacity .12s}
 .stat-chart-bar:hover{opacity:1}
 .stat-chart-caption{display:flex;justify-content:space-between;margin:4px 2px 0}
 /* A bigger sibling of the per-row .statbar.stacked (StatsDrilldown.tsx) — the whole category's
    aggregate share, not one machine's own. */
 .stat-bar-big{height:20px;border-radius:5px;margin-top:12px}
-.stat-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;font-size:12px;color:var(--muted)}
+.stat-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;font-size:12px;color:var(--app-muted)}
 .stat-legend-item{display:flex;align-items:center;gap:5px}
 .stat-legend-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
-.stat-legend-dot.seg-used{background:var(--stat-fill,var(--accent))}
+.stat-legend-dot.seg-used{background:var(--stat-fill,var(--app-accent))}
 .stat-legend-dot.seg-maint{background:var(--warn)}
-.stat-legend-dot.seg-idle{background:var(--border)}
+.stat-legend-dot.seg-idle{background:var(--app-border)}
 .breadcrumb{font-weight:600}
 /* Rechtsbündige Zahlenspalten: feste Ziffernbreite, damit z.B. "8/12 · 67%" untereinander
    exakt ausgerichtet steht statt je nach Ziffernbreite leicht zu wandern */
 .statrow .pct,.statgrp{font-variant-numeric:tabular-nums}
 .statrow .pct{width:100px;text-align:right;white-space:nowrap}
-.admrow{display:flex;gap:6px;align-items:center;padding:4px 6px;border-bottom:1px solid var(--border)}
+.admrow{display:flex;gap:6px;align-items:center;padding:4px 6px;border-bottom:1px solid var(--app-border)}
 .admrow .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.logrow{font-size:12px;padding:3px 6px;border-bottom:1px solid var(--border)}
-.logrow .ts{color:var(--muted);margin-right:8px}
+.logrow{font-size:12px;padding:3px 6px;border-bottom:1px solid var(--app-border)}
+.logrow .ts{color:var(--app-muted);margin-right:8px}
 .tag{font-size:11px;border-radius:4px;padding:1px 6px;background:var(--tagbg);color:var(--tagink)}
 .tag.defekt{background:var(--dangerbg);color:var(--danger)}
 .tag.wartung{background:var(--warnbg);color:var(--warn)}
 
 /* ---------- Debug-Panel ---------- */
-#dbgPanel{position:fixed;top:92px;right:8px;width:340px;max-height:70vh;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.25);z-index:90;display:none;flex-direction:column;font-size:11px}
+#dbgPanel{position:fixed;top:92px;right:8px;width:340px;max-height:70vh;background:var(--app-panel);border:1px solid var(--app-border);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.25);z-index:90;display:none;flex-direction:column;font-size:11px}
 #dbgPanel.open{display:flex}
-#dbgHead{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--border);font-weight:700;font-size:12px}
+#dbgHead{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--app-border);font-weight:700;font-size:12px}
 #dbgList{overflow:auto;padding:4px 8px;font-family:Consolas,Menlo,monospace}
-.dbgrow{padding:2px 0;border-bottom:1px dashed var(--border);word-break:break-word}
-.dbgrow .t{color:var(--muted);margin-right:6px}
+.dbgrow{padding:2px 0;border-bottom:1px dashed var(--app-border);word-break:break-word}
+.dbgrow .t{color:var(--app-muted);margin-right:6px}
 .dbgrow.err{color:var(--danger)}
-.dbgrow.write{color:var(--accent)}
+.dbgrow.write{color:var(--app-accent)}
 .dbgrow.remote{color:var(--warn)}
-.dbgrow.latency{color:var(--accent);font-weight:600}
+.dbgrow.latency{color:var(--app-accent);font-weight:600}
 
 /* ---------- Start screen / Toast ---------- */
-#startScreen{position:fixed;inset:0;background:var(--bg);z-index:200;display:flex;align-items:center;justify-content:center}
-#startScreen .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:32px;max-width:500px;text-align:center}
+#startScreen{position:fixed;inset:0;background:var(--app-bg);z-index:200;display:flex;align-items:center;justify-content:center}
+#startScreen .card{background:var(--app-panel);border:1px solid var(--app-border);border-radius:12px;padding:32px;max-width:500px;text-align:center}
 #startScreen h1{font-size:20px;margin:0 0 8px}
-#startScreen p{color:var(--muted);font-size:13px}
+#startScreen p{color:var(--app-muted);font-size:13px}
 #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--toastbg);color:var(--toastink);padding:8px 16px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;z-index:300;pointer-events:none}
 #toast.show{opacity:1}
 #toast.action{pointer-events:auto}

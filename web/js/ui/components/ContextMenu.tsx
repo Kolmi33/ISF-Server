@@ -128,7 +128,7 @@ function useContextMenuInfo(): MenuInfo | null {
 function ContextMenuContent({ info }: { info: MenuInfo }) {
   return (
     <>
-      <div style={{ padding: '4px 10px', fontSize: '12px', color: 'var(--muted)' }}>
+      <div style={{ padding: '4px 10px', fontSize: '12px', color: 'var(--app-muted)' }}>
         {info.machineIds.length} Maschine(n) · {formatDateLong(info.from)}
         {info.from !== info.to ? ' – ' + formatDateLong(info.to) : ''}
       </div>

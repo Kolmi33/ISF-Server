@@ -99,7 +99,7 @@ export function GroupFilterDropdown() {
         />{' '}
         <b>Alle Bereiche</b>
       </label>
-      <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+      <hr style={{ border: 'none', borderTop: '1px solid var(--app-border)', margin: '4px 0' }} />
       {groups.map((group) => (
         <label key={group}>
           <input

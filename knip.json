@@ -3,7 +3,13 @@
   "entry": ["server/server.ts", "server/import.ts", "server/backfill.ts", "scripts/*.mjs"],
   "project": ["{web,server,shared}/**/*.{ts,tsx}", "scripts/*.mjs"],
   "ignoreExportsUsedInFile": true,
-  "ignoreDependencies": ["tailwindcss"],
+  "ignoreDependencies": [
+    "tailwindcss",
+    "shadcn",
+    "tw-animate-css",
+    "@fontsource-variable/inter",
+    "@fontsource-variable/manrope"
+  ],
   "rules": {
     "duplicates": "off"
   }

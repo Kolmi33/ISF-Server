@@ -30,8 +30,8 @@ import { isDarkTheme } from '../theme.ts';
 import { collapseReactModal } from '../modal.tsx';
 import { openBookingForm } from './BookingForm.tsx';
 import { Icon } from './Icon.tsx';
-import { Button } from './ui/button.tsx';
-import { Input } from './ui/input.tsx';
+import { Button } from '../../components/ui/button.tsx';
+import { Input } from '../../components/ui/input.tsx';
 import { store } from '../../store-instance.ts';
 import { saveFilters, updateMachBtn } from './MachineFilterDropdown.tsx';
 
@@ -205,8 +205,12 @@ function AssistantResultItem({ row, tree, isFreeDev, allIds, machineById }: Resu
           onChange={onChange}
         />
         {tip && <span className="hint">{tip}</span>}
+        {/* variant="outline": the plain bordered look (Base UI's own "default" variant is a
+            filled primary-colored button, not the plain secondary look this icon button
+            needs). */}
         <Button
-          size="small"
+          variant="outline"
+          size="sm"
           title="Zum Termin springen und Zeilen auf die gewählten Geräte filtern"
           aria-label="Termin anzeigen"
           onClick={() => gotoRun(selectedDates[0]!, allIds)}
@@ -214,8 +218,7 @@ function AssistantResultItem({ row, tree, isFreeDev, allIds, machineById }: Resu
           <Icon name="pin" />
         </Button>
         <Button
-          variant="primary"
-          size="small"
+          size="sm"
           disabled={!pickedIds.length}
           onClick={() =>
             openBookingForm(pickedIds, selectedDates[0]!, selectedDates[selectedDates.length - 1]!)

@@ -4,11 +4,14 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-09-04 — **Phase 14 (Tailwind CSS + shadcn/ui-pattern components, piloted on
-the Booking Assistant) — 14.1–14.3 landed, phase-boundary halt for review** — tooling
-foundation + the ARCHITECTURE §19 guardrail change, then the `Button`/`Input` primitives
-applied to the Assistant's buttons/text-date-number fields; `npm run verify` green (1003
-tests / 71 files) throughout, full detail in the Phase 14 section below._
+_Last updated: 2026-09-04 — **Phase 14, revised direction: the shadcn preset (`b6EWdD0CK8`)
+adopted in full, on fork branch `phase14-shadcn-preset` — halted before merge/deploy.** After
+14.1–14.3 shipped to production (Tailwind tooling + hand-rolled Button/Input, then a real
+Preflight regression found and fixed same day), the project owner tried a real shadcn CLI
+preset and decided to adopt it fully: Base UI (not Radix), Tabler icons, Inter/Manrope fonts,
+the preset's own palette. Reconciled against 14.1–14.3's work, `npm run verify` green (998
+tests / 70 files) throughout. One item deliberately left open, not fixed or ignored — see
+Known Bugs → Open. Full detail in the Phase 14 section below._
 
 _Previously: 2026-09-03 — **Phase 13 (second user-requested feature/UX batch, post-deploy
 feedback) COMPLETE** — 3 commits, full detail in the Phase 13 section below. `npm run verify`
@@ -782,15 +785,87 @@ importers) — out of scope for an Assistant-only pilot.
   Playwright screenshot of the real Assistant modal (light AND dark theme, real seeded data,
   zero console errors) confirmed the converted buttons/inputs render visually identical to the
   pre-Tailwind app.css styling.
-- **Phase-boundary halt after 14.3** (per CLAUDE.md's per-phase cadence): report back before
-  going further. 14.1–14.3 prove the pattern end-to-end using only
-  `class-variance-authority`/`clsx`/`tailwind-merge` — no Radix package needed yet.
-  **Deferred, explicitly flagged, not silently skipped:** 14.4, a shadcn `Checkbox`
-  (`@radix-ui/react-checkbox`) for `AssistantChecklist.tsx`'s device rows — a real
-  interactive-widget dependency (bigger bar than a styling utility) whose test compatibility
-  (Radix's `<button role="checkbox">` root vs. whatever the existing test asserts) needs
-  confirming firsthand before converting; gets its own go-ahead and its own `ARCHITECTURE §19`
-  addendum line for the one new Radix package, not bundled into this batch.
+- **Phase-boundary halt after 14.3** (per CLAUDE.md's per-phase cadence): reported back. Landed
+  same day on production, then a real regression was found and fixed the same day too — see
+  Known Bugs → Fixed, "Tailwind's Preflight inflated every `.btn`-classed element app-wide".
+
+**Phase 14, revised direction — shadcn preset (`b6EWdD0CK8`) adopted in full (same day,
+2026-09-04) — on fork branch `phase14-shadcn-preset`, halted before merge/deploy**
+After 14.1–14.3 shipped, the project owner ran `shadcn@latest init --preset b6EWdD0CK8`
+(tweakcn) on a new fork to try a real externally-designed setup. It pulled in far more than a
+theme — **Base UI** (not Radix), **Tabler** icons, self-hosted **Inter**/**Manrope** fonts, a
+full olive semantic palette, a duplicate `Button` at a different path, and it silently
+overwrote the tested `web/js/lib/utils.ts`. **Decided: adopt it in full**, not a one-off theme
+swap — full reasoning + guardrail rewrite in `ARCHITECTURE.md` §19 (revised). Reconciled
+against 14.1–14.3's work in one combined pass (see the per-item notes for why some items that
+were separate slices in the plan landed together):
+- [x] **Token collision resolved.** app.css's own `--bg`/`--panel`/`--border`/`--text`/
+  `--muted`/`--accent` (186 occurrences, `sed`-renamed with word-boundary precision, verified
+  0 remaining bare collisions after) → `--app-*` prefixed, since the preset defines its own
+  semantic tokens of the same bare names for a different (olive) palette — without the
+  rename, every one of those 186 uses would've silently repainted with the preset's colors.
+  4 real non-CSS references caught by grep (`grid.ts`'s `mineAccentLayers`, `ContextMenu.tsx`,
+  `GroupFilterDropdown.tsx`, `MaintenanceSlotEditor.tsx` — all inline `style={{...}}` using
+  `var(--accent)`/`var(--muted)`/`var(--border)` literally) updated to match.
+- [x] **`Button`/`Input` reconciled.** The hand-rolled `web/js/ui/components/ui/{button,
+  input}.tsx` (+ tests) from 14.2/14.3 deleted; the Assistant's four buttons + all its inputs
+  repointed to the CLI-generated `web/js/components/ui/{button,input}.tsx` (Base UI-backed).
+  Variant remapping: Base UI's `default` variant is a *filled* primary style (unlike the old
+  primitive's plain-bordered `default`) — the pin button needed an explicit `variant="outline"`
+  it didn't need before, or it would've silently rendered as a bold primary-colored button.
+  `size="lg"` is exactly `h-9` (36px) — the manual `className="h-9"` height-parity hack from
+  the Preflight-fix commit is gone, replaced by the real size prop; confirmed the existing
+  height-parity regression test still passes unchanged (`size="lg"`'s own cva string still
+  literally contains `h-9`). The two bare date inputs needed `className="w-auto"` since the
+  new Input defaults to `w-full` (everything else — `.asNeed`/`.asDays`'s explicit inline
+  widths, the `.assist-card input[type=…]{height:36px}` attribute-selector rule — already had
+  higher-specificity app.css rules protecting them, confirmed by reasoning through the cascade
+  then verifying visually, not assumed).
+- [x] **`Icon.tsx` → Tabler, API unchanged.** All 21 names actually passed through the `Icon`
+  component (enumerated from real call sites + `core/machines.ts`'s category icons +
+  `assistant-checklist.ts`'s favorites star, not guessed) mapped to their Tabler equivalent;
+  every Tabler export name confirmed to actually exist in the installed package before use
+  (`IconWrench` doesn't exist — used `IconTool` instead). `className="ic"` is the only prop
+  passed — CSS presentation properties (width/height/stroke/fill) always win over an SVG's own
+  attributes, so every existing `.ic` rule (base + the context-scoped overrides in
+  `.aswork-empty`/`#modalReopen`/`.stat-kpi`) keeps working with zero per-context prop
+  replication. **Found and deliberately left alone**: 3 sprite symbols (`search`, `bug`, `cal`)
+  have real non-`Icon`-component consumers (`web/index.html`'s own static `machBtn`/`dbgHead`
+  markup, `ContextMenu.tsx`'s raw `<use>`, `MachineFilterDropdown.tsx`'s string-built HTML) —
+  the sprite `<symbol>` defs stay in `index.html`, not deleted, since removing them would break
+  those out-of-scope call sites. `eye` appears genuinely unused anywhere; also left alone
+  (no speculative cleanup). New `Icon.test.tsx` (previously untested directly, only via other
+  components' indirect coverage) — 3 tests incl. the unmapped-name defensive branch.
+- [x] **Typography app-wide.** app.css's `body{font:14px/1.4 -apple-system,…}` shorthand split
+  into `font-size:14px;line-height:1.4` with the system-font family dropped entirely, so the
+  preset's `html{@apply font-sans}` (Inter Variable) cascades app-wide. **A real collision
+  checked, not assumed**: the preset's own `@layer base{body{@apply bg-background
+  text-foreground}}` targets the same `body` element app.css's `body{background,color}` rule
+  does — confirmed via `getComputedStyle` that app.css's rule still wins (CSS Cascade Layers
+  give *unlayered* styles priority over *any* layered style, regardless of selector specificity
+  or source order — app.css was never wrapped in a Tailwind `@layer`), so body's actual
+  background/text color stayed app.css's own `--app-bg`/`--app-text`, not the preset's, with no
+  extra fix needed. Confirmed empirically, since this is exactly the class of thing the
+  Preflight bug taught not to assume.
+- [x] **`cn()`.** Kept the CLI-generated `web/js/lib/utils.ts` (`export { cn } from "cn"`)
+  rather than reverting to the hand-written clsx+tailwind-merge version — every
+  shadcn-generated file imports `cn` directly, not from `lib/utils`. `clsx`/`tailwind-merge`
+  uninstalled (genuinely dead once nothing imports them directly).
+- [x] **Guardrail + docs rewritten** — `ARCHITECTURE.md` §19 (revised, not appended twice),
+  `CLAUDE.md`'s guardrail line, this section. `knip.json` `ignoreDependencies` extended for the
+  CSS-only imports (`shadcn`, `tw-animate-css`, both `@fontsource-variable/*` packages — same
+  pattern as `tailwindcss` from 14.1: referenced only via a CSS `@import`, invisible to knip's
+  TS-only analysis).
+- **Verified**: `npm run verify` green throughout (998 tests after the file churn — down from
+  1006, net of the 9 deleted-file tests vs. the new Icon.test.tsx's 3). A throwaway
+  `docker build` + real Playwright measurements confirmed the toolbar/`#btnAssist` match the
+  pre-Phase-14 baseline (`ef7d334`: 29px/78px) **exactly**, and the Assistant's screenshots
+  (light theme) look correct with the new Base UI/Tabler/Inter styling.
+
+**Halted before merge to `master-2` or any deploy** (per CLAUDE.md's per-phase cadence — a
+redeploy is its own explicit decision, not automatic once a branch builds), with one open item
+— see Known Bugs → Open — rather than either declaring it fixed or chasing it indefinitely
+against ambiguous automated evidence.
 
 ## Done log (newest first)
 - **2026-09-02 — Code-review fixes**: undo's CAS-check bug and `machById`'s stale-cache bug
@@ -956,7 +1031,21 @@ importers) — out of scope for an Assistant-only pilot.
 ## Known bugs
 
 ### Open (deferred — preserve for now, fix in a flagged step)
-(none currently)
+- **Assistant card backgrounds render light in dark mode in automated screenshots, on the
+  `phase14-shadcn-preset` fork — unconfirmed whether this is real.** Found via Playwright
+  screenshot after the shadcn-preset pivot (2026-09-04). Investigated thoroughly before
+  flagging rather than assuming either way: `getComputedStyle` on `.assist-card` reports the
+  correct dark `rgb(30,33,38)` (`--app-panel`'s dark value) with the right `data-theme="dark"`
+  attribute set; `document.elementsFromPoint` at the card's exact screen coordinates shows no
+  covering element at any z-index; reproduced identically after long settle waits, after
+  `document.fonts.ready`, and — decisively — in a **real installed Chrome** (`channel:
+  'chrome'`), not just Playwright's stripped-down headless-shell binary. Computed-style-correct
+  + paint-wrong + reproducible across two browser binaries points at a software-rendering
+  (no-GPU/SwiftShader) artifact specific to this sandboxed container's screenshot pipeline
+  rather than a real app bug, but that's not proven — needs a real-browser spot-check (open the
+  Assistant in dark mode on an actual machine) before this branch is trusted for a merge/deploy
+  decision. Deliberately left open rather than declared fixed on ambiguous automated evidence,
+  and not chased further at the cost of unbounded additional verification effort.
 
 ### Fixed
 - **Tailwind's Preflight inflated every `.btn`-classed element app-wide (not just the

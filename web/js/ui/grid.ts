@@ -123,10 +123,10 @@ const NO_ACCENT = '0 0 0 0 transparent';
  */
 export function mineAccentLayers(segment: BookingBlockSegment): Record<string, string> {
   return {
-    '--mine-top': segment.continuesUp ? NO_ACCENT : '0 1px 0 0 var(--accent)',
-    '--mine-bottom': segment.continuesDown ? NO_ACCENT : '0 -1px 0 0 var(--accent)',
-    '--mine-left': segment.continuesLeft ? NO_ACCENT : '1px 0 0 0 var(--accent)',
-    '--mine-right': segment.continuesRight ? NO_ACCENT : '-1px 0 0 0 var(--accent)',
+    '--mine-top': segment.continuesUp ? NO_ACCENT : '0 1px 0 0 var(--app-accent)',
+    '--mine-bottom': segment.continuesDown ? NO_ACCENT : '0 -1px 0 0 var(--app-accent)',
+    '--mine-left': segment.continuesLeft ? NO_ACCENT : '1px 0 0 0 var(--app-accent)',
+    '--mine-right': segment.continuesRight ? NO_ACCENT : '-1px 0 0 0 var(--app-accent)',
   };
 }
 

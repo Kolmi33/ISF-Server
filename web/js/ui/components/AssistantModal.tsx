@@ -59,8 +59,8 @@ import { AssistantChecklist } from './AssistantChecklist.tsx';
 import { AssistantTree } from './AssistantTree.tsx';
 import { AssistantResults } from './AssistantResults.tsx';
 import { Icon } from './Icon.tsx';
-import { Button } from './ui/button.tsx';
-import { Input } from './ui/input.tsx';
+import { Button } from '../../components/ui/button.tsx';
+import { Input } from '../../components/ui/input.tsx';
 import { store } from '../../store-instance.ts';
 import { machById } from '../machine-lookup.ts';
 
@@ -230,9 +230,19 @@ function AssistantParametersCard({
       <div className="assist-card-title">Buchungsparameter</div>
       <div className="formrow">
         <label>Suchen von</label>
-        <Input type="date" value={from} onChange={(event) => onFromChange(event.target.value)} />
+        <Input
+          type="date"
+          className="w-auto"
+          value={from}
+          onChange={(event) => onFromChange(event.target.value)}
+        />
         <label style={{ minWidth: 'auto' }}>bis</label>
-        <Input type="date" value={to} onChange={(event) => onToChange(event.target.value)} />
+        <Input
+          type="date"
+          className="w-auto"
+          value={to}
+          onChange={(event) => onToChange(event.target.value)}
+        />
       </div>
       <div className="formrow">
         <label>Mind. Tage am Stück</label>
@@ -283,15 +293,15 @@ function AssistantSelectedDevicesCard({
         onRemove={assistant.onRemove}
       />
       <div className="assist-actions">
-        {/* h-9 (36px) restores app.css's dropped .assist-actions .btn{height:36px} rule — a
-            past user request ("uniform field/button height throughout the Assistant") keyed
-            on the literal .btn class this component no longer carries. Set directly here
-            rather than in app.css so Button stays self-contained once app.css is eventually
-            retired (Phase 14's incremental CSS burn-down). */}
-        <Button variant="ghost" className="h-9" onClick={closeReactModal}>
+        {/* size="lg" is exactly h-9 (36px), matching the Buchungsparameter card's inputs — a
+            past user request ("uniform field/button height throughout the Assistant") that
+            app.css used to enforce via `.assist-actions .btn{height:36px}`, keyed on the
+            literal .btn class this component no longer carries. Comes for free from the size
+            prop now, not a manual height hack. */}
+        <Button variant="ghost" size="lg" onClick={closeReactModal}>
           Abbrechen
         </Button>
-        <Button variant="primary" className="h-9" onClick={onSearch}>
+        <Button size="lg" onClick={onSearch}>
           Freie Termine suchen
         </Button>
       </div>

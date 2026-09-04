@@ -646,10 +646,11 @@ name or implementation detail. `vitest.config.ts`'s existing per-file `jsdom` op
 (`// @vitest-environment jsdom`) is used as-is; pure-logic tests stay on the `node`
 environment they already run in.
 
-## 19. Phase 14 — Tailwind CSS + shadcn/ui-pattern components (guardrail change, DECIDED 2026-09-04)
+## 19. Phase 14 — Tailwind CSS + shadcn/ui-pattern components (guardrail change, DECIDED
+2026-09-04; revised direction same day)
 
-### The decision
-The project owner wants the frontend to move toward component-library-based UI going
+### The decision (as first made)
+The project owner wanted the frontend to move toward component-library-based UI going
 forward, on the same "own the code" model shadcn/ui popularized (Tailwind CSS for styling;
 components are copied into the repo and can be freely edited, not pulled in as an opaque
 npm dependency). Piloted on one screen first — the Booking Assistant
@@ -657,56 +658,76 @@ npm dependency). Piloted on one screen first — the Booking Assistant
 replatform; `web/css/app.css` stays in place and is retired incrementally, primitive-class
 first (buttons → inputs → dropdowns → cards → modals → …), never in one big-bang rewrite,
 consistent with §1's refactor-not-reimagine stance and the running "conserve every
-behavior" discipline.
+behavior" discipline. The pilot's first two slices used hand-rolled `Button`/`Input`
+primitives styled directly against app.css's own (Tailwind-exposed) tokens, and hit one real
+production regression along the way — Tailwind's Preflight base reset, imported by default,
+turned out to affect every button app-wide, not just the ones this migration touched (found
+via user report, fixed by importing only the `theme`/`utilities` layers instead of the plain
+`'tailwindcss'` import; see the Known Bugs → Fixed entry in `PROGRESS.md`'s Phase 14 section
+for the full story — that lesson, "a Tailwind-styled primitive should never depend on a
+global reset," carried forward into everything below).
 
-### The guardrail change
+### The decision (revised, same day)
+Running `shadcn@latest init --preset b6EWdD0CK8` (a tweakcn theme) on a fork branch, to
+evaluate a real externally-designed shadcn setup, pulled in far more than a color theme:
+**Base UI** (`@base-ui/react`) as the primitive-component library — not Radix — **Tabler**
+icons, self-hosted **Inter**/**Manrope** variable fonts, and a full olive-palette shadcn
+semantic token set. **Decided to adopt this in full**, superseding the narrower plan above:
+Base UI is now the primitive library (Radix was never actually adopted — the "deliberately
+not added yet" note below is now moot, not deferred), Tabler replaced the hand-rolled
+`Icon.tsx` sprite system, Inter/Manrope apply app-wide, and the preset's `:root`/`.dark`
+tokens are canonical for anything built against the new components. `web/css/app.css`'s own
+role is unchanged in kind — it still styles everything not yet migrated — but its own design
+tokens were renamed (`--app-bg`, `--app-panel`, `--app-border`, `--app-text`, `--app-muted`,
+`--app-accent`, …) specifically because the preset defines semantic tokens of the same bare
+names (`--border`/`--muted`/`--accent`/…) for a different palette; without the rename, every
+one of app.css's ~150 uses of those names would have silently repainted with the preset's
+colors instead of its own the moment the preset's tokens landed in the same stylesheet.
+
+### The guardrail change (final)
 §18 narrowed the zero-runtime-dependency rule to backend-only and named exactly two
-frontend exceptions: `react`/`react-dom`. This section adds three more, **scoped to what
-Phase 14 actually needed to get the pilot's first primitives (Button, Input) working**:
-`class-variance-authority`, `clsx`, `tailwind-merge`. These are small, dependency-free
-style-composition utilities (compose/merge class-name strings; no DOM behavior, no
-interactive widgets of their own) — a meaningfully smaller bar than adopting React itself
-was. `tailwindcss`/`@tailwindcss/vite` are **not** a guardrail change at all: they're
-build-time-only devDependencies (compile to static CSS, ship no JS to the browser), which
-`ARCHITECTURE §5` rule 6 already allows freely ("dev tooling is fine").
-
-**Deliberately not added yet: any `@radix-ui/*` package.** Radix primitives (e.g.
-`@radix-ui/react-checkbox`, needed for a shadcn-pattern `Checkbox`) are actual interactive
-widgets, not styling utilities — a bigger bar, and the Assistant's checkbox-heavy device
-checklist has test coverage whose exact DOM-shape assumptions (native `<input
-type="checkbox">` vs. Radix's `<button role="checkbox">`) hadn't been confirmed compatible
-at the time this section was written. Adding a Radix package is its own follow-up decision
-with its own explicit go-ahead and its own guardrail addendum, not bundled into this one.
+frontend exceptions: `react`/`react-dom`. This section adds the full set the adopted preset
+actually needs: `@base-ui/react` (primitive components — headless, accessible, this
+migration's real interactive-widget library, filling the role §18/the original Phase 14
+plan had reserved for Radix), `@tabler/icons-react` (icons, replacing the SVG-sprite
+`Icon.tsx` internals), `class-variance-authority`/`clsx`/`cn` (style-composition
+utilities — `cn` supersedes the hand-written `clsx`+`tailwind-merge` combination the pilot
+started with, since shadcn-generated files import it directly), `@fontsource-variable/inter`
+and `@fontsource-variable/manrope` (self-hosted variable fonts — static font-file assets,
+zero JS shipped). `tailwindcss`/`@tailwindcss/vite`, `shadcn` (its npm package is referenced
+only via a build-time CSS `@import` — confirmed by inspecting its contents: animation
+keyframes and `data-*` custom variants, no JS, no reset of its own), and `tw-animate-css`
+are **not** a guardrail change: build-time-only, ship no JS to the browser, already allowed
+under `ARCHITECTURE §5` rule 6 ("dev tooling is fine").
 
 ### Scope and approach
-`web/css/tailwind.css` (imported once from `web/js/app.ts`) re-exposes the *existing*
-`app.css` design tokens (`--bg`, `--panel`, `--accent`, `--border`, `--muted`, …) as
-Tailwind theme colors via `@theme`, so `bg-panel`/`text-muted`/`border-border` utilities
-render pixel-identical to the current hand-written CSS — one palette, not two. Dark mode
-uses a `@custom-variant dark` keyed off the app's existing `html[data-theme="dark"]`
-attribute (`web/js/ui/theme.ts`'s `applyTheme`), not a second dark-mode mechanism. New
-shadcn-pattern primitives live under `web/js/ui/components/ui/` (e.g. `button.tsx`,
-`input.tsx`), each trimmed to only the variants an actual call site uses rather than
-shipping a component library's full default variant surface — keeps each file comfortably
-inside the existing complexity/line budgets and the `web/js/ui/**` 90%/85% coverage floor
-without contrived tests for unused branches. No path alias was added: shadcn's usual `@/`
--style generated imports are hand-adjusted to this repo's actual convention (relative,
-explicit `.ts`/`.tsx` extensions) as each primitive is landed, so the whole codebase keeps
-exactly one import style. `web/js/lib/utils.ts` holds the standard shadcn `cn()` helper
-(`clsx` + `tailwind-merge`).
+New Base UI/shadcn-pattern components live under `web/js/components/ui/` (the CLI's own
+convention — a different tree than the hand-rolled `web/js/ui/components/ui/` the pilot
+started with, which was deleted once its two components were reconciled against the real
+ones). A path alias (`@/*` → `web/js/*`) was added to `tsconfig.json`/`vite.config.ts`
+specifically because the shadcn CLI requires one to run at all — the original pilot's "no
+alias" call is superseded for anything under `components/ui/`; every other file keeps the
+repo's existing relative-import convention. Dark mode still keys off the app's own
+`html[data-theme="dark"]` attribute (`web/js/ui/theme.ts`), via a `@custom-variant dark` —
+not the preset's own default class-based (`.dark`) mechanism, which was never wired to
+anything and doesn't fire.
 
-**No Preflight (found in production, fixed same day).** `web/css/tailwind.css` initially used
-the plain `@import 'tailwindcss'`, which bundles Preflight — Tailwind's document-wide base
-reset (bare `button`/`input`/`*` element selectors, including a universal `box-sizing:
-border-box`). That's correct for a from-scratch Tailwind app; it's wrong for one *coexisting*
-incrementally with app.css, which never assumed border-box sizing anywhere — the reset applied
-to every element on the page, not just the ones this migration actually touched, silently
-resizing/restyling untouched screens too. Caught from real production feedback ("buttons look
-weird"), not by the test suite (jsdom doesn't render actual layout, so a box-sizing change is
-invisible to it — a real gap in what `verify` can catch, same category as the "UI behavior
-preservation" limit §10 already documents). Fixed by importing only the `theme`/`utilities`
-layers (skips Preflight); each Tailwind-styled primitive now supplies its own opt-in resets
-(`box-border`, `appearance-none`, `font-[inherit]`) instead of assuming a global one — the
-standing rule for every future primitive this migration adds, not a one-off patch.
+**No Preflight, still.** `web/css/tailwind.css` imports only the `theme`/`utilities` layers
+(the fix from the initial pilot slice, kept through the pivot) — confirmed the `shadcn`
+package's own bundled CSS doesn't reintroduce a reset either. One *does* remain: the
+preset's own `@layer base { * { border-color } body { bg/text } }` convention. Kept, because
+CSS Cascade Layers give **unlayered** styles (app.css, a plain stylesheet) priority over
+**any** layered style regardless of selector specificity or source order — confirmed
+empirically (`getComputedStyle`, not assumed) that `body`'s actual background/text still
+resolve to app.css's own `--app-bg`/`--app-text`, not the preset's, and that the toolbar
+(plain HTML, untouched by any of this) still measures pixel-identical to the pre-Phase-14
+baseline (`ef7d334`: 29px/78px). One thing this section does **not** claim fixed: an
+automated-screenshot check found the Assistant's card backgrounds rendering light in dark
+mode despite `getComputedStyle`/`elementsFromPoint` both reporting the correct dark color
+with nothing painted over it (reproduced in both Playwright's headless Chromium and a real
+installed Chrome) — strong evidence of a software-rendering (no-GPU/SwiftShader) screenshot
+artifact specific to the sandboxed verification environment rather than a real bug, but not
+100% confirmed; flagged in `PROGRESS.md`'s Known Bugs → Open for a real-browser spot-check
+rather than either declared fixed or chased indefinitely on unresolved automated evidence.
 
 Full slice-by-slice backlog and rationale: `PROGRESS.md`'s Phase 14 section.

@@ -25,7 +25,7 @@ function MaintenanceSlotRow({ slot, onChange, onRemove }: MaintenanceSlotRowProp
         flexWrap: 'wrap',
         gap: 6,
         alignItems: 'center',
-        border: '1px solid var(--border)',
+        border: '1px solid var(--app-border)',
         borderRadius: 8,
         padding: 6,
         marginBottom: 6,

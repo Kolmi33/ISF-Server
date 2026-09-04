@@ -91,17 +91,20 @@ Project-specific rules (full list `ARCHITECTURE.md §5`) — the ones that bite 
 - Pure `core/` has no DOM. · One authoritative server write path; never trust the client.
 - State changes go through the store. · Backend runtime stays zero-dependency; the
   frontend's runtime dependencies are `react`/`react-dom` (Phase 7, ARCHITECTURE §18) plus
-  `class-variance-authority`/`clsx`/`tailwind-merge` (Phase 14, ARCHITECTURE §19).
+  `@base-ui/react`/`@tabler/icons-react`/`class-variance-authority`/`clsx`/`cn`/
+  `@fontsource-variable/inter`/`@fontsource-variable/manrope` (Phase 14, revised direction —
+  the adopted shadcn preset, ARCHITECTURE §19).
 
 ## Guardrails
 
 - Do not add backend runtime dependencies — dev dependencies only there. The frontend's
-  runtime dependencies are `react`/`react-dom` (Phase 7, ARCHITECTURE §18) and
-  `class-variance-authority`/`clsx`/`tailwind-merge` (Phase 14, ARCHITECTURE §19) —
-  `tailwindcss`/`@tailwindcss/vite` are build-time-only devDependencies, not a guardrail
-  exception. No other runtime dependency, either side (this notably still excludes any
-  `@radix-ui/*` package — see ARCHITECTURE §19's "deliberately not added yet"), without an
-  explicit, reasoned guardrail change like those two.
+  runtime dependencies are `react`/`react-dom` (Phase 7, ARCHITECTURE §18) and the shadcn
+  preset's own set — `@base-ui/react` (the primitive-component library, filling the role
+  originally reserved for Radix), `@tabler/icons-react`, `class-variance-authority`/`clsx`/
+  `cn`, `@fontsource-variable/inter`/`@fontsource-variable/manrope` (Phase 14, ARCHITECTURE
+  §19) — `tailwindcss`/`@tailwindcss/vite`/`shadcn`/`tw-animate-css` are build-time-only
+  devDependencies or CSS-only imports, not a guardrail exception. No other runtime
+  dependency, either side, without an explicit, reasoned guardrail change like those.
 - Do not edit the untouched baseline behavior without a test that pins the change.
 - If a gate is wrong, change the gate deliberately (with reasoning in the commit), never
   bypass it with `--no-verify` or inline disables.

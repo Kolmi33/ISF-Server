@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -16,6 +17,13 @@ export default defineConfig({
   // loading separately via <link> in index.html, unchanged; the two coexist during the
   // incremental migration.
   plugins: [tailwindcss()],
+  resolve: {
+    // Mirrors tsconfig.json's "@/*" -> "web/js/*" path (Vite doesn't read tsconfig paths
+    // itself) — the shadcn CLI's expected import-alias convention (shadcn init, this branch).
+    alias: {
+      '@': fileURLToPath(new URL('./web/js', import.meta.url)),
+    },
+  },
   server: {
     host: true, // 0.0.0.0 so the container's published port is reachable from the host
     port: 5173,

@@ -2,11 +2,17 @@
    TAILWIND ENTRY POINT (web/css/tailwind.css)
    =======================================================================================
 
-   Phase 14 (ARCHITECTURE §19): Tailwind coexists with web/css/app.css during an incremental,
-   primitives-first migration — this file does NOT replace app.css's design tokens. It
-   re-exposes the SAME custom properties app.css already defines (:root / html[data-theme=
-   "dark"]) as Tailwind theme tokens, so utilities like bg-panel/text-muted/border-border
-   render pixel-identical to the existing hand-written CSS. No second palette to keep in sync.
+   Phase 14 (ARCHITECTURE §19): started as a narrow, hand-rolled Tailwind layer coexisting
+   with web/css/app.css. Revised direction (still Phase 14): `shadcn init --preset b6EWdD0CK8`
+   (tweakcn) was applied and adopted in full — Base UI as the primitive-component library,
+   Tabler icons, self-hosted Inter/Manrope fonts, and this preset's own oklch color palette
+   (the `:root`/`.dark` blocks below) are now canonical for anything built against the new
+   component library. app.css's OWN design tokens (`--app-bg`, `--app-panel`, `--app-border`,
+   `--app-text`, `--app-muted`, `--app-accent`, …) were renamed with an `--app-` prefix
+   specifically so they stop colliding with this preset's semantic tokens of the same bare
+   names (`--border`/`--muted`/`--accent`/…) — app.css keeps styling every screen not yet
+   migrated to the new components, under its own now-non-colliding names, until it's retired
+   screen by screen.
 
    Imported once from web/js/app.ts (Vite then treats it as a real CSS build input via the
    @tailwindcss/vite plugin, vite.config.ts); app.css keeps loading separately via its own
@@ -20,29 +26,166 @@
    has actually touched (found in production: it silently reset unrelated, untouched screens
    too — a violation of the "pilot changes only what it says it changes" plan). Importing only
    the theme + utilities layers below skips Preflight entirely, so adding a Tailwind-styled
-   primitive anywhere can never affect an element it wasn't explicitly given a class on. Each
-   primitive (ui/button.tsx, ui/input.tsx, …) supplies its own opt-in resets instead
-   (`box-border`, `appearance-none`) rather than relying on a global one.
+   primitive anywhere can never affect an element it wasn't explicitly given a class on. Note
+   the shadcn/Base UI components under web/js/components/ui/ (button.tsx, input.tsx, …) supply
+   their own resets via their own Tailwind classes (e.g. `outline-none`), same principle, not
+   dependent on Preflight either — confirmed no other global reset came in via `shadcn/
+   tailwind.css` itself (checked: it's only animation keyframes + data-state custom variants).
+   The one deliberate document-wide rule that DOES remain is the `@layer base` block below
+   (`* { border-color } body { bg/text }`) — the preset's own convention, plausibly harmless
+   since `border-color` alone is invisible without a border-width also being set somewhere, but
+   confirmed (not assumed) with the same DOM-measurement technique that caught the Preflight
+   regression — see PROGRESS.md's Phase 14 section for the actual numbers.
    ======================================================================================= */
 
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/manrope';
 
+/* app.css's own tokens, exposed under their real (--app- prefixed, non-colliding) names for
+   whatever still-unmigrated screen wants a Tailwind utility against them, e.g. bg-app-panel. */
 @theme {
-  --color-bg: var(--bg);
-  --color-panel: var(--panel);
-  --color-border: var(--border);
-  --color-text: var(--text);
-  --color-muted: var(--muted);
-  --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
-  --color-accent-light: var(--accent-light);
-  --color-danger: var(--danger);
-  --color-warn: var(--warn);
-  --color-hover: var(--hover);
+  --color-app-bg: var(--app-bg);
+  --color-app-panel: var(--app-panel);
+  --color-app-border: var(--app-border);
+  --color-app-text: var(--app-text);
+  --color-app-muted: var(--app-muted);
+  --color-app-accent: var(--app-accent);
+  --color-app-accent-hover: var(--app-accent-hover);
+  --color-app-accent-light: var(--app-accent-light);
+  --color-app-danger: var(--danger);
+  --color-app-warn: var(--warn);
+  --color-app-hover: var(--hover);
 }
 
 /* Mirrors the app's existing light/dark toggle (web/js/ui/theme.ts's applyTheme sets
    html[data-theme="dark"|"light"]) rather than inventing a second dark-mode mechanism —
    dark: utilities key off the same attribute app.css's html[data-theme="dark"] block does. */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.153 0.006 107.1);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.153 0.006 107.1);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.153 0.006 107.1);
+  --primary: oklch(0.508 0.118 165.612);
+  --primary-foreground: oklch(0.979 0.021 166.113);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.966 0.005 106.5);
+  --muted-foreground: oklch(0.58 0.031 107.3);
+  --accent: oklch(0.966 0.005 106.5);
+  --accent-foreground: oklch(0.228 0.013 107.4);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.93 0.007 106.5);
+  --input: oklch(0.93 0.007 106.5);
+  --ring: oklch(0.737 0.021 106.9);
+  --chart-1: oklch(0.88 0.011 106.6);
+  --chart-2: oklch(0.58 0.031 107.3);
+  --chart-3: oklch(0.466 0.025 107.3);
+  --chart-4: oklch(0.394 0.023 107.4);
+  --chart-5: oklch(0.286 0.016 107.4);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.988 0.003 106.5);
+  --sidebar-foreground: oklch(0.153 0.006 107.1);
+  --sidebar-primary: oklch(0.596 0.145 163.225);
+  --sidebar-primary-foreground: oklch(0.979 0.021 166.113);
+  --sidebar-accent: oklch(0.966 0.005 106.5);
+  --sidebar-accent-foreground: oklch(0.228 0.013 107.4);
+  --sidebar-border: oklch(0.93 0.007 106.5);
+  --sidebar-ring: oklch(0.737 0.021 106.9);
+}
+
+.dark {
+  --background: oklch(0.153 0.006 107.1);
+  --foreground: oklch(0.988 0.003 106.5);
+  --card: oklch(0.228 0.013 107.4);
+  --card-foreground: oklch(0.988 0.003 106.5);
+  --popover: oklch(0.228 0.013 107.4);
+  --popover-foreground: oklch(0.988 0.003 106.5);
+  --primary: oklch(0.432 0.095 166.913);
+  --primary-foreground: oklch(0.979 0.021 166.113);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.286 0.016 107.4);
+  --muted-foreground: oklch(0.737 0.021 106.9);
+  --accent: oklch(0.286 0.016 107.4);
+  --accent-foreground: oklch(0.988 0.003 106.5);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.58 0.031 107.3);
+  --chart-1: oklch(0.88 0.011 106.6);
+  --chart-2: oklch(0.58 0.031 107.3);
+  --chart-3: oklch(0.466 0.025 107.3);
+  --chart-4: oklch(0.394 0.023 107.4);
+  --chart-5: oklch(0.286 0.016 107.4);
+  --sidebar: oklch(0.228 0.013 107.4);
+  --sidebar-foreground: oklch(0.988 0.003 106.5);
+  --sidebar-primary: oklch(0.696 0.17 162.48);
+  --sidebar-primary-foreground: oklch(0.262 0.051 172.552);
+  --sidebar-accent: oklch(0.286 0.016 107.4);
+  --sidebar-accent-foreground: oklch(0.988 0.003 106.5);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.58 0.031 107.3);
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', sans-serif;
+  --font-heading: 'Manrope Variable', sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
