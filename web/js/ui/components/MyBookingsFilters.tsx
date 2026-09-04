@@ -17,11 +17,12 @@ import { GroupOptions } from './GroupOptions.tsx';
 import { store } from '../../store-instance.ts';
 import { saveFilters, updateMachBtn } from './MachineFilterDropdown.tsx';
 
+// 'maschine' removed from the sort options (user request) — the machine name is already the
+// row's own headline, so sorting by it added no real value.
 const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'termin', label: 'Termin der Buchung' },
   { value: 'erstellt', label: 'Zuletzt gebucht' },
   { value: 'bereich', label: 'Bereich' },
-  { value: 'maschine', label: 'Maschine' },
 ];
 
 interface MyBookingsFiltersProps {

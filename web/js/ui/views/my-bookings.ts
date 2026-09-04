@@ -110,16 +110,14 @@ export interface FilterableRun {
 
 /** The sort comparators, keyed by the modal's sort dropdown values — the same shape as
  *  `views/all-bookings.ts`'s own sorters, minus the 'person' key (meaningless here: every run
- *  is already the same one person). */
+ *  is already the same one person) and minus 'maschine' (removed — user request: the machine
+ *  name is already the row's own headline, so sorting by it added no real value). */
 const sorters: Record<string, (runA: FilterableRun, runB: FilterableRun) => number> = {
   termin: (runA, runB) =>
     runA.dates[0]! < runB.dates[0]! ? -1 : runA.dates[0]! > runB.dates[0]! ? 1 : 0,
   erstellt: (runA, runB) => (runB.ts || '').localeCompare(runA.ts || ''),
   bereich: (runA, runB) =>
     (runA.machine.group || '').localeCompare(runB.machine.group || '', 'de') ||
-    runA.machine.name.localeCompare(runB.machine.name, 'de') ||
-    (runA.dates[0]! < runB.dates[0]! ? -1 : 1),
-  maschine: (runA, runB) =>
     runA.machine.name.localeCompare(runB.machine.name, 'de') ||
     (runA.dates[0]! < runB.dates[0]! ? -1 : 1),
 };

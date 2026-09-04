@@ -164,17 +164,21 @@ describe('filterMyRuns', () => {
     expect(ids(filterMyRuns(all, { ...base, from: '2021-01-08' }))).toEqual(['b']);
   });
 
-  // What: each sort key (minus 'person', which doesn't exist here) produces the expected order.
-  // How: applies 'maschine', 'bereich', and 'erstellt' to the two-run fixture.
+  // What: each remaining sort key (minus 'person', which doesn't exist here, and minus
+  // 'maschine', removed — user request) produces the expected order.
+  // How: applies 'bereich' and 'erstellt' to the two-run fixture.
   it('applies each sort key', () => {
-    expect(ids(filterMyRuns(all, { ...base, sort: 'maschine' }))).toEqual(['a', 'b']); // Fräse, Presse
     expect(ids(filterMyRuns(all, { ...base, sort: 'bereich' }))).toEqual(['a', 'b']); // Halle, Labor
     expect(ids(filterMyRuns(all, { ...base, sort: 'erstellt' }))).toEqual(['a', 'b']); // ts desc
   });
 
-  // What: an unrecognized sort key falls back to 'termin' rather than throwing.
-  // How: passes a nonsense sort string and checks the result still matches termin order.
-  it('falls back to termin for an unknown sort key', () => {
+  // What: an unrecognized sort key falls back to 'termin' rather than throwing — also covers
+  // the now-removed 'maschine' key, e.g. a value still sitting in a returning user's
+  // localStorage from before the option was removed.
+  // How: passes a nonsense sort string, and separately the old 'maschine' key, and checks both
+  // still match termin order.
+  it('falls back to termin for an unknown sort key (including the removed "maschine" key)', () => {
     expect(ids(filterMyRuns(all, { ...base, sort: 'nonsense' }))).toEqual(['a', 'b']);
+    expect(ids(filterMyRuns(all, { ...base, sort: 'maschine' }))).toEqual(['a', 'b']);
   });
 });
