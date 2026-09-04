@@ -42,7 +42,7 @@ describe('refreshCell', () => {
   // safe no-op — it doesn't need to exist for the patch to be attempted.
   // How: calls refreshCell for a date not in the built DOM fixture and checks it doesn't throw.
   it('is a no-op when the cell is not currently rendered', () => {
-    expect(() => refreshCell('m1', '2099-01-01')).not.toThrow();
+    expect(() => refreshCell('m1', '2099-01-01', new Map())).not.toThrow();
   });
 
   // What: if the machine itself no longer exists in the loaded data (e.g. deleted
@@ -50,7 +50,7 @@ describe('refreshCell', () => {
   // How: empties the machines list, patches the cell, and checks its class is unchanged.
   it('is a no-op when the machine no longer exists', () => {
     window.S.data!.machines = [];
-    refreshCell('m1', TODAY);
+    refreshCell('m1', TODAY, new Map());
     expect(cell().className).toBe('cell free'); // unchanged
   });
 
@@ -62,7 +62,7 @@ describe('refreshCell', () => {
     window.S.data!.machines = [
       machine({ maint: [{ type: 'defekt', from: TODAY, until: TODAY, note: 'kaputt' }] }),
     ];
-    refreshCell('m1', TODAY);
+    refreshCell('m1', TODAY, new Map());
     expect(cell().className).toContain('blocked');
     expect(cell().title).toContain('kaputt');
   });
@@ -74,7 +74,7 @@ describe('refreshCell', () => {
   // and checks the class, text, and title.
   it('renders a booked cell, marking it "mine" case-insensitively', () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'Anna', note: 'wichtig' } } };
-    refreshCell('m1', TODAY);
+    refreshCell('m1', TODAY, new Map());
     expect(cell().className).toContain('booked');
     expect(cell().className).toContain('mine');
     expect(cell().textContent).toBe('Anna');
@@ -86,7 +86,7 @@ describe('refreshCell', () => {
   // How: gives the machine a days mask with today's weekday off and checks the class.
   it('renders an unavailable cell for a machine closed on that weekday', () => {
     window.S.data!.machines = [machine({ days: '0111111' })]; // Monday off
-    refreshCell('m1', TODAY);
+    refreshCell('m1', TODAY, new Map());
     expect(cell().className).toContain('unavail');
   });
 
@@ -97,9 +97,9 @@ describe('refreshCell', () => {
   // final state is free with empty text.
   it('renders free when nothing else applies', () => {
     window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
-    refreshCell('m1', TODAY);
+    refreshCell('m1', TODAY, new Map());
     window.S.data!.bookings = {};
-    refreshCell('m1', TODAY);
+    refreshCell('m1', TODAY, new Map());
     expect(cell().className).toContain('free');
     expect(cell().textContent).toBe('');
   });
@@ -126,7 +126,7 @@ describe('refreshCell', () => {
     // What: a free weekend cell keeps its "wknd" styling class through a patch.
     // How: patches a Saturday cell with nothing else going on and checks the class survives.
     it('keeps wknd on a free weekend cell', () => {
-      refreshCell('m1', SATURDAY);
+      refreshCell('m1', SATURDAY, new Map());
       expect(satCell().className).toContain('wknd');
     });
 
@@ -136,7 +136,7 @@ describe('refreshCell', () => {
     // booked state.
     it('keeps wknd on a booked weekend cell', () => {
       window.S.data!.bookings = { m1: { [SATURDAY]: { name: 'anna' } } };
-      refreshCell('m1', SATURDAY);
+      refreshCell('m1', SATURDAY, new Map());
       expect(satCell().className).toContain('wknd');
     });
 
@@ -147,7 +147,7 @@ describe('refreshCell', () => {
       window.S.data!.machines = [
         machine({ maint: [{ type: 'defekt', from: SATURDAY, until: SATURDAY }] }),
       ];
-      refreshCell('m1', SATURDAY);
+      refreshCell('m1', SATURDAY, new Map());
       expect(satCell().className).toContain('wknd');
     });
 
@@ -156,7 +156,7 @@ describe('refreshCell', () => {
     // present alongside the unavailable state.
     it('keeps wknd on an unavailable weekend cell', () => {
       window.S.data!.machines = [machine({ days: '1111101' })]; // Mo..So mask, Saturday off
-      refreshCell('m1', SATURDAY);
+      refreshCell('m1', SATURDAY, new Map());
       expect(satCell().className).toContain('wknd');
     });
 
@@ -164,7 +164,7 @@ describe('refreshCell', () => {
     // must apply only to actual weekend columns.
     // How: patches a Monday cell and checks the class does NOT contain wknd.
     it('does not add wknd to a weekday cell', () => {
-      refreshCell('m1', TODAY); // a Monday
+      refreshCell('m1', TODAY, new Map()); // a Monday
       expect(cell().className).not.toContain('wknd');
     });
   });
@@ -243,5 +243,79 @@ describe('patchCells', () => {
     // Nothing is actually anchored/focused in this fixture, so the repaint correctly clears
     // the stray .sel left over from before the patch — proving paintSelection() really ran.
     expect(cell().classList.contains('sel')).toBe(false);
+  });
+});
+
+// Regression: patchCells (and refreshCell underneath it) used to always show a booked cell's
+// own name and never touch merge/mine styling at all, no matter how many days/machines the
+// same booking actually spanned — so any write that goes through this patch path (nearly
+// every one — see mutate.ts) could leave a merged multi-day/multi-machine block's name back
+// in EVERY cell instead of just its one center cell, most visibly after deleting then undoing
+// a grouped booking (the exact user report this pins). Fixed by recomputing every patched
+// cell's real segment (ui/grid.ts's computeVisibleBookingBlocks) from the fully-applied
+// current data, the same recipe Grid.tsx's own full render uses.
+describe('patchCells — merge-aware rendering (regression)', () => {
+  const TUE = '2021-01-05';
+
+  function buildTwoDayDom(): void {
+    document.body.innerHTML = `
+      <table><tbody><tr>
+        <td class="machcol"><span class="dot free"></span></td>
+        <td class="cell free" data-machine-id="m1" data-date="${TODAY}"></td>
+        <td class="cell free" data-machine-id="m1" data-date="${TUE}"></td>
+      </tr></tbody></table>`;
+  }
+
+  function tueCell(): HTMLElement {
+    return document.querySelector(`td.cell[data-machine-id="m1"][data-date="${TUE}"]`)!;
+  }
+
+  beforeEach(() => {
+    buildTwoDayDom();
+    // The extra store fields computeVisibleBookingBlocks' own recipe (buildGridRows +
+    // visibleWeeks) needs, beyond what the outer beforeEach already sets.
+    window.S.visM = ['m1'];
+    window.S.weeks = 1;
+    window.S.extraWeeks = 0;
+    window.S.startMonday = new Date(`${TODAY}T00:00:00Z`);
+    window.S.groupsSel = new Set();
+    window.S.machSel = new Set();
+    window.S.cats = new Set(['maschine', 'messtechnik']);
+    window.S.collapsed = new Set();
+    window.S.favs = new Set();
+  });
+
+  // What: a 2-day run patched together (both days in the same `patchCells` call — exactly the
+  // shape a multi-day delete's undo produces) shows the booker's name exactly once, at the
+  // block's own center cell (a 2-day run's center is its first day) — never in both cells.
+  // How: books both days under the same name, patches both together, and checks each cell's
+  // own text content individually.
+  it("shows the name only once, at the block's actual center — not in every patched cell", () => {
+    window.S.data!.bookings = {
+      m1: { [TODAY]: { name: 'anna' }, [TUE]: { name: 'anna' } },
+    };
+    patchCells([
+      { machineId: 'm1', date: TODAY },
+      { machineId: 'm1', date: TUE },
+    ]);
+    expect(cell().textContent).toBe('anna'); // the run's first day is its center
+    expect(tueCell().textContent).toBe(''); // the run's second day stays blank
+  });
+
+  // What: the two days of the same run merge visually — the first day's right edge and the
+  // second day's left edge both drop their border/gridline (the `merge-right`/`merge-left`
+  // classes), matching what a full render would produce for the exact same data.
+  // How: books both days under the same name, patches both together, and checks each cell's
+  // own merge-* class.
+  it('applies merge-left/merge-right classes across the patched run, not just per-cell state', () => {
+    window.S.data!.bookings = {
+      m1: { [TODAY]: { name: 'anna' }, [TUE]: { name: 'anna' } },
+    };
+    patchCells([
+      { machineId: 'm1', date: TODAY },
+      { machineId: 'm1', date: TUE },
+    ]);
+    expect(cell().className).toContain('merge-right');
+    expect(tueCell().className).toContain('merge-left');
   });
 });

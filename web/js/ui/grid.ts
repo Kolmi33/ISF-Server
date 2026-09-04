@@ -15,9 +15,10 @@
 //
 // =======================================================================================
 
-import type { Booking, Machine, MachineCategory } from '../../../shared/types.ts';
+import type { Booking, Bookings, Machine, MachineCategory } from '../../../shared/types.ts';
 import { addDays, formatDateAsIsoString } from '../../../shared/dates.ts';
 import { getMachineCategory, getMaintenanceSlotAtDate } from '../core/machines.ts';
+import { getBooking } from '../core/bookings.ts';
 
 /** The four mutually exclusive states of a grid cell in priority order. */
 export type CellState = 'blocked' | 'booked' | 'unavail' | 'free';
@@ -258,6 +259,49 @@ export function computeBookingBlocks(
     }
   }
   return segments;
+}
+
+/**
+ * Runs `computeBookingBlocks` once per displayed week across a full grid row sequence —
+ * including category/group HEADER rows, given a `nameAt` that always returns `null`. Header
+ * rows must stay in the list rather than being filtered out first: a category or group header
+ * sitting between two machine rows genuinely breaks their visual adjacency (the same way a
+ * differently-booked row does), so two machines in different groups must never merge just
+ * because they'd be "adjacent" once headers are stripped out. A machine hidden by an active
+ * filter, by contrast, correctly closes the gap — `buildGridRows` simply omits its row
+ * entirely, no header takes its place, so its neighbors truly are adjacent and are free to
+ * merge.
+ *
+ * `weeks` are passed and combined separately (not one flat day list) since
+ * `computeBookingBlocks` merges purely by array adjacency: a run must never bridge the visual
+ * gap column between two weeks, so each week's own days need their own separate pass.
+ *
+ * The one shared recipe both `Grid.tsx`'s full render AND `cell-patch.ts`'s targeted DOM
+ * patch (after a booking write/delete/undo) use to compute a cell's segment — the merge/
+ * "only the block's one center cell shows the name" logic must stay correct after EVERY write
+ * path, not just a full re-render, or an undo (etc.) can leave a merged block's name back in
+ * every cell instead of just its center.
+ */
+export function computeVisibleBookingBlocks(
+  weeks: readonly (readonly string[])[],
+  gridRows: readonly GridRow[],
+  bookings: Bookings,
+): Map<string, BookingBlockSegment> {
+  const rows = gridRows.map(
+    (row, index) =>
+      row.kind === 'machine'
+        ? {
+            machineId: row.machine.id,
+            nameAt: (isoDate: string) =>
+              getBooking(bookings, row.machine.id, isoDate)?.name ?? null,
+          }
+        : { machineId: `__header_${index}__`, nameAt: () => null }, // never looked up; just a break
+  );
+  const combined = new Map<string, BookingBlockSegment>();
+  for (const week of weeks) {
+    for (const [key, segment] of computeBookingBlocks(week, rows)) combined.set(key, segment);
+  }
+  return combined;
 }
 
 /** Visual status dot state displayed in the machine row header. */
