@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import type { Machine, Bookings } from '../../../../shared/types.ts';
-import { computeStats, buildResourceRows, buildPersonRows, type StatsMachineRow } from './stats.ts';
+import {
+  computeStats,
+  buildResourceRows,
+  buildPersonRows,
+  bucketDailyCounts,
+  computeCategoryDashboard,
+  type StatsMachineRow,
+} from './stats.ts';
 
 const bk = (name: string) => ({ name });
 // m1: a machine with a 2-day maintenance slot; m2: a measurement device, no maintenance.
@@ -262,5 +269,119 @@ describe('buildPersonRows', () => {
     ]);
     const rows = buildPersonRows(persons, 'AN');
     expect(rows.map((p) => p.name)).toEqual(['Anna']);
+  });
+});
+
+describe('bucketDailyCounts', () => {
+  // What: with no days at all, the chart has nothing to show.
+  it('is empty for no days', () => {
+    expect(bucketDailyCounts([], [], 10)).toEqual([]);
+  });
+
+  // What: a range already at or under maxBars gets one bucket per day, unchanged — each
+  // labeled with that day's own short German date.
+  // How: two days, well under a maxBars of 10.
+  it('gives one bucket per day when the range already fits within maxBars', () => {
+    expect(bucketDailyCounts(['2021-01-04', '2021-01-05'], [2, 3], 10)).toEqual([
+      { label: '04.01.', count: 2 },
+      { label: '05.01.', count: 3 },
+    ]);
+  });
+
+  // What: once the range exceeds maxBars, contiguous days group into buckets (summed), keeping
+  // the chart legible regardless of how wide the selected range is.
+  // How: 4 days capped to 2 bars — two 2-day buckets, each summing its pair's counts, labeled
+  // by the bucket's own first day.
+  it('groups into contiguous buckets and sums counts once the range exceeds maxBars', () => {
+    const days = ['2021-01-04', '2021-01-05', '2021-01-06', '2021-01-07'];
+    expect(bucketDailyCounts(days, [1, 2, 3, 4], 2)).toEqual([
+      { label: '04.01.', count: 3 }, // 1 + 2
+      { label: '06.01.', count: 7 }, // 3 + 4
+    ]);
+  });
+});
+
+describe('computeCategoryDashboard', () => {
+  const days = ['2021-01-04', '2021-01-05']; // 2 weekdays
+
+  function machineRow(
+    id: string,
+    name: string,
+    bookedWorkdayCount: number,
+    percent: number,
+    personKeys: string[] = [],
+  ): StatsMachineRow {
+    return {
+      machine: { id, name, group: 'g' },
+      bookedWorkdayCount,
+      blockedWorkdayCount: 0,
+      percent,
+      persons: new Map(personKeys.map((key) => [key, { name: key, days: 1 }])),
+    };
+  }
+
+  // What: usedPercent/blockedPercent are true category-wide shares (total booked/blocked slots
+  // over the category's full denominator — machine count × range length), not a per-row average.
+  // How: two machines, one fully booked and one half booked/half blocked, and checks both
+  // aggregate percentages.
+  it('aggregates usedPercent and blockedPercent across the whole category', () => {
+    const m1 = machineRow('m1', 'M1', 2, 100); // 2 of 2 days booked
+    const m2 = machineRow('m2', 'M2', 1, 50); // 1 of 2 days booked
+    m2.blockedWorkdayCount = 1; // the other day is blocked, not idle
+    const dashboard = computeCategoryDashboard([m1, m2], {}, days, 'maschine');
+    expect(dashboard.usedPercent).toBe(75); // (2+1) booked / (2 rows * 2 days = 4 slots)
+    expect(dashboard.blockedPercent).toBe(25); // 1 blocked / 4 slots
+  });
+
+  // What: only the requested category's machines count toward the dashboard — a different
+  // category's rows (present in the same machRows list, e.g. Messtechnik alongside Maschinen)
+  // don't dilute it.
+  // How: mixes a 'maschine' and a 'messtechnik' row and checks only the former counts.
+  it("only counts the requested category's own machines", () => {
+    const maschine = machineRow('m1', 'M1', 2, 100);
+    const messtechnik: StatsMachineRow = {
+      ...machineRow('m2', 'M2', 0, 0),
+      machine: { id: 'm2', name: 'M2', group: 'g', cat: 'messtechnik' },
+    };
+    const dashboard = computeCategoryDashboard([maschine, messtechnik], {}, days, 'maschine');
+    expect(dashboard.usedPercent).toBe(100); // only m1's 2/2 counts; m2 excluded entirely
+  });
+
+  // What: activePersonCount counts DISTINCT people across every row's own person breakdown —
+  // someone booking two of the category's machines still counts once.
+  // How: anna appears on both rows, bob only on one; checks the count is 2, not 3.
+  it('counts distinct people across every row, not double-counting repeats', () => {
+    const m1 = machineRow('m1', 'M1', 1, 50, ['anna']);
+    const m2 = machineRow('m2', 'M2', 1, 50, ['anna', 'bob']);
+    const dashboard = computeCategoryDashboard([m1, m2], {}, days, 'maschine');
+    expect(dashboard.activePersonCount).toBe(2);
+  });
+
+  // What: topMachine names the highest-percent row in the category, or null when the category
+  // has no machines at all.
+  // How: three rows with different percents, checks the highest wins; then an empty category.
+  it('names the highest-utilisation machine as topMachine, or null with none', () => {
+    const rows = [machineRow('m1', 'Beta', 1, 50), machineRow('m2', 'Alpha', 2, 100)];
+    expect(computeCategoryDashboard(rows, {}, days, 'maschine').topMachine).toEqual({
+      name: 'Alpha',
+      percent: 100,
+    });
+    expect(computeCategoryDashboard([], {}, days, 'maschine').topMachine).toBeNull();
+  });
+
+  // What: the day-by-day chart counts actual bookings from the raw `bookings` map (not the
+  // rows' own totals, which have no daily granularity), summing across the category's machines.
+  // How: books both machines on the first day only, and checks the chart's two buckets.
+  it('builds the day-by-day chart from the raw bookings, summed across category machines', () => {
+    const rows = [machineRow('m1', 'M1', 1, 50), machineRow('m2', 'M2', 1, 50)];
+    const bookings: Bookings = {
+      m1: { '2021-01-04': { name: 'anna' } },
+      m2: { '2021-01-04': { name: 'bob' } },
+    };
+    const dashboard = computeCategoryDashboard(rows, bookings, days, 'maschine');
+    expect(dashboard.chart).toEqual([
+      { label: '04.01.', count: 2 },
+      { label: '05.01.', count: 0 },
+    ]);
   });
 });

@@ -12,7 +12,11 @@
 // =======================================================================================
 
 import type { Machine, Bookings, MachineCategory } from '../../../../shared/types.ts';
-import { getWeekdaysInRange } from '../../../../shared/dates.ts';
+import {
+  getWeekdaysInRange,
+  parseIsoDateString,
+  formatDateShort,
+} from '../../../../shared/dates.ts';
 import { isMachineBlockedOnDate, getMachineCategory } from '../../core/machines.ts';
 
 /** One person's day count on a single machine (the per-machine drilldown row). */
@@ -203,4 +207,86 @@ export function buildPersonRows(
   return [...persons.values()]
     .filter((person) => !lowercaseQuery || person.name.toLowerCase().includes(lowercaseQuery))
     .sort((a, b) => b.days - a.days || a.name.localeCompare(b.name, 'de'));
+}
+
+// ---- The dashboard KPI/chart strip (Statistik redesign, user request) ------------------
+
+/** One bar of the day-by-day booking chart. `label` is the bucket's first day, short German
+ *  format ('DD.MM.') — a tooltip/axis label, not shown as running text. */
+export interface ChartBucket {
+  label: string;
+  count: number;
+}
+
+/**
+ * Groups `days`/`counts` (same length, index-aligned) into at most `maxBars` contiguous
+ * buckets, summing each bucket's count — so the day-by-day chart stays legible regardless of
+ * how wide the selected date range is (a full year is ~260 weekdays; one bar per day would be
+ * unreadable). A range already at or under `maxBars` days gets one bucket per day, unchanged.
+ */
+export function bucketDailyCounts(
+  days: readonly string[],
+  counts: readonly number[],
+  maxBars: number,
+): ChartBucket[] {
+  if (!days.length) return [];
+  const bucketSize = Math.max(1, Math.ceil(days.length / maxBars));
+  const buckets: ChartBucket[] = [];
+  for (let start = 0; start < days.length; start += bucketSize) {
+    const bucketDays = days.slice(start, start + bucketSize);
+    const bucketCounts = counts.slice(start, start + bucketSize);
+    buckets.push({
+      label: formatDateShort(parseIsoDateString(bucketDays[0]!)),
+      count: bucketCounts.reduce((sum, count) => sum + count, 0),
+    });
+  }
+  return buckets;
+}
+
+/** The dashboard-style summary for one category over the current date range (user request:
+ *  revamp the Statistik tab as a dashboard, "structure and maybe even colour profile" matching
+ *  a reference card-based layout) — the KPI tiles + the day-by-day booking chart shown above
+ *  the existing grouped machine list, once per active category tab. */
+export interface CategoryDashboard {
+  /** Aggregate utilisation across every one of the category's machines: total booked-day slots
+   *  over the category's full denominator (machine count × range length in weekdays). */
+  usedPercent: number;
+  blockedPercent: number;
+  /** Distinct people who booked ANY of this category's machines in range. */
+  activePersonCount: number;
+  topMachine: { name: string; percent: number } | null;
+  chart: ChartBucket[];
+}
+
+const DASHBOARD_CHART_MAX_BARS = 20;
+
+/**
+ * Computes one category's dashboard summary from its already-aggregated rows (`computeStats`'s
+ * `machRows`, unfiltered by name — the dashboard always summarizes the whole category) plus the
+ * raw bookings (needed for the day-by-day chart, which `StatsMachineRow`'s own per-machine
+ * totals don't carry granularity for).
+ */
+export function computeCategoryDashboard(
+  machRows: readonly StatsMachineRow[],
+  bookings: Bookings,
+  days: readonly string[],
+  category: MachineCategory,
+): CategoryDashboard {
+  const rows = machRows.filter((row) => getMachineCategory(row.machine) === category);
+  const totalSlots = rows.length * days.length;
+  const usedSlots = rows.reduce((sum, row) => sum + row.bookedWorkdayCount, 0);
+  const blockedSlots = rows.reduce((sum, row) => sum + row.blockedWorkdayCount, 0);
+  const activePersons = new Set<string>();
+  for (const row of rows) for (const personKey of row.persons.keys()) activePersons.add(personKey);
+  const topRow = rows.slice().sort((a, b) => b.percent - a.percent)[0];
+  const dailyCounts = days.map((date) =>
+    rows.reduce((count, row) => (bookings[row.machine.id]?.[date]?.name ? count + 1 : count), 0),
+  );
+  return {
+    usedPercent: totalSlots ? Math.round((usedSlots * 100) / totalSlots) : 0,
+    blockedPercent: totalSlots ? Math.round((blockedSlots * 100) / totalSlots) : 0,
+    activePersonCount: activePersons.size,
+    topMachine: topRow ? { name: topRow.machine.name, percent: topRow.percent } : null,
+    chart: bucketDailyCounts(days, dailyCounts, DASHBOARD_CHART_MAX_BARS),
+  };
 }
