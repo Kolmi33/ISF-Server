@@ -19,9 +19,11 @@ function groupList(): string[] {
 }
 
 /** Refreshes `#groupBtn`'s label from the current group selection, plus the toolbar's own
- *  quick-clear "×" (`#groupClearBtn`, a sibling button next to `#groupBtn` — user request:
- *  clear an active filter instantly from the main view, without opening the dropdown at all).
- *  Both are static markup, not React-rendered, so mutated directly rather than through JSX. */
+ *  quick-clear "×" (`#groupClearBtn`, next to `#groupBtn` inside their shared `#groupWrap` box
+ *  — user request: clear an active filter instantly from the main view, without opening the
+ *  dropdown at all). Both are static markup, not React-rendered, so mutated directly rather
+ *  than through JSX. The `filtered` class on the wrap merges the "×" visually into the same
+ *  box as the button once it's shown (see `updateMachBtn`'s own comment / app.css). */
 function updateGroupBtn(): void {
   const button = document.getElementById('groupBtn');
   if (button) {
@@ -30,7 +32,9 @@ function updateGroupBtn(): void {
       count === 0 ? 'Alle Bereiche ▾' : `${count} Bereich${count > 1 ? 'e' : ''} ▾`;
   }
   const clearButton = document.getElementById('groupClearBtn');
-  if (clearButton) clearButton.style.display = store.get('groupsSel').size ? '' : 'none';
+  const isFiltered = store.get('groupsSel').size > 0;
+  if (clearButton) clearButton.style.display = isFiltered ? '' : 'none';
+  document.getElementById('groupWrap')?.classList.toggle('filtered', isFiltered);
 }
 
 /** Clears the group filter selection — the toolbar quick-clear's own action, reachable

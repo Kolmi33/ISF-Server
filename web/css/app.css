@@ -95,7 +95,13 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-light);bo
 .spacer{flex:1}
 #userChip{background:var(--accent-light);border-color:var(--accent);color:var(--accent);font-weight:600}
 #lastRef{font-size:11px;color:var(--muted);white-space:nowrap}
-#machWrap{position:relative;display:inline-flex;align-items:center;gap:4px}
+#machWrap{position:relative;display:inline-flex;align-items:center}
+/* Once a filter is active, the quick-clear "×" merges into the same visual box as the filter
+   button — one continuous pill, not two separate boxes side by side (user request: "Beim
+   Filter muss das 'x' Teil des Kastens sein"). Achieved by dropping the seam between them
+   (no gap, no shared border) rather than nesting a real button inside a button. */
+#machWrap.filtered #machBtn{border-top-right-radius:0;border-bottom-right-radius:0;border-right:none}
+#machWrap.filtered #machClearBtn{border-top-left-radius:0;border-bottom-left-radius:0;border-left:none}
 #machDrop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:8px;z-index:60;min-width:320px}
 #machDrop.open{display:block}
 /* Taller rows (user request: too tight to comfortably click, especially for long device
@@ -108,12 +114,15 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-light);bo
 #machDrop .mlist{border:none;padding:0}
 .chip{background:var(--accent-light);color:var(--accent);border:1px solid var(--accent);border-radius:12px;padding:2px 8px;font-size:12px;cursor:pointer;white-space:nowrap}
 .chip:hover{filter:brightness(.95)}
-#groupWrap{position:relative;display:inline-flex;align-items:center;gap:4px}
+#groupWrap{position:relative;display:inline-flex;align-items:center}
 /* Toolbar quick-clear "×" next to the machine/group filter buttons (user request): remove an
    active filter instantly from the main view, no need to open the dropdown first. Hidden by
    default (JS toggles it via updateMachBtn/updateGroupBtn once a filter is actually active). */
 .clearx{padding:2px 8px;font-size:15px;line-height:1;font-weight:700;color:var(--muted)}
 .clearx:hover{color:var(--danger);background:var(--dangerbg);border-color:var(--danger)}
+/* Same box-merging treatment as #machWrap above. */
+#groupWrap.filtered #groupBtn{border-top-right-radius:0;border-bottom-right-radius:0;border-right:none}
+#groupWrap.filtered #groupClearBtn{border-top-left-radius:0;border-bottom-left-radius:0;border-left:none}
 #groupDrop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:8px;z-index:50;min-width:230px;max-height:320px;overflow:auto}
 #groupDrop.open{display:block}
 #groupDrop label{display:block;padding:4px 6px;cursor:pointer;border-radius:4px;font-size:13px}

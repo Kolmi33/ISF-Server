@@ -24,7 +24,7 @@ const meas = machine({ id: 'm3', name: 'Messgerät', group: 'Labor', cat: 'messt
 const notifySpy = vi.spyOn(store, 'notify');
 
 beforeEach(() => {
-  document.body.innerHTML = `<button id="machBtn">Filtern ▾</button><button id="machClearBtn" style="display:none">×</button><div id="machDrop"></div>`;
+  document.body.innerHTML = `<div id="machWrap"><button id="machBtn">Filtern ▾</button><button id="machClearBtn" style="display:none">×</button><div id="machDrop"></div></div>`;
   store.set({
     data: { machines: [m1, m2, meas], bookings: {} },
     favs: new Set(),
@@ -220,6 +220,22 @@ describe('updateMachBtn', () => {
     window.S.machSel = new Set(['m1']);
     updateMachBtn();
     expect(document.getElementById('machClearBtn')!.style.display).not.toBe('none');
+  });
+
+  // What: once the "×" is shown, its wrap box gets a `filtered` class merging it visually into
+  // the same box as the filter button — not a separate box next to it (user request: "Beim
+  // Filter muss das 'x' Teil des Kastens sein").
+  // How: calls updateMachBtn() with an empty selection (no class), then with a selection (class
+  // present), then back to empty (class removed again).
+  it('merges the "×" into the same box as the button once a filter is active', () => {
+    updateMachBtn();
+    expect(document.getElementById('machWrap')!.classList.contains('filtered')).toBe(false);
+    window.S.machSel = new Set(['m1']);
+    updateMachBtn();
+    expect(document.getElementById('machWrap')!.classList.contains('filtered')).toBe(true);
+    window.S.machSel = new Set();
+    updateMachBtn();
+    expect(document.getElementById('machWrap')!.classList.contains('filtered')).toBe(false);
   });
 
   // What: calling updateMachBtn when the button element isn't in the DOM is a safe no-op.

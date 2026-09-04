@@ -32,10 +32,12 @@ export function saveFilters(): void {
 }
 
 /** Refreshes the toolbar button's label/highlight from the current machine selection, plus
- *  the toolbar's own quick-clear "×" (`#machClearBtn`, a sibling button next to `#machBtn` —
- *  user request: clear an active filter instantly from the main view, without opening the
- *  dropdown at all). Both are static markup, not React-rendered — mutated directly rather
- *  than through JSX. */
+ *  the toolbar's own quick-clear "×" (`#machClearBtn`, next to `#machBtn` inside their shared
+ *  `#machWrap` box — user request: clear an active filter instantly from the main view,
+ *  without opening the dropdown at all). Both are static markup, not React-rendered — mutated
+ *  directly rather than through JSX. The `filtered` class on the wrap merges the "×" visually
+ *  into the same box as the button once it's shown (user request: "Beim Filter muss das 'x'
+ *  Teil des Kastens sein" — see app.css). */
 export function updateMachBtn(): void {
   const button = document.getElementById('machBtn');
   if (button) {
@@ -46,7 +48,9 @@ export function updateMachBtn(): void {
     button.style.background = count ? 'var(--accent-light)' : '';
   }
   const clearButton = document.getElementById('machClearBtn');
-  if (clearButton) clearButton.style.display = store.get('machSel').size ? '' : 'none';
+  const isFiltered = store.get('machSel').size > 0;
+  if (clearButton) clearButton.style.display = isFiltered ? '' : 'none';
+  document.getElementById('machWrap')?.classList.toggle('filtered', isFiltered);
 }
 
 /** Clears the machine filter selection — the toolbar quick-clear's own action, reachable

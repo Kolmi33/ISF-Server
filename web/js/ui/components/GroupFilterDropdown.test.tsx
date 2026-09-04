@@ -17,7 +17,7 @@ let mounted: RenderResult;
 const notifySpy = vi.spyOn(store, 'notify');
 
 beforeEach(() => {
-  document.body.innerHTML = `<button id="groupBtn">Alle Bereiche ▾</button><button id="groupClearBtn" style="display:none">×</button><div id="groupDrop"></div>`;
+  document.body.innerHTML = `<div id="groupWrap"><button id="groupBtn">Alle Bereiche ▾</button><button id="groupClearBtn" style="display:none">×</button><div id="groupDrop"></div></div>`;
   store.set({
     data: { machines: [machine(), machine({ id: 'm2', name: 'Presse', group: 'Halle 2' })] },
     groupsSel: new Set(),
@@ -152,6 +152,19 @@ describe('GroupFilterDropdown', () => {
       screen.getByRole('checkbox', { name: 'Halle 1' }).click();
     });
     expect(document.getElementById('groupClearBtn')!.style.display).not.toBe('none');
+  });
+
+  // What: once the "×" is shown, its wrap box gets a `filtered` class merging it visually into
+  // the same box as the filter button — not a separate box next to it (user request: "Beim
+  // Filter muss das 'x' Teil des Kastens sein").
+  // How: checks the class is absent at mount, then present once a group is selected.
+  it('merges the "×" into the same box as the button once a group filter is active', () => {
+    expect(document.getElementById('groupWrap')!.classList.contains('filtered')).toBe(false);
+    openDropdown();
+    act(() => {
+      screen.getByRole('checkbox', { name: 'Halle 1' }).click();
+    });
+    expect(document.getElementById('groupWrap')!.classList.contains('filtered')).toBe(true);
   });
 });
 
