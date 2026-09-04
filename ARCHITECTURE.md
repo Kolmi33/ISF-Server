@@ -645,3 +645,54 @@ React Testing Library + jsdom, queried by role/text/label as a user would — no
 name or implementation detail. `vitest.config.ts`'s existing per-file `jsdom` opt-in
 (`// @vitest-environment jsdom`) is used as-is; pure-logic tests stay on the `node`
 environment they already run in.
+
+## 19. Phase 14 — Tailwind CSS + shadcn/ui-pattern components (guardrail change, DECIDED 2026-09-04)
+
+### The decision
+The project owner wants the frontend to move toward component-library-based UI going
+forward, on the same "own the code" model shadcn/ui popularized (Tailwind CSS for styling;
+components are copied into the repo and can be freely edited, not pulled in as an opaque
+npm dependency). Piloted on one screen first — the Booking Assistant
+(`web/js/ui/components/Assistant{Modal,Tree,Checklist,Results}.tsx`) — not a full
+replatform; `web/css/app.css` stays in place and is retired incrementally, primitive-class
+first (buttons → inputs → dropdowns → cards → modals → …), never in one big-bang rewrite,
+consistent with §1's refactor-not-reimagine stance and the running "conserve every
+behavior" discipline.
+
+### The guardrail change
+§18 narrowed the zero-runtime-dependency rule to backend-only and named exactly two
+frontend exceptions: `react`/`react-dom`. This section adds three more, **scoped to what
+Phase 14 actually needed to get the pilot's first primitives (Button, Input) working**:
+`class-variance-authority`, `clsx`, `tailwind-merge`. These are small, dependency-free
+style-composition utilities (compose/merge class-name strings; no DOM behavior, no
+interactive widgets of their own) — a meaningfully smaller bar than adopting React itself
+was. `tailwindcss`/`@tailwindcss/vite` are **not** a guardrail change at all: they're
+build-time-only devDependencies (compile to static CSS, ship no JS to the browser), which
+`ARCHITECTURE §5` rule 6 already allows freely ("dev tooling is fine").
+
+**Deliberately not added yet: any `@radix-ui/*` package.** Radix primitives (e.g.
+`@radix-ui/react-checkbox`, needed for a shadcn-pattern `Checkbox`) are actual interactive
+widgets, not styling utilities — a bigger bar, and the Assistant's checkbox-heavy device
+checklist has test coverage whose exact DOM-shape assumptions (native `<input
+type="checkbox">` vs. Radix's `<button role="checkbox">`) hadn't been confirmed compatible
+at the time this section was written. Adding a Radix package is its own follow-up decision
+with its own explicit go-ahead and its own guardrail addendum, not bundled into this one.
+
+### Scope and approach
+`web/css/tailwind.css` (imported once from `web/js/app.ts`) re-exposes the *existing*
+`app.css` design tokens (`--bg`, `--panel`, `--accent`, `--border`, `--muted`, …) as
+Tailwind theme colors via `@theme`, so `bg-panel`/`text-muted`/`border-border` utilities
+render pixel-identical to the current hand-written CSS — one palette, not two. Dark mode
+uses a `@custom-variant dark` keyed off the app's existing `html[data-theme="dark"]`
+attribute (`web/js/ui/theme.ts`'s `applyTheme`), not a second dark-mode mechanism. New
+shadcn-pattern primitives live under `web/js/ui/components/ui/` (e.g. `button.tsx`,
+`input.tsx`), each trimmed to only the variants an actual call site uses rather than
+shipping a component library's full default variant surface — keeps each file comfortably
+inside the existing complexity/line budgets and the `web/js/ui/**` 90%/85% coverage floor
+without contrived tests for unused branches. No path alias was added: shadcn's usual `@/`
+-style generated imports are hand-adjusted to this repo's actual convention (relative,
+explicit `.ts`/`.tsx` extensions) as each primitive is landed, so the whole codebase keeps
+exactly one import style. `web/js/lib/utils.ts` holds the standard shadcn `cn()` helper
+(`clsx` + `tailwind-merge`).
+
+Full slice-by-slice backlog and rationale: `PROGRESS.md`'s Phase 14 section.

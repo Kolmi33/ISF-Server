@@ -15,6 +15,7 @@
 //
 // =======================================================================================
 
+import '../css/tailwind.css';
 import type { AppState } from '../../shared/types.ts';
 import * as api from './net/api.ts';
 import * as gridInteraction from './ui/grid-interaction.ts';

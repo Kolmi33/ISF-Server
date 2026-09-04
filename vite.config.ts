@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import tailwindcss from '@tailwindcss/vite';
 
 // Frontend build/dev config. (Test config is separate, in vitest.config.ts, because the
 // app root differs from the test root.)
@@ -10,6 +11,11 @@ const apiTarget = process.env.VITE_API_TARGET || 'http://host.docker.internal:30
 
 export default defineConfig({
   root: 'web',
+  // Tailwind v4's own Vite plugin (Phase 14, ARCHITECTURE §19) — processes web/css/tailwind.css
+  // (imported from app.ts) via its @import "tailwindcss" directive. web/css/app.css keeps
+  // loading separately via <link> in index.html, unchanged; the two coexist during the
+  // incremental migration.
+  plugins: [tailwindcss()],
   server: {
     host: true, // 0.0.0.0 so the container's published port is reachable from the host
     port: 5173,

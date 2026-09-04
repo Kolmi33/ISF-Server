@@ -1,0 +1,35 @@
+/* =======================================================================================
+   TAILWIND ENTRY POINT (web/css/tailwind.css)
+   =======================================================================================
+
+   Phase 14 (ARCHITECTURE §19): Tailwind coexists with web/css/app.css during an incremental,
+   primitives-first migration — this file does NOT replace app.css's design tokens. It
+   re-exposes the SAME custom properties app.css already defines (:root / html[data-theme=
+   "dark"]) as Tailwind theme tokens, so utilities like bg-panel/text-muted/border-border
+   render pixel-identical to the existing hand-written CSS. No second palette to keep in sync.
+
+   Imported once from web/js/app.ts (Vite then treats it as a real CSS build input via the
+   @tailwindcss/vite plugin, vite.config.ts); app.css keeps loading separately via its own
+   <link> in index.html, unchanged.
+   ======================================================================================= */
+
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-light: var(--accent-light);
+  --color-danger: var(--danger);
+  --color-warn: var(--warn);
+  --color-hover: var(--hover);
+}
+
+/* Mirrors the app's existing light/dark toggle (web/js/ui/theme.ts's applyTheme sets
+   html[data-theme="dark"|"light"]) rather than inventing a second dark-mode mechanism —
+   dark: utilities key off the same attribute app.css's html[data-theme="dark"] block does. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));

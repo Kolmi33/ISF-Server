@@ -4,7 +4,11 @@
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
-_Last updated: 2026-09-03 — **Phase 13 (second user-requested feature/UX batch, post-deploy
+_Last updated: 2026-09-04 — **Phase 14 (Tailwind CSS + shadcn/ui-pattern components, piloted on
+the Booking Assistant) IN PROGRESS** — 14.1 (tooling foundation + the ARCHITECTURE §19
+guardrail change) landed; 14.2/14.3 next, full detail in the Phase 14 section below._
+
+_Previously: 2026-09-03 — **Phase 13 (second user-requested feature/UX batch, post-deploy
 feedback) COMPLETE** — 3 commits, full detail in the Phase 13 section below. `npm run verify`
 green at 933 tests / 68 files throughout._
 
@@ -722,6 +726,56 @@ split further).
   the right column — per the user's own "modern SaaS dashboard" reference. Commit `7282aeb`.
 
 `npm run verify` green after every commit; 68 files / 933 tests at the end of the batch.
+
+**Phase 14 — Tailwind CSS + shadcn/ui-pattern components, piloted on the Booking Assistant
+(user-requested 2026-09-04) — IN PROGRESS**
+The project owner wants the frontend to move toward component-library-based UI going forward
+(reui.io prompted the conversation; shadcn/ui — Tailwind CSS + Radix-based primitives you copy
+into the repo and own, not an npm black box — was settled on as the actual model). Scoped as a
+**pilot on one screen** (the Booking Assistant, `web/js/ui/components/Assistant{Modal,Tree,
+Checklist,Results}.tsx`), not a full replatform; `web/css/app.css` stays in place and is retired
+incrementally, primitive-class first (buttons → inputs → dropdowns → cards → modals → nav →
+machine cards → booking UI → calendar → tables → remaining misc CSS), never a big-bang rewrite.
+Full reasoning (why Tailwind/shadcn vs. reui directly, the guardrail-change decision, why this
+scope, why this CSS strategy) worked out in conversation; the guardrail change itself is
+`ARCHITECTURE.md` §19. Grounded by an Explore pass over the actual repo before any code
+landed: no existing path alias/PostCSS wiring, `web/js/ui/**` faces the 90/85 coverage floor
+with no import-boundary restriction, the 925-line `AssistantModal.test.tsx` queries buttons/
+checkboxes by role+accessible name (safe to restyle) but asserts many literal class names
+(`.asdev`, `.asgrp*`, `#asWork`, `.aspill-name`, `.asRange`, `.asDays`, `.asNeed`, `.dragover*`,
+`.cathead`, …) that must survive restyling, and `Icon.tsx`/`modal.tsx` are app-wide (20/14
+importers) — out of scope for an Assistant-only pilot.
+- [x] 14.1 Tooling foundation, no visible UI change: **Tailwind CSS v4** via `@tailwindcss/vite`
+  (devDependency, build-time only — no guardrail conflict, `ARCHITECTURE §5` rule 6 already
+  allows dev tooling). `web/css/tailwind.css` re-exposes app.css's *existing* design tokens
+  (`--bg`, `--panel`, `--accent`, `--border`, `--muted`, …) as Tailwind theme colors via
+  `@theme`, so `bg-panel`/`text-muted`/`border-border` utilities are pixel-identical to today —
+  one palette, not two; a `@custom-variant dark` mirrors the app's existing
+  `html[data-theme="dark"]` toggle (`web/js/ui/theme.ts`). Imported once from `web/js/app.ts`;
+  `app.css`'s own `<link>` in `index.html` is untouched, the two coexist. `web/js/lib/utils.ts`
+  — the standard shadcn `cn()` helper (`clsx` + `tailwind-merge`), tested. New runtime deps
+  `class-variance-authority`/`clsx`/`tailwind-merge` — the guardrail change, `ARCHITECTURE §19`
+  (CLAUDE.md's guardrail line updated to match). No path alias added: shadcn's usual `@/`-style
+  generated imports get hand-adjusted to this repo's actual convention (relative, explicit
+  `.ts`/`.tsx` extensions) as each primitive lands, keeping one import style app-wide.
+- [ ] 14.2 `web/js/ui/components/ui/button.tsx` — a shadcn Button **trimmed to only the
+  variants the Assistant actually uses** (no `asChild`/Radix Slot — nothing here needs it),
+  applied to the Assistant's buttons (Abbrechen/Freie Termine suchen/pin/Buchen…/dissolve/
+  remove/stepper ±), preserving exact accessible names (tests query by role+name, not `.btn`
+  class — verified safe by the exploration pass).
+- [ ] 14.3 `web/js/ui/components/ui/input.tsx` — a thin native-`<input>` wrapper (no Radix),
+  applied to the date-range/min-days/search/`.asNeed`/`.asDays` fields, passing the existing
+  `.asNeed`/`.asDays` classes through via `cn()` so the test file's direct `.value` reads keep
+  working unchanged.
+- **Phase-boundary halt after 14.3** (per CLAUDE.md's per-phase cadence): report back before
+  going further. 14.1–14.3 prove the pattern end-to-end using only
+  `class-variance-authority`/`clsx`/`tailwind-merge` — no Radix package needed yet.
+  **Deferred, explicitly flagged, not silently skipped:** 14.4, a shadcn `Checkbox`
+  (`@radix-ui/react-checkbox`) for `AssistantChecklist.tsx`'s device rows — a real
+  interactive-widget dependency (bigger bar than a styling utility) whose test compatibility
+  (Radix's `<button role="checkbox">` root vs. whatever the existing test asserts) needs
+  confirming firsthand before converting; gets its own go-ahead and its own `ARCHITECTURE §19`
+  addendum line for the one new Radix package, not bundled into this batch.
 
 ## Done log (newest first)
 - **2026-09-02 — Code-review fixes**: undo's CAS-check bug and `machById`'s stale-cache bug

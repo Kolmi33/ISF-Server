@@ -3,6 +3,7 @@
   "entry": ["server/server.ts", "server/import.ts", "server/backfill.ts", "scripts/*.mjs"],
   "project": ["{web,server,shared}/**/*.{ts,tsx}", "scripts/*.mjs"],
   "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": ["tailwindcss"],
   "rules": {
     "duplicates": "off"
   }
