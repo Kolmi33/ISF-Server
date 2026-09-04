@@ -17,6 +17,12 @@
 // Key Principles:
 // - TRIMMED VARIANT SURFACE: a bigger variant matrix than what's actually used would leave
 //   untested branches against the `web/js/ui/**` 90%/85% coverage floor.
+// - OWN RESETS, NOT PREFLIGHT: `web/css/tailwind.css` deliberately skips Tailwind's global
+//   Preflight reset (see that file's own comment for why), so this component supplies the
+//   handful of resets it personally needs — `box-border` (padding/border counted inside the
+//   stated size, not added on top), `appearance-none` (no native OS button chrome peeking
+//   through under the Tailwind background/border), `font-[inherit]` (native `<button>`s don't
+//   inherit the page font by default) — instead of assuming a document-wide reset provides them.
 //
 // =======================================================================================
 
@@ -26,7 +32,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../../lib/utils.ts';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center rounded-md border cursor-pointer whitespace-nowrap',
+  'box-border inline-flex appearance-none items-center justify-center rounded-md border cursor-pointer whitespace-nowrap font-[inherit]',
   {
     variants: {
       variant: {

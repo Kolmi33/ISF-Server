@@ -283,10 +283,15 @@ function AssistantSelectedDevicesCard({
         onRemove={assistant.onRemove}
       />
       <div className="assist-actions">
-        <Button variant="ghost" onClick={closeReactModal}>
+        {/* h-9 (36px) restores app.css's dropped .assist-actions .btn{height:36px} rule — a
+            past user request ("uniform field/button height throughout the Assistant") keyed
+            on the literal .btn class this component no longer carries. Set directly here
+            rather than in app.css so Button stays self-contained once app.css is eventually
+            retired (Phase 14's incremental CSS burn-down). */}
+        <Button variant="ghost" className="h-9" onClick={closeReactModal}>
           Abbrechen
         </Button>
-        <Button variant="primary" onClick={onSearch}>
+        <Button variant="primary" className="h-9" onClick={onSearch}>
           Freie Termine suchen
         </Button>
       </div>

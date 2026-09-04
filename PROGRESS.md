@@ -959,6 +959,27 @@ importers) — out of scope for an Assistant-only pilot.
 (none currently)
 
 ### Fixed
+- **Tailwind's Preflight inflated every `.btn`-classed element app-wide (not just the
+  Assistant's)** — FIXED 2026-09-04, same day as 14.1–14.3 shipped, found via direct user
+  report ("buttons look weird") against the live production redeploy. Root cause: `web/css/
+  tailwind.css`'s `@import 'tailwindcss'` bundles Preflight, whose `button,input,…{line-height:
+  inherit}` normalization made every button on every screen inherit `body`'s `line-height:1.4`
+  instead of the browser's own default button line-height — toolbar `#btnAssist` measured 45px
+  tall instead of its correct 29px (confirmed against a throwaway build of the untouched
+  pre-Phase-14 commit `ef7d334`: 29px/78px toolbar, pixel-identical to the fix). A second,
+  narrower issue found in the same pass: the Assistant's own "Abbrechen"/"Freie Termine
+  suchen" buttons lost their `height:36px` parity with the surrounding date inputs, because
+  that was `.assist-actions .btn{height:36px}` in app.css — keyed on the literal `.btn` class
+  `<Button>` no longer carries. Fixed both: `tailwind.css` now imports only the `theme`/
+  `utilities` layers (skips Preflight entirely — see that file's own comment for the reasoning,
+  now also `ARCHITECTURE.md` §19), with `ui/button.tsx`/`ui/input.tsx` supplying their own
+  `box-border`/`appearance-none`/`font-[inherit]` resets instead of assuming a global one; the
+  two `.assist-actions` buttons get an explicit `h-9` (36px) at their call site rather than in
+  app.css, so `<Button>` stays self-contained once app.css is eventually retired. Regression
+  tests added (`button.test.tsx`, `input.test.tsx`, `AssistantModal.test.tsx`). Verified two
+  ways: `npm run verify` green (1006 tests), and real Playwright DOM measurements — the fixed
+  build's toolbar/button dimensions match the pre-Phase-14 baseline **exactly** (not just
+  "close"), and the Assistant's action buttons/date inputs are all exactly 36px tall again.
 - **Undo's CAS check silently skipped after undoing a booking creation** — FIXED 2026-09-02,
   found by an external code review and verified before fixing (a regression test proved the
   bug first). `offerUndo` (`ui/toast.ts`) forwarded the *original* action's `CellUndo.prev`

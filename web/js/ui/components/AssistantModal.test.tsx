@@ -147,6 +147,18 @@ describe('AssistantModal — card layout', () => {
       within(actions as HTMLElement).getByRole('button', { name: 'Abbrechen' }),
     ).toBeInTheDocument();
   });
+
+  // What: both action buttons stay 36px tall, matching the Buchungsparameter card's inputs —
+  // app.css used to enforce this via `.assist-actions .btn{height:36px}` (a past user request,
+  // "uniform field/button height throughout the Assistant"), keyed on the literal `.btn` class
+  // <Button> (Phase 14) no longer carries; regression test for the fix that restores it directly
+  // on the two call sites instead.
+  // How: opens the Assistant and checks both buttons' className carries the h-9 (36px) marker.
+  it('keeps the action buttons the same height as the Buchungsparameter inputs (h-9)', () => {
+    act(() => openAssistant());
+    expect(screen.getByRole('button', { name: 'Abbrechen' }).className).toContain('h-9');
+    expect(screen.getByRole('button', { name: 'Freie Termine suchen' }).className).toContain('h-9');
+  });
 });
 
 describe('AssistantModal — checklist → work area', () => {

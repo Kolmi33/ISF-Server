@@ -695,4 +695,18 @@ explicit `.ts`/`.tsx` extensions) as each primitive is landed, so the whole code
 exactly one import style. `web/js/lib/utils.ts` holds the standard shadcn `cn()` helper
 (`clsx` + `tailwind-merge`).
 
+**No Preflight (found in production, fixed same day).** `web/css/tailwind.css` initially used
+the plain `@import 'tailwindcss'`, which bundles Preflight — Tailwind's document-wide base
+reset (bare `button`/`input`/`*` element selectors, including a universal `box-sizing:
+border-box`). That's correct for a from-scratch Tailwind app; it's wrong for one *coexisting*
+incrementally with app.css, which never assumed border-box sizing anywhere — the reset applied
+to every element on the page, not just the ones this migration actually touched, silently
+resizing/restyling untouched screens too. Caught from real production feedback ("buttons look
+weird"), not by the test suite (jsdom doesn't render actual layout, so a box-sizing change is
+invisible to it — a real gap in what `verify` can catch, same category as the "UI behavior
+preservation" limit §10 already documents). Fixed by importing only the `theme`/`utilities`
+layers (skips Preflight); each Tailwind-styled primitive now supplies its own opt-in resets
+(`box-border`, `appearance-none`, `font-[inherit]`) instead of assuming a global one — the
+standing rule for every future primitive this migration adds, not a one-off patch.
+
 Full slice-by-slice backlog and rationale: `PROGRESS.md`'s Phase 14 section.

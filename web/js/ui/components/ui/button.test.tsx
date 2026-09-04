@@ -14,6 +14,18 @@ describe('Button', () => {
     expect(button.className).toContain('text-[13px]');
   });
 
+  // What: since web/css/tailwind.css deliberately skips Tailwind's global Preflight reset
+  // (a document-wide reset is wrong for a stylesheet coexisting with app.css), this component
+  // must supply its own box-sizing/appearance/font resets rather than assume a global one.
+  // How: renders a plain Button and checks each own-reset marker class is present.
+  it('carries its own box-sizing/appearance/font resets (no global Preflight to rely on)', () => {
+    render(<Button>Abbrechen</Button>);
+    const button = screen.getByRole('button', { name: 'Abbrechen' });
+    expect(button.className).toContain('box-border');
+    expect(button.className).toContain('appearance-none');
+    expect(button.className).toContain('font-[inherit]');
+  });
+
   // What: variant="primary" swaps in the accent-filled styling used for the flow's primary
   // action.
   // How: renders with variant="primary" and checks the accent background marker class.

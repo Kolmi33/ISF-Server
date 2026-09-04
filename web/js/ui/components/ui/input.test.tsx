@@ -13,6 +13,17 @@ describe('Input', () => {
     expect(input.className).toContain('border-border');
   });
 
+  // What: since web/css/tailwind.css deliberately skips Tailwind's global Preflight reset
+  // (a document-wide reset is wrong for a stylesheet coexisting with app.css), this component
+  // must supply its own box-sizing/appearance resets rather than assume a global one.
+  // How: renders a plain Input and checks each own-reset marker class is present.
+  it('carries its own box-sizing/appearance resets (no global Preflight to rely on)', () => {
+    render(<Input placeholder="filtern…" />);
+    const input = screen.getByPlaceholderText('filtern…');
+    expect(input.className).toContain('box-border');
+    expect(input.className).toContain('appearance-none');
+  });
+
   // What: a caller-supplied className is merged in (via cn()), not dropped.
   // How: passes an extra class alongside a placeholder and checks both survive/merge.
   it('merges a caller className with the default styling', () => {

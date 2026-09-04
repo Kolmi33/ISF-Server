@@ -11,9 +11,22 @@
    Imported once from web/js/app.ts (Vite then treats it as a real CSS build input via the
    @tailwindcss/vite plugin, vite.config.ts); app.css keeps loading separately via its own
    <link> in index.html, unchanged.
+
+   NO PREFLIGHT: `@import 'tailwindcss'` (the plain form) bundles Preflight, Tailwind's
+   document-wide base reset — bare `button`/`input`/`*` element selectors, incl. a universal
+   `box-sizing: border-box`. That's fine for a from-scratch Tailwind app; it's actively wrong
+   for one incrementally *coexisting* with a large hand-written stylesheet app.css never
+   assumed border-box for, on every element on the page — not just the ones this migration
+   has actually touched (found in production: it silently reset unrelated, untouched screens
+   too — a violation of the "pilot changes only what it says it changes" plan). Importing only
+   the theme + utilities layers below skips Preflight entirely, so adding a Tailwind-styled
+   primitive anywhere can never affect an element it wasn't explicitly given a class on. Each
+   primitive (ui/button.tsx, ui/input.tsx, …) supplies its own opt-in resets instead
+   (`box-border`, `appearance-none`) rather than relying on a global one.
    ======================================================================================= */
 
-@import 'tailwindcss';
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
 
 @theme {
   --color-bg: var(--bg);
