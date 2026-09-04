@@ -564,6 +564,46 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    inherits the same --stat-fill too. */
 .stat-theme-maschine{--stat-fill: hsl(212 70% 42%)}
 .stat-theme-messtechnik{--stat-fill: hsl(174 40% 34%)}
+/* ---------- Statistik dashboard (StatsDashboard.tsx) ---------- */
+/* Light-grey modal ground behind the white cards below, matching the Assistant's own
+   card-on-grey treatment (app.css, "#modal:has(.assist-columns)"). */
+#modal:has(.stat-card){background:var(--bg)}
+/* The KPI tile row: icon + big bold value over a small muted label, four across. Same visual
+   language as MyBookingsModal's own summary strip (.mybk-stat), kept as separate classes since
+   the two features are otherwise unrelated. */
+.stat-kpis{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+.stat-kpi{flex:1;min-width:110px;display:flex;align-items:center;gap:8px;background:var(--panel);
+  border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.stat-kpi .ic{flex:0 0 auto;width:18px;height:18px;color:var(--stat-fill,var(--accent))}
+.stat-kpi-value{font-size:18px;font-weight:700;line-height:1.2;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Real machine/person names run much longer than short fixtures (e.g. a "Meistgenutzt" label
+   naming an actual resource) — truncated with an ellipsis rather than wrapping across three
+   lines and breaking the tile row's height; the label's own title attribute (StatsDashboard.tsx)
+   carries the full text as a hover tooltip. */
+.stat-kpi-label{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* The dashboard card itself: a white card on the grey modal ground (user request: match a
+   reference card-based dashboard's structure/colour profile). */
+.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+  padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.stat-card-head{display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:10px}
+.stat-card-head .ic{color:var(--stat-fill,var(--accent))}
+/* Day-by-day booking chart: one bar per bucket (bucketDailyCounts already caps the bar count
+   so it stays legible regardless of range length), height relative to the busiest bucket. */
+.stat-chart{display:flex;align-items:flex-end;gap:3px;height:80px;padding:0 2px}
+.stat-chart-bar{flex:1;min-width:4px;background:var(--stat-fill,var(--accent));border-radius:2px 2px 0 0;
+  opacity:.85;transition:opacity .12s}
+.stat-chart-bar:hover{opacity:1}
+.stat-chart-caption{display:flex;justify-content:space-between;margin:4px 2px 0}
+/* A bigger sibling of the per-row .statbar.stacked (StatsDrilldown.tsx) — the whole category's
+   aggregate share, not one machine's own. */
+.stat-bar-big{height:20px;border-radius:5px;margin-top:12px}
+.stat-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;font-size:12px;color:var(--muted)}
+.stat-legend-item{display:flex;align-items:center;gap:5px}
+.stat-legend-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.stat-legend-dot.seg-used{background:var(--stat-fill,var(--accent))}
+.stat-legend-dot.seg-maint{background:var(--warn)}
+.stat-legend-dot.seg-idle{background:var(--border)}
 .breadcrumb{font-weight:600}
 /* Rechtsbündige Zahlenspalten: feste Ziffernbreite, damit z.B. "8/12 · 67%" untereinander
    exakt ausgerichtet steht statt je nach Ziffernbreite leicht zu wandern */

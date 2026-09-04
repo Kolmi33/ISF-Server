@@ -127,6 +127,67 @@ describe('StatsModal — Ressourcen overview (default)', () => {
   });
 });
 
+// The dashboard-style KPI/chart card above the resource list (user request: revamp the whole
+// tab as a card-based dashboard). Both set the same explicit 5-weekday range (2021-01-04 to
+// -08) for precise, hand-checkable numbers, matching the pattern the stacked-bar test above
+// already uses.
+describe('StatsModal — dashboard summary', () => {
+  function setFiveWeekdayRange(): void {
+    const [fromInput, toInput] = document.querySelectorAll<HTMLInputElement>(
+      '#modal input[type="date"]',
+    );
+    fireEvent.change(fromInput!, { target: { value: '2021-01-04' } });
+    fireEvent.change(toInput!, { target: { value: '2021-01-08' } });
+  }
+
+  // Reads one tile's own value by its label — scoped per-tile rather than a bare `getByText`
+  // on the value, since two tiles can coincidentally show the same number (e.g. a single-
+  // machine category where "Ø Auslastung" and "Meistgenutzt" are numerically identical).
+  function tileValue(label: string): string | null {
+    return screen
+      .getByText(label, { selector: '.stat-kpi-label' })
+      .closest('.stat-kpi')!
+      .querySelector('.stat-kpi-value')!.textContent;
+  }
+
+  // What: the KPI tile row shows the range's weekday count, the category's aggregate
+  // utilisation, how many distinct people booked it, and its single most-used machine — for
+  // the active (default: Maschinen) category.
+  // How: sets the 5-weekday range and checks all four tile values (Fräse: booked 2 of 5 days).
+  it('shows Werktage/Ø Auslastung/Aktive Personen/Meistgenutzt tiles for the active category', () => {
+    act(() => openStats());
+    setFiveWeekdayRange();
+    expect(tileValue('Werktage')).toBe('5');
+    expect(tileValue('Ø Auslastung')).toBe('40%');
+    expect(tileValue('Aktive Personen')).toBe('1'); // just anna
+    expect(screen.getByText('Meistgenutzt: Fräse')).toBeInTheDocument();
+  });
+
+  // What: switching category tabs recomputes the dashboard for the newly-active category, not
+  // just the machine list below it.
+  // How: switches to Messtechnik and checks its own tile values (Messgerät: booked 1 of 5 days).
+  it('recomputes the dashboard tiles when the category tab switches', () => {
+    act(() => openStats());
+    setFiveWeekdayRange();
+    act(() => {
+      screen.getByRole('tab', { name: /Messtechnik/ }).click();
+    });
+    expect(tileValue('Ø Auslastung')).toBe('20%');
+    expect(screen.getByText('Meistgenutzt: Messgerät')).toBeInTheDocument();
+  });
+
+  // What: the dashboard card's legend names each segment with its own aggregate percentage,
+  // matching the tiles' own "Ø Auslastung" figure for the "used" share.
+  // How: checks the three legend labels for the default Maschinen category.
+  it('shows the aggregate utilisation legend with matching percentages', () => {
+    act(() => openStats());
+    setFiveWeekdayRange();
+    expect(screen.getByText(/Verwendet 40%/)).toBeInTheDocument();
+    expect(screen.getByText(/Wartung 0%/)).toBeInTheDocument();
+    expect(screen.getByText(/Frei 60%/)).toBeInTheDocument();
+  });
+});
+
 describe('StatsModal — Ressourcen drilldown', () => {
   // What: clicking a machine row drills into who booked it, and a back button returns to the
   // overview list.

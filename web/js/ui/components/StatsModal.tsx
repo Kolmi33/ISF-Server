@@ -23,9 +23,11 @@ import {
   computeStats,
   buildResourceRows,
   buildPersonRows,
+  computeCategoryDashboard,
   type Stats,
   type StatsMachineRow,
   type StatsPerson,
+  type CategoryDashboard,
 } from '../views/stats.ts';
 import { toast } from '../toast.ts';
 import { openReactModal, closeReactModal } from '../modal.tsx';
@@ -43,6 +45,10 @@ import { store } from '../../store-instance.ts';
 
 function categoryLabel(category: MachineCategory): string {
   return CATEGORIES.find((c) => c.id === category)?.label ?? category;
+}
+
+function categoryIcon(category: MachineCategory): string {
+  return CATEGORIES.find((c) => c.id === category)?.icon ?? 'factory';
 }
 
 function computeAgg(from: string, to: string): Stats {
@@ -156,6 +162,7 @@ function useStatsState(presetPerson: string | undefined) {
 interface StatsBodyProps {
   mode: StatsMode;
   agg: Stats;
+  dashboard: CategoryDashboard;
   machineRow: StatsMachineRow | undefined;
   person: StatsPerson | undefined;
   filterQuery: string;
@@ -171,6 +178,7 @@ interface StatsBodyProps {
 function StatsBody({
   mode,
   agg,
+  dashboard,
   machineRow,
   person,
   filterQuery,
@@ -190,6 +198,9 @@ function StatsBody({
         rows={buildResourceRows(agg.machRows, { filterQuery, activeCategory, closedKeys })}
         totalDays={totalDays}
         activeCategory={activeCategory}
+        dashboard={dashboard}
+        categoryLabel={categoryLabel(activeCategory)}
+        categoryIcon={categoryIcon(activeCategory)}
         onToggleFold={onToggleFold}
         onSelectMachine={onSelectMachine}
       />
@@ -256,6 +267,12 @@ export function StatsModal({ presetPerson }: StatsModalProps) {
         <StatsBody
           mode={s.mode}
           agg={s.agg}
+          dashboard={computeCategoryDashboard(
+            s.agg.machRows,
+            store.get('data')!.bookings,
+            s.agg.days,
+            s.activeCategory,
+          )}
           machineRow={s.machineRow}
           person={s.person}
           filterQuery={s.filterQuery}

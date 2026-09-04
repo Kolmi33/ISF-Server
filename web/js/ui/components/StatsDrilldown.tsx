@@ -54,12 +54,15 @@ export function StackedStatBar({
   );
 }
 
-/** Drilldown for one machine: who booked it, most days first. */
+/** Drilldown for one machine: who booked it, most days first. Wrapped in the same `.stat-card`
+ *  white-card treatment the overview's own dashboard/list cards use (user request: revamp the
+ *  whole tab as a card-based dashboard) — keeps the modal's grey ground consistent rather than
+ *  flashing back to a plain white background the moment a row is clicked. */
 export function MachineDrilldown({ row, totalDays }: { row: StatsMachineRow; totalDays: number }) {
   const people = [...row.persons.values()].sort((a, b) => b.days - a.days);
   const maxDays = people.length ? people[0]!.days : 1;
   return (
-    <>
+    <div className="stat-card">
       <p className="hint">
         <b>{row.machine.name}</b> ({row.machine.group}) — belegt an <b>{row.bookedWorkdayCount}</b>{' '}
         von {totalDays} Werktagen ({row.percent}%)
@@ -86,16 +89,17 @@ export function MachineDrilldown({ row, totalDays }: { row: StatsMachineRow; tot
           <p className="hint">Keine Buchungen im Zeitraum.</p>
         )}
       </div>
-    </>
+    </div>
   );
 }
 
-/** Drilldown for one person: which machines they use, most-used first. */
+/** Drilldown for one person: which machines they use, most-used first. Same `.stat-card`
+ *  wrapping as `MachineDrilldown` above, for the same reason. */
 export function PersonDrilldown({ person }: { person: StatsPerson }) {
   const machineEntries = [...person.machines.entries()].sort((a, b) => b[1] - a[1]);
   const maxDays = machineEntries.length ? machineEntries[0]![1] : 1;
   return (
-    <>
+    <div className="stat-card">
       <p className="hint">
         <b>{person.name}</b> — <b>{person.days}</b> gebuchte Maschinentage auf{' '}
         {person.machines.size} Maschine
@@ -117,6 +121,6 @@ export function PersonDrilldown({ person }: { person: StatsPerson }) {
           </div>
         ))}
       </div>
-    </>
+    </div>
   );
 }

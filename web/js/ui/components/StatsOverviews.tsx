@@ -10,8 +10,9 @@
 // =======================================================================================
 
 import type { MachineCategory } from '../../../../shared/types.ts';
-import type { ResourceRow, StatsPerson } from '../views/stats.ts';
+import type { ResourceRow, StatsPerson, CategoryDashboard } from '../views/stats.ts';
 import { StatBar, StackedStatBar } from './StatsDrilldown.tsx';
+import { CategoryDashboardCard } from './StatsDashboard.tsx';
 
 /** One `ResourceRow` as its `<div>` — a group header or a machine row. Its own function so
  *  `ResourcesOverview`'s `.map` body stays a single call, not an inline multi-branch closure. */
@@ -59,35 +60,55 @@ interface ResourcesOverviewProps {
   rows: readonly ResourceRow[];
   totalDays: number;
   activeCategory: MachineCategory;
+  dashboard: CategoryDashboard;
+  categoryLabel: string;
+  categoryIcon: string;
   onToggleFold: (key: string) => void;
   onSelectMachine: (machineId: string) => void;
 }
 
-/** The Ressourcen-mode overview: the active category's group-folded machine list. Wrapped in
- *  `stat-theme-<category>` (app.css) so every bar in this view — including the machine
- *  drilldown reached by clicking a row — picks up that category's own accent color (deep blue
- *  Maschinen, teal/slate Messtechnik — user request), via the `--stat-fill` custom property
- *  `StatBar`/`StackedStatBar` read from. */
+/** The Ressourcen-mode overview: the dashboard-style KPI/chart card (user request: revamp the
+ *  whole tab as a card-based dashboard) above the active category's own group-folded machine
+ *  list, itself now wrapped in a matching card. Both sit inside `stat-theme-<category>`
+ *  (app.css) so every bar in this view — including the machine drilldown reached by clicking a
+ *  row — picks up that category's own accent color (deep blue Maschinen, teal/slate
+ *  Messtechnik — user request), via the `--stat-fill` custom property `StatBar`/
+ *  `StackedStatBar`/`CategoryDashboardCard` all read from. */
 export function ResourcesOverview({
   rows,
   totalDays,
   activeCategory,
+  dashboard,
+  categoryLabel,
+  categoryIcon,
   onToggleFold,
   onSelectMachine,
 }: ResourcesOverviewProps) {
   return (
     <div className={`stat-theme-${activeCategory}`}>
-      <p className="hint">{totalDays} Werktage</p>
-      <div className="resultlist" style={{ maxHeight: 400 }}>
-        {rows.map((row, index) => (
-          <ResourceRowView
-            key={`${row.kind}:${row.kind === 'machine' ? row.row.machine.id : row.group}:${index}`}
-            row={row}
-            totalDays={totalDays}
-            onToggleFold={onToggleFold}
-            onSelectMachine={onSelectMachine}
-          />
-        ))}
+      <CategoryDashboardCard
+        dashboard={dashboard}
+        totalDays={totalDays}
+        categoryLabel={categoryLabel}
+        categoryIcon={categoryIcon}
+      />
+      <div className="stat-card">
+        <div className="stat-card-head">
+          <b>{categoryLabel} im Detail</b>
+        </div>
+        {/* Total day count now lives in the "Werktage" KPI tile above — repeating it here as
+            its own hint line would just be redundant. */}
+        <div className="resultlist" style={{ maxHeight: 400 }}>
+          {rows.map((row, index) => (
+            <ResourceRowView
+              key={`${row.kind}:${row.kind === 'machine' ? row.row.machine.id : row.group}:${index}`}
+              row={row}
+              totalDays={totalDays}
+              onToggleFold={onToggleFold}
+              onSelectMachine={onSelectMachine}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -99,11 +120,14 @@ interface PersonsOverviewProps {
 }
 
 /** The Personen-mode overview: everyone with a booking in range, most days first; a row click
- *  drills into that person's machine breakdown. */
+ *  drills into that person's machine breakdown. Wrapped in `.stat-card` for the same reason
+ *  the Ressourcen list is (user request: revamp the whole tab as a card-based dashboard) — this
+ *  mode has no visible tab of its own (only reachable via a booking's "Statistik" button), but
+ *  should still look consistent with the rest of the tab when it is reached. */
 export function PersonsOverview({ persons, onSelectPerson }: PersonsOverviewProps) {
   const maxDays = persons.length ? persons[0]!.days : 1;
   return (
-    <>
+    <div className="stat-card">
       <p className="hint">
         {persons.length} Person{persons.length === 1 ? '' : 'en'} mit Buchungen im Zeitraum — Zeile
         anklicken für die Maschinen-Aufschlüsselung
@@ -124,6 +148,6 @@ export function PersonsOverview({ persons, onSelectPerson }: PersonsOverviewProp
           </div>
         ))}
       </div>
-    </>
+    </div>
   );
 }
