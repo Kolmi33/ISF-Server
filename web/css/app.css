@@ -332,35 +332,46 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .assist-columns{display:flex;flex-direction:column;gap:10px}
 @media (min-width:860px){
   #modal:has(.assist-columns){max-width:920px}
-  /* 40/60 split (user request) with align-items: stretch, not the default start — both columns
-     now always match height regardless of which one's own content is naturally taller (long
-     equipment names included), instead of the shorter one just trailing off with empty space
-     below it. */
-  .assist-columns{display:grid;grid-template-columns:2fr 3fr;gap:16px;align-items:stretch}
+  /* 40/60 split (user request) with align-items: stretch AND an explicit row height — not just
+     stretch-to-content. Stretch alone equalizes both columns to whichever is naturally taller,
+     but with nothing capping either side's OWN content (e.g. many Geräteauswahl categories
+     opened at once), that "taller" height was itself unbounded — the whole card grew right
+     along with its checklist instead of scrolling internally, dragging the other column's
+     stretch target up with it (user report: "the 'Geräteauswahl' card growing indefinitely").
+     An explicit height gives both columns a real, bounded box to stretch to fill; each side's
+     own internal list (.mlist here, .aswork on the right) scrolls within that fixed height via
+     its own overflow-y instead. */
+  .assist-columns{display:grid;grid-template-columns:2fr 3fr;gap:16px;align-items:stretch;
+    height:min(560px,60vh)}
   .assist-columns .aswork{max-height:260px;overflow:auto}
 }
 .assist-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px}
 .assist-card-title{font-weight:700;font-size:13px;margin-bottom:8px;color:var(--text)}
-.assist-col-right{display:flex;flex-direction:column;gap:10px}
+.assist-col-right{display:flex;flex-direction:column;gap:10px;min-height:0}
 /* flex-grow: 1 on the "Ausgewählte Geräte" cart card specifically (user request) — once the
    column as a whole is stretched to match the left card's height, the cart (not the fixed-size
-   Buchungsparameter card or the action row) is what actually grows to fill the extra space. */
-.assist-col-right .assist-cart{flex:1;display:flex;flex-direction:column;gap:8px}
+   Buchungsparameter card or the action row) is what actually grows to fill the extra space.
+   min-height: 0 lets it actually shrink to the column's own bounded height instead of a flex
+   item's default auto-min keeping it at its content's full intrinsic size. */
+.assist-col-right .assist-cart{flex:1;display:flex;flex-direction:column;gap:8px;min-height:0}
 /* The tree (.aswork/.aswork-empty) grows to fill whatever height the cart card has to spare,
    pushing the action row (now nested inside this same card — user request) flush to the
    card's own bottom edge instead of floating right after the tree's own natural height. */
 .assist-cart .aswork,.assist-cart .aswork-empty{flex:1}
-/* The "Geräteauswahl" card grows to match the stretched column height (.assist-columns'
-   align-items: stretch), but its own checklist used to stay pinned at a fixed 260px, leaving
-   dead space between the list and the now-taller card's bottom edge (user report). Turning
-   the card into its own flex column lets the checklist (.mlist, min-height: 0 so it can
-   actually shrink/scroll instead of just growing to fit its content) fill the real remaining
-   space instead of a fixed height. */
-.assist-card.assist-catalog{display:flex;flex-direction:column}
+/* The "Geräteauswahl" card fills the column's own (now explicitly bounded, see
+   .assist-columns above) height — its own flex column, with the checklist (.mlist, min-height:
+   0 so it can actually shrink instead of just growing to fit its content) as the one growing
+   child, scrolling internally (.mlist's own overflow: auto) rather than pushing the card taller
+   once several categories are open at once. */
+.assist-card.assist-catalog{display:flex;flex-direction:column;min-height:0}
 .assist-card.assist-catalog .mlist{flex:1;min-height:0;max-height:none}
 /* Die primäre Aktion, unten rechts in der "Ausgewählte Geräte"-Karte selbst verankert — der
    klare letzte Schritt des Ablaufs, nicht lose unter einem unabhängigen Formular (user request) */
-.assist-actions{display:flex;gap:8px;justify-content:flex-end}
+/* margin-top: auto locks this row to the cart card's bottom edge regardless of how tall the
+   tree above it happens to be — belt-and-suspenders alongside the tree's own flex: 1 (which
+   already pushes it there in the common case), so the buttons stay put even if that chain
+   changes shape */
+.assist-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:auto}
 /* "Freie Termine suchen" bleibt die einzige auffällige Aktion (.btn.primary, unverändert) —
    "Abbrechen" wird bewusst zurückhaltend: randlos, nur ein dezenter Hover-Hintergrund, statt
    gleichrangig mit der Primäraktion zu wirken (user request). */
@@ -414,13 +425,27 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 /* Each Bedarfsgruppe gets a distinct soft pastel tint as its own background, with a darker
    shade of that same hue as its border (user request, reversing an earlier "one calm neutral
    card" redesign) — --groupcolor is set per-instance from the group's own hash (GroupNodeView,
-   AssistantTree.tsx), the same nameColor mechanism the grid/My Bookings use elsewhere. */
-.asgrp{border:1px solid color-mix(in srgb,var(--groupcolor) 55%,black);border-radius:10px;padding:7px 9px 9px;margin:5px 3px;background:var(--groupcolor)}
+   AssistantTree.tsx), the same nameColor mechanism the grid/My Bookings use elsewhere. Mixed
+   down to a fraction of full strength against the card background (18%, not the raw color) —
+   the original full-strength fill read as too heavy next to the green equipment chips inside
+   it (user report). Uniform 16px padding + a symmetric margin (both user-requested) so the box
+   sits evenly centered in the dashed .aswork container instead of looking lopsided; box-sizing:
+   border-box is already a global rule (app.css's own reset), so the padding doesn't push the
+   card wider than its siblings. */
+.asgrp{border:1px solid color-mix(in srgb,var(--groupcolor) 55%,black);border-radius:10px;
+  padding:16px;margin:8px;background:color-mix(in srgb,var(--groupcolor) 18%,var(--panel))}
 .asgrp.dragover{outline:2px dashed var(--accent);outline-offset:2px;background:var(--accent-light)}
-.asgrp-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:2px;cursor:grab}
+.asgrp-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:8px;cursor:grab}
 .asgrp-head b{color:var(--text)}
 .asgrp-need{display:inline-flex;align-items:center;gap:2px}
 .asgrp-need input{width:42px;text-align:center}
+/* The "oder" separator between a group's own direct children (user request: "Benötigt: 1 von
+   4" means these are alternatives, not a required set — spell that out rather than leaving the
+   chips to just run together). Vertically centered against the chip row regardless of chip
+   height, via align-self (the row itself stays align-items: flex-start, unchanged, so nested
+   subgroup cards keep aligning to the top like before). */
+.asgrp-or{align-self:center;font-size:11px;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.03em;padding:0 2px}
 .asstep{border:1px solid var(--border);background:var(--panel);border-radius:6px;width:22px;height:22px;line-height:1;cursor:pointer;color:var(--text);font-weight:700}
 .asstep:hover{background:var(--hover)}
 .asgrp-kids{display:flex;flex-wrap:wrap;align-items:flex-start;min-height:30px;padding:2px;border-radius:6px}

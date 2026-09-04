@@ -642,6 +642,85 @@ describe('AssistantModal — the work-area group node', () => {
     expect(window.askConfirm).not.toHaveBeenCalled();
   });
 
+  // What: an "oder" separator sits between a group's own sibling children, clarifying that
+  // "Benötigt: N von M" means alternatives, not a required set — user request.
+  // How: forms a 2-device group and checks exactly one separator appears (one gap between two
+  // children).
+  it("shows an 'oder' separator between a group's own sibling children", () => {
+    addGroupedPair();
+    expect(screen.getByText('oder')).toBeInTheDocument();
+    expect(document.querySelectorAll('.asgrp-or')).toHaveLength(1);
+  });
+
+  // What: a nested subgroup formed partway through no longer splits its parent's sibling
+  // devices apart — every device renders together, before any nested subgroup, regardless of
+  // the raw order the tree happened to acquire them in (user report: a device added after a
+  // nested subgroup formed rendered arbitrarily displaced below it, cut off from its actual
+  // siblings by the subgroup's own card).
+  // How: forms group RED (Fräse+Presse), a separate group BLUE (Kaputte Presse+Bohrer), nests
+  // BLUE inside RED, THEN adds a 5th device (Dewetron) to RED flatly — in the tree's own raw
+  // insertion order this pushes Dewetron after the already-nested BLUE; checks the rendered
+  // order is devices-first regardless (three .asdev children, then the nested .asgrp).
+  it('keeps sibling devices together, not split apart by a subgroup nested in after them', () => {
+    window.S.data!.machines.push(
+      machine({ id: 'm4', name: 'Bohrer' }),
+      machine({ id: 'm5', name: 'Dewetron' }),
+    );
+    act(() => openAssistant());
+    openChecklistCategory();
+    act(() => {
+      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
+      screen.getByRole('checkbox', { name: /^Presse/ }).click();
+      screen.getByRole('checkbox', { name: /^Kaputte Presse/ }).click();
+      screen.getByRole('checkbox', { name: /^Bohrer/ }).click();
+      screen.getByRole('checkbox', { name: /^Dewetron/ }).click();
+    });
+    const devNodes = () => [...document.querySelectorAll<HTMLElement>('.asdev')];
+    const looseDevs = () => devNodes().filter((el) => !el.closest('.asgrp-kids'));
+    // Group RED: Fräse + Presse.
+    const dtRed = dataTransferStub();
+    act(() => {
+      const [first, second] = looseDevs();
+      fireEvent.dragStart(second!, { dataTransfer: dtRed });
+      fireEvent.drop(first!, { dataTransfer: dtRed });
+    });
+    // Group BLUE: Kaputte Presse + Bohrer.
+    const dtBlue = dataTransferStub();
+    act(() => {
+      const [first, second] = looseDevs();
+      fireEvent.dragStart(second!, { dataTransfer: dtBlue });
+      fireEvent.drop(first!, { dataTransfer: dtBlue });
+    });
+    // Nest BLUE inside RED (drag BLUE's whole card onto RED's own head).
+    const groups = () => [...document.querySelectorAll<HTMLElement>('.asgrp')];
+    const redHead = groups()[0]!.querySelector<HTMLElement>('.asgrp-head')!;
+    const blueGroup = groups()[1]!;
+    const dtNest = dataTransferStub();
+    act(() => {
+      fireEvent.dragStart(blueGroup, { dataTransfer: dtNest });
+      fireEvent.drop(redHead, { dataTransfer: dtNest });
+    });
+    // Add Dewetron to RED flatly, dropped onto Fräse (already a RED member) — pushed to the
+    // END of RED's own raw child order, after the already-nested BLUE.
+    const dtJoin = dataTransferStub();
+    act(() => {
+      const dewetron = looseDevs()[0]!;
+      // Not screen.getByText — "Fräse" also matches its still-checked checklist checkbox
+      // label on the left; .asdev's own textContent includes the drag-handle/remove-icon
+      // glyphs too, so a plain text-node lookup wouldn't match it as its own element either.
+      const fraese = devNodes().find((el) => el.textContent!.includes('Fräse'))!;
+      fireEvent.dragStart(dewetron, { dataTransfer: dtJoin });
+      fireEvent.drop(fraese, { dataTransfer: dtJoin });
+    });
+    // RED's own (outer, first-in-document-order) kids container: every device renders before
+    // the nested BLUE group, not split apart by it.
+    const redKids = document.querySelector('.asgrp .asgrp-kids')!;
+    const kinds = [...redKids.children]
+      .filter((el) => !el.classList.contains('asgrp-or'))
+      .map((el) => (el.classList.contains('asgrp') ? 'grp' : 'dev'));
+    expect(kinds).toEqual(['dev', 'dev', 'dev', 'grp']);
+  });
+
   // What: the dissolve button (icon-only now, no "✕ auflösen" text — user request) breaks a
   // group apart, returning its member devices to being loose devices directly in the work area.
   // How: clicks the "Gruppe auflösen"-labeled button (by its accessible name, not visible

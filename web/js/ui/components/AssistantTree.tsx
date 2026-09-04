@@ -153,13 +153,39 @@ function GroupNeedStepper({ node, handlers }: { node: AssistGrp; handlers: NodeH
   );
 }
 
+/** Splits a group's own children into its devices, then its nested subgroups — raw insertion
+ *  order otherwise puts a nested subgroup wherever it happened to form, which can land it
+ *  between two sibling devices and visually cut them apart from each other (a device added
+ *  after the subgroup rendering as arbitrarily displaced below it — user report). Pure display
+ *  reordering only; the underlying tree's own child order (and thus the N-of-M solver, which
+ *  doesn't care about order) is untouched. */
+function devicesFirst(children: readonly AssistNode[]): AssistNode[] {
+  const devices = children.filter((c): c is AssistDev => c.type === 'dev');
+  const nestedGroups = children.filter((c): c is AssistGrp => c.type === 'grp');
+  return [...devices, ...nestedGroups];
+}
+
+/** Interposes an "oder" separator between every consecutive pair of a group's own direct
+ *  children (user request: "Benötigt: N von M" means these are alternatives — spell that out,
+ *  rather than leaving the chips to just run together as if all of them were required). */
+function withOrSeparators(
+  nodes: readonly AssistNode[],
+): ({ sep: true } | { sep: false; node: AssistNode })[] {
+  return nodes.flatMap((node, index) =>
+    index === 0
+      ? [{ sep: false as const, node }]
+      : [{ sep: true as const }, { sep: false as const, node }],
+  );
+}
+
 /** A demand group as a distinctly colored card — reinstated per a later user request ("I want
  *  the different 'Bedarfsgruppen' also to have coloured Card borders"), reversing an earlier
  *  redesign that had removed per-group hues (the old `AS_HUES`/`newColor` palette) because
  *  independently-hashed nested-group colors read as visual noise. `nameColor`, keyed by the
  *  group's own stable `uid`, gives each group a soft pastel tint (the same hash-based palette
  *  already used for booker names and My Bookings' group cards) — a darker shade of the same
- *  hue (`color-mix`, see app.css) replaces the previous plain grey border. */
+ *  hue (`color-mix`, see app.css) replaces the previous plain grey border. Children render
+ *  devices-first with "oder" separators between siblings (see the two helpers above). */
 function GroupNodeView({ node, handlers }: { node: AssistGrp; handlers: NodeHandlers }) {
   return (
     <div
@@ -186,9 +212,15 @@ function GroupNodeView({ node, handlers }: { node: AssistGrp; handlers: NodeHand
         </button>
       </div>
       <div className="asgrp-kids">
-        {node.children.map((child) => (
-          <AssistNodeView key={child.uid} node={child} handlers={handlers} />
-        ))}
+        {withOrSeparators(devicesFirst(node.children)).map((item, index) =>
+          item.sep ? (
+            <span key={`sep-${index}`} className="asgrp-or" aria-hidden="true">
+              oder
+            </span>
+          ) : (
+            <AssistNodeView key={item.node.uid} node={item.node} handlers={handlers} />
+          ),
+        )}
       </div>
     </div>
   );
