@@ -493,6 +493,82 @@ describe('AssistantModal — the work-area group node', () => {
     expect(card.style.getPropertyValue('--groupcolor')).not.toBe('');
   });
 
+  // What: forming (or growing) a Bedarfsgruppe that mixes a "maschine"-category device with a
+  // "messtechnik"-category one asks for confirmation (user request: "if i have a machine and a
+  // messtechnik in my bedarfsgruppe ... popup question with this information and if thats
+  // correct") — a same-category group (every other test in this file) asks nothing at all.
+  // How: adds a Messtechnik device, groups it with a Maschine device, and checks askConfirm was
+  // called naming the mix.
+  it('asks to confirm when a group ends up mixing machine and Messtechnik categories', () => {
+    window.S.data!.machines.push(
+      machine({ id: 'm4', name: 'Messgerät', group: 'Labor', cat: 'messtechnik' }),
+    );
+    act(() => openAssistant());
+    act(() => {
+      screen.getByText('Maschinen').click();
+    });
+    act(() => {
+      screen.getByText('Halle 1').click();
+    });
+    act(() => {
+      screen.getByText('Messtechnik').click();
+    });
+    act(() => {
+      screen.getByText('Labor').click();
+    });
+    act(() => {
+      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
+      screen.getByRole('checkbox', { name: /^Messgerät/ }).click();
+    });
+    const dt = dataTransferStub();
+    act(() => {
+      const devNodes = document.querySelectorAll('.asdev');
+      fireEvent.dragStart(devNodes[1]!, { dataTransfer: dt });
+      fireEvent.drop(devNodes[0]!, { dataTransfer: dt });
+    });
+    expect(window.askConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Gemischte Bedarfsgruppe' }),
+    );
+  });
+
+  // What: declining that confirmation reverts the merge — the dragged device goes back to being
+  // loose rather than staying stuck in a group the user just said wasn't intended.
+  // How: same mixed-category setup, but with askConfirm stubbed to resolve false, and checks no
+  // group remains once the decline's revert has run.
+  it('reverts the merge when the mixed-category confirmation is declined', async () => {
+    window.askConfirm = vi.fn().mockResolvedValue(false);
+    window.S.data!.machines.push(
+      machine({ id: 'm4', name: 'Messgerät', group: 'Labor', cat: 'messtechnik' }),
+    );
+    act(() => openAssistant());
+    act(() => {
+      screen.getByText('Maschinen').click();
+    });
+    act(() => {
+      screen.getByText('Halle 1').click();
+    });
+    act(() => {
+      screen.getByText('Messtechnik').click();
+    });
+    act(() => {
+      screen.getByText('Labor').click();
+    });
+    act(() => {
+      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
+      screen.getByRole('checkbox', { name: /^Messgerät/ }).click();
+    });
+    const dt = dataTransferStub();
+    await act(async () => {
+      const devNodes = document.querySelectorAll('.asdev');
+      fireEvent.dragStart(devNodes[1]!, { dataTransfer: dt });
+      fireEvent.drop(devNodes[0]!, { dataTransfer: dt });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(document.querySelectorAll('.asgrp')).toHaveLength(0);
+    expect(document.querySelectorAll('.asdev')).toHaveLength(2);
+  });
+
   // What: incrementing the need stepper raises the group's need.
   // How: clicks the "+" stepper once (need 1→2, matching the group's 2 members) and checks
   // the value updated.
@@ -502,6 +578,15 @@ describe('AssistantModal — the work-area group node', () => {
       document.querySelector<HTMLButtonElement>('.asstep[title="mehr"]')!.click();
     });
     expect((document.querySelector('.asNeed') as HTMLInputElement).value).toBe('2');
+  });
+
+  // What: grouping two devices of the SAME category asks nothing at all — the confirm is only
+  // for an actual mix.
+  // How: forms the standard same-category pair (addGroupedPair, both plain Maschinen) and
+  // checks askConfirm was never called.
+  it('asks nothing when a group stays within one category', () => {
+    addGroupedPair();
+    expect(window.askConfirm).not.toHaveBeenCalled();
   });
 
   // What: the dissolve button (icon-only now, no "✕ auflösen" text — user request) breaks a

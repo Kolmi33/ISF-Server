@@ -275,31 +275,35 @@ export function chooseDevicesForTree(
 // ---------------------------------------------------------------------------------------
 
 /**
- * Wraps `dragUid` and `targetUid` in a new "need 1 of 2" group.
+ * Wraps `dragUid` and `targetUid` in a new "need 1 of 2" group. Returns the new group's uid, or
+ * null if the operation was a no-op (invalid drag/target, or a cycle) — callers use this to
+ * check the resulting group afterward (e.g. AssistantModal.tsx's mixed-category confirm).
  */
 export function groupNodeOnto(
   tree: AssistContainer,
   dragUid: string,
   targetUid: string,
   newUid: () => string,
-): void {
-  if (dragUid === targetUid || treeIsAncestor(tree, dragUid, targetUid)) return;
+): string | null {
+  if (dragUid === targetUid || treeIsAncestor(tree, dragUid, targetUid)) return null;
   const dragNode = treeDetach(tree, dragUid);
-  if (!dragNode) return;
+  if (!dragNode) return null;
   const parent = treeFindParent(tree, targetUid);
   if (!parent) {
     tree.children.push(dragNode);
-    return;
+    return null;
   }
   const targetIndex = parent.children.findIndex((child) => child.uid === targetUid);
   const targetNode = parent.children[targetIndex]!;
+  const newGroupUid = newUid();
   parent.children.splice(targetIndex, 1, {
-    uid: newUid(),
+    uid: newGroupUid,
     type: 'grp',
     need: 1,
     children: [targetNode, dragNode],
   });
   treeCleanup(tree);
+  return newGroupUid;
 }
 
 /**

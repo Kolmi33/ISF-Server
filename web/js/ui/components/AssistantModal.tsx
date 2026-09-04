@@ -20,6 +20,7 @@
 
 import { useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import type { Machine } from '../../../../shared/types.ts';
 import {
   addDays,
   formatDateAsIsoString,
@@ -27,7 +28,11 @@ import {
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../../shared/dates.ts';
-import { isMachineBlockedOnDate, isMachineAvailableOnWeekday } from '../../core/machines.ts';
+import {
+  isMachineBlockedOnDate,
+  isMachineAvailableOnWeekday,
+  getMachineCategory,
+} from '../../core/machines.ts';
 import {
   addDeviceToTree,
   changeGroupNeed,
@@ -42,6 +47,7 @@ import {
   setGroupNeed,
   treeDevUid,
   treeDevs,
+  treeFind,
   type AssistContainer,
 } from '../../core/assistant.ts';
 import { orderedMachines } from '../grid.ts';
@@ -64,6 +70,46 @@ function isFreeDevice(id: string, day: string): boolean {
     !isMachineBlockedOnDate(machine, day) &&
     isMachineAvailableOnWeekday(machine, day)
   );
+}
+
+/** Every distinct machine category (Maschine/Messtechnik) present among a group's own devices
+ *  — used to flag a Bedarfsgruppe that mixes both kinds. */
+function groupCategories(group: AssistContainer): Set<string> {
+  return new Set(
+    treeDevs(group)
+      .map((id) => machById(id))
+      .filter((machine): machine is Machine => !!machine)
+      .map((machine) => getMachineCategory(machine)),
+  );
+}
+
+/**
+ * After a group/join operation forms or grows `groupUid` into one that mixes machine AND
+ * Messtechnik devices, asks for confirmation (user request: "if i have a machine and a
+ * messtechnik in my bedarfsgruppe ... I want to have popup question with this information and
+ * if thats correct") — reverting by pulling `dragUid` back out to the root if declined. Applied
+ * optimistically: the merge already happened (and rendered) by the time this runs, so a
+ * decline is a visible "undo" rather than a blocking pre-check — consistent with dropping the
+ * earlier, more intrusive pre-search redundancy confirm (see `runAssistantSearch`'s comment).
+ * A group that already only has one category, or wasn't actually formed (`groupUid` null from
+ * a no-op `groupNodeOnto`), is left alone with no popup at all.
+ */
+async function confirmMixedCategories(
+  tree: AssistContainer,
+  groupUid: string | null,
+  dragUid: string,
+  withRerender: (mutate: () => void) => void,
+): Promise<void> {
+  if (!groupUid) return;
+  const group = treeFind(tree, groupUid);
+  if (!group || group.type !== 'grp' || groupCategories(group).size < 2) return;
+  const confirmed = await window.askConfirm({
+    title: 'Gemischte Bedarfsgruppe',
+    body: 'Diese Bedarfsgruppe enthält sowohl eine Maschine als auch ein Messtechnik-Gerät. Ist das so gewollt?',
+    yes: 'Ja, das passt',
+    danger: false, // a plain yes/no question, not a destructive action
+  });
+  if (!confirmed) withRerender(() => moveNodeToRoot(tree, dragUid));
 }
 
 /** Owns the mutable tree plus every edit operation it supports — a single mutable object
@@ -94,10 +140,17 @@ function useAssistantTree() {
     tree: treeRef.current,
     addedIds: new Set(treeDevs(treeRef.current)),
     toggleDevice,
-    onGroupOnto: (dragUid: string, targetUid: string) =>
-      withRerender(() => groupNodeOnto(treeRef.current, dragUid, targetUid, newUid)),
-    onJoin: (dragUid: string, groupUid: string) =>
-      withRerender(() => joinNode(treeRef.current, dragUid, groupUid)),
+    onGroupOnto: (dragUid: string, targetUid: string) => {
+      let newGroupUid: string | null = null;
+      withRerender(() => {
+        newGroupUid = groupNodeOnto(treeRef.current, dragUid, targetUid, newUid);
+      });
+      void confirmMixedCategories(treeRef.current, newGroupUid, dragUid, withRerender);
+    },
+    onJoin: (dragUid: string, groupUid: string) => {
+      withRerender(() => joinNode(treeRef.current, dragUid, groupUid));
+      void confirmMixedCategories(treeRef.current, groupUid, dragUid, withRerender);
+    },
     onToRoot: (dragUid: string) => withRerender(() => moveNodeToRoot(treeRef.current, dragUid)),
     onDissolve: (uid: string) => withRerender(() => dissolveGroup(treeRef.current, uid)),
     onChangeNeed: (uid: string, delta: number) =>

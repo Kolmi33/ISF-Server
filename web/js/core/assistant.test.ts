@@ -351,13 +351,16 @@ describe('groupNodeOnto', () => {
   // new group, and that root no longer lists it directly.
   it('wraps the drag node and target in a new need-1-of-2 group', () => {
     const tree = sample();
-    groupNodeOnto(tree, 'n1', 'n3', newUid); // n1 (root) onto n3 (inside n2)
+    const result = groupNodeOnto(tree, 'n1', 'n3', newUid); // n1 (root) onto n3 (inside n2)
     const n2 = treeFind(tree, 'n2') as AssistGrp;
     const newGroup = n2.children[0] as AssistGrp;
     expect(newGroup).toMatchObject({ uid: 'new', type: 'grp', need: 1 });
     expect(newGroup.children).toEqual([dev('n3', 'B'), dev('n1', 'A')]);
     expect(treeFind(tree, 'n1')).not.toBeNull(); // n1 now lives inside the new group
     expect(tree.children.map((c) => c.uid)).toEqual(['n2']); // gone from root
+    // Returns the new group's own uid — callers (AssistantModal.tsx's mixed-category confirm)
+    // check the resulting group afterward.
+    expect(result).toBe('new');
   });
 
   // What: dragging a node onto itself is a meaningless operation and changes nothing.
@@ -365,8 +368,9 @@ describe('groupNodeOnto', () => {
   // tree is byte-identical to a fresh sample.
   it('is a no-op when dragging a node onto itself', () => {
     const tree = sample();
-    groupNodeOnto(tree, 'n1', 'n1', newUid);
+    const result = groupNodeOnto(tree, 'n1', 'n1', newUid);
     expect(tree).toEqual(sample());
+    expect(result).toBeNull();
   });
 
   // What: dragging a group onto one of its own descendants would create a cycle, so it's refused.
