@@ -498,6 +498,14 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 /* Ghost layout (user request, replacing an earlier shaded card that didn't land well): no
    background at all — the inputs/selects already carry their own border (global input/select
    rule), which is enough structure on its own without a filled box around the whole row. */
+/* Dashboard-style KPI summary strip at the top of the modal (user request: "eine management
+   summary auf der neuen Card ... mehr Dashboard-Struktur und Look") — a row of stat tiles, each
+   a big bold number over a small muted label, scannable at a glance. */
+.mybk-summary{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 12px}
+.mybk-stat{flex:1;min-width:96px;background:var(--panel);border:1px solid var(--border);
+  border-radius:10px;padding:10px 12px;text-align:center}
+.mybk-stat-value{font-size:22px;font-weight:700;line-height:1.2;color:var(--text)}
+.mybk-stat-label{font-size:11px;color:var(--muted);margin-top:2px}
 .mybookings .abfilters{margin:8px 0 10px}
 .mybookings .abfilters .fld>label{text-transform:none;font-size:12px}
 .mybookings .abfilters input,.mybookings .abfilters select{min-height:36px}

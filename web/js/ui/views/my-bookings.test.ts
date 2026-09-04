@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import type { Machine, Bookings } from '../../../../shared/types.ts';
-import { computeMyRuns, filterMyRuns, type BookingRun } from './my-bookings.ts';
+import {
+  computeMyRuns,
+  filterMyRuns,
+  computeMyBookingsSummary,
+  type BookingRun,
+} from './my-bookings.ts';
 
 const mach = (id: string): Machine => ({ id, name: id.toUpperCase(), group: 'g' });
 const m1 = mach('m1');
@@ -180,5 +185,60 @@ describe('filterMyRuns', () => {
   it('falls back to termin for an unknown sort key (including the removed "maschine" key)', () => {
     expect(ids(filterMyRuns(all, { ...base, sort: 'nonsense' }))).toEqual(['a', 'b']);
     expect(ids(filterMyRuns(all, { ...base, sort: 'maschine' }))).toEqual(['a', 'b']);
+  });
+});
+
+describe('computeMyBookingsSummary', () => {
+  const run = (machine: Machine, liveDates: string[], groupId?: string) =>
+    groupId ? { machine, liveDates, groupId } : { machine, liveDates };
+
+  // What: counts distinct machines, distinct REAL (multi-machine) groups, total booked days,
+  // and how many days until the soonest upcoming booking — always from the full run list, not
+  // a filtered subset (the summary describes the user's overall bookings).
+  // How: two machines sharing a real 2-machine group, plus an extra solo run, and checks every
+  // summary field.
+  it('summarizes machines, real groups, total days, and days to the next booking', () => {
+    const bookings: Bookings = {
+      m1: { '2021-01-06': { name: 'anna', gid: 'g1' }, '2021-01-11': bk('anna') },
+      m2: { '2021-01-06': { name: 'anna', gid: 'g1' } },
+    };
+    const runs = [
+      run(m1, ['2021-01-06'], 'g1'),
+      run(m1, ['2021-01-11']),
+      run(m2, ['2021-01-06'], 'g1'),
+    ];
+    const summary = computeMyBookingsSummary(runs, bookings, today);
+    expect(summary.machineCount).toBe(2);
+    expect(summary.groupCount).toBe(1);
+    expect(summary.totalDays).toBe(3);
+    expect(summary.nextInDays).toBe(2); // today=01-04, soonest live date=01-06
+  });
+
+  // What: a group id that only touches one surviving machine doesn't count as a real group —
+  // matches the threshold used elsewhere (multiMachineGroup, MyBookingsRun.tsx).
+  // How: one run carrying a gid whose only booked machine is itself, and checks groupCount is 0.
+  it('does not count a group id that only touches one machine', () => {
+    const bookings: Bookings = { m1: { '2021-01-06': { name: 'anna', gid: 'solo' } } };
+    const runs = [run(m1, ['2021-01-06'], 'solo')];
+    expect(computeMyBookingsSummary(runs, bookings, today).groupCount).toBe(0);
+  });
+
+  // What: with no bookings at all, every count is zero and nextInDays is null — nothing to
+  // count down to.
+  // How: calls with an empty run list.
+  it('is all zero/null with no runs', () => {
+    expect(computeMyBookingsSummary([], {}, today)).toEqual({
+      machineCount: 0,
+      groupCount: 0,
+      totalDays: 0,
+      nextInDays: null,
+    });
+  });
+
+  // What: a booking landing on today itself counts as 0 days away, not 1.
+  // How: one run whose only live date is today.
+  it('reports 0 days when the soonest booking is today', () => {
+    const runs = [run(m1, [today])];
+    expect(computeMyBookingsSummary(runs, {}, today).nextInDays).toBe(0);
   });
 });

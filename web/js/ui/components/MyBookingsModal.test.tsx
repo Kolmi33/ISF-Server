@@ -80,6 +80,47 @@ describe('MyBookingsModal', () => {
     expect(screen.getByText(/Keine zukünftigen Buchungen/)).toBeInTheDocument();
   });
 
+  // What: a dashboard-style KPI summary strip at the top shows counts derived from ALL the
+  // user's bookings — distinct machines, real (multi-machine) groups, total booked days, and
+  // how soon the next one is (user request: "eine management summary ... Anzahl gebuchter
+  // Maschinen, Anzahl Buchungsgruppen, nächste Buchung in X Tagen").
+  // How: books two machines for one day each (one of them today, no shared group), and checks
+  // all four tile values in order.
+  it('shows a dashboard summary of machines, groups, days, and the next booking', () => {
+    window.S.data!.machines = [machine(), machine({ id: 'm2', name: 'Presse' })];
+    window.S.data!.bookings = {
+      m1: { [TODAY]: { name: 'anna' } },
+      m2: { '2021-01-05': { name: 'anna' } },
+    };
+    render(<MyBookingsModal />);
+    const values = [...document.querySelectorAll('.mybk-stat-value')].map((el) => el.textContent);
+    expect(values).toEqual(['2', '0', '2', 'Heute']);
+  });
+
+  // What: with no bookings at all, the summary strip doesn't render at all — an empty
+  // dashboard of zeroes would just be noise above the "no bookings" placeholder.
+  // How: renders with no bookings and checks the strip is absent.
+  it('shows no summary strip when there are no bookings', () => {
+    render(<MyBookingsModal />);
+    expect(document.querySelector('.mybk-summary')).toBeNull();
+  });
+
+  // What: the summary reflects EVERY one of the user's bookings, not the filter row's
+  // currently-narrowed view — same "shortcut to the full set" reasoning the "only my machines"
+  // button already uses.
+  // How: books two machines, filters the list down to one by name, and checks the summary's
+  // machine count still counts both.
+  it('keeps summarizing all bookings even once the filter narrows the visible list', () => {
+    window.S.data!.machines = [machine(), machine({ id: 'm2', name: 'Presse' })];
+    window.S.data!.bookings = {
+      m1: { [TODAY]: { name: 'anna' } },
+      m2: { [TODAY]: { name: 'anna' } },
+    };
+    render(<MyBookingsModal />);
+    fireEvent.change(screen.getByPlaceholderText('Berger'), { target: { value: 'Fräse' } });
+    expect(document.querySelector('.mybk-stat-value')!.textContent).toBe('2');
+  });
+
   // What: a single-day booking shows its note inline and gets a direct "Löschen" (delete)
   // button, with no expand chip (there's nothing to expand for one day).
   // How: books one day with a note and checks the machine name, the note text, no expand

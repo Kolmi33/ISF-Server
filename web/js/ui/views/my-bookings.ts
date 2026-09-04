@@ -11,6 +11,7 @@
 import type { Machine, Bookings } from '../../../../shared/types.ts';
 import { parseIsoDateString, isWeekend, nextWeekday } from '../../../../shared/dates.ts';
 import { matchesGroupFilter } from '../../core/machines.ts';
+import { findBookingGroup } from '../../core/bookings.ts';
 
 /** A run of consecutive workdays the user has booked on one machine (a bookable "series"). */
 export interface BookingRun {
@@ -142,4 +143,60 @@ export function filterMyRuns<T extends FilterableRun>(
         (!filter.to || run.dates[0]! <= filter.to),
     )
     .sort(sorters[filter.sort] || sorters.termin);
+}
+
+/** The minimal shape `computeMyBookingsSummary` needs from each run — matches `LiveRun`
+ *  (`MyBookingsRun.tsx`) structurally, without importing it: that module already imports FROM
+ *  this one, so importing its type back here would create a cycle. */
+interface SummarizableRun {
+  machine: Machine;
+  liveDates: readonly string[];
+  groupId?: string;
+}
+
+/** The dashboard-style KPI summary shown at the top of "My Bookings" (user request: "a
+ *  management summary on top of the new card -> e.g number of machines booked, number of
+ *  booking groups, next booking coming in up in X days"). */
+export interface MyBookingsSummary {
+  machineCount: number;
+  /** Distinct REAL (multi-machine) booking groups only — a titled single-machine booking
+   *  isn't a "group" worth counting here, same threshold `multiMachineGroup` uses elsewhere. */
+  groupCount: number;
+  totalDays: number;
+  /** Days from `today` until the soonest upcoming booked day, or null with no bookings at all.
+   *  0 means today, negative is impossible (runs are already filtered to `today` onward by
+   *  `computeMyRuns`). */
+  nextInDays: number | null;
+}
+
+/**
+ * Computes the summary from the FULL, unfiltered run list — like the "only my machines"
+ * shortcut, this describes the user's overall bookings, not whatever the filter row above
+ * currently narrows the visible list to.
+ */
+export function computeMyBookingsSummary(
+  runs: readonly SummarizableRun[],
+  bookings: Bookings,
+  today: string,
+): MyBookingsSummary {
+  const machineIds = new Set(runs.map((run) => run.machine.id));
+  const groupIds = new Set(
+    runs
+      .filter((run) => run.groupId && findBookingGroup(bookings, run.groupId).machineIds.size > 1)
+      .map((run) => run.groupId!),
+  );
+  const allLiveDates = runs.flatMap((run) => run.liveDates);
+  const soonest = allLiveDates.length ? allLiveDates.reduce((a, b) => (a < b ? a : b)) : null;
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const nextInDays = soonest
+    ? Math.round(
+        (parseIsoDateString(soonest).getTime() - parseIsoDateString(today).getTime()) / msPerDay,
+      )
+    : null;
+  return {
+    machineCount: machineIds.size,
+    groupCount: groupIds.size,
+    totalDays: allLiveDates.length,
+    nextInDays,
+  };
 }

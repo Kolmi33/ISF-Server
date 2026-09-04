@@ -23,8 +23,10 @@ import { getBooking } from '../../core/bookings.ts';
 import {
   computeMyRuns,
   filterMyRuns,
+  computeMyBookingsSummary,
   type BookingRun,
   type MyBookingsFilter,
+  type MyBookingsSummary,
 } from '../views/my-bookings.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { offerUndo } from '../toast.ts';
@@ -56,6 +58,46 @@ function liveRunsFrom(frozenRuns: readonly BookingRun[]): LiveRun[] {
       groupTitle: run.groupTitle,
     }))
     .filter((run) => run.liveDates.length > 0);
+}
+
+/** "in N Tagen" → "Heute"/"Morgen" for the two near cases, matching how a person would
+ *  actually say it rather than the technically-correct-but-stilted "in 0/1 Tagen". */
+function nextInDaysText(days: number | null): string {
+  if (days === null) return '—';
+  if (days === 0) return 'Heute';
+  if (days === 1) return 'Morgen';
+  return `in ${days} Tagen`;
+}
+
+/** The dashboard-style KPI summary strip at the top of "My Bookings" (user request: "eine
+ *  management summary auf der neuen Card -> z.B. Anzahl gebuchter Maschinen, Anzahl
+ *  Buchungsgruppen, nächste Buchung in X Tagen") — always reflects every one of the user's
+ *  bookings, not the filter row's currently-narrowed view (same "shortcut to the full set"
+ *  reasoning as `myMachineIds` below). Hidden entirely with no bookings at all: an empty
+ *  dashboard of zeroes would just be noise above the "no bookings" placeholder.
+ */
+function MyBookingsSummaryBar({ summary }: { summary: MyBookingsSummary }) {
+  if (!summary.machineCount) return null;
+  return (
+    <div className="mybk-summary">
+      <div className="mybk-stat">
+        <div className="mybk-stat-value">{summary.machineCount}</div>
+        <div className="mybk-stat-label">Maschine{summary.machineCount === 1 ? '' : 'n'}</div>
+      </div>
+      <div className="mybk-stat">
+        <div className="mybk-stat-value">{summary.groupCount}</div>
+        <div className="mybk-stat-label">Buchungsgruppe{summary.groupCount === 1 ? '' : 'n'}</div>
+      </div>
+      <div className="mybk-stat">
+        <div className="mybk-stat-value">{summary.totalDays}</div>
+        <div className="mybk-stat-label">Gebuchte Tage</div>
+      </div>
+      <div className="mybk-stat">
+        <div className="mybk-stat-value">{nextInDaysText(summary.nextInDays)}</div>
+        <div className="mybk-stat-label">Nächster Termin</div>
+      </div>
+    </div>
+  );
 }
 
 interface RunListProps {
@@ -189,6 +231,13 @@ export function MyBookingsModal() {
       <h2>
         <Icon name="clip" /> Meine Buchungen (ab heute)
       </h2>
+      <MyBookingsSummaryBar
+        summary={computeMyBookingsSummary(
+          liveRuns,
+          store.get('data')!.bookings,
+          todayAsIsoDateString(),
+        )}
+      />
       <MyBookingsFilters filter={filter} groupOptions={groupOptions} onChange={updateFilter} />
       <MachineFilterButton machineIds={myMachineIds} />
       <RunList
