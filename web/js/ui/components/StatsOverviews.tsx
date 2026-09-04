@@ -2,24 +2,19 @@
 // STATS OVERVIEWS COMPONENT (web/js/ui/components/StatsOverviews.tsx)
 // =======================================================================================
 //
-// The Statistik modal's three non-drilldown overview modes: Ressourcen (the
-// category/group-folded machine list), Wartung (maintenance/downtime list), and Personen
-// (person overview, row-click drills into `PersonDrilldown`). Split out of
+// The Statistik modal's two non-drilldown overview modes: Ressourcen (the group-folded
+// machine list for the active category, each row a stacked used/maintenance/idle bar) and
+// Personen (person overview, row-click drills into `PersonDrilldown`). Split out of
 // `StatsModal.tsx` purely to stay under the file-length budget.
 //
 // =======================================================================================
 
-import { CATEGORIES } from '../../core/machines.ts';
-import type { ResourceRow, StatsMaintRow, StatsPerson } from '../views/stats.ts';
-import { StatBar } from './StatsDrilldown.tsx';
+import type { MachineCategory } from '../../../../shared/types.ts';
+import type { ResourceRow, StatsPerson } from '../views/stats.ts';
+import { StatBar, StackedStatBar } from './StatsDrilldown.tsx';
 
-function categoryLabel(category: string): string {
-  return CATEGORIES.find((c) => c.id === category)?.label ?? category;
-}
-
-/** One `ResourceRow` as its `<div>` — a category header, a group header, or a machine row.
- *  Its own function so `ResourcesOverview`'s `.map` body stays a single call, not an inline
- *  multi-branch closure. */
+/** One `ResourceRow` as its `<div>` — a group header or a machine row. Its own function so
+ *  `ResourcesOverview`'s `.map` body stays a single call, not an inline multi-branch closure. */
 function ResourceRowView({
   row,
   totalDays,
@@ -31,21 +26,8 @@ function ResourceRowView({
   onToggleFold: (key: string) => void;
   onSelectMachine: (machineId: string) => void;
 }) {
-  if (row.kind === 'category') {
-    return (
-      <div
-        className={`statgrp cathead click ${row.collapsed ? 'closed' : ''}`}
-        onClick={() => onToggleFold(`c:${row.category}`)}
-      >
-        <span className="arrow">▼</span> {categoryLabel(row.category)} · Ø {row.averagePercent}%
-      </div>
-    );
-  }
   if (row.kind === 'group') {
     return (
-      // `index` disambiguates the key: a group name can repeat across two categories, and
-      // the fold state deliberately keys on the bare group name — see `stats.ts`'s
-      // `buildResourceRows` comment for why.
       <div
         className={`statgrp click ${row.collapsed ? 'closed' : ''}`}
         onClick={() => onToggleFold(`g:${row.group}`)}
@@ -54,6 +36,10 @@ function ResourceRowView({
       </div>
     );
   }
+  const usedPercent = row.row.percent;
+  const blockedPercent = totalDays
+    ? Math.round((row.row.blockedWorkdayCount * 100) / totalDays)
+    : 0;
   return (
     <div
       className="statrow click"
@@ -61,9 +47,9 @@ function ResourceRowView({
       onClick={() => onSelectMachine(row.row.machine.id)}
     >
       <span className="nm">{row.row.machine.name}</span>
-      <StatBar percent={row.row.percent} colorByUtilization />
+      <StackedStatBar usedPercent={usedPercent} blockedPercent={blockedPercent} />
       <span className="pct">
-        {row.row.bookedWorkdayCount}/{totalDays} · {row.row.percent}%
+        {row.row.bookedWorkdayCount}/{totalDays} · {usedPercent}%
       </span>
     </div>
   );
@@ -72,24 +58,30 @@ function ResourceRowView({
 interface ResourcesOverviewProps {
   rows: readonly ResourceRow[];
   totalDays: number;
+  activeCategory: MachineCategory;
   onToggleFold: (key: string) => void;
   onSelectMachine: (machineId: string) => void;
 }
 
-/** The Ressourcen-mode overview: the category/group-folded machine list. */
+/** The Ressourcen-mode overview: the active category's group-folded machine list. Wrapped in
+ *  `stat-theme-<category>` (app.css) so every bar in this view — including the machine
+ *  drilldown reached by clicking a row — picks up that category's own accent color (deep blue
+ *  Maschinen, teal/slate Messtechnik — user request), via the `--stat-fill` custom property
+ *  `StatBar`/`StackedStatBar` read from. */
 export function ResourcesOverview({
   rows,
   totalDays,
+  activeCategory,
   onToggleFold,
   onSelectMachine,
 }: ResourcesOverviewProps) {
   return (
-    <>
+    <div className={`stat-theme-${activeCategory}`}>
       <p className="hint">{totalDays} Werktage</p>
       <div className="resultlist" style={{ maxHeight: 400 }}>
         {rows.map((row, index) => (
           <ResourceRowView
-            key={`${row.kind}:${row.kind === 'machine' ? row.row.machine.id : row.kind === 'category' ? row.category : row.group}:${index}`}
+            key={`${row.kind}:${row.kind === 'machine' ? row.row.machine.id : row.group}:${index}`}
             row={row}
             totalDays={totalDays}
             onToggleFold={onToggleFold}
@@ -97,43 +89,7 @@ export function ResourcesOverview({
           />
         ))}
       </div>
-    </>
-  );
-}
-
-interface MaintenanceOverviewProps {
-  rows: readonly StatsMaintRow[];
-  totalInstances: number;
-  totalDays: number;
-}
-
-/** The Wartung-mode overview: maintenance instance count + blocked days, per machine. */
-export function MaintenanceOverview({ rows, totalInstances, totalDays }: MaintenanceOverviewProps) {
-  const maxDays = rows.length ? Math.max(1, rows[0]!.days) : 1;
-  return (
-    <>
-      <p className="hint">
-        <b>{totalInstances}</b> Wartungs-/Ausfall-Instanz{totalInstances === 1 ? '' : 'en'} ·{' '}
-        <b>{totalDays}</b> gesperrte Tage im Zeitraum
-      </p>
-      <div className="resultlist" style={{ maxHeight: 400 }}>
-        {rows.length ? (
-          rows.map((row) => (
-            <div className="statrow" key={row.machine.id}>
-              <span className="nm" title={row.machine.group}>
-                {row.machine.name}
-              </span>
-              <StatBar percent={Math.round((row.days * 100) / maxDays)} />
-              <span className="pct">
-                {row.slotCount}× · {row.days} Tg
-              </span>
-            </div>
-          ))
-        ) : (
-          <p className="hint">Keine Wartungs-/Ausfallzeiten im Zeitraum.</p>
-        )}
-      </div>
-    </>
+    </div>
   );
 }
 

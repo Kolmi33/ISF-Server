@@ -11,39 +11,45 @@
 import type { StatsMachineRow, StatsPerson } from '../views/stats.ts';
 import { Icon } from './Icon.tsx';
 
-/** The traffic-light utilisation band a percent falls into: under-used, healthy, or
- *  over-used. Thresholds per user request — under 60% is under-utilized, 60–85% is the
- *  healthy band, over 85% is over-utilized (worth watching for overbooking/burnout). */
-function utilizationBand(percent: number): 'low' | 'mid' | 'high' {
-  if (percent > 85) return 'high';
-  if (percent >= 60) return 'mid';
-  return 'low';
+/**
+ * A single result row's horizontal bar, sized to `percent` (0–100) — a plain neutral fill
+ * (the active category's own `--stat-fill` theme color when one's in scope, `--accent`
+ * otherwise). Used for every "share of the list's own top scorer" bar (a person's days as a
+ * fraction of the busiest person's days, etc.) — the Ressourcen overview's own per-machine row
+ * uses `StackedStatBar` below instead, since utilisation there breaks down into three
+ * meaningfully different shares, not just one relative fraction.
+ */
+export function StatBar({ percent }: { percent: number }) {
+  return (
+    <div className="statbar">
+      <div style={{ width: `${percent}%` }} />
+    </div>
+  );
 }
 
 /**
- * A single result row's horizontal bar, sized to `percent` (0–100).
- *
- * `colorByUtilization` switches the fill from the plain accent color to the traffic-light
- * band above — only meaningful when `percent` IS a genuine 0–100 utilisation rate (a
- * machine's booked-workday share of the range). Most `StatBar` call sites instead pass a
- * percent *relative to the list's own top scorer* (e.g. a person's days as a fraction of the
- * busiest person's days) — traffic-light coloring there would be misleading (the busiest
- * entry always reads "over-utilized" red even at a genuinely low absolute rate), so those
- * callers leave this off and keep the neutral accent fill.
+ * The Ressourcen overview's own per-machine utilisation bar: three stacked, meaningfully
+ * distinct segments — booked ("used"), blocked by maintenance, and idle — replacing a single
+ * generic percent bar (user request: "a stacked bar chart, e.g. 60% Used, 10% Maintenance,
+ * 30% Idle", since maintenance is a state of the resource, not a separate bookable category).
+ * `usedPercent`/`blockedPercent` come straight from the row's own counts; idle is simply
+ * whatever's left, clamped at 0 in case the two ever summed past 100 (shouldn't happen —
+ * `stats.ts` already keeps booked and blocked mutually exclusive per day — but a rendering
+ * bug here should never show a negative-width segment).
  */
-export function StatBar({
-  percent,
-  colorByUtilization = false,
+export function StackedStatBar({
+  usedPercent,
+  blockedPercent,
 }: {
-  percent: number;
-  colorByUtilization?: boolean;
+  usedPercent: number;
+  blockedPercent: number;
 }) {
+  const idlePercent = Math.max(0, 100 - usedPercent - blockedPercent);
   return (
-    <div className="statbar">
-      <div
-        className={colorByUtilization ? `util-${utilizationBand(percent)}` : undefined}
-        style={{ width: `${percent}%` }}
-      />
+    <div className="statbar stacked">
+      <div className="seg-used" style={{ width: `${usedPercent}%` }} />
+      <div className="seg-maint" style={{ width: `${blockedPercent}%` }} />
+      <div className="seg-idle" style={{ width: `${idlePercent}%` }} />
     </div>
   );
 }

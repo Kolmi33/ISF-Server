@@ -490,13 +490,23 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .statrow{display:flex;align-items:center;gap:8px;padding:3px 6px;border-bottom:1px solid var(--border);font-size:12px}
 .statrow .nm{flex:0 0 210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .statbar{flex:1;background:var(--headbg);border-radius:4px;height:14px;overflow:hidden}
-.statbar div{height:100%;background:var(--accent)}
-/* Ampel-Einfärbung für echte Auslastungs-Balken (StatBar's `colorByUtilization` — nur die
-   Ressourcen-Übersicht der Maschinen, siehe StatsDrilldown.tsx): gelb = unterausgelastet
-   (<60%), grün = gesund (60–85%), rot = überausgelastet (>85%) */
-.statbar div.util-low{background:var(--warn)}
-.statbar div.util-mid{background:var(--dot-free)}
-.statbar div.util-high{background:var(--danger)}
+.statbar div{height:100%;background:var(--stat-fill,var(--accent))}
+/* The Ressourcen overview's own per-machine bar: three stacked segments side by side (not one
+   bar's width like every other .statbar use) — used (the category's own --stat-fill color),
+   blocked by maintenance (amber, same token the grid's own maintenance dots use), and idle
+   (just the track color showing through, i.e. no fill at all) — user request: "a stacked bar
+   chart, e.g. 60% Used, 10% Maintenance, 30% Idle", replacing a single traffic-light bar. */
+.statbar.stacked{display:flex}
+.statbar.stacked .seg-used{height:100%;background:var(--stat-fill,var(--accent))}
+.statbar.stacked .seg-maint{height:100%;background:var(--warn)}
+.statbar.stacked .seg-idle{height:100%;background:transparent}
+/* Category color themes (user request): deep blue for Maschinen, teal/slate for Messtechnik —
+   an instant subconscious cue for which category's data is on screen. Wraps the whole
+   Ressourcen overview (StatsOverviews.tsx), so the machine drilldown reached from within it
+   inherits the same --stat-fill too. */
+.stat-theme-maschine{--stat-fill: hsl(212 70% 42%)}
+.stat-theme-messtechnik{--stat-fill: hsl(174 40% 34%)}
+.breadcrumb{font-weight:600}
 /* Rechtsbündige Zahlenspalten: feste Ziffernbreite, damit z.B. "8/12 · 67%" untereinander
    exakt ausgerichtet steht statt je nach Ziffernbreite leicht zu wandern */
 .statrow .pct,.statgrp{font-variant-numeric:tabular-nums}

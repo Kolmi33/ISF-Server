@@ -2,24 +2,26 @@
 // STATS MODAL COMPONENT (web/js/ui/components/StatsModal.tsx)
 // =======================================================================================
 //
-// The Statistik modal: date-range/mode controls, three overview modes (Ressourcen/
-// Personen/Wartung), and two drilldowns (one machine, one person).
+// The Statistik modal: date-range controls, the Ressourcen overview (category-tabbed,
+// group-folded, each row a stacked used/maintenance/idle bar) and its machine drilldown, plus
+// the Personen overview/drilldown (reachable only via a preset person, see StatsControls.tsx).
 //
 // Key Principles:
-// - ONE MODAL, FOUR FILES: controls live in `StatsControls.tsx`, the three overview modes
-//   in `StatsOverviews.tsx`, and the two drilldowns in `StatsDrilldown.tsx` — split out
-//   purely to stay under the file-length/function-length budgets; all four are one modal
-//   conceptually, and this file is where they're composed together.
+// - ONE MODAL, FOUR FILES: controls live in `StatsControls.tsx`, the two overview modes in
+//   `StatsOverviews.tsx`, and the two drilldowns in `StatsDrilldown.tsx` — split out purely to
+//   stay under the file-length/function-length budgets; all four are one modal conceptually,
+//   and this file is where they're composed together.
 //
 // =======================================================================================
 
 import { useEffect, useState } from 'react';
+import type { MachineCategory } from '../../../../shared/types.ts';
 import { todayAsIsoDateString } from '../../../../shared/dates.ts';
 import { orderedMachines } from '../grid.ts';
+import { CATEGORIES } from '../../core/machines.ts';
 import {
   computeStats,
   buildResourceRows,
-  buildMaintRows,
   buildPersonRows,
   type Stats,
   type StatsMachineRow,
@@ -28,10 +30,20 @@ import {
 import { toast } from '../toast.ts';
 import { openReactModal, closeReactModal } from '../modal.tsx';
 import { Icon } from './Icon.tsx';
-import { StatsRangeRow, StatsModeRow, StatsFilterRow, type StatsMode } from './StatsControls.tsx';
-import { ResourcesOverview, MaintenanceOverview, PersonsOverview } from './StatsOverviews.tsx';
+import {
+  StatsRangeRow,
+  CategoryTabs,
+  StatsBreadcrumb,
+  StatsFilterRow,
+  type StatsMode,
+} from './StatsControls.tsx';
+import { ResourcesOverview, PersonsOverview } from './StatsOverviews.tsx';
 import { MachineDrilldown, PersonDrilldown } from './StatsDrilldown.tsx';
 import { store } from '../../store-instance.ts';
+
+function categoryLabel(category: MachineCategory): string {
+  return CATEGORIES.find((c) => c.id === category)?.label ?? category;
+}
 
 function computeAgg(from: string, to: string): Stats {
   return computeStats(
@@ -72,11 +84,12 @@ function useStatsRange() {
   };
 }
 
-/** The mode + drilldown selection (which machine/person, within Ressourcen/Personen), plus the
- *  name filter that resets with it. Split out of `useStatsState` purely to stay under the
- *  function-length budget. */
+/** The drilldown selection (which machine/person, within Ressourcen/Personen) plus the name
+ *  filter that resets with it. `mode` is fixed for the modal's lifetime (see
+ *  `StatsControls.tsx`'s `StatsMode` doc) — set once here from `presetPerson`, never changed
+ *  afterward. Split out of `useStatsState` purely to stay under the function-length budget. */
 function useStatsSelection(presetPerson: string | undefined, agg: Stats) {
-  const [mode, setMode] = useState<StatsMode>(presetPerson ? 'p' : 'm');
+  const [mode] = useState<StatsMode>(presetPerson ? 'p' : 'm');
   const [selM, setSelM] = useState<string | null>(null);
   const [selP, setSelP] = useState<string | null>(presetPerson ?? null);
   const [filterQuery, setFilterQuery] = useState('');
@@ -101,12 +114,6 @@ function useStatsSelection(presetPerson: string | undefined, agg: Stats) {
     filterQuery,
     machineRow,
     person,
-    onModeChange: (nextMode: StatsMode) => {
-      setMode(nextMode);
-      setSelM(null);
-      setSelP(null);
-      setFilterQuery('');
-    },
     onFilterChange: setFilterQuery,
     onSelectMachine: setSelM,
     onSelectPerson: setSelP,
@@ -124,17 +131,15 @@ function toggleInSet(set: ReadonlySet<string>, key: string): Set<string> {
   return next;
 }
 
-/** The Ressourcen-mode category show/hide and category/group fold state. Split out of
- *  `useStatsState` purely to stay under the function-length budget. */
+/** The Ressourcen-mode active category tab and group fold state. Split out of `useStatsState`
+ *  purely to stay under the function-length budget. */
 function useCategoryAndFoldState() {
-  const [visibleCategories, setVisibleCategories] = useState<ReadonlySet<string>>(
-    () => new Set(['maschine', 'messtechnik']),
-  );
+  const [activeCategory, setActiveCategory] = useState<MachineCategory>('maschine');
   const [closedKeys, setClosedKeys] = useState<ReadonlySet<string>>(() => new Set());
   return {
-    visibleCategories,
+    activeCategory,
     closedKeys,
-    onToggleCategory: (id: string) => setVisibleCategories((prev) => toggleInSet(prev, id)),
+    onCategoryChange: setActiveCategory,
     onToggleFold: (key: string) => setClosedKeys((prev) => toggleInSet(prev, key)),
   };
 }
@@ -154,7 +159,7 @@ interface StatsBodyProps {
   machineRow: StatsMachineRow | undefined;
   person: StatsPerson | undefined;
   filterQuery: string;
-  visibleCategories: ReadonlySet<string>;
+  activeCategory: MachineCategory;
   closedKeys: ReadonlySet<string>;
   onToggleFold: (key: string) => void;
   onSelectMachine: (machineId: string) => void;
@@ -162,14 +167,14 @@ interface StatsBodyProps {
 }
 
 /** Dispatches to the right drilldown or overview for the current mode/selection. Its own
- *  function so `StatsModal`'s render body isn't a five-way nested ternary. */
+ *  function so `StatsModal`'s render body isn't a multi-way nested ternary. */
 function StatsBody({
   mode,
   agg,
   machineRow,
   person,
   filterQuery,
-  visibleCategories,
+  activeCategory,
   closedKeys,
   onToggleFold,
   onSelectMachine,
@@ -182,19 +187,11 @@ function StatsBody({
   if (mode === 'm') {
     return (
       <ResourcesOverview
-        rows={buildResourceRows(agg.machRows, { filterQuery, visibleCategories, closedKeys })}
+        rows={buildResourceRows(agg.machRows, { filterQuery, activeCategory, closedKeys })}
         totalDays={totalDays}
+        activeCategory={activeCategory}
         onToggleFold={onToggleFold}
         onSelectMachine={onSelectMachine}
-      />
-    );
-  }
-  if (mode === 'w') {
-    return (
-      <MaintenanceOverview
-        rows={buildMaintRows(agg.maint.rows, filterQuery)}
-        totalInstances={agg.maint.slotCount}
-        totalDays={agg.maint.days}
       />
     );
   }
@@ -204,6 +201,26 @@ function StatsBody({
       onSelectPerson={onSelectPerson}
     />
   );
+}
+
+/** The breadcrumb trail's own segments for the current mode/selection — "Statistik" plus
+ *  whichever depth is currently drilled into (user request: always show depth within the
+ *  data). Empty-list/one-segment results render nothing (`StatsBreadcrumb`'s own guard). */
+function breadcrumbSegments(
+  mode: StatsMode,
+  activeCategory: MachineCategory,
+  machineRow: StatsMachineRow | undefined,
+  person: StatsPerson | undefined,
+): string[] {
+  const segments = ['Statistik'];
+  if (mode === 'm') {
+    segments.push(categoryLabel(activeCategory));
+    if (machineRow) segments.push(machineRow.machine.name);
+  } else {
+    segments.push('Personen');
+    if (person) segments.push(person.name);
+  }
+  return segments;
 }
 
 interface StatsModalProps {
@@ -223,11 +240,11 @@ export function StatsModal({ presetPerson }: StatsModalProps) {
         onFromChange={s.onFromChange}
         onToChange={s.onToChange}
       />
-      <StatsModeRow
-        mode={s.mode}
-        onModeChange={s.onModeChange}
-        visibleCategories={s.visibleCategories}
-        onToggleCategory={s.onToggleCategory}
+      {s.mode === 'm' && (
+        <CategoryTabs activeCategory={s.activeCategory} onCategoryChange={s.onCategoryChange} />
+      )}
+      <StatsBreadcrumb
+        segments={breadcrumbSegments(s.mode, s.activeCategory, s.machineRow, s.person)}
       />
       <StatsFilterRow
         filterQuery={s.filterQuery}
@@ -242,7 +259,7 @@ export function StatsModal({ presetPerson }: StatsModalProps) {
           machineRow={s.machineRow}
           person={s.person}
           filterQuery={s.filterQuery}
-          visibleCategories={s.visibleCategories}
+          activeCategory={s.activeCategory}
           closedKeys={s.closedKeys}
           onToggleFold={s.onToggleFold}
           onSelectMachine={s.onSelectMachine}

@@ -2,18 +2,26 @@
 // STATS CONTROLS COMPONENT (web/js/ui/components/StatsControls.tsx)
 // =======================================================================================
 //
-// The Statistik modal's top controls: date range, mode segmented buttons, the category
-// show/hide row (Ressourcen mode only), and the filter input + drilldown back button.
-// Split out of `StatsModal.tsx` purely to stay under the file-length/function-length
-// budgets — conceptually this is one modal.
+// The Statistik modal's top controls: date range, the Ressourcen-mode category tabs, a
+// breadcrumb trail while drilled in, and the filter input + drilldown back button. Split out
+// of `StatsModal.tsx` purely to stay under the file-length/function-length budgets —
+// conceptually this is one modal.
 //
 // =======================================================================================
 
 import type { ChangeEvent } from 'react';
+import type { MachineCategory } from '../../../../shared/types.ts';
 import { CATEGORIES } from '../../core/machines.ts';
 import { Icon } from './Icon.tsx';
 
-export type StatsMode = 'm' | 'p' | 'w';
+/** The modal's overall mode — 'm' (Ressourcen, the only one reachable from the UI itself) or
+ *  'p' (Personen). Personen has no visible entry point of its own (user request, 2026-09): it's
+ *  only reached via a booking's "Statistik" button (`BookingDetailModal.tsx`), which opens
+ *  `openStats(presetPerson)` straight into that person's drilldown; from there, the drilldown's
+ *  own "← Übersicht" back button lands on the Personen overview list. Since the mode has no
+ *  visible switcher any more, it's fixed for the lifetime of one modal instance — set once at
+ *  open, never changed afterward. */
+export type StatsMode = 'm' | 'p';
 
 interface StatsRangeRowProps {
   from: string;
@@ -42,62 +50,45 @@ export function StatsRangeRow({ from, to, onFromChange, onToChange }: StatsRange
   );
 }
 
-interface StatsModeRowProps {
-  mode: StatsMode;
-  onModeChange: (mode: StatsMode) => void;
-  visibleCategories: ReadonlySet<string>;
-  onToggleCategory: (id: string) => void;
+interface CategoryTabsProps {
+  activeCategory: MachineCategory;
+  onCategoryChange: (category: MachineCategory) => void;
 }
 
-/** The Ressourcen/Personen/Wartung segmented buttons, plus (Ressourcen mode only) the
- *  category show/hide row. */
-export function StatsModeRow({
-  mode,
-  onModeChange,
-  visibleCategories,
-  onToggleCategory,
-}: StatsModeRowProps) {
+/** The Ressourcen-mode category tabs — Maschinen / Messtechnik as top-level, single-select
+ *  tabs (user request), replacing both the old Ressourcen/Personen/Wartung primary tab switch
+ *  (Wartung is gone, folded into each row's own stacked bar; Personen has no visible switcher)
+ *  and the old multi-select "show both at once" pill row. Exactly one category is ever active. */
+export function CategoryTabs({ activeCategory, onCategoryChange }: CategoryTabsProps) {
   return (
-    <div className="formrow">
-      <div className="seg">
-        <button className={mode === 'm' ? 'on' : ''} onClick={() => onModeChange('m')}>
-          <Icon name="factory" /> Ressourcen
+    <div className="seg fill" role="tablist" aria-label="Kategorie wählen">
+      {CATEGORIES.map(({ id, label, icon }) => (
+        <button
+          key={id}
+          role="tab"
+          aria-selected={activeCategory === id}
+          className={activeCategory === id ? 'on' : ''}
+          onClick={() => onCategoryChange(id)}
+        >
+          <Icon name={icon} /> {label}
         </button>
-        {
-          // Personen is hidden from manual tab selection for now (user request, 2026-09) —
-          // kept, not deleted: the mode itself, `PersonsOverview`, and `PersonDrilldown` all
-          // still work exactly as before. It's still reachable two ways: a booking's
-          // "Statistik" button (`BookingDetailModal.tsx`) opens `openStats(presetPerson)`
-          // straight into that person's drilldown, and from there the drilldown's own
-          // "← Übersicht" back button lands on this mode's overview list.
-          /*
-        <button className={mode === 'p' ? 'on' : ''} onClick={() => onModeChange('p')}>
-          <Icon name="user" /> Personen
-        </button>
-        */
-        }
-        <button className={mode === 'w' ? 'on' : ''} onClick={() => onModeChange('w')}>
-          <Icon name="bolt" /> Wartung
-        </button>
-      </div>
-      {mode === 'm' && (
-        // Pill tags, not a segmented control: this row is a secondary *filter* (which
-        // categories show at all) sitting under the primary Ressourcen/Wartung tab switch
-        // above — the two need to read as different kinds of control, not two rows of the
-        // same widget (user request: separate "primary tabs" from "secondary filters").
-        <div className="pillrow" role="group" aria-label="Kategorie wählen">
-          {CATEGORIES.map(({ id, label, icon }) => (
-            <button
-              key={id}
-              className={visibleCategories.has(id) ? 'on' : ''}
-              aria-pressed={visibleCategories.has(id)}
-              onClick={() => onToggleCategory(id)}
-            >
-              <Icon name={icon} /> {label}
-            </button>
-          ))}
-        </div>
-      )}
+      ))}
+    </div>
+  );
+}
+
+/** A breadcrumb trail while drilled into a machine or person (user request: "users should
+ *  always know their depth within the data") — shown only once there's actual depth to show;
+ *  the top-level overview has nothing to trail. Sits above the existing "← Übersicht" back
+ *  button rather than replacing it, so that button's own tested behavior stays exactly as is. */
+export function StatsBreadcrumb({ segments }: { segments: readonly string[] }) {
+  // "Statistik" + the category/Personen level alone isn't real depth yet — that's just the
+  // top-level overview, which has nothing worth trailing. Only a genuine drilldown (a third
+  // segment: the machine or person name) earns the breadcrumb.
+  if (segments.length < 3) return null;
+  return (
+    <div className="hint breadcrumb" style={{ margin: '0 0 6px' }}>
+      {segments.join(' / ')}
     </div>
   );
 }

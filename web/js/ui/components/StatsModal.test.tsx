@@ -38,28 +38,47 @@ afterEach(() => {
 });
 
 describe('StatsModal — Ressourcen overview (default)', () => {
-  // What: the default view shows one category header per category, each category's machines,
-  // and a utilisation (workday) metric per machine.
-  // How: opens stats and checks two category headers, both known machine names, and the
-  // "Werktage" (workdays) label all appear.
-  it('shows a category header per category, groups, and each machine with its utilisation', () => {
+  // What: the default view is the "Maschinen" tab, listing only that category's machines with
+  // a utilisation metric — Messtechnik's own machine doesn't show until its tab is picked.
+  // How: opens stats and checks the Maschinen machine, the "Werktage" label, and that the
+  // Messtechnik machine is absent.
+  it("defaults to the Maschinen tab, listing only that category's machines", () => {
     act(() => openStats());
-    expect(document.querySelectorAll('#stOut .cathead')).toHaveLength(2);
     expect(screen.getByText('Fräse')).toBeInTheDocument();
-    expect(screen.getByText('Messgerät')).toBeInTheDocument();
     expect(screen.getByText(/Werktage/)).toBeInTheDocument();
+    expect(screen.queryByText('Messgerät')).not.toBeInTheDocument();
   });
 
-  // What: toggling a category's visibility off removes its machines from the list entirely,
-  // leaving the other category's machines untouched.
-  // How: clicks the Messtechnik toggle and checks its machine disappears while Maschinen's stays.
-  it('hiding a category via the toggle button removes its machines from the list', () => {
+  // What: the category tabs are single-select, top-level tabs (user request), not a
+  // multi-select pill row — exactly one is marked selected at a time, and clicking the other
+  // one swaps which category's machines show entirely.
+  // How: checks the Maschinen tab starts selected, clicks Messtechnik, and checks both the
+  // aria-selected state and the visible machine list swapped.
+  it("switching tabs shows the other category's machines, single-select", () => {
     act(() => openStats());
+    const maschinenTab = screen.getByRole('tab', { name: /Maschinen/ });
+    const messtechnikTab = screen.getByRole('tab', { name: /Messtechnik/ });
+    expect(maschinenTab.getAttribute('aria-selected')).toBe('true');
+    expect(messtechnikTab.getAttribute('aria-selected')).toBe('false');
     act(() => {
-      screen.getByRole('button', { name: /Messtechnik/ }).click();
+      messtechnikTab.click();
     });
-    expect(screen.queryByText('Messgerät')).not.toBeInTheDocument();
-    expect(screen.getByText('Fräse')).toBeInTheDocument();
+    expect(messtechnikTab.getAttribute('aria-selected')).toBe('true');
+    expect(maschinenTab.getAttribute('aria-selected')).toBe('false');
+    expect(screen.getByText('Messgerät')).toBeInTheDocument();
+    expect(screen.queryByText('Fräse')).not.toBeInTheDocument();
+  });
+
+  // What: the overview is wrapped in a category-specific theme class (user request: distinct
+  // color themes per category), switching along with the active tab.
+  // How: checks the theme class for Maschinen at first, then for Messtechnik after switching.
+  it("wraps the overview in the active category's own theme class", () => {
+    act(() => openStats());
+    expect(document.querySelector('#stOut > .stat-theme-maschine')).toBeInTheDocument();
+    act(() => {
+      screen.getByRole('tab', { name: /Messtechnik/ }).click();
+    });
+    expect(document.querySelector('#stOut > .stat-theme-messtechnik')).toBeInTheDocument();
   });
 
   // What: folding a group hides its machine rows but keeps the group's own header visible
@@ -75,55 +94,36 @@ describe('StatsModal — Ressourcen overview (default)', () => {
   });
 
   // What: the filter box narrows the resource list to machines whose name matches the query.
-  // How: types a partial machine name and checks the matching machine stays while the other disappears.
+  // How: types a partial machine name and checks the matching machine stays.
   it('filters the list by machine name', () => {
     act(() => openStats());
     fireEvent.change(screen.getByPlaceholderText('filtern…'), { target: { value: 'Frä' } });
     expect(screen.getByText('Fräse')).toBeInTheDocument();
-    expect(screen.queryByText('Messgerät')).not.toBeInTheDocument();
   });
 
-  // What: the category filter row (Maschinen/Messtechnik) renders as its own "pillrow" style
-  // rather than the primary mode-switch "seg" style, visually separating a secondary filter
-  // from the primary Ressourcen/Wartung tab control above it (user request).
-  // How: opens stats and checks the category row's own class is exactly "pillrow", not "seg".
-  it('renders the category filter as pill tags, distinct from the primary tab control', () => {
-    act(() => openStats());
-    const categoryRow = screen.getByRole('group', { name: 'Kategorie wählen' });
-    expect(categoryRow.className).toBe('pillrow');
-  });
-
-  // What: a machine's utilisation bar is colored by a traffic-light scheme — yellow under
-  // 60%, green 60–85%, red over 85% (user request) — recomputed live as the date range
-  // (and so the percent) changes.
-  // How: books Fräse on Mon/Tue/Wed of a fixed week (3 booked workdays, held constant), then
-  // moves the date filter's "Bis" end through three distinct end dates that shrink/grow the
-  // total-workday denominator — 6, 5, then 3 workdays — giving exactly 50%, 60%, and 100%
-  // utilisation over the same 3 booked days, checking the bar fill's class each time. (Each
-  // step uses a genuinely different date, not a repeat of a prior value — React's controlled
-  // `<input>` skips firing `onChange` again for an unchanged value.)
-  it('colors the machine utilization bar low/mid/high by its percent', () => {
+  // What: each machine's own utilisation bar is a three-segment stacked bar — booked
+  // ("used"), blocked by maintenance, and idle (user request: "a stacked bar chart, e.g. 60%
+  // Used, 10% Maintenance, 30% Idle"), not a single traffic-light-colored bar.
+  // How: books Fräse 3 of 5 workdays and gives it a 1-day maintenance slot on one of the
+  // remaining days, then reads the three segments' own widths.
+  it("shows each machine's utilisation as a stacked used/maintenance/idle bar", () => {
     window.S.data!.bookings.m1 = {
-      '2021-01-04': { name: 'anna' }, // Mon
-      '2021-01-05': { name: 'anna' }, // Tue
-      '2021-01-06': { name: 'anna' }, // Wed — Thu/Fri/next Mon stay unbooked
+      '2021-01-04': { name: 'anna' },
+      '2021-01-05': { name: 'anna' },
+      '2021-01-06': { name: 'anna' },
     };
+    window.S.data!.machines[0]!.maint = [
+      { type: 'wartung', from: '2021-01-07', until: '2021-01-07' },
+    ]; // exactly 1 workday
     act(() => openStats());
-    const [fromInput, toInput] = document.querySelectorAll<HTMLInputElement>(
-      '#modal input[type="date"]',
-    );
-    fireEvent.change(fromInput!, { target: { value: '2021-01-04' } }); // Mon, fixed throughout
-    const setToAndReadBarClass = (to: string): string => {
-      fireEvent.change(toInput!, { target: { value: to } });
-      return screen.getByText('Fräse').closest('.statrow')!.querySelector('.statbar div')!
-        .className;
-    };
-    // Mon(04)–Mon(11): 6 workdays (weekend skipped), 3 booked → 50%.
-    expect(setToAndReadBarClass('2021-01-11')).toBe('util-low');
-    // Mon(04)–Fri(08): 5 workdays, 3 booked → 60%.
-    expect(setToAndReadBarClass('2021-01-08')).toBe('util-mid');
-    // Mon(04)–Wed(06): 3 workdays, all 3 booked → 100%.
-    expect(setToAndReadBarClass('2021-01-06')).toBe('util-high');
+    const fromInput = document.querySelectorAll<HTMLInputElement>('#modal input[type="date"]')[0]!;
+    const toInput = document.querySelectorAll<HTMLInputElement>('#modal input[type="date"]')[1]!;
+    fireEvent.change(fromInput, { target: { value: '2021-01-04' } });
+    fireEvent.change(toInput, { target: { value: '2021-01-08' } }); // Mon-Fri, 5 workdays
+    const bar = screen.getByText('Fräse').closest('.statrow')!.querySelector('.statbar')!;
+    expect((bar.querySelector('.seg-used') as HTMLElement).style.width).toBe('60%'); // 3/5
+    expect((bar.querySelector('.seg-maint') as HTMLElement).style.width).toBe('20%'); // 1/5
+    expect((bar.querySelector('.seg-idle') as HTMLElement).style.width).toBe('20%'); // remainder
   });
 });
 
@@ -145,12 +145,30 @@ describe('StatsModal — Ressourcen drilldown', () => {
     expect(screen.queryByText('Am meisten belegt von', { exact: false })).not.toBeInTheDocument();
     expect(screen.getByText('Fräse')).toBeInTheDocument();
   });
+
+  // What: a breadcrumb trail shows the current depth while drilled into a machine (user
+  // request: "users should always know their depth within the data") — absent at the
+  // top-level overview, where there's no depth to show.
+  // How: checks no breadcrumb at the overview, then drills into a machine and checks the trail
+  // names the category and the machine.
+  it('shows a breadcrumb trail naming the category and machine while drilled in', () => {
+    act(() => openStats());
+    expect(document.querySelector('.breadcrumb')).not.toBeInTheDocument();
+    act(() => {
+      screen.getByText('Fräse').click();
+    });
+    expect(document.querySelector('.breadcrumb')!.textContent).toBe(
+      'Statistik / Maschinen / Fräse',
+    );
+  });
 });
 
 // Personen's own mode-switch button is hidden now (StatsControls.tsx — user request, kept not
-// deleted), so these tests reach it the same two ways production code still can: `openStats`
-// with a preset person (a booking's "Statistik" button), then that drilldown's own "←
-// Übersicht" back button to reach the bare overview list.
+// deleted), so these tests reach it the same way production code still can: `openStats` with a
+// preset person (a booking's "Statistik" button), then that drilldown's own "← Übersicht" back
+// button to reach the bare overview list. There's no user-facing way to switch modes any more
+// (Wartung is gone, folded into the stacked bar; Personen has no visible tab), so mode is fixed
+// for the modal's lifetime — there's nothing left to test there beyond what's covered below.
 describe('StatsModal — Personen mode', () => {
   // What: Personen mode lists every person with at least one booking in range, and clicking
   // a person drills into which machines they used.
@@ -171,55 +189,11 @@ describe('StatsModal — Personen mode', () => {
     expect(screen.getByText('Fräse')).toBeInTheDocument();
   });
 
-  // What: switching modes (e.g. Ressourcen → Wartung) clears any active drilldown and filter
-  // — modes don't share drilldown state. (Originally written against Ressourcen → Personen;
-  // adapted to Wartung since Personen's own tab button is now hidden — `onModeChange` resets
-  // the same way regardless of which mode it switches to, so this still pins the invariant.)
-  it('switching modes resets the filter and any drilldown', () => {
-    act(() => openStats());
-    act(() => {
-      screen.getByText('Fräse').click(); // drill into the machine
-    });
-    act(() => {
-      screen.getByRole('button', { name: /Wartung/ }).click();
-    });
-    expect(screen.queryByText('Am meisten belegt von', { exact: false })).not.toBeInTheDocument();
-    expect(screen.getByText(/Keine Wartungs-\/Ausfallzeiten/)).toBeInTheDocument();
-  });
-});
-
-describe('StatsModal — Wartung mode', () => {
-  // What: with nothing blocked in the current date range, Wartung (maintenance) mode shows an
-  // explanatory empty-state message.
-  // How: switches to Wartung mode (no maintenance seeded) and checks the message appears.
-  it('shows a message when nothing is blocked in range', () => {
-    act(() => openStats());
-    act(() => {
-      screen.getByRole('button', { name: /Wartung/ }).click();
-    });
-    expect(screen.getByText(/Keine Wartungs-\/Ausfallzeiten/)).toBeInTheDocument();
-  });
-
-  // What: Wartung mode shows, per machine, both the count of maintenance instances and the
-  // total blocked-day count in range.
-  // How: gives one machine a 2-day maintenance slot within range, switches to Wartung mode,
-  // and checks the summary paragraph mentions 1 instance and 2 blocked days, with the machine
-  // name shown too.
-  it('shows maintenance instance and blocked-day counts per machine', () => {
-    window.S.data!.machines[0]!.maint = [
-      { type: 'wartung', from: '2021-01-05', until: '2021-01-06' },
-    ];
-    act(() => openStats());
-    act(() => {
-      screen.getByRole('button', { name: /Wartung/ }).click();
-    });
-    // The count and the label sit in separate text nodes (a <b> plus plain text) — read the
-    // paragraph's full textContent rather than matching a single node.
-    const hint = document.querySelector('#stOut p.hint')!.textContent;
-    expect(hint).toContain('1');
-    expect(hint).toMatch(/Wartungs-\/Ausfall-Instanz/);
-    expect(hint).toMatch(/2.*gesperrte Tage/);
-    expect(screen.getByText('Fräse')).toBeInTheDocument();
+  // What: a breadcrumb trail shows "Personen" plus the drilled-into person's name.
+  // How: opens directly into anna's drilldown and checks the trail's text.
+  it('shows a breadcrumb trail naming Personen and the person while drilled in', () => {
+    act(() => openStats('anna'));
+    expect(document.querySelector('.breadcrumb')!.textContent).toBe('Statistik / Personen / anna');
   });
 });
 

@@ -3,19 +3,17 @@
 // =======================================================================================
 //
 // The statistics view model: the pure aggregation kernel built once per date range —
-// per-machine booking counts plus who booked them, a person index, and the
-// maintenance/downtime tally — plus the per-mode row-building/filter/sort logic each
-// overview and drilldown renders from.
+// per-machine booking + blocked-day counts and a person index — plus the row-building/
+// filter/sort logic the Ressourcen overview and both drilldowns render from. Maintenance is
+// folded directly into each machine's own row (a stacked Used/Wartung/Frei bar) rather than
+// living as a separate mode/list — a resource's downtime is a state of that resource, not a
+// bookable category of its own (user request).
 //
 // =======================================================================================
 
 import type { Machine, Bookings, MachineCategory } from '../../../../shared/types.ts';
-import { getWeekdaysInRange, getAllDaysInRange } from '../../../../shared/dates.ts';
-import {
-  getMaintenanceSlots,
-  isMachineBlockedOnDate,
-  getMachineCategory,
-} from '../../core/machines.ts';
+import { getWeekdaysInRange } from '../../../../shared/dates.ts';
+import { isMachineBlockedOnDate, getMachineCategory } from '../../core/machines.ts';
 
 /** One person's day count on a single machine (the per-machine drilldown row). */
 export interface StatsPersonDays {
@@ -28,25 +26,22 @@ export interface StatsPerson {
   days: number;
   machines: Map<string, number>;
 }
-/** A machine's utilisation over the range: booked workdays, percent, and who booked them. */
+/** A machine's utilisation over the range: booked workdays, blocked (maintenance) workdays,
+ *  percent booked, and who booked it. `blockedWorkdayCount` only counts workdays that are
+ *  blocked and NOT also booked — an (invalid, but possible) day that's somehow both counts as
+ *  booked, matching the grid's own "a real booking always wins" priority rule elsewhere. */
 export interface StatsMachineRow {
   machine: Machine;
   bookedWorkdayCount: number;
+  blockedWorkdayCount: number;
   percent: number;
   persons: Map<string, StatsPersonDays>;
 }
-/** A machine's maintenance/downtime over the range: intersecting slots + blocked calendar days. */
-export interface StatsMaintRow {
-  machine: Machine;
-  slotCount: number;
-  days: number;
-}
-/** The full aggregation the stats modal renders from (all four modes share it). */
+/** The full aggregation the stats modal renders from. */
 export interface Stats {
   days: string[];
   machRows: StatsMachineRow[];
   persons: Map<string, StatsPerson>;
-  maint: { rows: StatsMaintRow[]; slotCount: number; days: number };
 }
 
 function aggregateBookings(
@@ -59,10 +54,14 @@ function aggregateBookings(
   for (const machine of machines) {
     const machineBookings = bookings[machine.id] || {};
     let bookedWorkdayCount = 0;
+    let blockedWorkdayCount = 0;
     const personDaysOnThisMachine = new Map<string, StatsPersonDays>();
     for (const date of days) {
       const booking = machineBookings[date];
-      if (!booking || !booking.name) continue;
+      if (!booking || !booking.name) {
+        if (isMachineBlockedOnDate(machine, date)) blockedWorkdayCount++;
+        continue;
+      }
       bookedWorkdayCount++;
       const personKey = booking.name.toLowerCase();
 
@@ -84,6 +83,7 @@ function aggregateBookings(
     machRows.push({
       machine,
       bookedWorkdayCount,
+      blockedWorkdayCount,
       percent: days.length ? Math.round((bookedWorkdayCount * 100) / days.length) : 0,
       persons: personDaysOnThisMachine,
     });
@@ -91,36 +91,10 @@ function aggregateBookings(
   return { machRows, persons };
 }
 
-function aggregateMaint(
-  machines: readonly Machine[],
-  from: string,
-  to: string,
-  calDays: string[],
-): Stats['maint'] {
-  const rows: StatsMaintRow[] = [];
-  let totalSlotCount = 0;
-  let totalBlockedDayCount = 0;
-  for (const machine of machines) {
-    const slotsInRange = getMaintenanceSlots(machine).filter(
-      (slot) => (!slot.until || slot.until >= from) && (!slot.from || slot.from <= to),
-    );
-    let blockedDayCount = 0;
-    for (const date of calDays) {
-      if (isMachineBlockedOnDate(machine, date)) blockedDayCount++;
-    }
-    if (slotsInRange.length || blockedDayCount) {
-      rows.push({ machine, slotCount: slotsInRange.length, days: blockedDayCount });
-      totalSlotCount += slotsInRange.length;
-      totalBlockedDayCount += blockedDayCount;
-    }
-  }
-  return { rows, slotCount: totalSlotCount, days: totalBlockedDayCount };
-}
-
 /**
- * Aggregates bookings + maintenance over the (already-validated) `from`..`to` range.
- * `days` counts only weekdays (the utilisation denominator); `maint.days` counts blocked
- * *calendar* days instead — maintenance can span a weekend even though bookings never do.
+ * Aggregates bookings over the (already-validated) `from`..`to` range. `days` counts only
+ * weekdays — the shared denominator for both the booked and blocked-by-maintenance shares of
+ * each machine's stacked utilisation bar.
  */
 export function computeStats(
   machines: readonly Machine[],
@@ -129,30 +103,27 @@ export function computeStats(
   to: string,
 ): Stats {
   const days = getWeekdaysInRange(from, to);
-  const calDays = getAllDaysInRange(from, to);
   const { machRows, persons } = aggregateBookings(machines, bookings, days);
-  const maint = aggregateMaint(machines, from, to, calDays);
-  return { days, machRows, persons, maint };
+  return { days, machRows, persons };
 }
 
-// ---- The "Ressourcen" mode's category/group folding ----------------------------------
+// ---- The "Ressourcen" mode's group folding ----------------------------------
 
-/** One row of the Ressourcen-mode list: a category header, a group header, or one machine's
- *  utilisation row. Mirrors `ui/grid.ts`'s `GridRow` — the same "emit a flat list of header/
- *  data rows, let the renderer just map over it" shape, for the same reason: the fold state
- *  machine below is the trickiest part of this view to port faithfully, so it gets its own
- *  pure function and its own tests instead of being re-derived inline in JSX. */
+/** One row of the Ressourcen-mode list: a group header or one machine's utilisation row.
+ *  Mirrors `ui/grid.ts`'s `GridRow` — the same "emit a flat list of header/data rows, let the
+ *  renderer just map over it" shape. No category level here: the category is chosen by the
+ *  modal's own top-level tabs (`StatsControls.tsx`) now, not filtered/folded per row — only
+ *  one category's machines are ever passed in to begin with. */
 export type ResourceRow =
-  | { kind: 'category'; category: MachineCategory; collapsed: boolean; averagePercent: number }
   | { kind: 'group'; group: string; collapsed: boolean; averagePercent: number }
   | { kind: 'machine'; row: StatsMachineRow };
 
 export interface BuildResourceRowsOptions {
   /** Case-insensitive substring filter on the machine name (the "filtern…" box). */
   filterQuery: string;
-  /** Categories the show/hide segmented buttons currently have on. */
-  visibleCategories: ReadonlySet<string>;
-  /** Folded category/group keys, as `c:<category>` or `g:<group>`. */
+  /** Which category's machines to include — the modal's own top-level tab selection. */
+  activeCategory: MachineCategory;
+  /** Folded group keys, as `g:<group>`. */
   closedKeys: ReadonlySet<string>;
 }
 
@@ -162,135 +133,63 @@ function average(values: readonly number[]): number {
     : 0;
 }
 
-interface ResourceRowBuckets {
-  categoriesInOrder: MachineCategory[];
-  groupsByCategory: Map<MachineCategory, string[]>;
-  rowsByGroupInCategory: Map<string, StatsMachineRow[]>;
-}
-
 /**
- * Buckets the matching rows by category, then by group, preserving first-seen order.
- *
- * Bucketing on category+group together (not the bare group name alone) matters: a group
- * name shared by a "Maschinen" resource and a "Messtechnik" one would otherwise silently
- * merge their rows into whichever category's bucket happened to be created first, leaving
- * the other category's group list empty. The fold state in `buildResourceRows` still keys
- * on the bare group name, though — a real but obscure edge case (two categories sharing a
- * group name, both expanded/collapsed together) that's never come up in practice.
+ * Buckets the active category's matching rows by group, preserving first-seen order.
  */
 function bucketResourceRows(
   machRows: readonly StatsMachineRow[],
   filterQuery: string,
-  visibleCategories: ReadonlySet<string>,
-): ResourceRowBuckets {
+  activeCategory: MachineCategory,
+): { groupsInOrder: string[]; rowsByGroup: Map<string, StatsMachineRow[]> } {
   const lowercaseQuery = filterQuery.trim().toLowerCase();
-  const categoriesInOrder: MachineCategory[] = [];
-  const groupsByCategory = new Map<MachineCategory, string[]>();
-  const rowsByGroupInCategory = new Map<string, StatsMachineRow[]>();
+  const groupsInOrder: string[] = [];
+  const rowsByGroup = new Map<string, StatsMachineRow[]>();
   for (const row of machRows) {
     if (lowercaseQuery && !row.machine.name.toLowerCase().includes(lowercaseQuery)) continue;
-    const category = getMachineCategory(row.machine);
-    if (!visibleCategories.has(category)) continue;
-    if (!groupsByCategory.has(category)) {
-      groupsByCategory.set(category, []);
-      categoriesInOrder.push(category);
-    }
+    if (getMachineCategory(row.machine) !== activeCategory) continue;
     const group = row.machine.group;
-    const bucketKey = `${category}::${group}`;
-    if (!rowsByGroupInCategory.has(bucketKey)) {
-      rowsByGroupInCategory.set(bucketKey, []);
-      groupsByCategory.get(category)!.push(group);
+    if (!rowsByGroup.has(group)) {
+      rowsByGroup.set(group, []);
+      groupsInOrder.push(group);
     }
-    rowsByGroupInCategory.get(bucketKey)!.push(row);
+    rowsByGroup.get(group)!.push(row);
   }
-  return { categoriesInOrder, groupsByCategory, rowsByGroupInCategory };
+  return { groupsInOrder, rowsByGroup };
 }
 
 /**
- * Builds the Ressourcen-mode list, grouped by category then by group, each level foldable
- * and each carrying its own average utilisation. A category header only appears when more
- * than one category actually has matching rows (a single-category result skips straight to
- * its groups); a category's average covers every row in it regardless of which of its
- * groups are folded, but folding the category itself hides its groups and their rows entirely.
+ * Builds the Ressourcen-mode list for the active category, grouped, each group foldable and
+ * carrying its own average utilisation. Folding a group hides its machine rows; the group
+ * header itself always stays visible so it can be unfolded again.
  */
 export function buildResourceRows(
   machRows: readonly StatsMachineRow[],
   options: BuildResourceRowsOptions,
 ): ResourceRow[] {
-  const { filterQuery, visibleCategories, closedKeys } = options;
-  const { categoriesInOrder, groupsByCategory, rowsByGroupInCategory } = bucketResourceRows(
-    machRows,
-    filterQuery,
-    visibleCategories,
-  );
+  const { filterQuery, activeCategory, closedKeys } = options;
+  const { groupsInOrder, rowsByGroup } = bucketResourceRows(machRows, filterQuery, activeCategory);
 
-  const showCategoryHeaders = categoriesInOrder.length > 1;
   const rows: ResourceRow[] = [];
-  for (const category of categoriesInOrder) {
-    const groupsInCategory = groupsByCategory.get(category)!;
-    const allRowsInCategory = groupsInCategory.flatMap((group) =>
-      rowsByGroupInCategory.get(`${category}::${group}`)!,
-    );
-    // Only honor a "closed" fold when its header actually renders — with `showCategoryHeaders`
-    // false (down to one visible category), there's no header left to click to re-expand it,
-    // so a stale collapsed key from before would hide the whole list with no way back (a real
-    // bug: collapse "Maschinen", toggle "Messtechnik" off, and the "Maschinen" list vanished
-    // entirely). The state itself is left untouched — closedKeys isn't reset here — so the
-    // collapse resumes correctly once a second category becomes visible again.
-    const categoryClosed = showCategoryHeaders && closedKeys.has(`c:${category}`);
-    if (showCategoryHeaders) {
-      rows.push({
-        kind: 'category',
-        category,
-        collapsed: categoryClosed,
-        averagePercent: average(allRowsInCategory.map((row) => row.percent)),
-      });
-    }
-    if (categoryClosed) continue; // hides every group (and row) under this category
+  for (const group of groupsInOrder) {
+    const rowsInGroup = rowsByGroup
+      .get(group)!
+      .slice()
+      .sort((a, b) => b.percent - a.percent || a.machine.name.localeCompare(b.machine.name, 'de'));
+    const groupClosed = closedKeys.has(`g:${group}`);
+    rows.push({
+      kind: 'group',
+      group,
+      collapsed: groupClosed,
+      averagePercent: average(rowsInGroup.map((row) => row.percent)),
+    });
+    if (groupClosed) continue; // the group header stays; only its machine rows hide
 
-    for (const group of groupsInCategory) {
-      const rowsInGroup = rowsByGroupInCategory
-        .get(`${category}::${group}`)!
-        .slice()
-        .sort(
-          (a, b) => b.percent - a.percent || a.machine.name.localeCompare(b.machine.name, 'de'),
-        );
-      const groupClosed = closedKeys.has(`g:${group}`);
-      rows.push({
-        kind: 'group',
-        group,
-        collapsed: groupClosed,
-        averagePercent: average(rowsInGroup.map((row) => row.percent)),
-      });
-      if (groupClosed) continue; // the group header stays; only its machine rows hide
-
-      for (const row of rowsInGroup) rows.push({ kind: 'machine', row });
-    }
+    for (const row of rowsInGroup) rows.push({ kind: 'machine', row });
   }
   return rows;
 }
 
-// ---- The "Wartung" and "Personen" overview modes' filter + sort ---------------------
-
-/**
- * Builds the Wartung-mode list: maintenance rows matching `filterQuery` (machine name,
- * case-insensitive substring), most blocked-days first, then most instances, then German
- * name order.
- */
-export function buildMaintRows(
-  maintRows: readonly StatsMaintRow[],
-  filterQuery: string,
-): StatsMaintRow[] {
-  const lowercaseQuery = filterQuery.trim().toLowerCase();
-  return maintRows
-    .filter((row) => !lowercaseQuery || row.machine.name.toLowerCase().includes(lowercaseQuery))
-    .sort(
-      (a, b) =>
-        b.days - a.days ||
-        b.slotCount - a.slotCount ||
-        a.machine.name.localeCompare(b.machine.name, 'de'),
-    );
-}
+// ---- The "Personen" overview mode's filter + sort ---------------------
 
 /**
  * Builds the Personen-mode overview list: people matching `filterQuery` (name,

@@ -1,14 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { Machine, Bookings } from '../../../../shared/types.ts';
-import {
-  computeStats,
-  buildResourceRows,
-  buildMaintRows,
-  buildPersonRows,
-  type StatsMachineRow,
-  type StatsMaintRow,
-  type StatsPerson,
-} from './stats.ts';
+import { computeStats, buildResourceRows, buildPersonRows, type StatsMachineRow } from './stats.ts';
 
 const bk = (name: string) => ({ name });
 // m1: a machine with a 2-day maintenance slot; m2: a measurement device, no maintenance.
@@ -21,7 +13,7 @@ const m1: Machine = {
 const m2: Machine = { id: 'm2', name: 'M2', group: 'Labor', cat: 'messtechnik' };
 
 describe('computeStats', () => {
-  // Range 2021-01-04 Mon … 2021-01-08 Fri: 5 weekdays, 5 calendar days.
+  // Range 2021-01-04 Mon … 2021-01-08 Fri: 5 weekdays.
   const bookings: Bookings = {
     m1: { '2021-01-04': bk('anna'), '2021-01-05': bk('Anna'), '2021-01-06': bk('bob') },
     m2: { '2021-01-04': bk('anna') },
@@ -71,15 +63,39 @@ describe('computeStats', () => {
     expect(Object.fromEntries(bob.machines)).toEqual({ M1: 1 });
   });
 
-  // What: maintenance tallies count both slot instances (slotCount) and the actual number of
-  // CALENDAR days blocked (not weekdays — maintenance can span a weekend), and a machine with
-  // no maintenance and no blocked days is omitted from the maintenance rows entirely.
-  // How: gives m1 a 2-day slot within range and checks the aggregate slotCount/days plus that
-  // only m1 (not the unaffected m2) appears in maint.rows.
-  it('tallies maintenance: intersecting slots (slotCount) and blocked calendar days', () => {
-    expect(stats.maint.slotCount).toBe(1);
-    expect(stats.maint.days).toBe(2); // 2021-01-05 and -06 blocked
-    expect(stats.maint.rows).toEqual([{ machine: m1, slotCount: 1, days: 2 }]); // m2 omitted (no maint, no block)
+  // What: a machine's blocked-workday count (its maintenance share of the stacked utilisation
+  // bar) only counts WORKDAYS that are blocked and not also booked — maintenance folded
+  // directly into each row instead of a separate Wartung mode (user request).
+  // How: computes stats with m1's maintenance days left unbooked (unlike the shared `stats`
+  // fixture above, where m1 happens to be booked on both of them) and checks its
+  // blockedWorkdayCount; m2 (no maintenance) stays at 0.
+  it("tallies each row's own blocked (maintenance) workday count", () => {
+    const s = computeStats(
+      [m1, m2],
+      { m1: { '2021-01-04': bk('anna') } },
+      '2021-01-04',
+      '2021-01-08',
+    );
+    const r1 = s.machRows.find((r) => r.machine.id === 'm1')!;
+    expect(r1.blockedWorkdayCount).toBe(2); // 2021-01-05 and -06, neither booked here
+    const r2 = s.machRows.find((r) => r.machine.id === 'm2')!;
+    expect(r2.blockedWorkdayCount).toBe(0);
+  });
+
+  // What: a blocked day that's ALSO booked counts as booked, not blocked — matching the grid's
+  // own "a real booking always wins" priority rule, and keeping the stacked bar's two shares
+  // from double-counting the same day.
+  // How: books m1 on both maintenance days too, and checks blockedWorkdayCount is 0 (both fully
+  // absorbed into bookedWorkdayCount instead).
+  it('counts a day that is both booked and blocked as booked, not blocked', () => {
+    const s = computeStats(
+      [m1],
+      { m1: { '2021-01-05': bk('anna'), '2021-01-06': bk('anna') } },
+      '2021-01-04',
+      '2021-01-08',
+    );
+    expect(s.machRows[0]!.bookedWorkdayCount).toBe(2);
+    expect(s.machRows[0]!.blockedWorkdayCount).toBe(0);
   });
 
   // What: a range that's entirely weekend has zero weekdays to divide by, so utilisation
@@ -94,32 +110,30 @@ describe('computeStats', () => {
   });
 
   // What: with no machines at all, every part of the result is empty.
-  // How: computes stats with an empty machine list and checks machRows/persons/maint.rows all empty.
+  // How: computes stats with an empty machine list and checks machRows/persons are both empty.
   it('is empty when there are no machines', () => {
     const s = computeStats([], {}, '2021-01-04', '2021-01-08');
     expect(s.machRows).toEqual([]);
     expect(s.persons.size).toBe(0);
-    expect(s.maint.rows).toEqual([]);
   });
 
   // What: a machine with no key at all in the bookings map (not even an empty bucket) is
   // handled gracefully — treated the same as zero bookings, not an error.
   // How: computes stats for m2 against a completely empty bookings object and checks its
-  // count/persons and the overall persons/maint results are all correctly empty.
+  // count/persons and the overall persons result are all correctly empty.
   it('handles a machine with no bookings entry at all', () => {
-    // m2 has no key in `bookings` → the `|| {}` fallback; no maint either → omitted from maint rows.
+    // m2 has no key in `bookings` → the `|| {}` fallback.
     const s = computeStats([m2], {}, '2021-01-04', '2021-01-08');
     expect(s.machRows[0]!.bookedWorkdayCount).toBe(0);
     expect(s.machRows[0]!.persons.size).toBe(0);
     expect(s.persons.size).toBe(0);
-    expect(s.maint.rows).toEqual([]);
   });
 });
 
 describe('buildResourceRows', () => {
   const noFilter = {
     filterQuery: '',
-    visibleCategories: new Set(['maschine', 'messtechnik']),
+    activeCategory: 'maschine' as const,
     closedKeys: new Set<string>(),
   };
 
@@ -133,96 +147,60 @@ describe('buildResourceRows', () => {
     return {
       machine: { id: 'm1', name: 'M1', group: 'Halle', ...machineOverrides },
       bookedWorkdayCount,
+      blockedWorkdayCount: 0,
       percent,
       persons: new Map(),
     };
   };
 
-  // What: with only one category actually present in the matching rows, no category header
-  // is shown at all — the list goes straight to group/machine rows (a header would be redundant).
-  // How: builds rows from a single 'maschine' machine and checks the row kinds are just
-  // ['group', 'machine'], no 'category'.
-  it('skips the category header when only one category has matching rows', () => {
-    const rows = buildResourceRows([row({ id: 'm1' })], noFilter);
-    expect(rows.map((r) => r.kind)).toEqual(['group', 'machine']);
-  });
-
-  // What: once matching rows span more than one category, each category gets its own header.
-  // How: builds rows from one machine per category and checks the row kinds show a
-  // 'category' header before each category's own group/machine rows.
-  it('shows a category header per category once more than one is present', () => {
+  // What: only the active category's machines appear — there's no category header/level at
+  // all any more (the modal's own top-level tabs pick the category now, user request).
+  // How: builds rows from one 'maschine' and one 'messtechnik' machine, active category
+  // 'maschine', and checks only the maschine machine's group/row show up.
+  it("includes only the active category's machines, with no category header level", () => {
     const rows = buildResourceRows(
-      [row({ id: 'm1' }), row({ id: 'm2', cat: 'messtechnik' })],
+      [row({ id: 'm1', name: 'Fräse' }), row({ id: 'm2', name: 'Messgerät', cat: 'messtechnik' })],
       noFilter,
     );
-    expect(rows.map((r) => r.kind)).toEqual([
-      'category',
-      'group',
-      'machine',
-      'category',
-      'group',
-      'machine',
-    ]);
+    expect(rows.map((r) => r.kind)).toEqual(['group', 'machine']);
+    expect(rows.some((r) => r.kind === 'machine' && r.row.machine.name === 'Messgerät')).toBe(
+      false,
+    );
   });
 
-  // What: a category's average utilisation is computed over EVERY row in it, regardless of
-  // whether some of its groups are currently folded (hidden from view) — folding is a display
-  // concern, not something that should skew the average.
-  // How: puts two 0%-utilisation machines in a folded group under 'messtechnik' and checks
-  // the category's average still correctly reflects both of them (0%), while confirming the
-  // folded group's own header is marked collapsed and its machine rows are actually hidden.
-  it("a category's average covers every row in it, even ones in a folded group", () => {
+  // What: switching the active category swaps which machines show, independently of anything
+  // else (group fold state, filter query).
+  // How: builds the same two-machine list once per category and checks each only shows its
+  // own machine.
+  it('switches which machines show when the active category changes', () => {
+    const machines = [
+      row({ id: 'm1', name: 'Fräse' }),
+      row({ id: 'm2', name: 'Messgerät', cat: 'messtechnik' }),
+    ];
+    const maschineRows = buildResourceRows(machines, { ...noFilter, activeCategory: 'maschine' });
+    expect(maschineRows.filter((r) => r.kind === 'machine').map((r) => r.row.machine.name)).toEqual(
+      ['Fräse'],
+    );
+    const messtechnikRows = buildResourceRows(machines, {
+      ...noFilter,
+      activeCategory: 'messtechnik',
+    });
+    expect(
+      messtechnikRows.filter((r) => r.kind === 'machine').map((r) => r.row.machine.name),
+    ).toEqual(['Messgerät']);
+  });
+
+  // What: folding a group hides its machine rows but keeps the group header itself visible (so
+  // it can be unfolded again), and a group's average utilisation covers every row in it
+  // regardless of whether it's currently folded.
+  // How: folds a two-machine group and checks both effects.
+  it('folding a group hides its rows but keeps the header, average unaffected', () => {
     const rows = buildResourceRows(
-      [
-        row({ id: 'm1', group: 'A', percent: 100 }),
-        row({ id: 'm2', group: 'B', percent: 0, cat: 'messtechnik' }),
-        row({ id: 'm3', group: 'B', percent: 0, cat: 'messtechnik' }),
-      ],
-      { ...noFilter, closedKeys: new Set(['g:B']) },
+      [row({ id: 'm1', group: 'A', percent: 100 }), row({ id: 'm2', group: 'A', percent: 0 })],
+      { ...noFilter, closedKeys: new Set(['g:A']) },
     );
-    const messtechnikCategory = rows.find(
-      (r) => r.kind === 'category' && r.category === 'messtechnik',
-    );
-    expect(messtechnikCategory).toMatchObject({ averagePercent: 0 }); // both B rows count, despite being folded
-    const groupB = rows.find((r) => r.kind === 'group' && r.group === 'B');
-    expect(groupB).toMatchObject({ collapsed: true });
-    expect(rows.filter((r) => r.kind === 'machine' && r.row.machine.group === 'B')).toEqual([]); // rows hidden
-  });
-
-  // What: folding a category collapses its own header AND hides every group header and
-  // machine row beneath it — not just the category row itself staying visually collapsed.
-  // How: folds the 'maschine' category (with a 'messtechnik' category also present) and
-  // checks the row kinds show two category headers but only the OTHER category's group/machine rows.
-  it('folding a category hides its group headers and rows too, not just the category', () => {
-    const rows = buildResourceRows([row({ id: 'm1' }), row({ id: 'm2', cat: 'messtechnik' })], {
-      ...noFilter,
-      closedKeys: new Set(['c:maschine']),
-    });
-    expect(rows.map((r) => r.kind)).toEqual(['category', 'category', 'group', 'machine']);
-  });
-
-  // What: a category's stale "collapsed" fold state must not hide its rows once it becomes
-  // the only visible category — with just one category, no header renders at all (see "skips
-  // the category header..." above), so honoring a leftover closed key would make the whole
-  // list disappear with no way back. Real bug: collapsing "Maschinen" via its header, then
-  // toggling the "Messtechnik" chip off, used to leave the "Maschinen" list gone entirely
-  // until Messtechnik was toggled back on and its header clicked again to re-expand it.
-  // How: folds 'maschine' with both categories visible (its header renders, collapsed) —
-  // confirms the existing behavior above still holds — then rebuilds with only 'maschine'
-  // visible and the same stale closed key, and checks its rows show despite it.
-  it('ignores a stale collapsed fold once its category becomes the only one visible', () => {
-    const bothVisible = buildResourceRows(
-      [row({ id: 'm1' }), row({ id: 'm2', cat: 'messtechnik' })],
-      { ...noFilter, closedKeys: new Set(['c:maschine']) },
-    );
-    expect(bothVisible.map((r) => r.kind)).toEqual(['category', 'category', 'group', 'machine']);
-
-    const onlyMaschineVisible = buildResourceRows([row({ id: 'm1' })], {
-      ...noFilter,
-      visibleCategories: new Set(['maschine']),
-      closedKeys: new Set(['c:maschine']), // same stale fold key as above
-    });
-    expect(onlyMaschineVisible.map((r) => r.kind)).toEqual(['group', 'machine']); // no header, rows visible
+    expect(rows.map((r) => r.kind)).toEqual(['group']); // machine rows hidden
+    expect(rows[0]).toMatchObject({ collapsed: true, averagePercent: 50 }); // both rows still count
   });
 
   // What: within a group, machines are ranked by utilisation percent descending (most-used
@@ -238,74 +216,28 @@ describe('buildResourceRows', () => {
     expect(names).toEqual(['Alpha', 'Beta']);
   });
 
-  // What: a name filter narrows the machine rows to matches, and a category toggled off in
-  // visibleCategories excludes its rows entirely (an empty result when that's the only row).
-  // How: filters two machines down to one by name match, then separately checks a
-  // messtechnik-only machine list with only 'maschine' marked visible yields nothing at all.
-  it('filters by machine name and by which categories are toggled visible', () => {
+  // What: a name filter narrows the machine rows to matches, case-insensitively.
+  // How: filters two machines down to one by a lowercase substring of its name.
+  it('filters by machine name, case-insensitively', () => {
     const rows = buildResourceRows(
       [row({ id: 'm1', name: 'Fräse' }), row({ id: 'm2', name: 'Presse' })],
-      {
-        ...noFilter,
-        filterQuery: 'frä',
-      },
+      { ...noFilter, filterQuery: 'frä' },
     );
     expect(rows.filter((r) => r.kind === 'machine')).toHaveLength(1);
-
-    const hiddenCategory = buildResourceRows([row({ id: 'm1', cat: 'messtechnik' })], {
-      ...noFilter,
-      visibleCategories: new Set(['maschine']),
-    });
-    expect(hiddenCategory).toEqual([]);
-  });
-});
-
-describe('buildMaintRows', () => {
-  // `blockedDays`/`instances` (not `days`/`slotCount`) to avoid colliding with `Machine`'s own
-  // `days` field (the weekday-availability mask) when intersected below.
-  const maintRow = (
-    overrides: Partial<StatsMaintRow['machine']> & {
-      instances?: number;
-      blockedDays?: number;
-    } = {},
-  ): StatsMaintRow => {
-    const { instances = 0, blockedDays = 0, ...machineOverrides } = overrides;
-    return {
-      machine: { id: 'm1', name: 'M1', group: 'Halle', ...machineOverrides },
-      slotCount: instances,
-      days: blockedDays,
-    };
-  };
-
-  // What: maintenance rows sort primarily by blocked-day count descending, then by instance
-  // count descending as a tiebreak, then German name order as the final tiebreak.
-  // How: builds three rows where two tie on blocked-days (broken by instance count) and
-  // checks the resulting name order matches that three-level sort.
-  it('sorts by blocked days descending, then instance count, then German name order', () => {
-    const rows = buildMaintRows(
-      [
-        maintRow({ id: 'a', name: 'Beta', blockedDays: 2, instances: 1 }),
-        maintRow({ id: 'b', name: 'Alpha', blockedDays: 5, instances: 1 }),
-        maintRow({ id: 'c', name: 'Gamma', blockedDays: 2, instances: 3 }),
-      ],
-      '',
-    );
-    expect(rows.map((r) => r.machine.name)).toEqual(['Alpha', 'Gamma', 'Beta']);
   });
 
-  // What: the maintenance list's own name filter matches case-insensitively.
-  // How: filters a differently-cased query against two machines and checks only the matching one remains.
-  it('filters by machine name, case-insensitively', () => {
-    const rows = buildMaintRows(
-      [maintRow({ id: 'a', name: 'Fräse' }), maintRow({ id: 'b', name: 'Presse' })],
-      'FRÄ',
-    );
-    expect(rows.map((r) => r.machine.name)).toEqual(['Fräse']);
+  // What: with nothing matching the active category at all, the result is simply empty — no
+  // stray group headers.
+  // How: builds rows from a single messtechnik machine with 'maschine' active and checks the
+  // result is empty.
+  it('is empty when nothing matches the active category', () => {
+    const rows = buildResourceRows([row({ id: 'm1', cat: 'messtechnik' })], noFilter);
+    expect(rows).toEqual([]);
   });
 });
 
 describe('buildPersonRows', () => {
-  const person = (name: string, days: number): StatsPerson => ({ name, days, machines: new Map() });
+  const person = (name: string, days: number) => ({ name, days, machines: new Map() });
 
   // What: the Personen-mode overview sorts by booked days descending, with German name order
   // as the tiebreak for equal day counts.
