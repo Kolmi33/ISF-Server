@@ -59,6 +59,8 @@ import { AssistantChecklist } from './AssistantChecklist.tsx';
 import { AssistantTree } from './AssistantTree.tsx';
 import { AssistantResults } from './AssistantResults.tsx';
 import { Icon } from './Icon.tsx';
+import { Button } from './ui/button.tsx';
+import { Input } from './ui/input.tsx';
 import { store } from '../../store-instance.ts';
 import { machById } from '../machine-lookup.ts';
 
@@ -228,13 +230,13 @@ function AssistantParametersCard({
       <div className="assist-card-title">Buchungsparameter</div>
       <div className="formrow">
         <label>Suchen von</label>
-        <input type="date" value={from} onChange={(event) => onFromChange(event.target.value)} />
+        <Input type="date" value={from} onChange={(event) => onFromChange(event.target.value)} />
         <label style={{ minWidth: 'auto' }}>bis</label>
-        <input type="date" value={to} onChange={(event) => onToChange(event.target.value)} />
+        <Input type="date" value={to} onChange={(event) => onToChange(event.target.value)} />
       </div>
       <div className="formrow">
         <label>Mind. Tage am Stück</label>
-        <input
+        <Input
           type="number"
           value={minDays}
           min={1}
@@ -281,12 +283,12 @@ function AssistantSelectedDevicesCard({
         onRemove={assistant.onRemove}
       />
       <div className="assist-actions">
-        <button className="btn" onClick={closeReactModal}>
+        <Button variant="ghost" onClick={closeReactModal}>
           Abbrechen
-        </button>
-        <button className="btn primary" onClick={onSearch}>
+        </Button>
+        <Button variant="primary" onClick={onSearch}>
           Freie Termine suchen
-        </button>
+        </Button>
       </div>
     </div>
   );

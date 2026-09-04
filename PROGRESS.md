@@ -5,8 +5,10 @@ truth for *where we are* and *what's next*. Update it whenever an item lands or 
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)
 
 _Last updated: 2026-09-04 — **Phase 14 (Tailwind CSS + shadcn/ui-pattern components, piloted on
-the Booking Assistant) IN PROGRESS** — 14.1 (tooling foundation + the ARCHITECTURE §19
-guardrail change) landed; 14.2/14.3 next, full detail in the Phase 14 section below._
+the Booking Assistant) — 14.1–14.3 landed, phase-boundary halt for review** — tooling
+foundation + the ARCHITECTURE §19 guardrail change, then the `Button`/`Input` primitives
+applied to the Assistant's buttons/text-date-number fields; `npm run verify` green (1003
+tests / 71 files) throughout, full detail in the Phase 14 section below._
 
 _Previously: 2026-09-03 — **Phase 13 (second user-requested feature/UX batch, post-deploy
 feedback) COMPLETE** — 3 commits, full detail in the Phase 13 section below. `npm run verify`
@@ -758,15 +760,28 @@ importers) — out of scope for an Assistant-only pilot.
   (CLAUDE.md's guardrail line updated to match). No path alias added: shadcn's usual `@/`-style
   generated imports get hand-adjusted to this repo's actual convention (relative, explicit
   `.ts`/`.tsx` extensions) as each primitive lands, keeping one import style app-wide.
-- [ ] 14.2 `web/js/ui/components/ui/button.tsx` — a shadcn Button **trimmed to only the
-  variants the Assistant actually uses** (no `asChild`/Radix Slot — nothing here needs it),
-  applied to the Assistant's buttons (Abbrechen/Freie Termine suchen/pin/Buchen…/dissolve/
-  remove/stepper ±), preserving exact accessible names (tests query by role+name, not `.btn`
-  class — verified safe by the exploration pass).
-- [ ] 14.3 `web/js/ui/components/ui/input.tsx` — a thin native-`<input>` wrapper (no Radix),
+- [x] 14.2 `web/js/ui/components/ui/button.tsx` — a shadcn Button trimmed to the three
+  variants actually used (`default`/`primary`/`ghost` — not the originally-sketched
+  `default`/`primary` only: the Assistant's "Abbrechen" button relied on a scoped app.css
+  override, `.assist-actions .btn:not(.primary)`, that made it transparent/borderless; since
+  it no longer carries the literal `.btn` class that override was keyed on, a `ghost` variant
+  conserves that look explicitly instead of silently losing it) × `default`/`small` sizes, no
+  `asChild`/Radix Slot. Applied to the Assistant's four `.btn`-classed buttons (Abbrechen,
+  Freie Termine suchen, pin, Buchen…), preserving exact accessible names (tests query by
+  role+name, not `.btn` class — verified safe by the exploration pass). The plan's parenthetical
+  about also converting `.rm`/`.asstep` (dissolve/remove/stepper) was **not** followed — those
+  never carried the `.btn` class to begin with (they're small bespoke icon/stepper controls,
+  a different shape than "Button"), so they're out of scope here, not silently dropped.
+- [x] 14.3 `web/js/ui/components/ui/input.tsx` — a thin native-`<input>` wrapper (no Radix),
   applied to the date-range/min-days/search/`.asNeed`/`.asDays` fields, passing the existing
   `.asNeed`/`.asDays` classes through via `cn()` so the test file's direct `.value` reads keep
-  working unchanged.
+  working unchanged. Landed in the same commit as 14.2 (both ended up touching the same four
+  Assistant files once actually implemented — not usefully splittable, same rationale Phase 13
+  used for its own shared-file commits).
+  Verified: `npm run verify` green (1003 tests, 71 files); a throwaway `docker build` +
+  Playwright screenshot of the real Assistant modal (light AND dark theme, real seeded data,
+  zero console errors) confirmed the converted buttons/inputs render visually identical to the
+  pre-Tailwind app.css styling.
 - **Phase-boundary halt after 14.3** (per CLAUDE.md's per-phase cadence): report back before
   going further. 14.1–14.3 prove the pattern end-to-end using only
   `class-variance-authority`/`clsx`/`tailwind-merge` — no Radix package needed yet.

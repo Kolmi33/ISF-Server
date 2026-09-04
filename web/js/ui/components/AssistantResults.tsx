@@ -30,6 +30,8 @@ import { isDarkTheme } from '../theme.ts';
 import { collapseReactModal } from '../modal.tsx';
 import { openBookingForm } from './BookingForm.tsx';
 import { Icon } from './Icon.tsx';
+import { Button } from './ui/button.tsx';
+import { Input } from './ui/input.tsx';
 import { store } from '../../store-instance.ts';
 import { saveFilters, updateMachBtn } from './MachineFilterDropdown.tsx';
 
@@ -193,7 +195,7 @@ function AssistantResultItem({ row, tree, isFreeDev, allIds, machineById }: Resu
         onRemoveDevice={(id) => setRemovedIds((prev) => new Set(prev).add(id))}
       />
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <input
+        <Input
           type="number"
           className="asDays"
           value={days}
@@ -203,23 +205,24 @@ function AssistantResultItem({ row, tree, isFreeDev, allIds, machineById }: Resu
           onChange={onChange}
         />
         {tip && <span className="hint">{tip}</span>}
-        <button
-          className="btn small"
+        <Button
+          size="small"
           title="Zum Termin springen und Zeilen auf die gewählten Geräte filtern"
           aria-label="Termin anzeigen"
           onClick={() => gotoRun(selectedDates[0]!, allIds)}
         >
           <Icon name="pin" />
-        </button>
-        <button
-          className="btn small primary"
+        </Button>
+        <Button
+          variant="primary"
+          size="small"
           disabled={!pickedIds.length}
           onClick={() =>
             openBookingForm(pickedIds, selectedDates[0]!, selectedDates[selectedDates.length - 1]!)
           }
         >
           Buchen…
-        </button>
+        </Button>
       </div>
     </div>
   );

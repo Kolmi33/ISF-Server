@@ -18,6 +18,7 @@ import { hasAnyMaintenanceSlot } from '../../core/machines.ts';
 import { maintenanceKind, statusRangeText } from '../machine-text.ts';
 import { buildChecklistRows, type ChecklistRow } from '../assistant-checklist.ts';
 import { Icon } from './Icon.tsx';
+import { Input } from './ui/input.tsx';
 
 /** The maintenance/defect status tag, when the machine has one. */
 function MachineStatusTag({ machine }: { machine: Machine }) {
@@ -106,7 +107,7 @@ export function AssistantChecklist({
 
   return (
     <>
-      <input
+      <Input
         type="text"
         placeholder="filtern…"
         style={{ width: '100%', marginBottom: 4 }}

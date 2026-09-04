@@ -27,6 +27,7 @@ import { maintenanceKind, statusRangeText } from '../machine-text.ts';
 import { categoryColor, nameColor } from '../grid.ts';
 import { isDarkTheme } from '../theme.ts';
 import { Icon } from './Icon.tsx';
+import { Input } from './ui/input.tsx';
 
 /** The maintenance/defect status tag, when the machine has one. */
 function MachineStatusTag({ machine }: { machine: Machine }) {
@@ -127,7 +128,7 @@ function GroupNeedStepper({ node, handlers }: { node: AssistGrp; handlers: NodeH
         >
           –
         </button>
-        <input
+        <Input
           type="number"
           className="asNeed"
           value={need}
