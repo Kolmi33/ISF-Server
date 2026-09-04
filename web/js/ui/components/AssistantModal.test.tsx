@@ -535,6 +535,57 @@ describe('AssistantModal — the work-area group node', () => {
     expect(document.querySelectorAll('.asgrp')).toHaveLength(1); // still one group, not nested
     expect(document.querySelectorAll('.asgrp-kids .asdev')).toHaveLength(3);
   });
+
+  // What: dragging one whole Bedarfsgruppe onto ANOTHER group's own HEAD (its title bar — the
+  // drag handle/stepper/dissolve row, titled "Gruppe ziehen zum Verschachteln") nests it inside
+  // that group, same as dropping on the target group's kids background — a real regression:
+  // the head used to fall outside every recognized drop target, so a group dropped there
+  // silently moved to the root instead of nesting, looking exactly like nesting a Bedarfsgruppe
+  // inside another had stopped working (the group's own head is the single biggest, most
+  // obvious part of its card — the most natural thing to aim a drop at).
+  // How: forms two separate 2-device groups (needs a 4th machine, since the shared fixture's
+  // 3 machines only make one group's worth), drags the first group onto the second group's own
+  // head element specifically, and checks the result is one group nested inside the other, not
+  // two groups still sitting side by side at the root.
+  it("dropping a whole group onto another group's own head nests it, not just its kids area", () => {
+    window.S.data!.machines.push(machine({ id: 'm4', name: 'Bohrer' }));
+    act(() => openAssistant());
+    openChecklistCategory();
+    act(() => {
+      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
+      screen.getByRole('checkbox', { name: /^Presse/ }).click();
+      screen.getByRole('checkbox', { name: /^Kaputte Presse/ }).click();
+      screen.getByRole('checkbox', { name: /^Bohrer/ }).click();
+    });
+    const devNodes = () => [...document.querySelectorAll<HTMLElement>('.asdev')];
+    const looseDevs = () => devNodes().filter((el) => !el.closest('.asgrp-kids'));
+    // Group A: Fräse + Presse.
+    const dtA = dataTransferStub();
+    act(() => {
+      const [first, second] = looseDevs();
+      fireEvent.dragStart(second!, { dataTransfer: dtA });
+      fireEvent.drop(first!, { dataTransfer: dtA });
+    });
+    // Group B: Kaputte Presse + Bohrer (the two still-loose devices).
+    const dtB = dataTransferStub();
+    act(() => {
+      const [first, second] = looseDevs();
+      fireEvent.dragStart(second!, { dataTransfer: dtB });
+      fireEvent.drop(first!, { dataTransfer: dtB });
+    });
+    expect(document.querySelectorAll('.asgrp')).toHaveLength(2); // two separate groups so far
+
+    const groups = () => [...document.querySelectorAll<HTMLElement>('.asgrp')];
+    const groupA = groups()[0]!;
+    const groupBHead = groups()[1]!.querySelector<HTMLElement>('.asgrp-head')!;
+    const dtNest = dataTransferStub();
+    act(() => {
+      fireEvent.dragStart(groupA, { dataTransfer: dtNest });
+      fireEvent.drop(groupBHead, { dataTransfer: dtNest });
+    });
+    expect(document.querySelectorAll('.asgrp')).toHaveLength(2); // still two groups...
+    expect(document.querySelector('.asgrp-kids > .asgrp')).not.toBeNull(); // ...one nested in the other
+  });
 });
 
 describe('AssistantModal — drag-and-drop highlighting', () => {

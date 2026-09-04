@@ -177,7 +177,7 @@ function GroupNodeView({ node, handlers }: { node: AssistGrp; handlers: NodeHand
           <Icon name="trash" />
         </button>
       </div>
-      <div className="asgrp-kids" data-dropgrp={node.uid}>
+      <div className="asgrp-kids">
         {node.children.map((child) => (
           <AssistNodeView key={child.uid} node={child} handlers={handlers} />
         ))}
@@ -215,14 +215,27 @@ function clearHighlights(container: HTMLElement): void {
   container.querySelectorAll('.dragover').forEach((n) => n.classList.remove('dragover'));
 }
 
-/** Resolves a drop event's target into the tree edit it should trigger. Dropping onto a
- *  device that's ALREADY a member of a group joins that group flatly (same as dropping on the
- *  group's own background) rather than wrapping just that one device in a brand-new nested
- *  subgroup — the fix for a real bug: with 2+ existing members, aiming for one of them (the
- *  easiest, biggest target to hit) used to bury it one level deeper each time instead of
- *  adding a flat 3rd/4th/... member, which looked broken/like the drag had silently failed
- *  ("snaps back") once a group had more than 2 members. Split out of `handleDrop` purely to
- *  stay under the function-length budget. */
+/** Resolves a drop event's target into the tree edit it should trigger.
+ *
+ * - Dropping onto a device that's ALREADY a member of a group joins that group flatly (same
+ *   as dropping on the group's own background) rather than wrapping just that one device in a
+ *   brand-new nested subgroup — with 2+ existing members, aiming for one of them (the
+ *   easiest, biggest target to hit) used to bury it one level deeper each time instead of
+ *   adding a flat 3rd/4th/... member, which looked broken/like the drag had silently failed
+ *   ("snaps back") once a group had more than 2 members.
+ * - Dropping ANYWHERE else on an existing group — its `.asgrp-kids` background, or its own
+ *   `.asgrp-head` title bar (the drag handle/stepper/dissolve row) — joins that same group.
+ *   The two used to be handled differently (only `.asgrp-kids` counted, via its own
+ *   `data-dropgrp` attribute), so dropping a group you're trying to nest onto another group's
+ *   HEAD — the single biggest, most obvious part of its card, and the one literally titled
+ *   "Gruppe ziehen zum Verschachteln" (drag a group here to nest it) — silently fell through
+ *   to moving it to the root instead, looking exactly like nesting one Bedarfsgruppe into
+ *   another had stopped working. `closest('.asgrp')` covers the group's whole card (head and
+ *   kids both) in one check, reading the group's own `data-uid` — `.asgrp-kids`'s separate
+ *   `data-dropgrp` carried the exact same uid, so it's gone now too, not just unused.
+ *
+ * Split out of `handleDrop` purely to stay under the function-length budget.
+ */
 function resolveDrop(
   target: HTMLElement,
   drag: string,
@@ -233,13 +246,13 @@ function resolveDrop(
   },
 ): void {
   const dev = target.closest<HTMLElement>('.asdev');
-  const kids = target.closest<HTMLElement>('.asgrp-kids');
-  const devsGroup = dev?.closest<HTMLElement>('.asgrp-kids');
+  const grp = target.closest<HTMLElement>('.asgrp');
+  const devsGroup = dev?.closest<HTMLElement>('.asgrp');
   if (dev && dev.dataset.uid !== drag) {
-    if (devsGroup) handlers.onJoin(drag, devsGroup.dataset.dropgrp!);
+    if (devsGroup) handlers.onJoin(drag, devsGroup.dataset.uid!);
     else handlers.onGroupOnto(drag, dev.dataset.uid!);
-  } else if (kids) {
-    handlers.onJoin(drag, kids.dataset.dropgrp!);
+  } else if (grp) {
+    handlers.onJoin(drag, grp.dataset.uid!);
   } else {
     handlers.onToRoot(drag);
   }
