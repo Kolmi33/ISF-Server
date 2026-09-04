@@ -92,8 +92,19 @@ function useClampedDays(maxDays: number, initialDays: number) {
  *  longer hidden in fine print). Each pill's color is now its device's resource-category color
  *  (`categoryColor` — blue Maschinen, green Messtechnik, user request), the same one the
  *  Assistant's own selection chips use (`AssistantTree.tsx`), so equipment reads as "which
- *  kind" consistently across both. */
-function SuggestedDevicePills({ devices }: { devices: readonly Machine[] }) {
+ *  kind" consistently across both.
+ *
+ *  Hovering a pill reveals a "×" to drop that one device from THIS result's own booking (user
+ *  request: "When i hover over the items in the potential booking i have the option to remove
+ *  individual items by pressing the x which appears") — scoped to this one result card only,
+ *  not the Assistant's overall device selection in the tree. */
+function SuggestedDevicePills({
+  devices,
+  onRemove,
+}: {
+  devices: readonly Machine[];
+  onRemove: (deviceId: string) => void;
+}) {
   if (!devices.length) {
     return (
       <div className="aspills">
@@ -112,7 +123,16 @@ function SuggestedDevicePills({ devices }: { devices: readonly Machine[] }) {
           className="aspill"
           style={{ background: categoryColor(getMachineCategory(device), dark) }}
         >
-          {device.name}
+          <span className="aspill-name">{device.name}</span>
+          <button
+            type="button"
+            className="aspill-rm"
+            title={`${device.name} aus diesem Termin entfernen`}
+            aria-label={`${device.name} aus diesem Termin entfernen`}
+            onClick={() => onRemove(device.id)}
+          >
+            ×
+          </button>
         </span>
       ))}
     </div>
@@ -120,20 +140,26 @@ function SuggestedDevicePills({ devices }: { devices: readonly Machine[] }) {
 }
 
 interface ResultInfoProps {
-  selectedDates: readonly string[];
+  fullWindow: readonly string[];
   windowText: string;
   pickedDevices: readonly Machine[];
+  onRemoveDevice: (deviceId: string) => void;
 }
 
-/** The run's date range, the suggested-device pills (color-coded by resource category — a
- *  universal feature now, not just when a Bedarfsgruppe exists: user request), and the
- *  free-window description. Split out of `AssistantResultItem` purely to stay under the
- *  function-length budget. */
-function ResultInfo({ selectedDates, windowText, pickedDevices }: ResultInfoProps) {
+/** The run's title, the suggested-device pills (color-coded by resource category — a universal
+ *  feature now, not just when a Bedarfsgruppe exists: user request), and the free-window
+ *  description. Split out of `AssistantResultItem` purely to stay under the function-length
+ *  budget.
+ *
+ *  The title shows the free window's own full start – end span (`fullWindow`, i.e. `row.dates`)
+ *  — not the currently-selected/clamped day subset, which used to leave it reading as just a
+ *  single bold date whenever "Mind. Tage am Stück" defaulted to 1 (user request: "The Title
+ *  should not just be the bold date -> but the time slot available date start -> date end"). */
+function ResultInfo({ fullWindow, windowText, pickedDevices, onRemoveDevice }: ResultInfoProps) {
   return (
     <div>
-      <b className="asRange">{rangeText(selectedDates)}</b>
-      <SuggestedDevicePills devices={pickedDevices} />
+      <b className="asRange">{rangeText(fullWindow)}</b>
+      <SuggestedDevicePills devices={pickedDevices} onRemove={onRemoveDevice} />
       <span className="hint" style={{ margin: 0, display: 'block' }}>
         {windowText}
       </span>
@@ -144,8 +170,13 @@ function ResultInfo({ selectedDates, windowText, pickedDevices }: ResultInfoProp
 function AssistantResultItem({ row, tree, isFreeDev, allIds, machineById }: ResultItemProps) {
   const maxDays = row.dates.length;
   const { days, tip, onChange } = useClampedDays(maxDays, row.defaultDays);
+  // Devices dropped from THIS result's own booking via a pill's hover "×" — scoped to this one
+  // card, not the Assistant's overall device selection in the tree (user request).
+  const [removedIds, setRemovedIds] = useState<ReadonlySet<string>>(new Set());
   const selectedDates = row.dates.slice(0, days);
-  const pickedIds = chooseDevicesForTree(tree, selectedDates, isFreeDev);
+  const pickedIds = chooseDevicesForTree(tree, selectedDates, isFreeDev).filter(
+    (id) => !removedIds.has(id),
+  );
   const pickedDevices = pickedIds
     .map((id) => machineById(id))
     .filter((device): device is Machine => !!device);
@@ -156,9 +187,10 @@ function AssistantResultItem({ row, tree, isFreeDev, allIds, machineById }: Resu
   return (
     <div className="res">
       <ResultInfo
-        selectedDates={selectedDates}
+        fullWindow={row.dates}
         windowText={windowText}
         pickedDevices={pickedDevices}
+        onRemoveDevice={(id) => setRemovedIds((prev) => new Set(prev).add(id))}
       />
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <input
@@ -181,6 +213,7 @@ function AssistantResultItem({ row, tree, isFreeDev, allIds, machineById }: Resu
         </button>
         <button
           className="btn small primary"
+          disabled={!pickedIds.length}
           onClick={() =>
             openBookingForm(pickedIds, selectedDates[0]!, selectedDates[selectedDates.length - 1]!)
           }

@@ -432,7 +432,14 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .asgrp-kids.dragover{background:var(--accent-light)}
 /* Vorschlags-Badges in den Suchergebnissen: farbige "Pillen" statt Fließtext-Aufzählung */
 .aspills{display:flex;flex-wrap:wrap;gap:4px;margin:3px 0}
-.aspill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;color:var(--text)}
+.aspill{position:relative;display:inline-flex;align-items:center;padding:2px 20px 2px 9px;border-radius:999px;font-size:11px;font-weight:600;color:var(--text)}
+/* Hover-reveal "×" to drop one device from this one result's own booking (user request) — kept
+   invisible (not just hidden) until hovered, so the pill row's resting look is unchanged. */
+.aspill-rm{position:absolute;right:3px;top:50%;transform:translateY(-50%);opacity:0;
+  border:none;background:none;padding:0 3px;cursor:pointer;font-weight:700;line-height:1;
+  color:inherit;transition:opacity .12s}
+.aspill:hover .aspill-rm{opacity:.7}
+.aspill-rm:hover{opacity:1}
 #modalReopen{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:90;display:none;flex-direction:column;align-items:center;gap:3px;background:var(--accent);color:#fff;border:none;border-radius:0 12px 12px 0;padding:12px 8px;box-shadow:0 4px 18px rgba(0,0,0,.28);cursor:pointer;font-size:11px;font-weight:600;letter-spacing:.02em}
 #modalReopen.show{display:flex}
 #modalReopen .ic{width:18px;height:18px;stroke:#fff}
@@ -469,7 +476,12 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .mlist label:hover{background:var(--hover)}
 .mlist .grp{font-weight:700;margin-top:6px;color:var(--muted);font-size:12px}
 .resultlist{max-height:300px;overflow:auto}
-.resultlist .res{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid var(--border)}
+/* Each "Passende Termine" result gets its own standalone white card with a subtle shadow,
+   separating it from the modal's grey backdrop instead of being a flat list row sharing borders
+   with its neighbors (user request). */
+.resultlist .res{display:flex;justify-content:space-between;align-items:center;gap:8px;
+  padding:10px 12px;margin:8px 4px;background:var(--panel);border:1px solid var(--border);
+  border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .mybk{display:flex;justify-content:space-between;align-items:flex-start;padding:8px;border-bottom:1px solid var(--border);gap:8px}
 .mybk .abmach{font-size:14px;line-height:1.35}
 .mybk .abdate{font-size:13px;line-height:1.5;margin:1px 0}

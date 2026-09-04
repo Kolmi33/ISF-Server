@@ -297,7 +297,56 @@ describe('AssistantModal — search results', () => {
     });
     expect(screen.getByText('Passende Termine:')).toBeInTheDocument();
     expect(document.querySelector('.aspills')).not.toBeNull();
-    expect(screen.getByText('Fräse', { selector: '.aspill' })).toBeInTheDocument();
+    expect(screen.getByText('Fräse', { selector: '.aspill-name' })).toBeInTheDocument();
+  });
+
+  // What: the result's title shows the free window's own full start – end span, not just the
+  // (often single-day, since "Mind. Tage am Stück" defaults to 1) currently-selected subset —
+  // user request: "The Title should not just be the bold date -> but the time slot available
+  // date start -> date end".
+  // How: searches with the default wide (56-day) window and an unbooked machine, so the found
+  // run spans many days while the default day-count selection is still just 1 — checks the
+  // title (.asRange) reads as a real range (contains an en dash), not a single bare date.
+  it("titles each result with the free window's full start – end range", async () => {
+    act(() => openAssistant());
+    openChecklistCategory();
+    act(() => {
+      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
+    });
+    await act(async () => {
+      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
+      await Promise.resolve();
+    });
+    const title = document.querySelector('.asRange')!;
+    expect(title.textContent).toContain('–');
+  });
+
+  // What: hovering a suggestion pill reveals a "×" that removes just that one device from THIS
+  // result's own booking, without touching the Assistant's overall device selection — user
+  // request: "the option to remove individual items by pressing the x which appears".
+  // How: searches with two devices, clicks the first pill's remove button, and checks it (and
+  // only it) disappears from that result's pills while the checklist selection itself is
+  // untouched.
+  it('removes a single device from one result via its pill\'s "×"', async () => {
+    act(() => openAssistant());
+    openChecklistCategory();
+    act(() => {
+      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
+      screen.getByRole('checkbox', { name: /^Presse/ }).click();
+    });
+    await act(async () => {
+      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
+      await Promise.resolve();
+    });
+    expect(screen.getByText('Fräse', { selector: '.aspill-name' })).toBeInTheDocument();
+    expect(screen.getByText('Presse', { selector: '.aspill-name' })).toBeInTheDocument();
+    act(() => {
+      screen.getByRole('button', { name: 'Fräse aus diesem Termin entfernen' }).click();
+    });
+    expect(screen.queryByText('Fräse', { selector: '.aspill-name' })).not.toBeInTheDocument();
+    expect(screen.getByText('Presse', { selector: '.aspill-name' })).toBeInTheDocument();
+    // Still checked in the checklist itself — this only affected the one result's own pills.
+    expect(screen.getByRole('checkbox', { name: /^Fräse/ })).toBeChecked();
   });
 
   // What: the suggestion pills are colored by resource CATEGORY, not by device name (user
@@ -317,8 +366,12 @@ describe('AssistantModal — search results', () => {
       screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
       await Promise.resolve();
     });
-    const fraese = screen.getByText('Fräse', { selector: '.aspill' }) as HTMLElement;
-    const presse = screen.getByText('Presse', { selector: '.aspill' }) as HTMLElement;
+    const fraese = screen
+      .getByText('Fräse', { selector: '.aspill-name' })
+      .closest('.aspill') as HTMLElement;
+    const presse = screen
+      .getByText('Presse', { selector: '.aspill-name' })
+      .closest('.aspill') as HTMLElement;
     expect(fraese.style.backgroundColor).not.toBe('');
     expect(fraese.style.backgroundColor).toBe(presse.style.backgroundColor);
   });
