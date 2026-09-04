@@ -337,6 +337,14 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    column as a whole is stretched to match the left card's height, the cart (not the fixed-size
    Buchungsparameter card or the action row) is what actually grows to fill the extra space. */
 .assist-col-right .assist-cart{flex:1;display:flex;flex-direction:column}
+/* The "Geräteauswahl" card grows to match the stretched column height (.assist-columns'
+   align-items: stretch), but its own checklist used to stay pinned at a fixed 260px, leaving
+   dead space between the list and the now-taller card's bottom edge (user report). Turning
+   the card into its own flex column lets the checklist (.mlist, min-height: 0 so it can
+   actually shrink/scroll instead of just growing to fit its content) fill the real remaining
+   space instead of a fixed height. */
+.assist-card.assist-catalog{display:flex;flex-direction:column}
+.assist-card.assist-catalog .mlist{flex:1;min-height:0;max-height:none}
 /* Die primäre Aktion, unten in der rechten Spalte verankert — der klare letzte Schritt des
    Ablaufs, nicht lose unter einem unabhängigen Formular (user request) */
 .assist-actions{display:flex;gap:8px;justify-content:flex-end}

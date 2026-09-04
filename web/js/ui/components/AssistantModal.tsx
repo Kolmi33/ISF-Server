@@ -275,7 +275,7 @@ export function AssistantModal() {
           right, both permanently visible without their own scrolling getting in each other's
           way. Narrower viewports stack everything in this same top-to-bottom order. */}
       <div className="assist-columns">
-        <div className="assist-card">
+        <div className="assist-card assist-catalog">
           <div className="assist-card-title">Geräteauswahl</div>
           <AssistantChecklist
             machines={machines}

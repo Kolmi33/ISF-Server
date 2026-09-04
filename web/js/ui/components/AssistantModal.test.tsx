@@ -112,6 +112,17 @@ describe('AssistantModal — card layout', () => {
     expect(document.querySelectorAll('.assist-card')).toHaveLength(3);
   });
 
+  // What: the "Geräteauswahl" card is its own flex column (`.assist-catalog`) so its
+  // checklist can grow to fill the card's real height once the card itself stretches to match
+  // the right column (user report: the card grew but its own dropdown/checklist stayed a
+  // fixed height, leaving dead space at the bottom).
+  // How: opens the Assistant and checks the "Geräteauswahl" card carries the class.
+  it('gives the "Geräteauswahl" card its own stretch-friendly class', () => {
+    act(() => openAssistant());
+    const card = screen.getByText('Geräteauswahl').closest('.assist-card')!;
+    expect(card.classList.contains('assist-catalog')).toBe(true);
+  });
+
   // What: the primary action ("Freie Termine suchen") is anchored at the bottom of the right
   // column, below both the parameters and selected-devices cards — the clear final step of
   // the flow, not a separate/disconnected form (user request).
