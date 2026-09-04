@@ -199,11 +199,19 @@ function AssistantParametersCard({
  *  work exactly this way, own remove icon included) the moment it's checked on the left, no
  *  further action needed. No explanatory drag-and-drop copy here (or in `AssistantTree`'s
  *  empty state) by design — the interaction is communicated purely visually now (drag
- *  handles, dashed drop zones), per the redesign in `AssistantTree`. */
+ *  handles, dashed drop zones), per the redesign in `AssistantTree`.
+ *
+ *  The primary actions (Abbrechen / Freie Termine suchen) live inside this card now, pinned to
+ *  its bottom-right corner (user request: "Move the ... buttons completely inside the
+ *  'Ausgewählte Geräte' card") — the tree above them (`.aswork`, flex: 1) grows to fill the
+ *  remaining card height, so the buttons stay flush at the bottom regardless of how many
+ *  devices are picked. */
 function AssistantSelectedDevicesCard({
   assistant,
+  onSearch,
 }: {
   assistant: ReturnType<typeof useAssistantTree>;
+  onSearch: () => void;
 }) {
   return (
     <div className="assist-card assist-cart">
@@ -219,6 +227,14 @@ function AssistantSelectedDevicesCard({
         onSetNeed={assistant.onSetNeed}
         onRemove={assistant.onRemove}
       />
+      <div className="assist-actions">
+        <button className="btn" onClick={closeReactModal}>
+          Abbrechen
+        </button>
+        <button className="btn primary" onClick={onSearch}>
+          Freie Termine suchen
+        </button>
+      </div>
     </div>
   );
 }
@@ -228,23 +244,15 @@ interface AssistantConfigColumnProps extends AssistantParametersProps {
   onSearch: () => void;
 }
 
-/** The right column: the "Buchungsparameter" card, the "Ausgewählte Geräte" cart card, and the
- *  primary action anchored at the bottom of both — the clear final step of the flow, not lose
- *  under an unrelated form (user request). Split out of `AssistantModal` purely to stay under
- *  the function-length budget. */
+/** The right column: the "Buchungsparameter" card and the "Ausgewählte Geräte" cart card (which
+ *  now carries the primary action row itself, pinned to its own bottom-right corner — see that
+ *  card's comment). Split out of `AssistantModal` purely to stay under the function-length
+ *  budget. */
 function AssistantConfigColumn({ assistant, onSearch, ...parameters }: AssistantConfigColumnProps) {
   return (
     <div className="assist-col-right">
       <AssistantParametersCard {...parameters} />
-      <AssistantSelectedDevicesCard assistant={assistant} />
-      <div className="assist-actions">
-        <button className="btn" onClick={closeReactModal}>
-          Abbrechen
-        </button>
-        <button className="btn primary" onClick={onSearch}>
-          Freie Termine suchen
-        </button>
-      </div>
+      <AssistantSelectedDevicesCard assistant={assistant} onSearch={onSearch} />
     </div>
   );
 }

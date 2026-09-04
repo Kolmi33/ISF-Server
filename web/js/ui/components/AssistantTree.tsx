@@ -24,7 +24,7 @@ import type { AssistContainer, AssistDev, AssistGrp, AssistNode } from '../../co
 import { effectiveNeed } from '../../core/assistant.ts';
 import { getMachineCategory, hasAnyMaintenanceSlot } from '../../core/machines.ts';
 import { maintenanceKind, statusRangeText } from '../machine-text.ts';
-import { categoryColor } from '../grid.ts';
+import { categoryColor, nameColor } from '../grid.ts';
 import { isDarkTheme } from '../theme.ts';
 import { Icon } from './Icon.tsx';
 
@@ -153,13 +153,21 @@ function GroupNeedStepper({ node, handlers }: { node: AssistGrp; handlers: NodeH
   );
 }
 
-/** A demand group as a soft neutral card — deliberately no per-group border color any more
- *  (the old `AS_HUES`/`newColor` palette, removed with it): nested groups each picking their
- *  own hue produced exactly the "verschachtelte, bunte Rahmen" (nested, colorful borders) the
- *  redesign calls out as visual noise. One calm card style for every group instead. */
+/** A demand group as a distinctly colored card — reinstated per a later user request ("I want
+ *  the different 'Bedarfsgruppen' also to have coloured Card borders"), reversing an earlier
+ *  redesign that had removed per-group hues (the old `AS_HUES`/`newColor` palette) because
+ *  independently-hashed nested-group colors read as visual noise. `nameColor`, keyed by the
+ *  group's own stable `uid`, gives each group a soft pastel tint (the same hash-based palette
+ *  already used for booker names and My Bookings' group cards) — a darker shade of the same
+ *  hue (`color-mix`, see app.css) replaces the previous plain grey border. */
 function GroupNodeView({ node, handlers }: { node: AssistGrp; handlers: NodeHandlers }) {
   return (
-    <div className="asnode asgrp" draggable data-uid={node.uid}>
+    <div
+      className="asnode asgrp"
+      draggable
+      data-uid={node.uid}
+      style={{ '--groupcolor': nameColor(node.uid, isDarkTheme()) } as CSSProperties}
+    >
       <div className="asgrp-head" title="Gruppe ziehen zum Verschachteln">
         <DragHandle />
         <GroupNeedStepper node={node} handlers={handlers} />

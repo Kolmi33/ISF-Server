@@ -123,25 +123,28 @@ describe('AssistantModal — card layout', () => {
     expect(card.classList.contains('assist-catalog')).toBe(true);
   });
 
-  // What: the primary action ("Freie Termine suchen") is anchored at the bottom of the right
-  // column, below both the parameters and selected-devices cards — the clear final step of
-  // the flow, not a separate/disconnected form (user request).
-  // How: opens the Assistant and checks the search button's container (".assist-actions")
-  // comes after both right-column cards in DOM order, within the same right-column parent.
-  it('anchors the primary action below both right-column cards', () => {
+  // What: the primary actions ("Abbrechen" / "Freie Termine suchen") live entirely inside the
+  // "Ausgewählte Geräte" cart card now, pinned to its own bottom-right corner — not a separate
+  // row below the right column's two cards (user request: "Move the ... buttons completely
+  // inside the 'Ausgewählte Geräte' card, pinning them to the bottom right corner").
+  // How: opens the Assistant, finds the cart card, and checks ".assist-actions" is the cart's
+  // own last child (after the tree), not a sibling of the card in the right column.
+  it('anchors the primary actions inside the cart card, pinned to its bottom', () => {
     act(() => openAssistant());
-    const rightColumn = screen.getByText('Buchungsparameter').closest('.assist-col-right')!;
-    const children = [...rightColumn.children];
-    const actionsIndex = children.findIndex((el) => el.classList.contains('assist-actions'));
-    const cardIndices = children
-      .map((el, i) => (el.classList.contains('assist-card') ? i : -1))
-      .filter((i) => i >= 0);
-    expect(cardIndices).toHaveLength(2);
-    expect(actionsIndex).toBeGreaterThan(Math.max(...cardIndices));
+    const cart = screen.getByText('Ausgewählte Geräte').closest('.assist-cart')!;
+    const rightColumn = cart.closest('.assist-col-right')!;
+    // Not a sibling of the card in the right column — the right column now holds only the two
+    // cards themselves, nothing else.
+    expect([...rightColumn.children].every((el) => el.classList.contains('assist-card'))).toBe(
+      true,
+    );
+    const actions = cart.lastElementChild!;
+    expect(actions.classList.contains('assist-actions')).toBe(true);
     expect(
-      within(rightColumn.children[actionsIndex] as HTMLElement).getByRole('button', {
-        name: 'Freie Termine suchen',
-      }),
+      within(actions as HTMLElement).getByRole('button', { name: 'Freie Termine suchen' }),
+    ).toBeInTheDocument();
+    expect(
+      within(actions as HTMLElement).getByRole('button', { name: 'Abbrechen' }),
     ).toBeInTheDocument();
   });
 });
@@ -479,6 +482,17 @@ describe('AssistantModal — the work-area group node', () => {
     expect((document.querySelector('.asNeed') as HTMLInputElement).value).toBe('1');
   });
 
+  // What: a Bedarfsgruppe card gets a distinct pastel color, set via a --groupcolor custom
+  // property (user request: "Ich möchte, dass die verschiedenen 'Bedarfsgruppen' auch coloured
+  // Card borders [haben]") — not the flat neutral card from the earlier "no per-group color"
+  // redesign.
+  // How: forms a group and checks its card carries a non-empty --groupcolor custom property.
+  it('gives the group card a distinct pastel color via --groupcolor', () => {
+    addGroupedPair();
+    const card = document.querySelector<HTMLElement>('.asgrp')!;
+    expect(card.style.getPropertyValue('--groupcolor')).not.toBe('');
+  });
+
   // What: incrementing the need stepper raises the group's need.
   // How: clicks the "+" stepper once (need 1→2, matching the group's 2 members) and checks
   // the value updated.
@@ -545,6 +559,41 @@ describe('AssistantModal — the work-area group node', () => {
     });
     expect(document.querySelectorAll('.asgrp')).toHaveLength(1); // still one group, not nested
     expect(document.querySelectorAll('.asgrp-kids .asdev')).toHaveLength(3);
+  });
+
+  // What: two separate Bedarfsgruppen get two distinct colors, not the same one repeated — the
+  // whole point of coloring them per-group is telling them apart at a glance.
+  // How: forms two separate 2-device groups (needs a 4th machine, same as the nesting test
+  // below) and checks their --groupcolor values differ.
+  it('gives two separate groups two different colors', () => {
+    window.S.data!.machines.push(machine({ id: 'm4', name: 'Bohrer' }));
+    act(() => openAssistant());
+    openChecklistCategory();
+    act(() => {
+      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
+      screen.getByRole('checkbox', { name: /^Presse/ }).click();
+      screen.getByRole('checkbox', { name: /^Kaputte Presse/ }).click();
+      screen.getByRole('checkbox', { name: /^Bohrer/ }).click();
+    });
+    const devNodes = () => [...document.querySelectorAll<HTMLElement>('.asdev')];
+    const looseDevs = () => devNodes().filter((el) => !el.closest('.asgrp-kids'));
+    const dtA = dataTransferStub();
+    act(() => {
+      const [first, second] = looseDevs();
+      fireEvent.dragStart(second!, { dataTransfer: dtA });
+      fireEvent.drop(first!, { dataTransfer: dtA });
+    });
+    const dtB = dataTransferStub();
+    act(() => {
+      const [first, second] = looseDevs();
+      fireEvent.dragStart(second!, { dataTransfer: dtB });
+      fireEvent.drop(first!, { dataTransfer: dtB });
+    });
+    const groups = [...document.querySelectorAll<HTMLElement>('.asgrp')];
+    expect(groups).toHaveLength(2);
+    expect(groups[0]!.style.getPropertyValue('--groupcolor')).not.toBe(
+      groups[1]!.style.getPropertyValue('--groupcolor'),
+    );
   });
 
   // What: dragging one whole Bedarfsgruppe onto ANOTHER group's own HEAD (its title bar — the

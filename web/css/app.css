@@ -350,7 +350,11 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 /* flex-grow: 1 on the "Ausgewählte Geräte" cart card specifically (user request) — once the
    column as a whole is stretched to match the left card's height, the cart (not the fixed-size
    Buchungsparameter card or the action row) is what actually grows to fill the extra space. */
-.assist-col-right .assist-cart{flex:1;display:flex;flex-direction:column}
+.assist-col-right .assist-cart{flex:1;display:flex;flex-direction:column;gap:8px}
+/* The tree (.aswork/.aswork-empty) grows to fill whatever height the cart card has to spare,
+   pushing the action row (now nested inside this same card — user request) flush to the
+   card's own bottom edge instead of floating right after the tree's own natural height. */
+.assist-cart .aswork,.assist-cart .aswork-empty{flex:1}
 /* The "Geräteauswahl" card grows to match the stretched column height (.assist-columns'
    align-items: stretch), but its own checklist used to stay pinned at a fixed 260px, leaving
    dead space between the list and the now-taller card's bottom edge (user report). Turning
@@ -359,8 +363,8 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    space instead of a fixed height. */
 .assist-card.assist-catalog{display:flex;flex-direction:column}
 .assist-card.assist-catalog .mlist{flex:1;min-height:0;max-height:none}
-/* Die primäre Aktion, unten in der rechten Spalte verankert — der klare letzte Schritt des
-   Ablaufs, nicht lose unter einem unabhängigen Formular (user request) */
+/* Die primäre Aktion, unten rechts in der "Ausgewählte Geräte"-Karte selbst verankert — der
+   klare letzte Schritt des Ablaufs, nicht lose unter einem unabhängigen Formular (user request) */
 .assist-actions{display:flex;gap:8px;justify-content:flex-end}
 /* "Freie Termine suchen" bleibt die einzige auffällige Aktion (.btn.primary, unverändert) —
    "Abbrechen" wird bewusst zurückhaltend: randlos, nur ein dezenter Hover-Hintergrund, statt
@@ -412,9 +416,11 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
   border:none;background:none;font-size:inherit}
 .asdev .rm:hover,.asgrp .rm:hover{color:var(--danger,#c0392b)}
 .asdev .machinfo{display:inline-flex}
-/* Bedarfsgruppen als ruhige, neutrale Karte statt verschachtelter bunter Rahmen (die frühere
-   Palette pro Gruppe ist mit dieser Umstellung komplett entfernt, nicht nur ausgeblendet) */
-.asgrp{border:1px solid var(--border);border-radius:10px;padding:7px 9px 9px;margin:5px 3px;background:var(--headbg)}
+/* Each Bedarfsgruppe gets a distinct soft pastel tint as its own background, with a darker
+   shade of that same hue as its border (user request, reversing an earlier "one calm neutral
+   card" redesign) — --groupcolor is set per-instance from the group's own hash (GroupNodeView,
+   AssistantTree.tsx), the same nameColor mechanism the grid/My Bookings use elsewhere. */
+.asgrp{border:1px solid color-mix(in srgb,var(--groupcolor) 55%,black);border-radius:10px;padding:7px 9px 9px;margin:5px 3px;background:var(--groupcolor)}
 .asgrp.dragover{outline:2px dashed var(--accent);outline-offset:2px;background:var(--accent-light)}
 .asgrp-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:2px;cursor:grab}
 .asgrp-head b{color:var(--text)}
