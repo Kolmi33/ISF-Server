@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from 'react';
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 import { Popover } from '@base-ui/react/popover';
 import { IconArrowRight, IconCalendar } from '@tabler/icons-react';
 import { Button } from './button.tsx';
@@ -17,18 +17,33 @@ function DateEndpoint({
   label,
   value,
   onChange,
+  trigger,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  trigger: ReactNode;
 }) {
   return (
     <div className="date-range-endpoint">
       <label htmlFor={id}>{label}</label>
-      <Input id={id} type="date" value={value} onChange={onChange} />
-      <IconCalendar className="date-endpoint-icon" size={16} aria-hidden="true" />
+      <div className="date-range-control">
+        <Input id={id} type="date" value={value} onChange={onChange} />
+        {trigger}
+      </div>
     </div>
+  );
+}
+
+function CalendarTrigger({ label }: { label: string }) {
+  return (
+    <Popover.Trigger
+      render={<Button variant="outline" size="icon" className="date-endpoint-trigger" />}
+      aria-label={label}
+    >
+      <IconCalendar size={16} aria-hidden="true" />
+    </Popover.Trigger>
   );
 }
 
@@ -44,6 +59,7 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
           id={`${id}-from`}
           label="Suchen von"
           value={from}
+          trigger={<CalendarTrigger label="Startdatum im Kalender wählen" />}
           onChange={(event) => {
             const value = event.target.value;
             onChange(value, value && to && value > to ? value : to);
@@ -54,17 +70,12 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
           id={`${id}-to`}
           label="bis"
           value={to}
+          trigger={<CalendarTrigger label="Enddatum im Kalender wählen" />}
           onChange={(event) => {
             const value = event.target.value;
             onChange(value && from && value < from ? value : from, value);
           }}
         />
-        <Popover.Trigger
-          render={<Button variant="outline" size="icon-lg" />}
-          aria-label="Zeitraum im Kalender wählen"
-        >
-          <IconCalendar size={18} aria-hidden="true" />
-        </Popover.Trigger>
       </div>
       <Popover.Portal container={fieldRef}>
         <Popover.Positioner sideOffset={8} align="end" className="range-positioner">

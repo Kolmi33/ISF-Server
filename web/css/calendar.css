@@ -96,9 +96,6 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  padding: 8px 12px;
 }
 .date-range-endpoint {
   flex: 1;
@@ -112,10 +109,18 @@
 }
 .date-range-endpoint input[data-slot='input'] {
   width: 100%;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  box-shadow: none;
+}
+.date-range-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.date-range-control input[data-slot='input'] {
+  flex: 1;
+  min-width: 0;
+}
+.date-endpoint-trigger {
+  flex: 0 0 32px;
 }
 .range-arrow {
   color: var(--app-muted);
@@ -127,7 +132,6 @@
   }
   .date-range-field {
     gap: 8px;
-    padding: 8px;
   }
   .range-arrow {
     display: none;
