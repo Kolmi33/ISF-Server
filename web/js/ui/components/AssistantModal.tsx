@@ -388,26 +388,24 @@ export function AssistantModal() {
         </p>
       </header>
       <div className="assist-body">
-        <div className="assist-filter-zone">
-          <AssistantDeviceColumns machines={machines} assistant={assistant} />
-          <AssistantParameters
-            from={from}
-            to={to}
-            minDays={minDays}
-            weekdayMask={weekdayMask}
-            rangeError={search.rangeError}
-            weekdayError={search.weekdayError}
-            summary={describeSelectionSummary(assistant.tree)}
-            isSearching={search.isSearching}
-            onRangeChange={(nextFrom, nextTo) => {
-              setFrom(nextFrom);
-              setTo(nextTo);
-            }}
-            onMinDaysChange={setMinDays}
-            onWeekdayMaskChange={setWeekdayMask}
-            onSearch={search.runSearch}
-          />
-        </div>
+        <AssistantDeviceColumns machines={machines} assistant={assistant} />
+        <AssistantParameters
+          from={from}
+          to={to}
+          minDays={minDays}
+          weekdayMask={weekdayMask}
+          rangeError={search.rangeError}
+          weekdayError={search.weekdayError}
+          summary={describeSelectionSummary(assistant.tree)}
+          isSearching={search.isSearching}
+          onRangeChange={(nextFrom, nextTo) => {
+            setFrom(nextFrom);
+            setTo(nextTo);
+          }}
+          onMinDaysChange={setMinDays}
+          onWeekdayMaskChange={setWeekdayMask}
+          onSearch={search.runSearch}
+        />
         <AssistantSearchOutcome search={search} />
       </div>
     </div>

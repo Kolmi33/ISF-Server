@@ -92,25 +92,47 @@
   gap: 8px;
   margin-top: 12px;
 }
+/* The whole range control stacks like any other field: heading, control, then the error —
+   the same rhythm `Field` gives the plain fields beside it, so the two columns line up. */
+.date-range-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.date-range-heading {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--app-text);
+}
 .date-range-field {
   display: flex;
   align-items: center;
   gap: 12px;
 }
+/* "Von"/"Bis" sit INLINE with their input, not stacked above it: a second stacked label row
+   here would push the date inputs one line below the plain fields beside them, which is
+   exactly how the two columns drifted out of alignment. */
 .date-range-endpoint {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .date-range-endpoint label {
-  display: block;
+  flex: 0 0 auto;
   font-size: 12px;
   color: var(--app-muted);
-  margin-bottom: 4px;
 }
 .date-range-endpoint input[data-slot='input'] {
   width: 100%;
 }
+/* Fills the rest of its endpoint so the two halves span the column evenly and the arrow
+   lands between them, instead of both halves shrink-wrapping and leaving a hole. */
 .date-range-control {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -119,8 +141,9 @@
   flex: 1;
   min-width: 0;
 }
+/* Matches the 36px control height the inputs and the number field use. */
 .date-endpoint-trigger {
-  flex: 0 0 32px;
+  flex: 0 0 36px;
 }
 .range-arrow {
   color: var(--app-muted);

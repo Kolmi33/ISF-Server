@@ -7,65 +7,50 @@
 // beside this card's own criteria (not in a page-level footer), with a live selection
 // summary alongside it.
 //
+// Key Principles:
+// - FIELD OWNS THE RHYTHM: every labelled control is a `Field` (label → control →
+//   description/error), so the two columns share one vertical rhythm instead of each
+//   hand-managing its own label margins — which is what let them drift out of alignment.
+//
 // =======================================================================================
 
 import { IconLoader2, IconSearch } from '@tabler/icons-react';
 import { DateRangePicker } from '../../components/ui/date-range-picker.tsx';
-import { Input } from '../../components/ui/input.tsx';
 import { Button } from '../../components/ui/button.tsx';
+import { Field, FieldDescription, FieldLabel } from '../../components/ui/field.tsx';
+import { NumberInput } from '../../components/ui/number-field.tsx';
+import { Separator } from '../../components/ui/separator.tsx';
 import { closeReactModal } from '../modal.tsx';
 import { AssistantWeekdaySelector } from './AssistantWeekdaySelector.tsx';
 import type { WeekdayMask } from '../../core/assistant.ts';
 import { durationUnitHint } from '../assistant-weekdays.ts';
 
-interface MinDaysFieldProps {
+const MAX_MIN_DAYS = 30;
+
+/** "Mindestdauer": one segmented number control, with helper text adapting to the active
+ *  weekday selection (feature 8). */
+function MinDaysField({
+  minDays,
+  weekdayMask,
+  onChange,
+}: {
   minDays: number;
   weekdayMask: WeekdayMask;
   onChange: (value: number) => void;
-}
-
-/** "Mindestdauer": a compact stepper (decrement disabled at 1) plus direct entry, with its
- *  helper text adapting to the active weekday selection (feature 8). */
-function MinDaysField({ minDays, weekdayMask, onChange }: MinDaysFieldProps) {
+}) {
   return (
-    <div className="assist-duration">
-      <label htmlFor="assist-days">Mindestdauer</label>
-      <div className="assist-duration-input">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-sm"
-          aria-label="Weniger Tage"
-          disabled={minDays <= 1}
-          onClick={() => onChange(Math.max(1, minDays - 1))}
-        >
-          –
-        </Button>
-        <Input
-          id="assist-days"
-          type="number"
-          value={minDays}
-          min={1}
-          max={30}
-          aria-describedby="assist-days-hint"
-          onChange={(event) =>
-            onChange(Math.max(1, Math.min(30, parseInt(event.target.value) || 1)))
-          }
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-sm"
-          aria-label="Mehr Tage"
-          onClick={() => onChange(Math.min(30, minDays + 1))}
-        >
-          +
-        </Button>
-      </div>
-      <span id="assist-days-hint" className="assist-hint">
-        {durationUnitHint(weekdayMask)}
-      </span>
-    </div>
+    <Field className="assist-duration">
+      <FieldLabel>Mindestdauer</FieldLabel>
+      <NumberInput
+        value={minDays}
+        min={1}
+        max={MAX_MIN_DAYS}
+        onValueChange={onChange}
+        decrementLabel="Weniger Tage"
+        incrementLabel="Mehr Tage"
+      />
+      <FieldDescription>{durationUnitHint(weekdayMask)}</FieldDescription>
+    </Field>
   );
 }
 
@@ -162,7 +147,7 @@ export function AssistantParameters({
         onChange={onWeekdayMaskChange}
         error={weekdayError}
       />
-      <div className="assist-parameters-separator" />
+      <Separator className="assist-parameters-separator" />
       <AssistantSearchRow summary={summary} isSearching={isSearching} onSearch={onSearch} />
     </section>
   );

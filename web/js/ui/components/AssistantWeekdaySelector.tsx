@@ -33,14 +33,15 @@ export interface AssistantWeekdaySelectorProps {
 
 /** The two compact preset shortcuts — set the mask directly, so they always stay in sync
  *  with whatever the individual toggles currently show (no separate "preset mode" to fall
- *  out of sync with). */
+ *  out of sync with). Sits directly beside the toggles rather than pinned to the card's far
+ *  edge, so the whole weekday choice reads as one control cluster. */
 function WeekdayPresets({ onChange }: { onChange: (mask: WeekdayMask) => void }) {
   return (
     <div className="assist-weekday-presets">
-      <Button type="button" variant="outline" size="xs" onClick={() => onChange(WEEKDAYS_MON_FRI)}>
+      <Button type="button" variant="outline" size="lg" onClick={() => onChange(WEEKDAYS_MON_FRI)}>
         Mo–Fr
       </Button>
-      <Button type="button" variant="outline" size="xs" onClick={() => onChange(WEEKDAYS_ALL)}>
+      <Button type="button" variant="outline" size="lg" onClick={() => onChange(WEEKDAYS_ALL)}>
         Alle Tage
       </Button>
     </div>
@@ -51,30 +52,32 @@ export function AssistantWeekdaySelector({ mask, onChange, error }: AssistantWee
   const value = selectedWeekdayIndices(mask).map(String);
   return (
     <div className="assist-weekdays">
-      <div className="assist-weekdays-head">
-        <label id="assist-weekdays-label">Buchbare Wochentage</label>
+      <label id="assist-weekdays-label" className="assist-weekdays-label">
+        Buchbare Wochentage
+      </label>
+      <div className="assist-weekdays-row">
+        <ToggleGroup
+          multiple
+          aria-labelledby="assist-weekdays-label"
+          aria-describedby={error ? 'assist-weekdays-error' : 'assist-weekdays-hint'}
+          aria-invalid={!!error}
+          value={value}
+          onValueChange={(next) => onChange(maskFromSelectedIndices(next.map(Number)))}
+          className="assist-weekday-toggles"
+        >
+          {WEEKDAY_OPTIONS.map((day) => (
+            <Toggle
+              key={day.index}
+              value={String(day.index)}
+              aria-label={day.full}
+              className="assist-weekday-toggle"
+            >
+              {day.short}
+            </Toggle>
+          ))}
+        </ToggleGroup>
         <WeekdayPresets onChange={onChange} />
       </div>
-      <ToggleGroup
-        multiple
-        aria-labelledby="assist-weekdays-label"
-        aria-describedby={error ? 'assist-weekdays-error' : 'assist-weekdays-hint'}
-        aria-invalid={!!error}
-        value={value}
-        onValueChange={(next) => onChange(maskFromSelectedIndices(next.map(Number)))}
-        className="assist-weekday-toggles"
-      >
-        {WEEKDAY_OPTIONS.map((day) => (
-          <Toggle
-            key={day.index}
-            value={String(day.index)}
-            aria-label={day.full}
-            className="assist-weekday-toggle"
-          >
-            {day.short}
-          </Toggle>
-        ))}
-      </ToggleGroup>
       {error ? (
         <span id="assist-weekdays-error" className="assist-field-error" role="alert">
           {error}
