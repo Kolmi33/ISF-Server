@@ -12,12 +12,13 @@
 //
 // =======================================================================================
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
 import { hasAnyMaintenanceSlot } from '../../core/machines.ts';
 import { maintenanceKind, statusRangeText } from '../machine-text.ts';
 import { buildChecklistRows, type ChecklistRow } from '../assistant-checklist.ts';
 import { Icon } from './Icon.tsx';
+import { Checkbox } from '../../components/ui/checkbox.tsx';
 import { Input } from '../../components/ui/input.tsx';
 
 /** The maintenance/defect status tag, when the machine has one. */
@@ -39,13 +40,9 @@ interface ChecklistMachineRowProps {
 
 function ChecklistMachineRow({ machine, checked, onToggle }: ChecklistMachineRowProps) {
   return (
-    <label>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onToggle(event.target.checked)}
-      />{' '}
-      {machine.name}
+    <label className="assist-machine-row">
+      <Checkbox checked={checked} onCheckedChange={onToggle} />
+      <span className="assist-machine-name">{machine.name}</span>
       {machine.info && (
         <span
           className="machinfo"
@@ -67,13 +64,15 @@ type HeaderRow = Extract<ChecklistRow, { kind: 'category' | 'group' }>;
 
 function ChecklistHeaderRow({ row, onToggleOpen }: { row: HeaderRow; onToggleOpen: () => void }) {
   return (
-    <div
+    <button
+      type="button"
+      aria-expanded={row.open}
       className={`grp ${row.kind === 'category' ? 'cathead' : 'grpsub'} click`}
       onClick={onToggleOpen}
     >
       <span className="tarr">{row.open ? '▾' : '▸'}</span>{' '}
       {row.kind === 'category' && <Icon name={row.icon} />} {row.label}
-    </div>
+    </button>
   );
 }
 
@@ -92,6 +91,7 @@ export function AssistantChecklist({
   onToggle,
 }: AssistantChecklistProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
   const [openKeys, setOpenKeys] = useState<ReadonlySet<string>>(() => new Set(['fav']));
 
   function toggleOpen(key: string): void {
@@ -108,7 +108,9 @@ export function AssistantChecklist({
   return (
     <>
       <Input
+        ref={searchRef}
         type="text"
+        aria-label="Geräte filtern"
         placeholder="filtern…"
         style={{ width: '100%', marginBottom: 4 }}
         autoComplete="off"
@@ -122,7 +124,13 @@ export function AssistantChecklist({
               key={row.machine.id}
               machine={row.machine}
               checked={addedIds.has(row.machine.id)}
-              onToggle={(checked) => onToggle(row.machine.id, checked)}
+              onToggle={(checked) => {
+                onToggle(row.machine.id, checked);
+                if (checked && searchQuery) {
+                  setSearchQuery('');
+                  searchRef.current?.focus();
+                }
+              }}
             />
           ) : (
             <ChecklistHeaderRow key={row.key} row={row} onToggleOpen={() => toggleOpen(row.key)} />

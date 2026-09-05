@@ -19,7 +19,6 @@
 // =======================================================================================
 
 import { useRef, useState } from 'react';
-import type { ChangeEvent } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
 import {
   addDays,
@@ -54,13 +53,12 @@ import { orderedMachines } from '../grid.ts';
 import { getBooking } from '../../core/bookings.ts';
 import { buildAssistantResults, type AssistantResultRow } from '../assistant-results.ts';
 import { toast } from '../toast.ts';
-import { closeReactModal, openReactModal } from '../modal.tsx';
+import { openReactModal } from '../modal.tsx';
 import { AssistantChecklist } from './AssistantChecklist.tsx';
 import { AssistantTree } from './AssistantTree.tsx';
 import { AssistantResults } from './AssistantResults.tsx';
 import { Icon } from './Icon.tsx';
-import { Button } from '../../components/ui/button.tsx';
-import { Input } from '../../components/ui/input.tsx';
+import { AssistantParameters } from './AssistantParameters.tsx';
 import { store } from '../../store-instance.ts';
 import { machById } from '../machine-lookup.ts';
 
@@ -202,81 +200,11 @@ function runAssistantSearch(
   };
 }
 
-interface AssistantParametersProps {
-  from: string;
-  to: string;
-  minDays: number;
-  onFromChange: (value: string) => void;
-  onToChange: (value: string) => void;
-  onMinDaysChange: (value: number) => void;
-}
-
-/** The "Buchungsparameter" card: just the date-range + minimum-consecutive-days inputs, no
- *  action buttons — those are anchored separately at the bottom of the whole right column
- *  (`AssistantModal`), not tied to this one card, per the redesign's "primary action is the
- *  clear final step of the flow" request. */
-function AssistantParametersCard({
-  from,
-  to,
-  minDays,
-  onFromChange,
-  onToChange,
-  onMinDaysChange,
-}: AssistantParametersProps) {
-  const onMinDaysInput = (event: ChangeEvent<HTMLInputElement>) =>
-    onMinDaysChange(Math.max(1, Math.min(30, parseInt(event.target.value) || 1)));
-  return (
-    <div className="assist-card">
-      <div className="assist-card-title">Buchungsparameter</div>
-      <div className="formrow">
-        <label>Suchen von</label>
-        <Input
-          type="date"
-          className="w-auto"
-          value={from}
-          onChange={(event) => onFromChange(event.target.value)}
-        />
-        <label style={{ minWidth: 'auto' }}>bis</label>
-        <Input
-          type="date"
-          className="w-auto"
-          value={to}
-          onChange={(event) => onToChange(event.target.value)}
-        />
-      </div>
-      <div className="formrow">
-        <label>Mind. Tage am Stück</label>
-        <Input
-          type="number"
-          value={minDays}
-          min={1}
-          max={30}
-          style={{ width: 70 }}
-          onChange={onMinDaysInput}
-        />
-      </div>
-    </div>
-  );
-}
-
-/** The "Ausgewählte Geräte" card — a "shopping cart" for checked devices (user request): each
- *  one shows up here as its own line item (`AssistantTree`'s `.asdev`/`.asgrp` nodes already
- *  work exactly this way, own remove icon included) the moment it's checked on the left, no
- *  further action needed. No explanatory drag-and-drop copy here (or in `AssistantTree`'s
- *  empty state) by design — the interaction is communicated purely visually now (drag
- *  handles, dashed drop zones), per the redesign in `AssistantTree`.
- *
- *  The primary actions (Abbrechen / Freie Termine suchen) live inside this card now, pinned to
- *  its bottom-right corner (user request: "Move the ... buttons completely inside the
- *  'Ausgewählte Geräte' card") — the tree above them (`.aswork`, flex: 1) grows to fill the
- *  remaining card height, so the buttons stay flush at the bottom regardless of how many
- *  devices are picked. */
+/** Selected devices scroll independently within the right-hand card. */
 function AssistantSelectedDevicesCard({
   assistant,
-  onSearch,
 }: {
   assistant: ReturnType<typeof useAssistantTree>;
-  onSearch: () => void;
 }) {
   return (
     <div className="assist-card assist-cart">
@@ -292,37 +220,6 @@ function AssistantSelectedDevicesCard({
         onSetNeed={assistant.onSetNeed}
         onRemove={assistant.onRemove}
       />
-      <div className="assist-actions">
-        {/* size="lg" is exactly h-9 (36px), matching the Buchungsparameter card's inputs — a
-            past user request ("uniform field/button height throughout the Assistant") that
-            app.css used to enforce via `.assist-actions .btn{height:36px}`, keyed on the
-            literal .btn class this component no longer carries. Comes for free from the size
-            prop now, not a manual height hack. */}
-        <Button variant="ghost" size="lg" onClick={closeReactModal}>
-          Abbrechen
-        </Button>
-        <Button size="lg" onClick={onSearch}>
-          Freie Termine suchen
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-interface AssistantConfigColumnProps extends AssistantParametersProps {
-  assistant: ReturnType<typeof useAssistantTree>;
-  onSearch: () => void;
-}
-
-/** The right column: the "Buchungsparameter" card and the "Ausgewählte Geräte" cart card (which
- *  now carries the primary action row itself, pinned to its own bottom-right corner — see that
- *  card's comment). Split out of `AssistantModal` purely to stay under the function-length
- *  budget. */
-function AssistantConfigColumn({ assistant, onSearch, ...parameters }: AssistantConfigColumnProps) {
-  return (
-    <div className="assist-col-right">
-      <AssistantParametersCard {...parameters} />
-      <AssistantSelectedDevicesCard assistant={assistant} onSearch={onSearch} />
     </div>
   );
 }
@@ -336,10 +233,14 @@ export function AssistantModal() {
   );
   const [minDays, setMinDays] = useState(1);
   const [searchState, setSearchState] = useState<AssistantSearchState | null>(null);
+  const searchRevision = useRef(0);
 
   function search(): void {
     const outcome = runAssistantSearch(assistant.tree, from, to, minDays);
-    if (outcome) setSearchState(outcome);
+    if (outcome) {
+      searchRevision.current += 1;
+      setSearchState(outcome);
+    }
   }
 
   return (
@@ -347,11 +248,6 @@ export function AssistantModal() {
       <h2>
         <Icon name="compass" /> Buchungsassistent
       </h2>
-      {/* Card-based, two-column dashboard layout on desktop (app.css, ".assist-columns"): a
-          light-grey backdrop behind white cards — the catalog (search + checklist) on the
-          left, the active configuration (parameters, then the selected-devices "cart") on the
-          right, both permanently visible without their own scrolling getting in each other's
-          way. Narrower viewports stack everything in this same top-to-bottom order. */}
       <div className="assist-columns">
         <div className="assist-card assist-catalog">
           <div className="assist-card-title">Geräteauswahl</div>
@@ -362,19 +258,22 @@ export function AssistantModal() {
             onToggle={assistant.toggleDevice}
           />
         </div>
-        <AssistantConfigColumn
-          assistant={assistant}
-          from={from}
-          to={to}
-          minDays={minDays}
-          onFromChange={setFrom}
-          onToChange={setTo}
-          onMinDaysChange={setMinDays}
-          onSearch={search}
-        />
+        <AssistantSelectedDevicesCard assistant={assistant} />
       </div>
+      <AssistantParameters
+        from={from}
+        to={to}
+        minDays={minDays}
+        onRangeChange={(nextFrom, nextTo) => {
+          setFrom(nextFrom);
+          setTo(nextTo);
+        }}
+        onMinDaysChange={setMinDays}
+        onSearch={search}
+      />
       {searchState && (
         <AssistantResults
+          key={searchRevision.current}
           results={searchState.results}
           tree={searchState.tree}
           isFreeDev={isFreeDevice}

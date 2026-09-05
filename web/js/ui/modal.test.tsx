@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { act } from '@testing-library/react';
+import { act, fireEvent } from '@testing-library/react';
 import { openReactModal, closeReactModal, collapseReactModal } from './modal.tsx';
 
 function setDom(): void {
@@ -41,6 +41,21 @@ describe('openReactModal / closeReactModal', () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
+  });
+
+  it('lets an open nested popover handle Escape before the modal', () => {
+    act(() =>
+      openReactModal(
+        <div data-slot="popover-content" data-open="">
+          Calendar
+        </div>,
+      ),
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.getElementById('overlay')).toHaveClass('open');
+    document.querySelector('[data-slot="popover-content"]')!.removeAttribute('data-open');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.getElementById('overlay')).not.toHaveClass('open');
   });
 
   it('Escape does NOT close a sticky modal', () => {

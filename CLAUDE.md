@@ -105,6 +105,8 @@ Project-specific rules (full list `ARCHITECTURE.md §5`) — the ones that bite 
   §19) — `tailwindcss`/`@tailwindcss/vite`/`shadcn`/`tw-animate-css` are build-time-only
   devDependencies or CSS-only imports, not a guardrail exception. No other runtime
   dependency, either side, without an explicit, reasoned guardrail change like those.
+  The user-requested range calendar adds `react-day-picker` (and its locked date-fns
+  dependencies) on the frontend only; rationale and boundaries are in ARCHITECTURE §19.
 - Do not edit the untouched baseline behavior without a test that pins the change.
 - If a gate is wrong, change the gate deliberately (with reasoning in the commit), never
   bypass it with `--no-verify` or inline disables.

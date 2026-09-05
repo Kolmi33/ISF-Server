@@ -1,0 +1,161 @@
+/* Central palette and UI tokens. See docs/UI-DESIGN.md for decisions and usage. */
+:root {
+  --heading-ink: #000;
+  --on-primary: #fff;
+  --control-gap: 12px;
+  --app-bg: #f4f5f7;
+  --app-panel: #fff;
+  --app-border: #d8dbe0;
+  --app-text: #1a1d21;
+  --app-muted: #6b7280;
+  --app-accent: #1a5fb4;
+  --app-accent-light: #e8f0fb;
+  --danger: #c0392b;
+  --warn: #b9770e;
+  --today: #fff8dc;
+  --free-hover: #e8f5e9;
+  --machw: 230px;
+  --hover: #f0f2f5;
+  --headbg: #eceff3;
+  --grpbg: #dde3ea;
+  --cellbg: #fff;
+  --todayhead: #f5e9b8;
+  --blocked1: #f3f3f3;
+  --blocked2: #e3e3e3;
+  --tagbg: #eee;
+  --tagink: #555;
+  --dangerbg: #fde3e0;
+  --warnbg: #fdf0d8;
+  --confbg: #fdf3e7;
+  --confink: #5c4a1f;
+  --confbrd: #e6c78a;
+  --toastbg: #333;
+  --toastink: #fff;
+  --app-accent-hover: #164e94;
+  --focus: #e67e22;
+  --selglow: rgba(26, 95, 180, 0.25);
+  --dot-free: #2f9e44;
+  --dot-busy: #e03131;
+  --wknd: #e9ebef;
+  --wkndhead: #dfe2e8;
+  --wkndtint: rgba(110, 116, 128, 0.13);
+  --star: #d4a017;
+  /* Raster-Linienfarbe/-stärke der Buchungstabelle — eigene Tokens statt --app-border, damit die
+     Einstellung (SettingsModal.tsx, zwei unabhängige Schieberegler in Pixeln) nur das
+     Zellgitter betrifft, nicht Rahmen andernorts (Modals, Buttons, …). --gridline-width ist die
+     Datenzellen (td), --gridline-width-header die Kopfzeile (th: KW-Zeile + Datumszeile) — zwei
+     Variablen statt einer, damit beide unabhängig einstellbar sind. Themeunabhängig (reine
+     Nutzerpräferenz), deshalb nur einmal hier gesetzt, nicht im dark-Block unten wiederholt. */
+  --gridline: var(--app-border);
+  --gridline-width: 1px;
+  --gridline-width-header: 1px;
+}
+html[data-theme='dark'] {
+  --heading-ink: #f5f7fa;
+  --on-primary: #101c2b;
+  --app-bg: #15171a;
+  --app-panel: #1e2126;
+  --app-border: #3a3f46;
+  --app-text: #e8eaed;
+  --app-muted: #9aa0a6;
+  --app-accent: #5b96e3;
+  --app-accent-light: #263a52;
+  --danger: #e07b6e;
+  --warn: #d9a441;
+  --today: #3a3620;
+  --free-hover: #1f3320;
+  --hover: #2a2f36;
+  --headbg: #23262b;
+  --grpbg: #2b313a;
+  --cellbg: #1e2126;
+  --star: #e0b84a;
+  --todayhead: #4a4420;
+  --blocked1: #24272c;
+  --blocked2: #2f333a;
+  --tagbg: #33383f;
+  --tagink: #b6bcc4;
+  --dangerbg: #4a2622;
+  --warnbg: #453a1c;
+  --confbg: #3b3325;
+  --confink: #e8d9b0;
+  --confbrd: #6b5c33;
+  --toastbg: #e8eaed;
+  --toastink: #1a1d21;
+  --app-accent-hover: #6ea5e8;
+  --focus: #ffab5e;
+  --selglow: rgba(91, 150, 227, 0.32);
+  --dot-free: #4cbf63;
+  --dot-busy: #ff6b6b;
+  --wknd: #242830;
+  --wkndhead: #1b1e23;
+  --wkndtint: rgba(150, 160, 180, 0.1);
+  --gridline: var(--app-border);
+}
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.153 0.006 107.1);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.153 0.006 107.1);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.153 0.006 107.1);
+  --primary: var(--app-accent);
+  --primary-foreground: var(--on-primary);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.966 0.005 106.5);
+  --muted-foreground: oklch(0.58 0.031 107.3);
+  --accent: oklch(0.966 0.005 106.5);
+  --accent-foreground: oklch(0.228 0.013 107.4);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.93 0.007 106.5);
+  --input: oklch(0.93 0.007 106.5);
+  --ring: var(--app-accent);
+  --chart-1: oklch(0.88 0.011 106.6);
+  --chart-2: oklch(0.58 0.031 107.3);
+  --chart-3: oklch(0.466 0.025 107.3);
+  --chart-4: oklch(0.394 0.023 107.4);
+  --chart-5: oklch(0.286 0.016 107.4);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.988 0.003 106.5);
+  --sidebar-foreground: oklch(0.153 0.006 107.1);
+  --sidebar-primary: var(--app-accent);
+  --sidebar-primary-foreground: var(--on-primary);
+  --sidebar-accent: oklch(0.966 0.005 106.5);
+  --sidebar-accent-foreground: oklch(0.228 0.013 107.4);
+  --sidebar-border: oklch(0.93 0.007 106.5);
+  --sidebar-ring: oklch(0.737 0.021 106.9);
+}
+
+html[data-theme='dark'] {
+  --background: oklch(0.153 0.006 107.1);
+  --foreground: oklch(0.988 0.003 106.5);
+  --card: oklch(0.228 0.013 107.4);
+  --card-foreground: oklch(0.988 0.003 106.5);
+  --popover: oklch(0.228 0.013 107.4);
+  --popover-foreground: oklch(0.988 0.003 106.5);
+  --primary: var(--app-accent);
+  --primary-foreground: var(--on-primary);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.286 0.016 107.4);
+  --muted-foreground: oklch(0.737 0.021 106.9);
+  --accent: oklch(0.286 0.016 107.4);
+  --accent-foreground: oklch(0.988 0.003 106.5);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: var(--app-accent);
+  --chart-1: oklch(0.88 0.011 106.6);
+  --chart-2: oklch(0.58 0.031 107.3);
+  --chart-3: oklch(0.466 0.025 107.3);
+  --chart-4: oklch(0.394 0.023 107.4);
+  --chart-5: oklch(0.286 0.016 107.4);
+  --sidebar: oklch(0.228 0.013 107.4);
+  --sidebar-foreground: oklch(0.988 0.003 106.5);
+  --sidebar-primary: var(--app-accent);
+  --sidebar-primary-foreground: var(--on-primary);
+  --sidebar-accent: oklch(0.286 0.016 107.4);
+  --sidebar-accent-foreground: oklch(0.988 0.003 106.5);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.58 0.031 107.3);
+}

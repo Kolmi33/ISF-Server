@@ -17,7 +17,7 @@
 //
 // =======================================================================================
 
-import { useRef } from 'react';
+import { Fragment, useRef } from 'react';
 import type { CSSProperties, DragEvent } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
 import type { AssistContainer, AssistDev, AssistGrp, AssistNode } from '../../core/assistant.ts';
@@ -166,17 +166,26 @@ function devicesFirst(children: readonly AssistNode[]): AssistNode[] {
   return [...devices, ...nestedGroups];
 }
 
-/** Interposes an "oder" separator between every consecutive pair of a group's own direct
- *  children (user request: "Benötigt: N von M" means these are alternatives — spell that out,
- *  rather than leaving the chips to just run together as if all of them were required). */
-function withOrSeparators(
-  nodes: readonly AssistNode[],
-): ({ sep: true } | { sep: false; node: AssistNode })[] {
-  return nodes.flatMap((node, index) =>
-    index === 0
-      ? [{ sep: false as const, node }]
-      : [{ sep: true as const }, { sep: false as const, node }],
-  );
+/** Connectors describe the solver's existing semantics, including N-of-M selections. */
+function ConnectedNodes({
+  nodes,
+  connection,
+  handlers,
+}: {
+  nodes: readonly AssistNode[];
+  connection: string;
+  handlers: NodeHandlers;
+}) {
+  return nodes.map((node, index) => (
+    <Fragment key={node.uid}>
+      {index > 0 && (
+        <span className={connection === 'oder' ? 'asgrp-or' : 'assist-connection'}>
+          {connection}
+        </span>
+      )}
+      <AssistNodeView node={node} handlers={handlers} />
+    </Fragment>
+  ));
 }
 
 /** A demand group as a distinctly colored card — reinstated per a later user request ("I want
@@ -186,8 +195,10 @@ function withOrSeparators(
  *  group's own stable `uid`, gives each group a soft pastel tint (the same hash-based palette
  *  already used for booker names and My Bookings' group cards) — a darker shade of the same
  *  hue (`color-mix`, see app.css) replaces the previous plain grey border. Children render
- *  devices-first with "oder" separators between siblings (see the two helpers above). */
+ *  devices-first with connections reflecting the required count. */
 function GroupNodeView({ node, handlers }: { node: AssistGrp; handlers: NodeHandlers }) {
+  const need = effectiveNeed(node);
+  const connection = need === node.children.length ? 'und' : need === 1 ? 'oder' : 'Auswahl';
   return (
     <div
       className="asnode asgrp"
@@ -213,15 +224,11 @@ function GroupNodeView({ node, handlers }: { node: AssistGrp; handlers: NodeHand
         </button>
       </div>
       <div className="asgrp-kids">
-        {withOrSeparators(devicesFirst(node.children)).map((item, index) =>
-          item.sep ? (
-            <span key={`sep-${index}`} className="asgrp-or" aria-hidden="true">
-              oder
-            </span>
-          ) : (
-            <AssistNodeView key={item.node.uid} node={item.node} handlers={handlers} />
-          ),
-        )}
+        <ConnectedNodes
+          nodes={devicesFirst(node.children)}
+          connection={connection}
+          handlers={handlers}
+        />
       </div>
     </div>
   );
@@ -420,17 +427,17 @@ export function AssistantTree({
       {groups.length > 0 && (
         <>
           <div className="catlbl">Bedarfsgruppen</div>
-          {groups.map((g) => (
-            <AssistNodeView key={g.uid} node={g} handlers={handlers} />
-          ))}
+          <ConnectedNodes nodes={groups} connection="und" handlers={handlers} />
         </>
       )}
       {loose.length > 0 && (
         <>
+          {groups.length > 0 && <span className="assist-connection">und</span>}
           <div className="catlbl">Einzelgeräte</div>
-          {loose.map((d) => (
-            <AssistNodeView key={d.uid} node={d} handlers={handlers} />
-          ))}
+          <p className="assist-drag-hint">
+            Ähnliche Geräte aufeinander ziehen, um eine Bedarfsgruppe mit Alternativen zu bilden.
+          </p>
+          <ConnectedNodes nodes={loose} connection="und" handlers={handlers} />
         </>
       )}
     </div>

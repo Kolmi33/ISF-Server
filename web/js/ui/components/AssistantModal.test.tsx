@@ -41,6 +41,8 @@ function dataTransferStub() {
 const notifySpy = vi.spyOn(store, 'notify');
 
 beforeEach(() => {
+  // jsdom lacks PointerEvent; Base UI forwards checkbox clicks through this constructor.
+  vi.stubGlobal('PointerEvent', MouseEvent);
   vi.useFakeTimers();
   vi.setSystemTime(new Date(`${TODAY}T12:00:00Z`));
   document.body.innerHTML =
@@ -97,64 +99,28 @@ function openChecklistCategory(): void {
 }
 
 describe('AssistantModal — card layout', () => {
-  // What: the redesigned Assistant lays out its content as three distinct cards — device
-  // selection, booking parameters, and the selected-devices "cart" — each with its own
-  // heading, rather than one undifferentiated block of controls (user request: a modern,
-  // card-based dashboard layout).
-  // How: opens the Assistant and checks all three card titles are present, plus that there
-  // are exactly three ".assist-card" elements (the fourth section, the action buttons, is
-  // deliberately not a card).
-  it('lays out device selection, parameters, and selected devices as three separate cards', () => {
+  it('places a shared parameter card below the two device cards', () => {
     act(() => openAssistant());
-    expect(screen.getByText('Geräteauswahl')).toBeInTheDocument();
-    expect(screen.getByText('Buchungsparameter')).toBeInTheDocument();
-    expect(screen.getByText('Ausgewählte Geräte')).toBeInTheDocument();
+    const columns = document.querySelector('.assist-columns')!;
+    expect(columns.children).toHaveLength(2);
+    expect(columns.querySelector('.assist-catalog')).toBeInTheDocument();
+    expect(columns.querySelector('.assist-cart')).toBeInTheDocument();
+    const parameters = screen.getByRole('region', {
+      name: 'Auswahl Zeitraum und gewünschter Buchungstage',
+    });
+    expect(columns.nextElementSibling).toBe(parameters);
     expect(document.querySelectorAll('.assist-card')).toHaveLength(3);
-  });
-
-  // What: the "Geräteauswahl" card is its own flex column (`.assist-catalog`) so its
-  // checklist can grow to fill the card's real height once the card itself stretches to match
-  // the right column (user report: the card grew but its own dropdown/checklist stayed a
-  // fixed height, leaving dead space at the bottom).
-  // How: opens the Assistant and checks the "Geräteauswahl" card carries the class.
-  it('gives the "Geräteauswahl" card its own stretch-friendly class', () => {
-    act(() => openAssistant());
-    const card = screen.getByText('Geräteauswahl').closest('.assist-card')!;
-    expect(card.classList.contains('assist-catalog')).toBe(true);
-  });
-
-  // What: the primary actions ("Abbrechen" / "Freie Termine suchen") live entirely inside the
-  // "Ausgewählte Geräte" cart card now, pinned to its own bottom-right corner — not a separate
-  // row below the right column's two cards (user request: "Move the ... buttons completely
-  // inside the 'Ausgewählte Geräte' card, pinning them to the bottom right corner").
-  // How: opens the Assistant, finds the cart card, and checks ".assist-actions" is the cart's
-  // own last child (after the tree), not a sibling of the card in the right column.
-  it('anchors the primary actions inside the cart card, pinned to its bottom', () => {
-    act(() => openAssistant());
-    const cart = screen.getByText('Ausgewählte Geräte').closest('.assist-cart')!;
-    const rightColumn = cart.closest('.assist-col-right')!;
-    // Not a sibling of the card in the right column — the right column now holds only the two
-    // cards themselves, nothing else.
-    expect([...rightColumn.children].every((el) => el.classList.contains('assist-card'))).toBe(
-      true,
+    expect(within(parameters).getByRole('group', { name: 'Suchzeitraum' })).toBeInTheDocument();
+    expect(within(parameters).getByLabelText('Mind. Tage am Stück')).toHaveAccessibleDescription(
+      'Arbeitstage (Mo-Fr)',
     );
-    const actions = cart.lastElementChild!;
-    expect(actions.classList.contains('assist-actions')).toBe(true);
     expect(
-      within(actions as HTMLElement).getByRole('button', { name: 'Freie Termine suchen' }),
+      within(parameters).getByRole('button', { name: 'Freie Termine suchen' }),
     ).toBeInTheDocument();
-    expect(
-      within(actions as HTMLElement).getByRole('button', { name: 'Abbrechen' }),
-    ).toBeInTheDocument();
+    expect(within(parameters).getByRole('button', { name: 'Abbrechen' })).toBeInTheDocument();
   });
 
-  // What: both action buttons stay 36px tall, matching the Buchungsparameter card's inputs —
-  // app.css used to enforce this via `.assist-actions .btn{height:36px}` (a past user request,
-  // "uniform field/button height throughout the Assistant"), keyed on the literal `.btn` class
-  // <Button> (Phase 14) no longer carries; regression test for the fix that restores it directly
-  // on the two call sites instead.
-  // How: opens the Assistant and checks both buttons' className carries the h-9 (36px) marker.
-  it('keeps the action buttons the same height as the Buchungsparameter inputs (h-9)', () => {
+  it('keeps final actions at the shared control height', () => {
     act(() => openAssistant());
     expect(screen.getByRole('button', { name: 'Abbrechen' }).className).toContain('h-9');
     expect(screen.getByRole('button', { name: 'Freie Termine suchen' }).className).toContain('h-9');
@@ -273,17 +239,17 @@ describe('AssistantModal — search validation', () => {
     expect(document.getElementById('toast')!.textContent).toBe('Bitte oben Geräte übernehmen.');
   });
 
-  // What: searching with an inverted date range (bis before von) is rejected client-side.
-  // How: checks a device, sets the "bis" date before the default "von", clicks search, and
+  // What: searching with a missing date endpoint is rejected client-side.
+  // How: checks a device, clears the "bis" date, clicks search, and
   // checks the toast text.
-  it('toasts on an invalid date range', () => {
+  it('toasts on an incomplete date range', () => {
     act(() => openAssistant());
     openChecklistCategory();
     act(() => {
       screen.getByRole('checkbox', { name: /Fräse/ }).click();
     });
     const dateInputs = document.querySelectorAll('#modal input[type="date"]');
-    fireEvent.change(dateInputs[1]!, { target: { value: '2000-01-01' } }); // "bis" before "von"
+    fireEvent.change(dateInputs[1]!, { target: { value: '' } }); // an endpoint was cleared
     act(() => {
       screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
     });
@@ -292,6 +258,72 @@ describe('AssistantModal — search validation', () => {
 });
 
 describe('AssistantModal — search results', () => {
+  it('uses the requested days on every search, resetting previous result edits', () => {
+    act(() => openAssistant());
+    openChecklistCategory();
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
+    fireEvent.change(screen.getByLabelText('Mind. Tage am Stück'), { target: { value: '4' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Freie Termine suchen' }));
+    expect(document.querySelector('.asDays')).toHaveValue(4);
+    fireEvent.change(document.querySelector('.asDays')!, { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: /aus diesem Termin entfernen/ }));
+    fireEvent.change(screen.getByLabelText('Mind. Tage am Stück'), { target: { value: '6' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Freie Termine suchen' }));
+    expect(document.querySelector('.asDays')).toHaveValue(6);
+    expect(document.querySelector('.aspill-name')).toHaveTextContent('Fräse');
+  });
+
+  it('clears a filter after adding a device and focuses the filter for the next search', () => {
+    act(() => openAssistant());
+    const filter = screen.getByRole('textbox', { name: 'Geräte filtern' });
+    fireEvent.change(filter, { target: { value: 'Fräse' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
+    expect(filter).toHaveValue('');
+    expect(filter).toHaveFocus();
+    expect(document.querySelector('.asdev')).toHaveTextContent('Fräse');
+  });
+
+  it('shows UND between required devices and explains grouping', () => {
+    act(() => openAssistant());
+    openChecklistCategory();
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Presse/ }));
+    const work = document.getElementById('asWork')!;
+    expect(within(work).getByText('und')).toBeInTheDocument();
+    expect(within(work).getByText(/Ähnliche Geräte aufeinander ziehen/)).toBeInTheDocument();
+  });
+
+  it('shows UND within all-required groups and Auswahl for intermediate N-of-M needs', () => {
+    act(() => openAssistant());
+    openChecklistCategory();
+    for (const name of [/^Fräse/, /^Presse/, /^Kaputte Presse/]) {
+      fireEvent.click(screen.getByRole('checkbox', { name }));
+    }
+    const devices = [...document.querySelectorAll('.asdev')];
+    const transfer = dataTransferStub();
+    fireEvent.dragStart(devices[1]!, { dataTransfer: transfer });
+    fireEvent.drop(devices[0]!, { dataTransfer: transfer });
+    const group = document.querySelector('.asgrp')!;
+    expect(within(group as HTMLElement).getByText('oder')).toBeInTheDocument();
+    fireEvent.change(group.querySelector('.asNeed')!, { target: { value: '2' } });
+    expect(within(group as HTMLElement).getByText('und')).toBeInTheDocument();
+    expect(within(group as HTMLElement).queryByText('oder')).not.toBeInTheDocument();
+    fireEvent.dragStart(devices[2]!, { dataTransfer: transfer });
+    fireEvent.drop(group, { dataTransfer: transfer });
+    expect(within(group as HTMLElement).getAllByText('Auswahl')).toHaveLength(2);
+  });
+
+  it('keeps the result booking-day count at least one', () => {
+    act(() => openAssistant());
+    openChecklistCategory();
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Freie Termine suchen' }));
+    fireEvent.change(screen.getByLabelText('Buchungstage für diesen Termin'), {
+      target: { value: '-2' },
+    });
+    expect(screen.getByLabelText('Buchungstage für diesen Termin')).toHaveValue(1);
+  });
+
   // What: the suggested-device pill row is a universal feature (user request) — it shows even
   // for a bare device with no Bedarfsgruppe at all, not just when a group's own structure
   // suggests something.

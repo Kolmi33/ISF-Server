@@ -701,6 +701,24 @@ are **not** a guardrail change: build-time-only, ship no JS to the browser, alre
 under `ARCHITECTURE §5` rule 6 ("dev tooling is fine").
 
 ### Scope and approach
+**2026-09-05 — Assistant range-picker extension (user-requested).** Add
+`react-day-picker` 10.0.1 as a frontend runtime dependency, including its locked date-fns
+dependencies. This is the calendar engine used by shadcn's documented Calendar + Popover
+composition; Base UI already supplies Popover but no equivalent calendar in our installed
+component set. Reusing its range/keyboard/calendar semantics is safer and smaller in owned
+code than building date arithmetic and an accessible calendar from scratch. The backend
+remains zero-dependency. `components/ui/calendar.tsx` adapts DayPicker, and
+`date-range-picker.tsx` owns ephemeral range drafts; the Assistant receives ISO endpoints
+together only after application. Explicit UTC handling matches `shared/dates.ts` and
+prevents local-time/DST date shifts. Typed endpoints adjust the opposite endpoint when
+crossed; cleared endpoints still fail the existing search validation.
+
+Shared palette values now live in `web/css/theme.css` (imported by app.css). Shadcn primary
+tokens reference the existing blue accent; dark semantic tokens now use `html[data-theme]`
+as well. See `docs/UI-DESIGN.md` and the tracked `docs/ASSISTANT-UX-PLAN.md`. The date popup
+is portaled within its owning field; the modal lets an open nested popover consume Escape
+before closing itself. Button/Input forward refs to support Base UI composition on React 18.
+
 New Base UI/shadcn-pattern components live under `web/js/components/ui/` (the CLI's own
 convention — a different tree than the hand-rolled `web/js/ui/components/ui/` the pilot
 started with, which was deleted once its two components were reconciled against the real

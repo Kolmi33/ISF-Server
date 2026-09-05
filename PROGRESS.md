@@ -1,5 +1,29 @@
 # PROGRESS — living project state
 
+## Assistant usability update (2026-09-05)
+
+All nine requested improvements are implemented and locally verified. The tracked feature
+and implementation checklist is in [docs/ASSISTANT-UX-PLAN.md](docs/ASSISTANT-UX-PLAN.md).
+The two device cards now have equal heights; a full-width range/duration card sits below.
+Base UI checkboxes have aligned names and 12px spacing; category headings/icons use black
+ink in light mode. Required nodes show UND, alternative groups ODER, intermediate N-of-M
+choices Auswahl. Einzelgeräte includes grouping guidance. Checking a filtered device clears
+the query and restores filter focus. Fresh searches reset each result's booking-day count
+to the requested minimum and clear prior per-result edits/removals.
+
+The date-range field combines synchronized editable endpoints with a German DayPicker
+calendar in a Base UI popup (two months desktop, one mobile). Draft/cancel, reversed and
+same-day ranges, leap days, keyboard selection, and UTC/DST handling are verified. Theme
+values now live in web/css/theme.css; blue primary tokens and design decisions are documented
+in docs/UI-DESIGN.md. ARCHITECTURE §19 records the frontend-only calendar dependency.
+
+Host Node 24 verify: 1,006 tests / 71 files passed; production build passed. Chromium checks
+covered layout, colors/alignment, independent scrolling, keyboard/focus, and DST in Berlin
+and Los Angeles; no page errors or booking writes (temporary backend rev remained 0).
+Docker Desktop was found under AppData/Local/Programs/DockerDesktop and started successfully;
+the full Node 22 container gate also passed (1,006 tests / 71 files). This step is
+committed through the mandatory Docker pre-commit hook; all plan items are crossed off.
+
 **Read this first when resuming, and after any context clear.** It is the single source of
 truth for *where we are* and *what's next*. Update it whenever an item lands or the plan
 changes. (The stable design lives in `ARCHITECTURE.md`; the volatile state lives here.)

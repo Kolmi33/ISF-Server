@@ -82,7 +82,7 @@ function useClampedDays(maxDays: number, initialDays: number) {
       clearTimeout(tipTimer.current);
       tipTimer.current = setTimeout(() => setTip(null), 2000);
     } else {
-      setDays(requested);
+      setDays(Math.max(1, requested));
     }
   }
 
@@ -200,6 +200,8 @@ function AssistantResultItem({ row, tree, isFreeDev, allIds, machineById }: Resu
           className="asDays"
           value={days}
           min={1}
+          max={maxDays}
+          aria-label="Buchungstage für diesen Termin"
           style={{ width: 62 }}
           title="Anzahl Tage (ab Fensteranfang)"
           onChange={onChange}
@@ -259,8 +261,8 @@ export function AssistantResults({
       <h2 style={{ marginTop: 14 }}>Passende Termine:</h2>
       <div className="resultlist">
         {results.map((row, i) => (
-          // Keyed by index — results are replaced wholesale on each search, matching legacy's
-          // own `data-i="${i}"` indexing.
+          // The parent remounts this list for every successful search; local edits stay
+          // scoped to the frozen search snapshot.
           <AssistantResultItem
             key={i}
             row={row}

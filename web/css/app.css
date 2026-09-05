@@ -1,41 +1,5 @@
-:root{
-  --app-bg:#f4f5f7; --app-panel:#fff; --app-border:#d8dbe0; --app-text:#1a1d21; --app-muted:#6b7280;
-  --app-accent:#1a5fb4; --app-accent-light:#e8f0fb; --danger:#c0392b; --warn:#b9770e;
-  --today:#fff8dc; --free-hover:#e8f5e9; --machw:230px;
-  --hover:#f0f2f5; --headbg:#eceff3; --grpbg:#dde3ea; --cellbg:#fff;
-  --todayhead:#f5e9b8; --blocked1:#f3f3f3; --blocked2:#e3e3e3;
-  --tagbg:#eee; --tagink:#555; --dangerbg:#fde3e0; --warnbg:#fdf0d8;
-  --confbg:#fdf3e7; --confink:#5c4a1f; --confbrd:#e6c78a;
-  --toastbg:#333; --toastink:#fff; --app-accent-hover:#164e94;
-  --focus:#e67e22; --selglow:rgba(26,95,180,.25);
-  --dot-free:#2f9e44; --dot-busy:#e03131;
-  --wknd:#e9ebef; --wkndhead:#dfe2e8; --wkndtint:rgba(110,116,128,.13);
-  --star:#d4a017;
-  /* Raster-Linienfarbe/-stärke der Buchungstabelle — eigene Tokens statt --app-border, damit die
-     Einstellung (SettingsModal.tsx, zwei unabhängige Schieberegler in Pixeln) nur das
-     Zellgitter betrifft, nicht Rahmen andernorts (Modals, Buttons, …). --gridline-width ist die
-     Datenzellen (td), --gridline-width-header die Kopfzeile (th: KW-Zeile + Datumszeile) — zwei
-     Variablen statt einer, damit beide unabhängig einstellbar sind. Themeunabhängig (reine
-     Nutzerpräferenz), deshalb nur einmal hier gesetzt, nicht im dark-Block unten wiederholt. */
-  --gridline: var(--app-border);
-  --gridline-width: 1px;
-  --gridline-width-header: 1px;
-}
-html[data-theme="dark"]{
-  --app-bg:#15171a; --app-panel:#1e2126; --app-border:#3a3f46; --app-text:#e8eaed; --app-muted:#9aa0a6;
-  --app-accent:#5b96e3; --app-accent-light:#263a52; --danger:#e07b6e; --warn:#d9a441;
-  --today:#3a3620; --free-hover:#1f3320;
-  --hover:#2a2f36; --headbg:#23262b; --grpbg:#2b313a; --cellbg:#1e2126;
-  --star:#e0b84a;
-  --todayhead:#4a4420; --blocked1:#24272c; --blocked2:#2f333a;
-  --tagbg:#33383f; --tagink:#b6bcc4; --dangerbg:#4a2622; --warnbg:#453a1c;
-  --confbg:#3b3325; --confink:#e8d9b0; --confbrd:#6b5c33;
-  --toastbg:#e8eaed; --toastink:#1a1d21; --app-accent-hover:#6ea5e8;
-  --focus:#ffab5e; --selglow:rgba(91,150,227,.32);
-  --dot-free:#4cbf63; --dot-busy:#ff6b6b;
-  --wknd:#242830; --wkndhead:#1b1e23; --wkndtint:rgba(150,160,180,.10);
-  --gridline: var(--app-border);
-}
+@import './theme.css';
+
 body.compact td.cell{height:22px;padding:1px 4px;font-size:12px}
 body.compact td.machcol{padding-top:1px;padding-bottom:1px;font-size:12px}
 *{box-sizing:border-box}
@@ -332,74 +296,42 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    übereinander, beide Spalten dauerhaft sichtbar. Schmalere Breiten stapeln alles in
    derselben Reihenfolge von oben nach unten. */
 #modal:has(.assist-columns){background:var(--app-bg)}
-.assist-columns{display:flex;flex-direction:column;gap:10px}
-@media (min-width:860px){
-  #modal:has(.assist-columns){max-width:920px}
-  /* 40/60 split (user request) with align-items: stretch AND an explicit row height — not just
-     stretch-to-content. Stretch alone equalizes both columns to whichever is naturally taller,
-     but with nothing capping either side's OWN content (e.g. many Geräteauswahl categories
-     opened at once), that "taller" height was itself unbounded — the whole card grew right
-     along with its checklist instead of scrolling internally, dragging the other column's
-     stretch target up with it (user report: "the 'Geräteauswahl' card growing indefinitely").
-     An explicit height gives both columns a real, bounded box to stretch to fill; each side's
-     own internal list (.mlist here, .aswork on the right) scrolls within that fixed height via
-     its own overflow-y instead. */
-  .assist-columns{display:grid;grid-template-columns:2fr 3fr;gap:16px;align-items:stretch;
-    height:min(560px,60vh)}
-  .assist-columns .aswork{max-height:260px;overflow:auto}
+.assist-columns{display:grid;grid-template-columns:1fr;gap:12px}
+.assist-card{background:var(--app-panel);border:1px solid var(--app-border);border-radius:10px;padding:12px;min-width:0}
+.assist-card-title{font-weight:700;font-size:13px;margin:0 0 10px;color:var(--heading-ink)}
+.assist-cart,.assist-catalog{display:flex;flex-direction:column;min-height:0}
+.assist-cart .aswork,.assist-cart .aswork-empty{flex:1;min-height:0;overflow:auto}
+.assist-catalog .mlist{flex:1;min-height:0;max-height:none;border:0;border-radius:0;padding:0;margin:2px 0 0}
+.assist-parameters{margin-top:12px}
+.assist-parameter-fields{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:24px;align-items:center}
+.assist-duration>label{display:block;font-size:13px;color:var(--app-muted);margin-bottom:8px}
+.assist-duration-input{display:flex;align-items:center;gap:12px}
+.assist-duration-input input{width:70px}
+.assist-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}
+.assist-hint{font-size:12px;color:var(--app-muted)}
+.assist-card input[type=date],.assist-card input[type=number],.assist-card input[type=text]{height:36px;box-sizing:border-box}
+.assist-card .grp.cathead{background:transparent;color:var(--heading-ink);border-radius:0;
+  border-bottom:1px solid var(--app-border);padding:8px 4px;display:flex;align-items:center;gap:6px}
+.assist-catalog button.grp{width:100%;text-align:left;font:inherit;cursor:pointer;border:0;background:transparent;color:var(--heading-ink)}
+.assist-catalog .grp.cathead:not(:first-child){border-top:0;margin-top:6px}
+.assist-catalog button.cathead{font-weight:700;font-size:12px;border-bottom:1px solid var(--app-border)}
+.assist-catalog button.grp:focus-visible{outline:2px solid var(--app-accent);outline-offset:-2px}
+.assist-catalog .grp.cathead .ic{flex:0 0 auto}
+.assist-catalog .mlist label.assist-machine-row{display:flex;align-items:center;min-height:40px;box-sizing:border-box;gap:var(--control-gap);cursor:pointer;padding:8px}
+.assist-machine-row [data-slot=checkbox]{margin:0;box-sizing:border-box;flex:0 0 18px;width:18px;height:18px}
+.assist-machine-name{line-height:1.4;min-width:0;overflow-wrap:anywhere}
+.assist-catalog .mlist label:has([data-checked]){background:var(--app-accent-light)}
+.assist-connection{display:block;margin:4px 8px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--app-muted);text-transform:uppercase}
+.assist-drag-hint{margin:4px 2px 10px;font-size:12px;line-height:1.5;color:var(--app-muted)}
+@media(min-width:860px){
+  #modal:has(.assist-columns){max-width:1040px}
+  .assist-columns{grid-template-columns:1fr 1fr;height:clamp(280px,42vh,440px);align-items:stretch}
 }
-.assist-card{background:var(--app-panel);border:1px solid var(--app-border);border-radius:10px;padding:12px}
-.assist-card-title{font-weight:700;font-size:13px;margin-bottom:8px;color:var(--app-text)}
-.assist-col-right{display:flex;flex-direction:column;gap:10px;min-height:0}
-/* flex-grow: 1 on the "Ausgewählte Geräte" cart card specifically (user request) — once the
-   column as a whole is stretched to match the left card's height, the cart (not the fixed-size
-   Buchungsparameter card or the action row) is what actually grows to fill the extra space.
-   min-height: 0 lets it actually shrink to the column's own bounded height instead of a flex
-   item's default auto-min keeping it at its content's full intrinsic size. */
-.assist-col-right .assist-cart{flex:1;display:flex;flex-direction:column;gap:8px;min-height:0}
-/* The tree (.aswork/.aswork-empty) grows to fill whatever height the cart card has to spare,
-   pushing the action row (now nested inside this same card — user request) flush to the
-   card's own bottom edge instead of floating right after the tree's own natural height. */
-.assist-cart .aswork,.assist-cart .aswork-empty{flex:1}
-/* The "Geräteauswahl" card fills the column's own (now explicitly bounded, see
-   .assist-columns above) height — its own flex column, with the checklist (.mlist, min-height:
-   0 so it can actually shrink instead of just growing to fit its content) as the one growing
-   child, scrolling internally (.mlist's own overflow: auto) rather than pushing the card taller
-   once several categories are open at once. */
-.assist-card.assist-catalog{display:flex;flex-direction:column;min-height:0}
-.assist-card.assist-catalog .mlist{flex:1;min-height:0;max-height:none}
-/* Die primäre Aktion, unten rechts in der "Ausgewählte Geräte"-Karte selbst verankert — der
-   klare letzte Schritt des Ablaufs, nicht lose unter einem unabhängigen Formular (user request) */
-/* margin-top: auto locks this row to the cart card's bottom edge regardless of how tall the
-   tree above it happens to be — belt-and-suspenders alongside the tree's own flex: 1 (which
-   already pushes it there in the common case), so the buttons stay put even if that chain
-   changes shape */
-.assist-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:auto}
-/* "Freie Termine suchen" bleibt die einzige auffällige Aktion (.btn.primary, unverändert) —
-   "Abbrechen" wird bewusst zurückhaltend: randlos, nur ein dezenter Hover-Hintergrund, statt
-   gleichrangig mit der Primäraktion zu wirken (user request). */
-.assist-actions .btn:not(.primary){border-color:transparent;background:transparent}
-.assist-actions .btn:not(.primary):hover{background:var(--hover)}
-/* Einheitliche Feld-/Button-Höhe im ganzen Assistenten (user request: "Mind. Tage am Stück"
-   wirkte gegenüber den Datumsfeldern/Buttons darunter zu niedrig) */
-.assist-card input[type=date],.assist-card input[type=number],.assist-card input[type=text],
-.assist-actions .btn{height:36px;box-sizing:border-box}
-.assist-actions .btn{display:inline-flex;align-items:center;justify-content:center}
-.assist-card input[type=date]::-webkit-calendar-picker-indicator{margin-right:2px}
-/* Das Geräteauswahl-Akkordeon (.mlist, via AssistantChecklist) sitzt bereits in einer Karte mit
-   eigenem Rahmen — der zusätzliche innere Rahmen/das Padding von .mlist ist hier redundant
-   (user request). Nur innerhalb des Assistenten überschrieben (Spezifität), .mlist selbst
-   bleibt für AdminModal/MachineFilterDropdown unverändert. */
-.assist-card .mlist{border:none;border-radius:0;padding:0;margin-top:2px}
-/* Hellere, dezente Akkordeon-Köpfe statt der schweren Volltonfläche (user request) — ebenfalls
-   nur innerhalb des Assistenten, .cathead bleibt anderswo unverändert. */
-.assist-card .grp.cathead{
-  background:transparent;color:var(--app-muted);border-radius:0;
-  border-bottom:1px solid var(--app-border);padding:6px 4px;display:flex;align-items:center;gap:5px}
-.assist-card .grp.cathead .ic{flex:0 0 auto}
-.assist-card .grp.cathead:not(:first-child){border-top:none;margin-top:2px;padding-top:6px}
-/* Leerer Warenkorb-Zustand: zentriert statt linksbündig, dezentes Icon + hellere Schrift, damit
-   der Zustand bewusst statt „vergessen" wirkt (user request) */
+@media(max-width:859px){
+  .assist-catalog,.assist-cart{height:300px}
+  .assist-parameter-fields{grid-template-columns:1fr;gap:16px}
+}
+@media(max-width:480px){.assist-actions{display:grid;grid-template-columns:1fr}}
 .aswork-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:6px;min-height:54px;color:var(--app-muted)}
 .aswork-empty .ic{width:22px;height:22px;opacity:.5}

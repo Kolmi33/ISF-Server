@@ -46,6 +46,10 @@ covered by an automated test.
 - [x] Machine selector/filter (search, by category/group, favorites)
 
 ## Assistant (auto-booking)
+- [x] Assistant UX 2026-09-05: aligned labeled checkboxes, black category ink, blue theme tokens,
+  explicit UND/ODER requirements, grouping help, automatic filter clearing, equal-height cards,
+  full-width parameters, synchronized range calendar, and per-search result-duration defaults.
+  Local gate and browser evidence: `docs/ASSISTANT-UX-PLAN.md` (Docker/commit status tracked there).
 - [x] Build a device/group tree; drag-drop to group devices
 - [ ] Group "need N of M" (change need up/down, dissolve group, remove device) — group creation verified above, these per-group controls were not separately exercised
 - [x] Run assistant over a date range → allocates free machines respecting need/blocks (logic-tested; redundancy-confirm dialog before the search also confirmed working)

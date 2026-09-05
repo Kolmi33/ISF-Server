@@ -101,6 +101,8 @@ document.addEventListener(
   'keydown',
   (event) => {
     if (!currentRoot || event.key !== 'Escape') return;
+    // Nested Base UI popovers own the first Escape; a second Escape closes this modal.
+    if (document.querySelector('#modal [data-slot="popover-content"][data-open]')) return;
     event.stopPropagation();
     if (isCurrentModalSticky) return;
     if (isCollapsed) dismissCollapsedTab();
