@@ -58,7 +58,7 @@ import { AssistantChecklist } from './AssistantChecklist.tsx';
 import { AssistantTree } from './AssistantTree.tsx';
 import { AssistantResults } from './AssistantResults.tsx';
 import { Icon } from './Icon.tsx';
-import { AssistantParameters } from './AssistantParameters.tsx';
+import { AssistantActions, AssistantParameters } from './AssistantParameters.tsx';
 import { store } from '../../store-instance.ts';
 import { machById } from '../machine-lookup.ts';
 
@@ -248,29 +248,31 @@ export function AssistantModal() {
       <h2>
         <Icon name="compass" /> Buchungsassistent
       </h2>
-      <div className="assist-columns">
-        <div className="assist-card assist-catalog">
-          <div className="assist-card-title">Geräteauswahl</div>
-          <AssistantChecklist
-            machines={machines}
-            favoriteIds={store.get('favs')}
-            addedIds={assistant.addedIds}
-            onToggle={assistant.toggleDevice}
-          />
+      <div className="assist-filter-zone">
+        <div className="assist-columns">
+          <div className="assist-card assist-catalog">
+            <div className="assist-card-title">Geräteauswahl</div>
+            <AssistantChecklist
+              machines={machines}
+              favoriteIds={store.get('favs')}
+              addedIds={assistant.addedIds}
+              onToggle={assistant.toggleDevice}
+            />
+          </div>
+          <AssistantSelectedDevicesCard assistant={assistant} />
         </div>
-        <AssistantSelectedDevicesCard assistant={assistant} />
+        <AssistantParameters
+          from={from}
+          to={to}
+          minDays={minDays}
+          onRangeChange={(nextFrom, nextTo) => {
+            setFrom(nextFrom);
+            setTo(nextTo);
+          }}
+          onMinDaysChange={setMinDays}
+        />
+        <AssistantActions onSearch={search} />
       </div>
-      <AssistantParameters
-        from={from}
-        to={to}
-        minDays={minDays}
-        onRangeChange={(nextFrom, nextTo) => {
-          setFrom(nextFrom);
-          setTo(nextTo);
-        }}
-        onMinDaysChange={setMinDays}
-        onSearch={search}
-      />
       {searchState && (
         <AssistantResults
           key={searchRevision.current}

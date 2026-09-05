@@ -1138,3 +1138,10 @@ against ambiguous automated evidence.
   console clean, no write attempted (rev unchanged). Acceptance was integration-level (fresh-tab
   console clean + zero `/api/mutate` + rev stable), since the defect lived in impure obsolete init
   code with no meaningful unit-test surface.
+- **Assistant global filter actions and compact selection layout** — FIXED 2026-09-05.
+  The search and cancel actions now live in a single right-aligned footer for the complete
+  filter zone and remain available as the zone scrolls. The three input cards share a light
+  filter-zone surface; selected devices wrap as inline chips, with alternatives grouped in a
+  dashed container and the redundant root-level `UND` label removed. The date range is compact,
+  shows a calendar icon in each endpoint, and keeps the minimum-days input beside the range.
+  Focused Assistant/date-picker tests (46) and the full verification suite pass.

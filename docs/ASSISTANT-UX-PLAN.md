@@ -3,6 +3,18 @@
 Status markers: checked and struck through means implemented and validated.
 The full Docker gate passed; the completed change is committed through the mandatory hook.
 
+## Follow-up global action and filter-zone plan (2026-09-05)
+
+- [x] ~~Move Assistant actions into a page-level right-aligned footer.~~
+- [x] ~~Keep actions sticky within the scrollable filter zone for long lists.~~
+- [x] ~~Remove explicit root UND labels and keep alternatives in grouped dashed containers.~~
+- [x] ~~Keep split date endpoints with compact calendar affordances and duration beside them.~~
+- [x] ~~Wrap the three cards in a light filter-zone foundation.~~
+
+Implementation evidence: 46 focused tests pass; browser confirms three cards, one global footer,
+equal 420px device cards, two endpoint icons, no root UND text, and no horizontal overflow at
+1440px and 390px.
+
 ## Feature plan
 
 - [x] ~~1. Align Base UI checkboxes vertically with names; use an explicit 12px gap and full-row targets.~~

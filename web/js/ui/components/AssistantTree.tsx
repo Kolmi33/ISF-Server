@@ -178,7 +178,7 @@ function ConnectedNodes({
 }) {
   return nodes.map((node, index) => (
     <Fragment key={node.uid}>
-      {index > 0 && (
+      {index > 0 && connection !== 'und' && (
         <span className={connection === 'oder' ? 'asgrp-or' : 'assist-connection'}>
           {connection}
         </span>
@@ -432,7 +432,6 @@ export function AssistantTree({
       )}
       {loose.length > 0 && (
         <>
-          {groups.length > 0 && <span className="assist-connection">und</span>}
           <div className="catlbl">Einzelgeräte</div>
           <p className="assist-drag-hint">
             Ähnliche Geräte aufeinander ziehen, um eine Bedarfsgruppe mit Alternativen zu bilden.

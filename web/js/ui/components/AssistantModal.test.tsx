@@ -114,10 +114,12 @@ describe('AssistantModal — card layout', () => {
     expect(within(parameters).getByLabelText('Mind. Tage am Stück')).toHaveAccessibleDescription(
       'Arbeitstage (Mo-Fr)',
     );
+    const filterZone = document.querySelector<HTMLElement>('.assist-filter-zone')!;
     expect(
-      within(parameters).getByRole('button', { name: 'Freie Termine suchen' }),
+      within(filterZone).getByRole('button', { name: 'Freie Termine suchen' }),
     ).toBeInTheDocument();
-    expect(within(parameters).getByRole('button', { name: 'Abbrechen' })).toBeInTheDocument();
+    expect(within(filterZone).getByRole('button', { name: 'Abbrechen' })).toBeInTheDocument();
+    expect(filterZone.lastElementChild).toHaveClass('assist-global-actions');
   });
 
   it('keeps final actions at the shared control height', () => {
@@ -283,17 +285,17 @@ describe('AssistantModal — search results', () => {
     expect(document.querySelector('.asdev')).toHaveTextContent('Fräse');
   });
 
-  it('shows UND between required devices and explains grouping', () => {
+  it('implies required selection without an UND label and explains grouping', () => {
     act(() => openAssistant());
     openChecklistCategory();
     fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: /^Presse/ }));
     const work = document.getElementById('asWork')!;
-    expect(within(work).getByText('und')).toBeInTheDocument();
+    expect(within(work).queryByText(/^und$/i)).not.toBeInTheDocument();
     expect(within(work).getByText(/Ähnliche Geräte aufeinander ziehen/)).toBeInTheDocument();
   });
 
-  it('shows UND within all-required groups and Auswahl for intermediate N-of-M needs', () => {
+  it('keeps alternatives grouped and labels intermediate N-of-M choices', () => {
     act(() => openAssistant());
     openChecklistCategory();
     for (const name of [/^Fräse/, /^Presse/, /^Kaputte Presse/]) {
@@ -306,7 +308,7 @@ describe('AssistantModal — search results', () => {
     const group = document.querySelector('.asgrp')!;
     expect(within(group as HTMLElement).getByText('oder')).toBeInTheDocument();
     fireEvent.change(group.querySelector('.asNeed')!, { target: { value: '2' } });
-    expect(within(group as HTMLElement).getByText('und')).toBeInTheDocument();
+    expect(within(group as HTMLElement).queryByText(/^und$/i)).not.toBeInTheDocument();
     expect(within(group as HTMLElement).queryByText('oder')).not.toBeInTheDocument();
     fireEvent.dragStart(devices[2]!, { dataTransfer: transfer });
     fireEvent.drop(group, { dataTransfer: transfer });

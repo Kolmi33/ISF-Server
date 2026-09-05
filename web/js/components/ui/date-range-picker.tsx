@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import { Popover } from '@base-ui/react/popover';
 import { IconArrowRight, IconCalendar } from '@tabler/icons-react';
 import { Button } from './button.tsx';
@@ -11,6 +12,26 @@ interface DateRangePickerProps {
   onChange: (from: string, to: string) => void;
 }
 
+function DateEndpoint({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <div className="date-range-endpoint">
+      <label htmlFor={id}>{label}</label>
+      <Input id={id} type="date" value={value} onChange={onChange} />
+      <IconCalendar className="date-endpoint-icon" size={16} aria-hidden="true" />
+    </div>
+  );
+}
+
 /** One compound range field: synchronized editable endpoints plus a shared range calendar. */
 export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
   const id = useId();
@@ -19,31 +40,25 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <div ref={fieldRef} className="date-range-field" role="group" aria-label="Suchzeitraum">
-        <div className="date-range-endpoint">
-          <label htmlFor={`${id}-from`}>Suchen von</label>
-          <Input
-            id={`${id}-from`}
-            type="date"
-            value={from}
-            onChange={(event) => {
-              const value = event.target.value;
-              onChange(value, value && to && value > to ? value : to);
-            }}
-          />
-        </div>
+        <DateEndpoint
+          id={`${id}-from`}
+          label="Suchen von"
+          value={from}
+          onChange={(event) => {
+            const value = event.target.value;
+            onChange(value, value && to && value > to ? value : to);
+          }}
+        />
         <IconArrowRight size={18} aria-hidden="true" className="range-arrow" />
-        <div className="date-range-endpoint">
-          <label htmlFor={`${id}-to`}>bis</label>
-          <Input
-            id={`${id}-to`}
-            type="date"
-            value={to}
-            onChange={(event) => {
-              const value = event.target.value;
-              onChange(value && from && value < from ? value : from, value);
-            }}
-          />
-        </div>
+        <DateEndpoint
+          id={`${id}-to`}
+          label="bis"
+          value={to}
+          onChange={(event) => {
+            const value = event.target.value;
+            onChange(value && from && value < from ? value : from, value);
+          }}
+        />
         <Popover.Trigger
           render={<Button variant="outline" size="icon-lg" />}
           aria-label="Zeitraum im Kalender wählen"

@@ -1,6 +1,6 @@
-import { Button } from '../../components/ui/button.tsx';
 import { DateRangePicker } from '../../components/ui/date-range-picker.tsx';
 import { Input } from '../../components/ui/input.tsx';
+import { Button } from '../../components/ui/button.tsx';
 import { closeReactModal } from '../modal.tsx';
 
 interface AssistantParametersProps {
@@ -9,7 +9,6 @@ interface AssistantParametersProps {
   minDays: number;
   onRangeChange: (from: string, to: string) => void;
   onMinDaysChange: (value: number) => void;
-  onSearch: () => void;
 }
 
 /** Shared final step below both device-selection cards. */
@@ -19,7 +18,6 @@ export function AssistantParameters({
   minDays,
   onRangeChange,
   onMinDaysChange,
-  onSearch,
 }: AssistantParametersProps) {
   return (
     <section className="assist-card assist-parameters" aria-labelledby="assist-parameters-title">
@@ -48,14 +46,24 @@ export function AssistantParameters({
           </div>
         </div>
       </div>
-      <div className="assist-actions">
-        <Button variant="ghost" size="lg" onClick={closeReactModal}>
-          Abbrechen
-        </Button>
-        <Button size="lg" onClick={onSearch}>
-          Freie Termine suchen
-        </Button>
-      </div>
     </section>
+  );
+}
+
+export interface AssistantActionsProps {
+  onSearch: () => void;
+}
+
+/** Page-level actions for the complete filter zone, rather than one parameter card. */
+export function AssistantActions({ onSearch }: AssistantActionsProps) {
+  return (
+    <div className="assist-actions assist-global-actions">
+      <Button variant="ghost" size="lg" className="assist-cancel-action" onClick={closeReactModal}>
+        Abbrechen
+      </Button>
+      <Button size="lg" className="assist-search-action" onClick={onSearch}>
+        Freie Termine suchen
+      </Button>
+    </div>
   );
 }
