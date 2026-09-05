@@ -13,7 +13,12 @@
 //
 // =======================================================================================
 
-import { nextWeekday } from '../../../shared/dates.ts';
+import {
+  addDays,
+  formatDateAsIsoString,
+  mondayFirstWeekdayIndex,
+  parseIsoDateString,
+} from '../../../shared/dates.ts';
 
 /** A device leaf in the Assistant requirement tree. */
 export interface AssistDev {
@@ -139,6 +144,57 @@ export function treeCleanup(node: AssistContainer): void {
 /** Predicate checking whether device `id` is free and bookable on ISO calendar day `day`. */
 export type IsFree = (id: string, day: string) => boolean;
 
+// ---------------------------------------------------------------------------------------
+// Buchbare Wochentage (eligible weekdays) — which calendar weekdays the search/continuity
+// model considers at all, letting the user restrict or widen the default Mon–Fri window.
+// ---------------------------------------------------------------------------------------
+
+/** A 7-character mask, Monday-first (index 0=Mo .. 6=So), `'1'` = eligible for booking — the
+ *  exact same format/order as a `Machine.days` availability mask (`core/machines.ts`), so the
+ *  two line up directly: a day only ever counts if it's eligible under BOTH masks. */
+export type WeekdayMask = string;
+
+export const WEEKDAYS_MON_FRI: WeekdayMask = '1111100';
+export const WEEKDAYS_ALL: WeekdayMask = '1111111';
+
+/** True if `mask` selects at least one weekday — an all-'0' mask can never produce a search. */
+export function hasEligibleWeekday(mask: WeekdayMask): boolean {
+  return mask.includes('1');
+}
+
+/** Whether `date` falls on a weekday `mask` marks eligible. */
+function isMaskedDay(mask: WeekdayMask, date: Date): boolean {
+  return mask.charAt(mondayFirstWeekdayIndex(date)) !== '0';
+}
+
+/** The next ISO date strictly after `isoDateString` whose weekday `mask` marks eligible —
+ *  the generalized form of the old hardcoded-Mon–Fri "next business day" step, used to decide
+ *  whether two eligible days are "adjacent" for run-continuity purposes. */
+function nextMaskedDay(isoDateString: string, mask: WeekdayMask): string {
+  let candidateDate = addDays(parseIsoDateString(isoDateString), 1);
+  while (!isMaskedDay(mask, candidateDate)) {
+    candidateDate = addDays(candidateDate, 1);
+  }
+  return formatDateAsIsoString(candidateDate);
+}
+
+/** Every ISO date in `[fromIsoDate, toIsoDate]` whose weekday `mask` marks eligible — the
+ *  candidate-day list the search scans, generalizing the old hardcoded Mon–Fri window. */
+export function candidateDaysInRange(
+  fromIsoDate: string,
+  toIsoDate: string,
+  mask: WeekdayMask,
+): string[] {
+  const isoDatesInRange: string[] = [];
+  let currentDate = parseIsoDateString(fromIsoDate);
+  const endDate = parseIsoDateString(toIsoDate);
+  while (currentDate <= endDate) {
+    if (isMaskedDay(mask, currentDate)) isoDatesInRange.push(formatDateAsIsoString(currentDate));
+    currentDate = addDays(currentDate, 1);
+  }
+  return isoDatesInRange;
+}
+
 /**
  * Returns the effective `need` count of a group, clamped to `1 <= need <= children.length`.
  */
@@ -178,13 +234,18 @@ export function freeDays(root: AssistContainer, days: string[], isFree: IsFree):
 }
 
 /**
- * Groups a sorted array of available ISO dates into contiguous business-day runs (skipping weekends).
+ * Groups a sorted array of available ISO dates into contiguous runs under `mask` (defaulting
+ * to the classic Mon–Fri business-day window, so a Friday followed by the next Monday still
+ * counts as adjacent under the default mask, exactly as before).
  */
-export function groupRuns(sortedFreeDates: string[]): string[][] {
+export function groupRuns(
+  sortedFreeDates: string[],
+  mask: WeekdayMask = WEEKDAYS_MON_FRI,
+): string[][] {
   const runs: string[][] = [];
   let currentRun: string[] = [];
   for (const date of sortedFreeDates) {
-    if (currentRun.length && nextWeekday(currentRun[currentRun.length - 1]!) === date) {
+    if (currentRun.length && nextMaskedDay(currentRun[currentRun.length - 1]!, mask) === date) {
       currentRun.push(date);
     } else {
       if (currentRun.length) runs.push(currentRun);
@@ -196,25 +257,27 @@ export function groupRuns(sortedFreeDates: string[]): string[][] {
 }
 
 /**
- * Extends available runs that reach the search horizon (`to`) into future workdays as long as
- * the requirement tree remains continuously satisfiable, up to a safety `cap` of days.
+ * Extends available runs that reach the search horizon (`to`) into future eligible days (per
+ * `mask`, defaulting to Mon–Fri) as long as the requirement tree remains continuously
+ * satisfiable, up to a safety `cap` of days.
  */
 export function extendOpenRuns(
   root: AssistContainer,
   runs: string[][],
   to: string,
   isFree: IsFree,
+  mask: WeekdayMask = WEEKDAYS_MON_FRI,
   cap = 520,
 ): Set<string[]> {
   const openRuns = new Set<string[]>();
   for (const run of runs) {
-    if (nextWeekday(run[run.length - 1]!) > to) {
+    if (nextMaskedDay(run[run.length - 1]!, mask) > to) {
       openRuns.add(run);
-      let date = nextWeekday(run[run.length - 1]!);
+      let date = nextMaskedDay(run[run.length - 1]!, mask);
       let daysExtended = 0;
       while (isTreeSatisfiableOnDay(root, date, isFree) && daysExtended < cap) {
         run.push(date);
-        date = nextWeekday(date);
+        date = nextMaskedDay(date, mask);
         daysExtended++;
       }
     }

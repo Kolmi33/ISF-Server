@@ -23,7 +23,6 @@ import type { Machine } from '../../../../shared/types.ts';
 import {
   addDays,
   formatDateAsIsoString,
-  getWeekdaysInRange,
   parseIsoDateString,
   todayAsIsoDateString,
 } from '../../../../shared/dates.ts';
@@ -34,12 +33,14 @@ import {
 } from '../../core/machines.ts';
 import {
   addDeviceToTree,
+  candidateDaysInRange,
   changeGroupNeed,
   dissolveGroup,
   extendOpenRuns,
   freeDays,
   groupNodeOnto,
   groupRuns,
+  hasEligibleWeekday,
   joinNode,
   moveNodeToRoot,
   removeNode,
@@ -47,18 +48,21 @@ import {
   treeDevUid,
   treeDevs,
   treeFind,
+  WEEKDAYS_MON_FRI,
   type AssistContainer,
+  type WeekdayMask,
 } from '../../core/assistant.ts';
 import { orderedMachines } from '../grid.ts';
 import { getBooking } from '../../core/bookings.ts';
 import { buildAssistantResults, type AssistantResultRow } from '../assistant-results.ts';
+import { describeSelectionSummary } from '../assistant-summary.ts';
 import { toast } from '../toast.ts';
 import { openReactModal } from '../modal.tsx';
 import { AssistantChecklist } from './AssistantChecklist.tsx';
 import { AssistantTree } from './AssistantTree.tsx';
 import { AssistantResults } from './AssistantResults.tsx';
 import { Icon } from './Icon.tsx';
-import { AssistantActions, AssistantParameters } from './AssistantParameters.tsx';
+import { AssistantParameters } from './AssistantParameters.tsx';
 import { store } from '../../store-instance.ts';
 import { machById } from '../machine-lookup.ts';
 
@@ -116,7 +120,7 @@ async function confirmMixedCategories(
  *  held across renders, so drag-and-drop edits don't need to reconstruct the whole tree. */
 function useAssistantTree() {
   const treeRef = useRef<AssistContainer>({ children: [] });
-  const [, forceRerender] = useState(0);
+  const [revision, forceRerender] = useState(0);
   const uidCounter = useRef(0);
   const newUid = () => 'n' + ++uidCounter.current;
 
@@ -138,6 +142,9 @@ function useAssistantTree() {
 
   return {
     tree: treeRef.current,
+    /** Bumped on every tree edit — lets the search-staleness check notice a tree change
+     *  without deep-comparing it. */
+    revision,
     addedIds: new Set(treeDevs(treeRef.current)),
     toggleDevice,
     onGroupOnto: (dragUid: string, targetUid: string) => {
@@ -167,31 +174,44 @@ interface AssistantSearchState {
   allIds: readonly string[];
 }
 
+/** Field-level validation for the date-range inputs, shown beside the field rather than as a
+ *  toast (feature 6) — distinguishes a missing endpoint from an inverted range, per the two
+ *  distinct causes a user can actually run into. */
+function rangeValidationError(from: string, to: string): string | null {
+  if (!from || !to) return 'Bitte Start- und Enddatum wählen.';
+  if (from > to) return 'Enddatum darf nicht vor dem Startdatum liegen.';
+  return null;
+}
+
+/** Field-level validation for the weekday selector: an all-excluded mask can never produce a
+ *  search (feature 7). */
+function weekdayValidationError(mask: WeekdayMask): string | null {
+  return hasEligibleWeekday(mask) ? null : 'Wählen Sie mindestens einen Wochentag aus.';
+}
+
 /**
- * Validates the search inputs, then searches for free windows and freezes a tree snapshot for
- * the result (see the file header's note on why the result is frozen rather than reading the
- * live tree). Used to also confirm before searching when a group had redundancy (need < member
- * count) — removed (user request): the results/suggestion pills already surface a group's
- * structure without an extra blocking dialog in front of every such search.
+ * Searches for free windows under `weekdayMask` and freezes a tree snapshot for the result
+ * (see the file header's note on why the result is frozen rather than reading the live tree).
+ * Assumes the date range and weekday mask are already known-valid (the component gates the
+ * search action on `rangeValidationError`/`weekdayValidationError` first) — this only still
+ * guards the one condition with no natural field to attach an inline error to: an empty
+ * device selection, which stays a toast.
  */
 function runAssistantSearch(
   tree: AssistContainer,
   from: string,
   to: string,
   minDays: number,
+  weekdayMask: WeekdayMask,
 ): AssistantSearchState | null {
   if (!tree.children.length) {
     toast('Bitte oben Geräte übernehmen.');
     return null;
   }
-  if (!from || !to || from > to) {
-    toast('Bitte gültigen Zeitraum wählen.');
-    return null;
-  }
   const frozenTree = structuredClone(tree);
-  const days = getWeekdaysInRange(from, to);
-  const runs = groupRuns(freeDays(frozenTree, days, isFreeDevice));
-  const openRuns = extendOpenRuns(frozenTree, runs, to, isFreeDevice);
+  const days = candidateDaysInRange(from, to, weekdayMask);
+  const runs = groupRuns(freeDays(frozenTree, days, isFreeDevice), weekdayMask);
+  const openRuns = extendOpenRuns(frozenTree, runs, to, isFreeDevice, weekdayMask);
   const good = runs.filter((run) => run.length >= minDays);
   return {
     results: buildAssistantResults(good, openRuns, minDays),
@@ -224,6 +244,121 @@ function AssistantSelectedDevicesCard({
   );
 }
 
+interface AssistantSearchController {
+  searchState: AssistantSearchState | null;
+  searchRevision: number;
+  isSearching: boolean;
+  isStale: boolean;
+  rangeError: string | null;
+  weekdayError: string | null;
+  runSearch: () => void;
+}
+
+/** Owns the search action's lifecycle: field-level validation (gates the search rather than
+ *  toasting), a deferred (`setTimeout`) run so the "Termine werden gesucht…" loading state
+ *  actually gets a paint before the (synchronous, in-memory) search runs, a token guard so a
+ *  superseded search can never overwrite a newer one's result, and a staleness flag once any
+ *  input has changed since the last completed search. */
+function useAssistantSearchController(
+  tree: AssistContainer,
+  treeRevision: number,
+  from: string,
+  to: string,
+  minDays: number,
+  weekdayMask: WeekdayMask,
+): AssistantSearchController {
+  const [searchState, setSearchState] = useState<AssistantSearchState | null>(null);
+  const [searchRevision, setSearchRevision] = useState(0);
+  const [isSearching, setIsSearching] = useState(false);
+  const [lastSignature, setLastSignature] = useState<string | null>(null);
+  const tokenRef = useRef(0);
+
+  const rangeError = rangeValidationError(from, to);
+  const weekdayError = weekdayValidationError(weekdayMask);
+  const signature = JSON.stringify([from, to, minDays, weekdayMask, treeRevision]);
+
+  function runSearch(): void {
+    if (rangeError || weekdayError || isSearching) return;
+    setIsSearching(true);
+    const token = ++tokenRef.current;
+    setTimeout(() => {
+      if (token !== tokenRef.current) return; // superseded by a newer search since
+      let outcome: AssistantSearchState | null;
+      try {
+        outcome = runAssistantSearch(tree, from, to, minDays, weekdayMask);
+      } catch {
+        setIsSearching(false);
+        toast('Fehler bei der Suche. Bitte erneut versuchen.');
+        return;
+      }
+      setIsSearching(false);
+      if (outcome) {
+        setSearchRevision((revision) => revision + 1);
+        setSearchState(outcome);
+        setLastSignature(signature);
+      }
+    }, 0);
+  }
+
+  return {
+    searchState,
+    searchRevision,
+    isSearching,
+    isStale: searchState !== null && signature !== lastSignature,
+    rangeError,
+    weekdayError,
+    runSearch,
+  };
+}
+
+/** The two device-selection cards: "Geräte auswählen" (catalog) at 45%, "Ausgewählte Geräte"
+ *  (the work tree) at 55% on desktop, stacked on narrow screens. */
+function AssistantDeviceColumns({
+  machines,
+  assistant,
+}: {
+  machines: readonly Machine[];
+  assistant: ReturnType<typeof useAssistantTree>;
+}) {
+  return (
+    <div className="assist-columns">
+      <div className="assist-card assist-catalog">
+        <div className="assist-card-title">Geräte auswählen</div>
+        <AssistantChecklist
+          machines={machines}
+          favoriteIds={store.get('favs')}
+          addedIds={assistant.addedIds}
+          onToggle={assistant.toggleDevice}
+        />
+      </div>
+      <AssistantSelectedDevicesCard assistant={assistant} />
+    </div>
+  );
+}
+
+/** The stale-search banner + results list, once at least one search has completed. */
+function AssistantSearchOutcome({ search }: { search: AssistantSearchController }) {
+  return (
+    <>
+      {search.isStale && (
+        <p className="assist-stale-banner" role="status">
+          Suchkriterien geändert. Bitte erneut suchen.
+        </p>
+      )}
+      {search.searchState && (
+        <AssistantResults
+          key={search.searchRevision}
+          results={search.searchState.results}
+          tree={search.searchState.tree}
+          isFreeDev={isFreeDevice}
+          allIds={search.searchState.allIds}
+          machineById={(id) => machById(id)}
+        />
+      )}
+    </>
+  );
+}
+
 export function AssistantModal() {
   const assistant = useAssistantTree();
   const machines = orderedMachines(store.get('data')!.machines, store.get('favs'));
@@ -232,58 +367,50 @@ export function AssistantModal() {
     formatDateAsIsoString(addDays(parseIsoDateString(todayAsIsoDateString()), 56)),
   );
   const [minDays, setMinDays] = useState(1);
-  const [searchState, setSearchState] = useState<AssistantSearchState | null>(null);
-  const searchRevision = useRef(0);
-
-  function search(): void {
-    const outcome = runAssistantSearch(assistant.tree, from, to, minDays);
-    if (outcome) {
-      searchRevision.current += 1;
-      setSearchState(outcome);
-    }
-  }
+  const [weekdayMask, setWeekdayMask] = useState<WeekdayMask>(WEEKDAYS_MON_FRI);
+  const search = useAssistantSearchController(
+    assistant.tree,
+    assistant.revision,
+    from,
+    to,
+    minDays,
+    weekdayMask,
+  );
 
   return (
-    <>
-      <h2>
-        <Icon name="compass" /> Buchungsassistent
-      </h2>
-      <div className="assist-filter-zone">
-        <div className="assist-columns">
-          <div className="assist-card assist-catalog">
-            <div className="assist-card-title">Geräteauswahl</div>
-            <AssistantChecklist
-              machines={machines}
-              favoriteIds={store.get('favs')}
-              addedIds={assistant.addedIds}
-              onToggle={assistant.toggleDevice}
-            />
-          </div>
-          <AssistantSelectedDevicesCard assistant={assistant} />
+    <div className="assist-shell">
+      <header className="assist-header">
+        <h2>
+          <Icon name="compass" /> Buchungsassistent
+        </h2>
+        <p className="assist-subtitle">
+          Geräte auswählen, Zeitraum festlegen und freie Termine finden.
+        </p>
+      </header>
+      <div className="assist-body">
+        <div className="assist-filter-zone">
+          <AssistantDeviceColumns machines={machines} assistant={assistant} />
+          <AssistantParameters
+            from={from}
+            to={to}
+            minDays={minDays}
+            weekdayMask={weekdayMask}
+            rangeError={search.rangeError}
+            weekdayError={search.weekdayError}
+            summary={describeSelectionSummary(assistant.tree)}
+            isSearching={search.isSearching}
+            onRangeChange={(nextFrom, nextTo) => {
+              setFrom(nextFrom);
+              setTo(nextTo);
+            }}
+            onMinDaysChange={setMinDays}
+            onWeekdayMaskChange={setWeekdayMask}
+            onSearch={search.runSearch}
+          />
         </div>
-        <AssistantParameters
-          from={from}
-          to={to}
-          minDays={minDays}
-          onRangeChange={(nextFrom, nextTo) => {
-            setFrom(nextFrom);
-            setTo(nextTo);
-          }}
-          onMinDaysChange={setMinDays}
-        />
-        <AssistantActions onSearch={search} />
+        <AssistantSearchOutcome search={search} />
       </div>
-      {searchState && (
-        <AssistantResults
-          key={searchRevision.current}
-          results={searchState.results}
-          tree={searchState.tree}
-          isFreeDev={isFreeDevice}
-          allIds={searchState.allIds}
-          machineById={(id) => machById(id)}
-        />
-      )}
-    </>
+    </div>
   );
 }
 

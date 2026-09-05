@@ -25,6 +25,10 @@ import {
   setGroupNeed,
   removeNode,
   addDeviceToTree,
+  hasEligibleWeekday,
+  candidateDaysInRange,
+  WEEKDAYS_MON_FRI,
+  WEEKDAYS_ALL,
 } from './assistant.ts';
 
 const dev = (uid: string, id: string): AssistNode => ({ uid, type: 'dev', id });
@@ -297,8 +301,78 @@ describe('extendOpenRuns', () => {
   // extension at 1, and checks only one day was actually appended.
   it('honors the extension cap', () => {
     const runs = [['2021-01-12']];
-    extendOpenRuns(root, runs, '2021-01-12', freeOn(['A@2021-01-13', 'A@2021-01-14']), 1);
+    extendOpenRuns(
+      root,
+      runs,
+      '2021-01-12',
+      freeOn(['A@2021-01-13', 'A@2021-01-14']),
+      WEEKDAYS_MON_FRI,
+      1,
+    );
     expect(runs[0]!.length).toBe(2); // +1 only
+  });
+});
+
+describe('Buchbare Wochentage (weekday mask)', () => {
+  // What: a mask with at least one '1' has an eligible weekday; an all-'0' mask has none —
+  // the guard the UI uses to reject an empty weekday selection before searching.
+  it('hasEligibleWeekday reports whether any weekday is selected', () => {
+    expect(hasEligibleWeekday(WEEKDAYS_MON_FRI)).toBe(true);
+    expect(hasEligibleWeekday('0000000')).toBe(false);
+  });
+
+  // What: candidateDaysInRange keeps only the calendar days whose weekday the mask marks
+  // eligible — the generalized replacement for the old hardcoded Mon–Fri window.
+  // How: a full week (Mon 2021-01-11 .. Sun 2021-01-17) under three masks: the Mon–Fri
+  // default (5 days, weekend dropped), "alle Tage" (all 7), and a custom Mon/Wed/Fri set.
+  it('candidateDaysInRange filters a range down to the eligible weekdays', () => {
+    expect(candidateDaysInRange('2021-01-11', '2021-01-17', WEEKDAYS_MON_FRI)).toEqual([
+      '2021-01-11',
+      '2021-01-12',
+      '2021-01-13',
+      '2021-01-14',
+      '2021-01-15',
+    ]);
+    expect(candidateDaysInRange('2021-01-11', '2021-01-17', WEEKDAYS_ALL)).toEqual([
+      '2021-01-11',
+      '2021-01-12',
+      '2021-01-13',
+      '2021-01-14',
+      '2021-01-15',
+      '2021-01-16',
+      '2021-01-17',
+    ]);
+    expect(candidateDaysInRange('2021-01-11', '2021-01-17', '1010100')).toEqual([
+      '2021-01-11', // Mo
+      '2021-01-13', // Mi
+      '2021-01-15', // Fr
+    ]);
+  });
+
+  // What: under a custom Mon/Wed/Fri mask, groupRuns treats Mon→Wed→Fri as one continuous
+  // run (the excluded Tue/Thu don't break it), while a genuinely missing eligible day still
+  // splits the run — this is the "excluded days don't count toward duration, but every
+  // eligible day must be available" continuity model (see AssistantModal's search wiring).
+  it('groupRuns treats consecutive eligible days as adjacent under a custom mask', () => {
+    const mask = '1010100'; // Mo, Mi, Fr
+    expect(groupRuns(['2021-01-11', '2021-01-13', '2021-01-15'], mask)).toEqual([
+      ['2021-01-11', '2021-01-13', '2021-01-15'],
+    ]);
+    // Same three candidate days, but Wednesday itself isn't free — splits into two runs.
+    expect(groupRuns(['2021-01-11', '2021-01-15'], mask)).toEqual([['2021-01-11'], ['2021-01-15']]);
+  });
+
+  // What: extendOpenRuns also honors a custom mask when growing an open-ended run past the
+  // search window's end.
+  // How: a Mon/Wed/Fri mask, a run ending exactly at the window boundary (Friday), with the
+  // following Monday free — checks it's appended (skipping the excluded weekend AND Tuesday).
+  it('extendOpenRuns steps by the custom mask, not the hardcoded Mon–Fri default', () => {
+    const root: AssistContainer = { children: [dev('a', 'A')] };
+    const mask = '1010100'; // Mo, Mi, Fr
+    const runs = [['2021-01-11', '2021-01-13', '2021-01-15']]; // Mo, Mi, Fr
+    const open = extendOpenRuns(root, runs, '2021-01-15', freeOn(['A@2021-01-18']), mask);
+    expect(runs[0]).toEqual(['2021-01-11', '2021-01-13', '2021-01-15', '2021-01-18']); // +Mo
+    expect(open.has(runs[0]!)).toBe(true);
   });
 });
 

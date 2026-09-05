@@ -1,5 +1,68 @@
 # PROGRESS — living project state
 
+## Assistant redesign — spacious layout, weekday selection, help tooltip (2026-09-05)
+
+User-requested full redesign of the booking Assistant on the existing shadcn/Tailwind
+components, superseding parts of the same-day "usability update" section below (notably its
+page-level footer decision — the search action now sits directly beside the "Zeitraum &
+Dauer" card again, per this newer, more specific request).
+
+**Layout**: `Buchungsassistent` + subtitle header; 45/55 two-column device cards ("Geräte
+auswählen" / "Ausgewählte Geräte") stacking on narrow screens; a full-width "Zeitraum & Dauer"
+card below (date range + duration, then weekday selection, then a separator, then the
+selection summary + search/cancel actions); "Passende Termine · {count}" below that once a
+search has run. Dialog now sizes to `min(1200px, 100%)` wide and `calc(100vh/100dvh - 40px)`
+tall (was a fixed max-width/vh clamp) — header stays fixed, only the body scrolls. The catalog
+card keeps its own bounded scroll (`clamp(340px,45vh,480px)`); the selected-devices card has
+none, growing with the dialog's own scroll instead of a second small scrollbar.
+
+**Weekday selection (new)**: `core/assistant.ts` gained a `WeekdayMask` (7-char Monday-first
+mask, same format as `Machine.days`) and generalized `groupRuns`/`extendOpenRuns` plus a new
+`candidateDaysInRange` to step by an injected mask instead of a hardcoded Mon–Fri skip
+(defaulted to the old Mon–Fri mask, so every existing call site/test is unaffected). A Base UI
+`ToggleGroup` (`AssistantWeekdaySelector.tsx`) exposes all 7 days plus "Mo–Fr"/"Alle Tage"
+presets, wired into the real search (not a cosmetic filter) and into "Mindestdauer"'s helper
+text (`ui/assistant-weekdays.ts`'s `durationUnitHint`, 3 variants). An empty selection is
+rejected with an inline error, blocking the search.
+
+**Booking-write fix (real conflict identified and resolved, not silently patched over)**: the
+booking write path (`BookingForm.tsx`) always expanded a Von/Bis range into every calendar day
+between them (intentional for the Mon–Fri/weekend-bridge default). A custom, gapped weekday
+selection would have silently re-included the excluded days on write. Fixed by giving
+`openBookingForm`/`BookingForm` an optional explicit `dates` list — the Assistant now always
+passes its own already-resolved day list for its "Buchen…" action, bypassing the range
+recompute; every other caller (grid rectangle/single-cell, booking-detail modal) is untouched.
+The Mon–Fri default's weekend bridging is unaffected: it's the server's own `maintainBridges`
+(Phase 6.3) that re-establishes it after the fact, independent of the exact dates POSTed.
+
+**Other features**: inline field-level validation (date range, weekday selection) replacing
+two of the three toast cases (the "no devices" toast stays — cart-level, no labeled field to
+attach to); a deferred (`setTimeout`) search with a token guard (prevents a superseded search
+from clobbering a newer one) and a "Termine werden gesucht…" loading state on the search
+button; a staleness banner ("Suchkriterien geändert…") once any input changes after a
+completed search; a live "N Einzelgeräte · N Bedarfsgruppen" selection summary
+(`ui/assistant-summary.ts`); the permanent "Ähnliche Geräte…" hint paragraph replaced by a
+`AssistantHelpTooltip.tsx` (Tooltip for hover/focus, Popover fallback for touch via
+`useMediaQuery`) beside an always-visible "Bedarfsgruppen" heading; group requirement reworded
+to "N von M Geräten benötigt"; a keyboard-accessible "In Gruppe verschieben" alternative to
+drag-and-drop (`AssistantGroupMenu.tsx`, a Base UI `Menu` scoped to top-level loose
+devices/groups — nested-group targets are out of scope for now, drag-and-drop still covers
+those); results heading now reads "Passende Termine · {count}"; repeated result rows' "Buchen…"
+button uses the quieter `outline` variant.
+
+**Validated**: `npm run verify` green (1,027 tests / 74 files, was 1,006/71 — 21 new tests
+across `core/assistant.test.ts`, `ui/assistant-weekdays.test.ts`, `ui/assistant-summary.test.ts`,
+`BookingForm.test.tsx`), production build clean. Browser-verified against the real dev server
+(Playwright, Chromium): 1200×~696px dialog at 1440×900 with ~20px overlay margin; weekday
+toggles + presets functional; duration hint switches to "Aufeinanderfolgende ausgewählte
+Wochentage" under a custom mask; tooltip shows the exact required copy on hover, positioned
+within viewport; a real search against live seed data returns "Passende Termine · 1" with no
+console errors; 390px mobile viewport reflows to one column with no additional horizontal
+overflow beyond the pre-existing (unrelated) wide booking-grid table; a checked device updates
+the summary and reveals the "Bedarfsgruppen" heading + tooltip. Not separately re-screenshotted:
+dark mode, 200% zoom, and the keyboard "In Gruppe verschieben" menu's own interaction (covered
+by unit tests, not a live browser pass).
+
 ## Assistant usability update (2026-09-05)
 
 All nine requested improvements are implemented and locally verified. The tracked feature

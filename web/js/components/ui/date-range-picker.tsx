@@ -10,6 +10,8 @@ interface DateRangePickerProps {
   from: string;
   to: string;
   onChange: (from: string, to: string) => void;
+  /** Shown beneath the field and wired to both endpoints via `aria-describedby`/`aria-invalid`. */
+  error?: string | null;
 }
 
 function DateEndpoint({
@@ -18,18 +20,27 @@ function DateEndpoint({
   value,
   onChange,
   trigger,
+  errorId,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
   trigger: ReactNode;
+  errorId?: string;
 }) {
   return (
     <div className="date-range-endpoint">
       <label htmlFor={id}>{label}</label>
       <div className="date-range-control">
-        <Input id={id} type="date" value={value} onChange={onChange} />
+        <Input
+          id={id}
+          type="date"
+          value={value}
+          onChange={onChange}
+          aria-invalid={!!errorId}
+          aria-describedby={errorId}
+        />
         {trigger}
       </div>
     </div>
@@ -48,10 +59,11 @@ function CalendarTrigger({ label }: { label: string }) {
 }
 
 /** One compound range field: synchronized editable endpoints plus a shared range calendar. */
-export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
+export function DateRangePicker({ from, to, onChange, error }: DateRangePickerProps) {
   const id = useId();
   const fieldRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const errorId = error ? `${id}-error` : undefined;
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <div ref={fieldRef} className="date-range-field" role="group" aria-label="Suchzeitraum">
@@ -60,6 +72,7 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
           label="Suchen von"
           value={from}
           trigger={<CalendarTrigger label="Startdatum im Kalender wählen" />}
+          errorId={errorId}
           onChange={(event) => {
             const value = event.target.value;
             onChange(value, value && to && value > to ? value : to);
@@ -71,12 +84,18 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
           label="bis"
           value={to}
           trigger={<CalendarTrigger label="Enddatum im Kalender wählen" />}
+          errorId={errorId}
           onChange={(event) => {
             const value = event.target.value;
             onChange(value && from && value < from ? value : from, value);
           }}
         />
       </div>
+      {error && (
+        <span id={errorId} className="assist-field-error" role="alert">
+          {error}
+        </span>
+      )}
       <Popover.Portal container={fieldRef}>
         <Popover.Positioner sideOffset={8} align="end" className="range-positioner">
           <Popover.Popup

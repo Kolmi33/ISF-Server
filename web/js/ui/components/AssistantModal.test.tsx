@@ -98,28 +98,48 @@ function openChecklistCategory(): void {
   });
 }
 
+// The search action is deferred by one macrotask (a real `setTimeout(fn, 0)`, so the
+// "Termine werden gesucht…" loading state gets a paint before the — synchronous, in-memory —
+// search actually runs). Fake timers (stubbed in beforeEach) don't advance on their own, so
+// every test that clicks search needs to explicitly fire that pending timer afterward.
+function clickSearch(): void {
+  act(() => {
+    screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
+    vi.advanceTimersByTime(0);
+  });
+}
+
 describe('AssistantModal — card layout', () => {
-  it('places a shared parameter card below the two device cards', () => {
+  it('places a shared "Zeitraum & Dauer" card below the two device cards', () => {
     act(() => openAssistant());
     const columns = document.querySelector('.assist-columns')!;
     expect(columns.children).toHaveLength(2);
     expect(columns.querySelector('.assist-catalog')).toBeInTheDocument();
     expect(columns.querySelector('.assist-cart')).toBeInTheDocument();
-    const parameters = screen.getByRole('region', {
-      name: 'Auswahl Zeitraum und gewünschter Buchungstage',
-    });
+    const parameters = screen.getByRole('region', { name: 'Zeitraum & Dauer' });
     expect(columns.nextElementSibling).toBe(parameters);
     expect(document.querySelectorAll('.assist-card')).toHaveLength(3);
     expect(within(parameters).getByRole('group', { name: 'Suchzeitraum' })).toBeInTheDocument();
-    expect(within(parameters).getByLabelText('Mind. Tage am Stück')).toHaveAccessibleDescription(
-      'Arbeitstage (Mo-Fr)',
+    expect(within(parameters).getByLabelText('Mindestdauer')).toHaveAccessibleDescription(
+      'Arbeitstage am Stück (Mo–Fr)',
     );
-    const filterZone = document.querySelector<HTMLElement>('.assist-filter-zone')!;
+    // The search action sits directly beside this card's own criteria (feature 9), not in a
+    // page-level footer below the results.
     expect(
-      within(filterZone).getByRole('button', { name: 'Freie Termine suchen' }),
+      within(parameters).getByRole('button', { name: 'Freie Termine suchen' }),
     ).toBeInTheDocument();
-    expect(within(filterZone).getByRole('button', { name: 'Abbrechen' })).toBeInTheDocument();
-    expect(filterZone.lastElementChild).toHaveClass('assist-global-actions');
+    expect(within(parameters).getByRole('button', { name: 'Abbrechen' })).toBeInTheDocument();
+  });
+
+  it('names the left/right device cards "Geräte auswählen" / "Ausgewählte Geräte"', () => {
+    act(() => openAssistant());
+    const columns = document.querySelector('.assist-columns')!;
+    expect(columns.querySelector('.assist-catalog .assist-card-title')).toHaveTextContent(
+      'Geräte auswählen',
+    );
+    expect(columns.querySelector('.assist-cart .assist-card-title')).toHaveTextContent(
+      'Ausgewählte Geräte',
+    );
   });
 
   it('keeps final actions at the shared control height', () => {
@@ -231,20 +251,20 @@ describe('AssistantModal — checklist details', () => {
 
 describe('AssistantModal — search validation', () => {
   // What: searching with no devices in the work area at all is rejected client-side with a
-  // toast, rather than running a meaningless empty search.
+  // toast, rather than running a meaningless empty search — the one validation case with no
+  // natural field to attach an inline error to (a cart-level concern, not a labeled control).
   // How: opens the assistant and clicks search with nothing checked, checking the toast text.
   it('toasts when no devices have been added', () => {
     act(() => openAssistant());
-    act(() => {
-      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
-    });
+    clickSearch();
     expect(document.getElementById('toast')!.textContent).toBe('Bitte oben Geräte übernehmen.');
   });
 
-  // What: searching with a missing date endpoint is rejected client-side.
-  // How: checks a device, clears the "bis" date, clicks search, and
-  // checks the toast text.
-  it('toasts on an incomplete date range', () => {
+  // What: a missing date endpoint shows an inline error beside the range field (feature 6)
+  // instead of a toast, and blocks the search action entirely (no meaningless search runs).
+  // How: checks a device, clears the "bis" date, clicks search, and checks the inline error
+  // appears while no toast fires and no results panel appears.
+  it('shows an inline error on an incomplete date range, blocking the search', () => {
     act(() => openAssistant());
     openChecklistCategory();
     act(() => {
@@ -252,10 +272,31 @@ describe('AssistantModal — search validation', () => {
     });
     const dateInputs = document.querySelectorAll('#modal input[type="date"]');
     fireEvent.change(dateInputs[1]!, { target: { value: '' } }); // an endpoint was cleared
+    expect(screen.getByText('Bitte Start- und Enddatum wählen.')).toBeInTheDocument();
+    clickSearch();
+    expect(document.getElementById('toast')!.textContent).toBe('');
+    expect(screen.queryByText(/Passende Termine/)).not.toBeInTheDocument();
+  });
+
+  // What: clearing every weekday shows an inline error and blocks the search (feature 7) —
+  // a purely visual filter the search silently ignored would be worse than not having one.
+  // How: unpresses every weekday toggle, checks the error appears, then clicks search and
+  // checks no toast/results follow.
+  it('shows an inline error and blocks the search when no weekday is selected', () => {
+    act(() => openAssistant());
+    openChecklistCategory();
     act(() => {
-      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
+      screen.getByRole('checkbox', { name: /Fräse/ }).click();
     });
-    expect(document.getElementById('toast')!.textContent).toBe('Bitte gültigen Zeitraum wählen.');
+    for (const day of ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag']) {
+      act(() => {
+        screen.getByRole('button', { name: day }).click();
+      });
+    }
+    expect(screen.getByText('Wählen Sie mindestens einen Wochentag aus.')).toBeInTheDocument();
+    clickSearch();
+    expect(document.getElementById('toast')!.textContent).toBe('');
+    expect(screen.queryByText(/Passende Termine/)).not.toBeInTheDocument();
   });
 });
 
@@ -264,13 +305,13 @@ describe('AssistantModal — search results', () => {
     act(() => openAssistant());
     openChecklistCategory();
     fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
-    fireEvent.change(screen.getByLabelText('Mind. Tage am Stück'), { target: { value: '4' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Freie Termine suchen' }));
+    fireEvent.change(screen.getByLabelText('Mindestdauer'), { target: { value: '4' } });
+    clickSearch();
     expect(document.querySelector('.asDays')).toHaveValue(4);
     fireEvent.change(document.querySelector('.asDays')!, { target: { value: '2' } });
     fireEvent.click(screen.getByRole('button', { name: /aus diesem Termin entfernen/ }));
-    fireEvent.change(screen.getByLabelText('Mind. Tage am Stück'), { target: { value: '6' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Freie Termine suchen' }));
+    fireEvent.change(screen.getByLabelText('Mindestdauer'), { target: { value: '6' } });
+    clickSearch();
     expect(document.querySelector('.asDays')).toHaveValue(6);
     expect(document.querySelector('.aspill-name')).toHaveTextContent('Fräse');
   });
@@ -285,14 +326,35 @@ describe('AssistantModal — search results', () => {
     expect(document.querySelector('.asdev')).toHaveTextContent('Fräse');
   });
 
-  it('implies required selection without an UND label and explains grouping', () => {
+  it('implies required selection without an UND label', () => {
     act(() => openAssistant());
     openChecklistCategory();
     fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: /^Presse/ }));
     const work = document.getElementById('asWork')!;
     expect(within(work).queryByText(/^und$/i)).not.toBeInTheDocument();
-    expect(within(work).getByText(/Ähnliche Geräte aufeinander ziehen/)).toBeInTheDocument();
+  });
+
+  // What: the old permanently-visible grouping-hint paragraph is gone, replaced by a small,
+  // always-present help trigger beside the "Bedarfsgruppen" heading (visible even before any
+  // group has been formed) — the explanatory text now only shows via that tooltip/popover.
+  // How: opens the assistant with one device checked (no group formed yet), checks the
+  // "Bedarfsgruppen" heading and its help trigger are present with no permanent hint text in
+  // the DOM, then focuses the trigger and checks the tooltip content appears.
+  it('replaces the permanent drag-hint paragraph with a focusable help tooltip', () => {
+    act(() => openAssistant());
+    openChecklistCategory();
+    fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
+    const work = document.getElementById('asWork')!;
+    expect(within(work).getByText('Bedarfsgruppen')).toBeInTheDocument();
+    expect(document.querySelector('.assist-drag-hint')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Ähnliche Geräte aufeinander ziehen/)).not.toBeInTheDocument();
+    const helpTrigger = screen.getByRole('button', { name: 'Hilfe zu Bedarfsgruppen' });
+    act(() => {
+      helpTrigger.focus();
+      vi.advanceTimersByTime(1000);
+    });
+    expect(screen.getByText(/Ähnliche Geräte aufeinander ziehen/)).toBeInTheDocument();
   });
 
   it('keeps alternatives grouped and labels intermediate N-of-M choices', () => {
@@ -319,7 +381,7 @@ describe('AssistantModal — search results', () => {
     act(() => openAssistant());
     openChecklistCategory();
     fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Freie Termine suchen' }));
+    clickSearch();
     fireEvent.change(screen.getByLabelText('Buchungstage für diesen Termin'), {
       target: { value: '-2' },
     });
@@ -337,11 +399,8 @@ describe('AssistantModal — search results', () => {
     act(() => {
       screen.getByRole('checkbox', { name: /Fräse/ }).click();
     });
-    await act(async () => {
-      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
-      await Promise.resolve();
-    });
-    expect(screen.getByText('Passende Termine:')).toBeInTheDocument();
+    clickSearch();
+    expect(screen.getByText(/^Passende Termine · \d+$/)).toBeInTheDocument();
     expect(document.querySelector('.aspills')).not.toBeNull();
     expect(screen.getByText('Fräse', { selector: '.aspill-name' })).toBeInTheDocument();
   });
@@ -359,10 +418,7 @@ describe('AssistantModal — search results', () => {
     act(() => {
       screen.getByRole('checkbox', { name: /^Fräse/ }).click();
     });
-    await act(async () => {
-      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
-      await Promise.resolve();
-    });
+    clickSearch();
     const title = document.querySelector('.asRange')!;
     expect(title.textContent).toContain('–');
   });
@@ -380,10 +436,7 @@ describe('AssistantModal — search results', () => {
       screen.getByRole('checkbox', { name: /^Fräse/ }).click();
       screen.getByRole('checkbox', { name: /^Presse/ }).click();
     });
-    await act(async () => {
-      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
-      await Promise.resolve();
-    });
+    clickSearch();
     expect(screen.getByText('Fräse', { selector: '.aspill-name' })).toBeInTheDocument();
     expect(screen.getByText('Presse', { selector: '.aspill-name' })).toBeInTheDocument();
     act(() => {
@@ -408,10 +461,7 @@ describe('AssistantModal — search results', () => {
       screen.getByRole('checkbox', { name: /^Fräse/ }).click();
       screen.getByRole('checkbox', { name: /^Presse/ }).click();
     });
-    await act(async () => {
-      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
-      await Promise.resolve();
-    });
+    clickSearch();
     const fraese = screen
       .getByText('Fräse', { selector: '.aspill-name' })
       .closest('.aspill') as HTMLElement;
@@ -442,10 +492,7 @@ describe('AssistantModal — search results', () => {
     const dateInputs = document.querySelectorAll('#modal input[type="date"]');
     fireEvent.change(dateInputs[0]!, { target: { value: '2021-01-04' } });
     fireEvent.change(dateInputs[1]!, { target: { value: '2021-01-08' } });
-    await act(async () => {
-      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
-      await Promise.resolve();
-    });
+    clickSearch();
     expect(screen.getByText(/Keine passenden Termine im Zeitraum gefunden/)).toBeInTheDocument();
   });
 
@@ -459,10 +506,7 @@ describe('AssistantModal — search results', () => {
     act(() => {
       screen.getByRole('checkbox', { name: /Fräse/ }).click();
     });
-    await act(async () => {
-      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
-      await Promise.resolve();
-    });
+    clickSearch();
     act(() => {
       screen.getByRole('button', { name: 'Buchen…' }).click();
     });
@@ -486,10 +530,7 @@ describe('AssistantModal — search results', () => {
     const dateInputs = document.querySelectorAll('#modal input[type="date"]');
     fireEvent.change(dateInputs[0]!, { target: { value: '2021-01-04' } });
     fireEvent.change(dateInputs[1]!, { target: { value: '2021-01-15' } });
-    await act(async () => {
-      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
-      await Promise.resolve();
-    });
+    clickSearch();
     const daysInput = document.querySelector<HTMLInputElement>('.asDays')!;
     act(() => {
       fireEvent.change(daysInput, { target: { value: '99' } });
@@ -511,10 +552,7 @@ describe('AssistantModal — search results', () => {
     act(() => {
       screen.getByRole('checkbox', { name: /Fräse/ }).click();
     });
-    await act(async () => {
-      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
-      await Promise.resolve();
-    });
+    clickSearch();
     act(() => {
       screen.getByRole('button', { name: 'Termin anzeigen' }).click();
     });
@@ -546,10 +584,8 @@ describe('AssistantModal — search results', () => {
     });
     expect(document.querySelectorAll('.asgrp')).toHaveLength(1);
 
-    act(() => {
-      screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
-    });
-    expect(screen.getByText('Passende Termine:')).toBeInTheDocument();
+    clickSearch();
+    expect(screen.getByText(/^Passende Termine · \d+$/)).toBeInTheDocument();
     expect(document.querySelector('.aspill')).toBeInTheDocument();
   });
 });
@@ -570,14 +606,14 @@ describe('AssistantModal — the work-area group node', () => {
     });
   }
 
-  // What: a freshly-formed group (drag one device onto another) shows the terse "Benötigt: N
-  // von M" need label — rigorously shortened from the old "Bedarf: brauche N von M – alle
-  // gleichwertigen Geräte hier?" wording (user request) — and its stepper defaults to
-  // needing 1 (of however many members the group has — 2 here).
-  // How: forms a 2-device group and checks the "Benötigt:" label and the stepper's default value.
-  it('shows the terse "Benötigt" need label, stepper defaulting to 1 of 2', () => {
+  // What: a freshly-formed group (drag one device onto another) phrases the requirement as
+  // "N von M Geräten benötigt" (feature: communicate the requirement as "1 von 2 Geräten
+  // benötigt" with the editable quantity control incorporated cleanly) and its stepper
+  // defaults to needing 1 (of however many members the group has — 2 here).
+  // How: forms a 2-device group and checks the phrase and the stepper's default value.
+  it('phrases the requirement as "N von M Geräten benötigt", stepper defaulting to 1 of 2', () => {
     addGroupedPair();
-    expect(screen.getByText('Benötigt:')).toBeInTheDocument();
+    expect(screen.getByText(/von 2 Geräten benötigt/)).toBeInTheDocument();
     expect((document.querySelector('.asNeed') as HTMLInputElement).value).toBe('1');
   });
 

@@ -34,19 +34,30 @@ function generateGroupId(): string {
 }
 
 /** Validates the submit form's inputs, as a pure function of them: returns the days to
- *  book, or the German message to toast when the input is invalid. */
+ *  book, or the German message to toast when the input is invalid. When `fixedDates` is
+ *  given (the Assistant's own already-resolved day list — possibly gapped under a custom
+ *  "Buchbare Wochentage" selection), it's used verbatim instead of expanding a Von/Bis
+ *  range — expanding would silently book excluded weekdays the search never considered
+ *  available in the first place. Every other caller (plain grid rectangle/single-cell
+ *  selection, the booking-detail modal) has no such list and keeps the original "book EVERY
+ *  day in range, weekends included" behavior: the machine stays part of the series on Sat/Sun
+ *  too, rather than looking spuriously "free" there. */
 function validateBookingInput(
   name: string,
   fromDate: string,
   toDate: string,
   machineCount: number,
-): { dates: string[] } | { error: string } {
+  fixedDates?: readonly string[],
+): { dates: readonly string[] } | { error: string } {
   if (!name.trim()) return { error: 'Bitte Namen eingeben.' };
-  if (!fromDate || !toDate || fromDate > toDate)
-    return { error: 'Bitte gültigen Zeitraum wählen.' };
-  // Book EVERY day in range, weekends included: the machine stays part of the series on
-  // Sat/Sun too, rather than looking spuriously "free" there.
-  const dates = getAllDaysInRange(fromDate, toDate);
+  let dates: readonly string[];
+  if (fixedDates) {
+    dates = fixedDates;
+  } else {
+    if (!fromDate || !toDate || fromDate > toDate)
+      return { error: 'Bitte gültigen Zeitraum wählen.' };
+    dates = getAllDaysInRange(fromDate, toDate);
+  }
   if (!dates.length) return { error: 'Bitte gültigen Zeitraum wählen.' };
   if (dates.length * machineCount > MAX_CELLS_PER_BOOKING) {
     return { error: 'Zeitraum zu groß (max. ~500 Einzelbuchungen).' };
@@ -96,12 +107,27 @@ interface FormFieldsState {
   setNote: (value: string) => void;
 }
 
+/** Fixed-dates mode (opened from the Assistant with an already-resolved, possibly gapped day
+ *  list) shows the exact dates as a read-only line instead of editable Von/Bis fields — free
+ *  Von/Bis editing would recompute a full calendar range and silently re-include the very
+ *  weekdays the search excluded. */
+function FixedDatesRow({ dates }: { dates: readonly string[] }) {
+  return (
+    <div className="formrow">
+      <label>Termine</label>
+      <span>{dates.map((date) => formatDateLong(date)).join(', ')}</span>
+    </div>
+  );
+}
+
 function BookingFormFields({
   machines,
   fields,
+  fixedDates,
 }: {
   machines: readonly Machine[];
   fields: FormFieldsState;
+  fixedDates?: readonly string[];
 }) {
   return (
     <>
@@ -117,20 +143,24 @@ function BookingFormFields({
           onChange={(event) => fields.setName(event.target.value)}
         />
       </div>
-      <div className="formrow">
-        <label>Von</label>
-        <input
-          type="date"
-          value={fields.fromDate}
-          onChange={(event) => fields.setFromDate(event.target.value)}
-        />
-        <label style={{ minWidth: 'auto' }}>Bis</label>
-        <input
-          type="date"
-          value={fields.toDate}
-          onChange={(event) => fields.setToDate(event.target.value)}
-        />
-      </div>
+      {fixedDates ? (
+        <FixedDatesRow dates={fixedDates} />
+      ) : (
+        <div className="formrow">
+          <label>Von</label>
+          <input
+            type="date"
+            value={fields.fromDate}
+            onChange={(event) => fields.setFromDate(event.target.value)}
+          />
+          <label style={{ minWidth: 'auto' }}>Bis</label>
+          <input
+            type="date"
+            value={fields.toDate}
+            onChange={(event) => fields.setToDate(event.target.value)}
+          />
+        </div>
+      )}
       <div className="formrow">
         <label>Notiz</label>
         <input
@@ -148,6 +178,9 @@ interface BookingFormProps {
   machineIds: readonly string[];
   from: string;
   to: string;
+  /** The Assistant's own already-resolved day list, when opened from a search result — see
+   *  `validateBookingInput`'s doc comment for why this bypasses Von/Bis range expansion. */
+  dates?: readonly string[];
 }
 
 interface SubmitBookingInput {
@@ -157,6 +190,7 @@ interface SubmitBookingInput {
   toDate: string;
   note: string;
   skipConflicts: boolean;
+  fixedDates?: readonly string[];
 }
 
 /** Validates and, if valid, actually books. Returns the conflict list (the form stays open
@@ -169,6 +203,7 @@ async function submitBooking(input: SubmitBookingInput): Promise<readonly Confli
     input.fromDate,
     input.toDate,
     input.machineIds.length,
+    input.fixedDates,
   );
   if ('error' in validation) {
     toast(validation.error);
@@ -198,7 +233,7 @@ async function submitBooking(input: SubmitBookingInput): Promise<readonly Confli
   return undefined;
 }
 
-export function BookingForm({ machineIds, from, to }: BookingFormProps) {
+export function BookingForm({ machineIds, from, to, dates }: BookingFormProps) {
   const machines = machineIds.map((id) => machById(id)).filter((m): m is Machine => !!m);
   const [name, setName] = useState(store.get('user'));
   const [fromDate, setFromDate] = useState(from);
@@ -214,6 +249,7 @@ export function BookingForm({ machineIds, from, to }: BookingFormProps) {
       toDate,
       note,
       skipConflicts,
+      fixedDates: dates,
     });
     if (newConflicts) setConflicts(newConflicts);
   }
@@ -224,6 +260,7 @@ export function BookingForm({ machineIds, from, to }: BookingFormProps) {
       <BookingFormFields
         machines={machines}
         fields={{ name, setName, fromDate, setFromDate, toDate, setToDate, note, setNote }}
+        fixedDates={dates}
       />
       <div id="bkConflicts">
         {conflicts && (
@@ -251,7 +288,20 @@ export function BookingForm({ machineIds, from, to }: BookingFormProps) {
 
 /** Opens the booking form for `machineIds` over `[from, to]`. The form is sticky —
  *  Escape/outside-click don't dismiss it, only the buttons do, since an accidental
- *  dismissal here would lose a partially-filled booking. */
-export function openBookingForm(machineIds: readonly string[], from: string, to: string): void {
-  openReactModal(<BookingForm machineIds={machineIds} from={from} to={to} />, { sticky: true });
+ *  dismissal here would lose a partially-filled booking.
+ *
+ *  `dates`, when given, is the Assistant's own already-resolved day list (possibly gapped
+ *  under a custom "Buchbare Wochentage" selection) — it's booked verbatim instead of
+ *  re-expanding `[from, to]` into every calendar day between them. Every other caller (plain
+ *  grid rectangle/single-cell selection, the booking-detail modal) omits it and keeps the
+ *  original full-range behavior. */
+export function openBookingForm(
+  machineIds: readonly string[],
+  from: string,
+  to: string,
+  dates?: readonly string[],
+): void {
+  openReactModal(<BookingForm machineIds={machineIds} from={from} to={to} dates={dates} />, {
+    sticky: true,
+  });
 }

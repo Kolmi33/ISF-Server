@@ -169,6 +169,72 @@ function ResultInfo({ fullWindow, windowText, pickedDevices, onRemoveDevice }: R
   );
 }
 
+interface ResultActionsProps {
+  days: number;
+  maxDays: number;
+  tip: string | null;
+  onDaysChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  selectedDates: readonly string[];
+  pickedIds: readonly string[];
+  allIds: readonly string[];
+}
+
+/** The days-to-book input plus the "pin"/"Buchen…" actions — split out of `AssistantResultItem`
+ *  purely to stay under the function-length budget. */
+function ResultActions({
+  days,
+  maxDays,
+  tip,
+  onDaysChange,
+  selectedDates,
+  pickedIds,
+  allIds,
+}: ResultActionsProps) {
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <Input
+        type="number"
+        className="asDays"
+        value={days}
+        min={1}
+        max={maxDays}
+        aria-label="Buchungstage für diesen Termin"
+        style={{ width: 62 }}
+        title="Anzahl Tage (ab Fensteranfang)"
+        onChange={onDaysChange}
+      />
+      {tip && <span className="hint">{tip}</span>}
+      {/* variant="outline": the plain bordered look (Base UI's own "default" variant is a
+          filled primary-colored button, not the plain secondary look this icon button
+          needs). */}
+      <Button
+        variant="outline"
+        size="sm"
+        title="Zum Termin springen und Zeilen auf die gewählten Geräte filtern"
+        aria-label="Termin anzeigen"
+        onClick={() => gotoRun(selectedDates[0]!, allIds)}
+      >
+        <Icon name="pin" />
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={!pickedIds.length}
+        onClick={() =>
+          openBookingForm(
+            pickedIds,
+            selectedDates[0]!,
+            selectedDates[selectedDates.length - 1]!,
+            selectedDates,
+          )
+        }
+      >
+        Buchen…
+      </Button>
+    </div>
+  );
+}
+
 function AssistantResultItem({ row, tree, isFreeDev, allIds, machineById }: ResultItemProps) {
   const maxDays = row.dates.length;
   const { days, tip, onChange } = useClampedDays(maxDays, row.defaultDays);
@@ -194,41 +260,15 @@ function AssistantResultItem({ row, tree, isFreeDev, allIds, machineById }: Resu
         pickedDevices={pickedDevices}
         onRemoveDevice={(id) => setRemovedIds((prev) => new Set(prev).add(id))}
       />
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <Input
-          type="number"
-          className="asDays"
-          value={days}
-          min={1}
-          max={maxDays}
-          aria-label="Buchungstage für diesen Termin"
-          style={{ width: 62 }}
-          title="Anzahl Tage (ab Fensteranfang)"
-          onChange={onChange}
-        />
-        {tip && <span className="hint">{tip}</span>}
-        {/* variant="outline": the plain bordered look (Base UI's own "default" variant is a
-            filled primary-colored button, not the plain secondary look this icon button
-            needs). */}
-        <Button
-          variant="outline"
-          size="sm"
-          title="Zum Termin springen und Zeilen auf die gewählten Geräte filtern"
-          aria-label="Termin anzeigen"
-          onClick={() => gotoRun(selectedDates[0]!, allIds)}
-        >
-          <Icon name="pin" />
-        </Button>
-        <Button
-          size="sm"
-          disabled={!pickedIds.length}
-          onClick={() =>
-            openBookingForm(pickedIds, selectedDates[0]!, selectedDates[selectedDates.length - 1]!)
-          }
-        >
-          Buchen…
-        </Button>
-      </div>
+      <ResultActions
+        days={days}
+        maxDays={maxDays}
+        tip={tip}
+        onDaysChange={onChange}
+        selectedDates={selectedDates}
+        pickedIds={pickedIds}
+        allIds={allIds}
+      />
     </div>
   );
 }
@@ -248,31 +288,30 @@ export function AssistantResults({
   allIds,
   machineById,
 }: AssistantResultsProps) {
-  if (!results.length) {
-    return (
-      <p className="hint">
-        <b>Keine passenden Termine im Zeitraum gefunden.</b> Zeitraum vergrößern, „brauche N" senken
-        oder Geräte entfernen.
-      </p>
-    );
-  }
   return (
     <>
-      <h2 style={{ marginTop: 14 }}>Passende Termine:</h2>
-      <div className="resultlist">
-        {results.map((row, i) => (
-          // The parent remounts this list for every successful search; local edits stay
-          // scoped to the frozen search snapshot.
-          <AssistantResultItem
-            key={i}
-            row={row}
-            tree={tree}
-            isFreeDev={isFreeDev}
-            allIds={allIds}
-            machineById={machineById}
-          />
-        ))}
-      </div>
+      <h2 className="assist-results-heading">Passende Termine · {results.length}</h2>
+      {results.length === 0 ? (
+        <p className="hint">
+          <b>Keine passenden Termine im Zeitraum gefunden.</b> Zeitraum vergrößern, „brauche N"
+          senken oder Geräte entfernen.
+        </p>
+      ) : (
+        <div className="resultlist">
+          {results.map((row, i) => (
+            // The parent remounts this list for every successful search; local edits stay
+            // scoped to the frozen search snapshot.
+            <AssistantResultItem
+              key={i}
+              row={row}
+              tree={tree}
+              isFreeDev={isFreeDev}
+              allIds={allIds}
+              machineById={machineById}
+            />
+          ))}
+        </div>
+      )}
     </>
   );
 }

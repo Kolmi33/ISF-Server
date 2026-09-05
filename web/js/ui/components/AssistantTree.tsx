@@ -28,6 +28,8 @@ import { categoryColor, nameColor } from '../grid.ts';
 import { isDarkTheme } from '../theme.ts';
 import { Icon } from './Icon.tsx';
 import { Input } from '../../components/ui/input.tsx';
+import { AssistantGroupMenu } from './AssistantGroupMenu.tsx';
+import { AssistantHelpTooltip } from './AssistantHelpTooltip.tsx';
 
 /** The maintenance/defect status tag, when the machine has one. */
 function MachineStatusTag({ machine }: { machine: Machine }) {
@@ -46,6 +48,12 @@ interface NodeHandlers {
   onChangeNeed: (uid: string, delta: number) => void;
   onSetNeed: (uid: string, value: number) => void;
   onRemove: (uid: string) => void;
+  /** Every top-level loose device / group — the candidate targets `AssistantGroupMenu` (the
+   *  keyboard-accessible alternative to dragging) offers a loose device. */
+  looseDevices: readonly AssistDev[];
+  groups: readonly AssistGrp[];
+  onGroupOnto: (dragUid: string, targetUid: string) => void;
+  onJoin: (dragUid: string, groupUid: string) => void;
 }
 
 /** The drag handle (⋮⋮) that's now the sole visual cue a node is draggable — replacing the
@@ -60,7 +68,15 @@ function DragHandle() {
   );
 }
 
-function DevNodeView({ node, handlers }: { node: AssistDev; handlers: NodeHandlers }) {
+function DevNodeView({
+  node,
+  handlers,
+  showGroupMenu,
+}: {
+  node: AssistDev;
+  handlers: NodeHandlers;
+  showGroupMenu?: boolean;
+}) {
   const machine = handlers.machineById(node.id);
   if (!machine) return null;
   return (
@@ -92,6 +108,16 @@ function DevNodeView({ node, handlers }: { node: AssistDev; handlers: NodeHandle
         </span>
       )}
       <MachineStatusTag machine={machine} />
+      {showGroupMenu && (
+        <AssistantGroupMenu
+          device={node}
+          otherLooseDevices={handlers.looseDevices.filter((d) => d.uid !== node.uid)}
+          groups={handlers.groups}
+          machineById={handlers.machineById}
+          onGroupOnto={handlers.onGroupOnto}
+          onJoin={handlers.onJoin}
+        />
+      )}
       <span
         className="rm"
         title="Aus Auswahl entfernen"
@@ -106,16 +132,14 @@ function DevNodeView({ node, handlers }: { node: AssistDev; handlers: NodeHandle
   );
 }
 
-/** The "Benötigt: N von M" stepper: -/+ buttons and the direct-entry number input, rigorously
- *  shortened from the old "Bedarf: brauche N von M – alle gleichwertigen Geräte hier?" wording
- *  down to just the number itself (user request). Split out of `GroupNodeView` purely to stay
- *  under the function-length budget. */
+/** The "N von M Geräten benötigt" stepper: -/+ buttons and the direct-entry number input,
+ *  phrasing the requirement as a plain sentence rather than a "Benötigt:"-prefixed label.
+ *  Split out of `GroupNodeView` purely to stay under the function-length budget. */
 function GroupNeedStepper({ node, handlers }: { node: AssistGrp; handlers: NodeHandlers }) {
   const childCount = node.children.length;
   const need = effectiveNeed(node);
   return (
     <>
-      <b>Benötigt:</b>
       <span className="asgrp-need">
         <button
           className="asstep"
@@ -148,8 +172,8 @@ function GroupNeedStepper({ node, handlers }: { node: AssistGrp; handlers: NodeH
         >
           +
         </button>
-      </span>
-      von {childCount}
+      </span>{' '}
+      von {childCount} Geräten benötigt
     </>
   );
 }
@@ -171,10 +195,13 @@ function ConnectedNodes({
   nodes,
   connection,
   handlers,
+  showGroupMenu,
 }: {
   nodes: readonly AssistNode[];
   connection: string;
   handlers: NodeHandlers;
+  /** Only the top-level loose-devices row passes this — see `DevNodeView`'s own doc note. */
+  showGroupMenu?: boolean;
 }) {
   return nodes.map((node, index) => (
     <Fragment key={node.uid}>
@@ -183,7 +210,7 @@ function ConnectedNodes({
           {connection}
         </span>
       )}
-      <AssistNodeView node={node} handlers={handlers} />
+      <AssistNodeView node={node} handlers={handlers} showGroupMenu={showGroupMenu} />
     </Fragment>
   ));
 }
@@ -234,11 +261,19 @@ function GroupNodeView({ node, handlers }: { node: AssistGrp; handlers: NodeHand
   );
 }
 
-function AssistNodeView({ node, handlers }: { node: AssistNode; handlers: NodeHandlers }) {
+function AssistNodeView({
+  node,
+  handlers,
+  showGroupMenu,
+}: {
+  node: AssistNode;
+  handlers: NodeHandlers;
+  showGroupMenu?: boolean;
+}) {
   return node.type === 'grp' ? (
     <GroupNodeView node={node} handlers={handlers} />
   ) : (
-    <DevNodeView node={node} handlers={handlers} />
+    <DevNodeView node={node} handlers={handlers} showGroupMenu={showGroupMenu} />
   );
 }
 
@@ -377,6 +412,36 @@ export interface AssistantTreeProps {
   onRemove: (uid: string) => void;
 }
 
+/** The heading row + the groups/loose-devices sections themselves — split out of
+ *  `AssistantTree` purely to stay under the function-length budget. */
+function AssistantTreeBody({
+  groups,
+  loose,
+  handlers,
+}: {
+  groups: readonly AssistGrp[];
+  loose: readonly AssistDev[];
+  handlers: NodeHandlers;
+}) {
+  return (
+    <>
+      {/* Always shown once any device is selected — visible even before a group has been
+          formed, so the grouping feature (and its help tooltip) is discoverable up front. */}
+      <div className="catlbl assist-group-heading">
+        Bedarfsgruppen
+        <AssistantHelpTooltip />
+      </div>
+      {groups.length > 0 && <ConnectedNodes nodes={groups} connection="und" handlers={handlers} />}
+      {loose.length > 0 && (
+        <>
+          <div className="catlbl">Einzelgeräte</div>
+          <ConnectedNodes nodes={loose} connection="und" handlers={handlers} showGroupMenu />
+        </>
+      )}
+    </>
+  );
+}
+
 export function AssistantTree({
   tree,
   machineById,
@@ -412,7 +477,17 @@ export function AssistantTree({
     tree.children.filter((c): c is AssistDev => c.type === 'dev'),
     machineById,
   );
-  const handlers: NodeHandlers = { machineById, onDissolve, onChangeNeed, onSetNeed, onRemove };
+  const handlers: NodeHandlers = {
+    machineById,
+    onDissolve,
+    onChangeNeed,
+    onSetNeed,
+    onRemove,
+    looseDevices: loose,
+    groups,
+    onGroupOnto,
+    onJoin,
+  };
 
   return (
     <div
@@ -424,21 +499,7 @@ export function AssistantTree({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      {groups.length > 0 && (
-        <>
-          <div className="catlbl">Bedarfsgruppen</div>
-          <ConnectedNodes nodes={groups} connection="und" handlers={handlers} />
-        </>
-      )}
-      {loose.length > 0 && (
-        <>
-          <div className="catlbl">Einzelgeräte</div>
-          <p className="assist-drag-hint">
-            Ähnliche Geräte aufeinander ziehen, um eine Bedarfsgruppe mit Alternativen zu bilden.
-          </p>
-          <ConnectedNodes nodes={loose} connection="und" handlers={handlers} />
-        </>
-      )}
+      <AssistantTreeBody groups={groups} loose={loose} handlers={handlers} />
     </div>
   );
 }

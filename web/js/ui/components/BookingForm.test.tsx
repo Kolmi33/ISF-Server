@@ -148,6 +148,30 @@ describe('BookingForm', () => {
   });
 });
 
+describe('BookingForm — fixed dates (opened from the Assistant)', () => {
+  // What: when opened with an explicit `dates` list (a custom, possibly gapped "Buchbare
+  // Wochentage" selection resolved by the Assistant's own search), the form shows those exact
+  // dates read-only instead of editable Von/Bis fields, and books exactly that list — not
+  // every calendar day between its first and last entry.
+  // How: opens with a gapped Mon/Wed/Fri list, checks the read-only dates line replaces the
+  // date inputs, submits, and checks the reducer passed to mutate books exactly 3 cells (not
+  // the 5 calendar days a Von/Bis range over the same span would expand to).
+  it('books exactly the given dates, not the full calendar span between them', async () => {
+    window.mutate = vi.fn().mockResolvedValue({ count: 3, undo: [] });
+    const dates = ['2021-01-04', '2021-01-06', '2021-01-08']; // Mon, Wed, Fri — gapped
+    act(() => openBookingForm(['m1'], dates[0]!, dates[dates.length - 1]!, dates));
+    expect(document.querySelectorAll('#modal input[type="date"]')).toHaveLength(0);
+    expect(screen.getByText(/Mo\.?,? 04\.01\.2021/)).toBeInTheDocument();
+    await act(async () => {
+      screen.getByRole('button', { name: 'Buchen' }).click();
+    });
+    const [reducer] = (window.mutate as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    const fresh = { machines: [machine()], bookings: {} };
+    const result = reducer(fresh);
+    expect(result.count).toBe(3); // exactly the 3 given dates, Tue/Thu excluded
+  });
+});
+
 describe('openBookingForm', () => {
   // What: the booking form is a "sticky" modal — Escape doesn't dismiss it, unlike most
   // other modals, since accidentally losing an in-progress booking would be disruptive.

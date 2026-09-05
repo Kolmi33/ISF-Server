@@ -295,19 +295,57 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    Desktop-Breiten: Geräteauswahl links, Buchungsparameter + ausgewählte Geräte rechts
    übereinander, beide Spalten dauerhaft sichtbar. Schmalere Breiten stapeln alles in
    derselben Reihenfolge von oben nach unten. */
-#modal:has(.assist-columns){background:var(--app-bg)}
-.assist-columns{display:grid;grid-template-columns:1fr;gap:12px}
-.assist-card{background:var(--app-panel);border:1px solid var(--app-border);border-radius:10px;padding:12px;min-width:0}
-.assist-card-title{font-weight:700;font-size:13px;margin:0 0 10px;color:var(--heading-ink)}
-.assist-cart,.assist-catalog{display:flex;flex-direction:column;min-height:0}
-.assist-cart .aswork,.assist-cart .aswork-empty{flex:1;min-height:0;overflow:auto}
+/* Dialog shell: header (title/subtitle) stays fixed, only .assist-body scrolls — keeps the
+   heading and, on the overlay's own dismiss affordances, always reachable regardless of how
+   tall the content grows. Height is dvh-based (with a plain vh fallback declared first — the
+   later, dvh, declaration wins in a supporting browser and is simply ignored otherwise) minus
+   the reduced overlay margin below, so the dialog uses nearly the full viewport while still
+   leaving a visible gap above/below it. */
+#overlay:has(.assist-shell){padding:20px 12px}
+#modal:has(.assist-shell){background:var(--app-bg);display:flex;flex-direction:column;
+  width:100%;max-width:1200px;padding:0;overflow:hidden;
+  max-height:calc(100vh - 40px);max-height:calc(100dvh - 40px)}
+.assist-header{flex:0 0 auto;padding:24px 24px 12px}
+/* #modal h2{margin:0 0 12px;font-size:16px} outranks a bare .assist-header h2 (ID beats
+   class regardless of source order) — scope through #modal itself to actually win. */
+#modal:has(.assist-shell) .assist-header h2{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+.assist-subtitle{margin:4px 0 0;font-size:14px;color:var(--app-muted)}
+.assist-body{flex:1;min-height:0;overflow:auto;padding:0 24px 24px}
+.assist-filter-zone{background:color-mix(in srgb,var(--app-border) 18%,var(--app-bg));border-radius:12px;padding:16px;margin:0 0 16px}
+.assist-columns{display:grid;grid-template-columns:1fr;gap:16px}
+.assist-card{background:var(--app-panel);border:1px solid var(--app-border);border-radius:10px;padding:20px;min-width:0}
+.assist-card-title{font-size:16px;font-weight:600;letter-spacing:-.01em;margin:0 0 12px;color:var(--heading-ink)}
+.assist-card-description{font-size:13px;color:var(--app-muted);margin:-6px 0 16px}
+/* The catalog keeps its own bounded scroll (the full device list can be long); the selected-
+   devices card has none — it grows with .assist-body's own scroll instead of a second small
+   scrollbar (feature: give the machine panel more room without squashing the date section). */
+.assist-catalog{display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .assist-catalog .mlist{flex:1;min-height:0;max-height:none;border:0;border-radius:0;padding:0;margin:2px 0 0}
-.assist-parameters{margin-top:12px}
-.assist-parameter-fields{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:24px;align-items:center}
-.assist-duration>label{display:block;font-size:13px;color:var(--app-muted);margin-bottom:8px}
-.assist-duration-input{display:flex;align-items:center;gap:12px}
-.assist-duration-input input{width:70px}
-.assist-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}
+.assist-cart{display:flex;flex-direction:column}
+.assist-parameter-fields{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:24px;align-items:start}
+.assist-duration{display:flex;flex-direction:column}
+.assist-duration>label{font-size:13px;font-weight:500;color:var(--app-text);margin-bottom:8px}
+.assist-duration-input{display:flex;align-items:center;gap:6px}
+.assist-duration-input input{width:56px;text-align:center}
+.assist-weekdays{margin-top:20px}
+.assist-weekdays-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.assist-weekdays-head label{font-size:13px;font-weight:500;color:var(--app-text)}
+.assist-weekday-presets{display:flex;gap:6px}
+.assist-weekday-toggles{display:flex;gap:6px;flex-wrap:wrap}
+.assist-weekday-toggle{min-width:44px;height:36px;padding:0 10px;box-sizing:border-box;border:1px solid var(--app-border);border-radius:8px;background:var(--app-panel);color:var(--app-text);font-size:13px;font-weight:500;cursor:pointer;transition:background .12s,border-color .12s}
+.assist-weekday-toggle:hover{background:var(--hover)}
+.assist-weekday-toggle[data-pressed]{background:var(--app-accent);border-color:var(--app-accent);color:#fff}
+.assist-weekday-toggle:focus-visible{outline:2px solid var(--app-accent);outline-offset:2px}
+.assist-field-error{display:block;margin-top:4px;font-size:12px;color:var(--danger)}
+.assist-parameters-separator{border-top:1px solid var(--app-border);margin:20px 0 16px}
+.assist-search-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.assist-selection-summary{font-size:13px;color:var(--app-muted)}
+.assist-actions{display:flex;gap:8px;align-items:center}
+.assist-cancel-action{background:transparent;color:var(--app-text)}
+.assist-search-action{background:var(--app-accent);border-color:var(--app-accent);color:#fff;font-weight:600;min-width:190px;gap:6px}
+.assist-search-action:hover{background:var(--app-accent-hover)}
+.assist-stale-banner{background:var(--warnbg);color:var(--confink);border:1px solid var(--confbrd);border-radius:8px;padding:8px 12px;font-size:13px;margin:0 0 12px}
+.assist-results-heading{font-size:16px;font-weight:600;letter-spacing:-.01em;margin:20px 0 8px}
 .assist-hint{font-size:12px;color:var(--app-muted)}
 .assist-card input[type=date],.assist-card input[type=number],.assist-card input[type=text]{height:36px;box-sizing:border-box}
 .assist-card .grp.cathead{background:transparent;color:var(--heading-ink);border-radius:0;
@@ -322,23 +360,29 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .assist-machine-name{line-height:1.4;min-width:0;overflow-wrap:anywhere}
 .assist-catalog .mlist label:has([data-checked]){background:var(--app-accent-light)}
 .assist-connection{display:block;margin:4px 8px;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--app-muted);text-transform:uppercase}
-.assist-drag-hint{margin:4px 2px 10px;font-size:12px;line-height:1.5;color:var(--app-muted)}
+.assist-group-heading{display:flex;align-items:center;gap:2px}
+.assist-help-trigger{color:var(--app-muted)}
+.assist-help-positioner{z-index:150}
+.assist-help-popup{max-width:300px;background:var(--app-text);color:var(--app-panel);padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.4;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.assist-group-menu-trigger{color:var(--app-muted)}
+.assist-group-menu-popup{z-index:150;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);padding:4px;min-width:220px}
+.assist-group-menu-item{padding:7px 10px;border-radius:6px;font-size:13px;cursor:pointer;color:var(--app-text)}
+.assist-group-menu-item[data-highlighted]{background:var(--hover)}
 @media(min-width:860px){
-  #modal:has(.assist-columns){max-width:1040px}
-  .assist-columns{grid-template-columns:1fr 1fr;height:clamp(280px,42vh,440px);align-items:stretch}
+  .assist-columns{grid-template-columns:45% 55%;align-items:start}
+  .assist-catalog{max-height:clamp(340px,45vh,480px)}
 }
 @media(max-width:859px){
-  .assist-catalog,.assist-cart{height:300px}
   .assist-parameter-fields{grid-template-columns:1fr;gap:16px}
 }
-@media(max-width:480px){.assist-actions{display:grid;grid-template-columns:1fr}}
-.assist-filter-zone{background:color-mix(in srgb,var(--app-border) 18%,var(--app-bg));border-radius:12px;padding:16px;margin:0 0 4px}
-.assist-filter-zone .assist-parameters{margin-top:12px}
-.assist-filter-zone .assist-global-actions{border-top:1px solid var(--app-border);padding-top:12px;margin-top:12px}
-.assist-global-actions{align-items:center}
-.assist-global-actions .assist-cancel-action{background:transparent;color:var(--app-text)}
-.assist-global-actions .assist-search-action{background:var(--app-accent);border-color:var(--app-accent);color:#fff;font-weight:600}
-.assist-global-actions .assist-search-action:hover{background:var(--app-accent-hover)}
+@media(max-width:640px){
+  .assist-header{padding:16px 16px 10px}
+  .assist-body{padding:0 16px 16px}
+}
+@media(max-width:480px){
+  .assist-search-row{flex-direction:column;align-items:stretch}
+  .assist-actions{display:grid;grid-template-columns:1fr}
+}
 .date-range-field{max-width:560px}
 .aswork-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:6px;min-height:54px;color:var(--app-muted)}
@@ -529,7 +573,7 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .stat-theme-messtechnik{--stat-fill: hsl(174 40% 34%)}
 /* ---------- Statistik dashboard (StatsDashboard.tsx) ---------- */
 /* Light-grey modal ground behind the white cards below, matching the Assistant's own
-   card-on-grey treatment (app.css, "#modal:has(.assist-columns)"). */
+   card-on-grey treatment (app.css, "#modal:has(.assist-shell)"). */
 #modal:has(.stat-card){background:var(--app-bg)}
 /* The KPI tile row: icon + big bold value over a small muted label, four across. Same visual
    language as MyBookingsModal's own summary strip (.mybk-stat), kept as separate classes since
