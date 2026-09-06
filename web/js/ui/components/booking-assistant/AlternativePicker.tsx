@@ -41,7 +41,7 @@ export function AlternativePicker({
           title={
             candidates.length > 0
               ? 'Alternativen auswählen (ODER)'
-              : 'Keine weitere Karte auf dieser Ebene'
+              : 'Keine weitere Maschine verfügbar'
           }
           onPointerDown={(event) => event.stopPropagation()}
           className="size-8 shrink-0 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary"
@@ -84,7 +84,7 @@ function AlternativeContent({
       <div className="border-b border-border px-4 py-3">
         <p className="text-sm font-semibold text-foreground">Alternativen auswählen</p>
         <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-          Diese Karten werden mit {sourceName} als ODER-Gruppe verbunden.
+          Diese Geräte werden mit {sourceName} als ODER-Gruppe verbunden.
         </p>
       </div>
       <div className="max-h-64 space-y-1 overflow-y-auto p-2">

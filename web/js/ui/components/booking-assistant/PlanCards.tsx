@@ -11,6 +11,7 @@ import { Button } from './primitives.tsx';
 import { useDevices } from './DeviceProvider.tsx';
 import { type PlanEntry } from '../../../core/booking-assistant-types.ts';
 import { DeviceSubtitle } from './DeviceSubtitle.tsx';
+import { entryContains } from './plan-tree.ts';
 import { entryDragId } from './plan-tree.ts';
 import { NumberInput } from './NumberField.tsx';
 import { AlternativePicker } from './AlternativePicker.tsx';
@@ -120,7 +121,7 @@ function PlanCardBody({
     <AlternativePicker
       entry={entry}
       position={position}
-      candidates={handlers.alternativeCandidates}
+      candidates={alternativeCandidatesFor(entry, handlers.alternativeCandidates)}
       onGroup={handlers.onGroupAlternatives}
     />
   );
@@ -159,6 +160,15 @@ function PlanCardBody({
   );
 }
 
+/** Every selected machine can be chosen except the card that opened the picker. A group card
+ * excludes all of its members because adding them again would duplicate its own contents. */
+export function alternativeCandidatesFor(
+  entry: PlanEntry,
+  candidates: AlternativeCandidate[],
+): AlternativeCandidate[] {
+  return candidates.filter((candidate) => !entryContains(entry, candidate.entry.id));
+}
+
 function GroupMembers({
   entry,
   depth,
@@ -178,14 +188,7 @@ function GroupMembers({
           {preview ? (
             <PlanCardPreview entry={member} />
           ) : (
-            <PlanCard
-              entry={member}
-              depth={depth + 1}
-              {...handlers}
-              alternativeCandidates={entry.members
-                .filter((candidate) => candidate.id !== member.id)
-                .map((candidate) => ({ entry: candidate }))}
-            />
+            <PlanCard entry={member} depth={depth + 1} {...handlers} />
           )}
         </React.Fragment>
       ))}

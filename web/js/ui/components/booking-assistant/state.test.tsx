@@ -8,7 +8,7 @@ import { deviceIdsOf, normalizePlan } from './plan-tree.ts';
 import type { PlanEntry } from '../../../core/booking-assistant-types.ts';
 import type { DropZone } from './plan-drop.ts';
 import { DeviceProvider } from './DeviceProvider.tsx';
-import { PlanCard } from './PlanCards.tsx';
+import { alternativeCandidatesFor, PlanCard } from './PlanCards.tsx';
 import { planPositionLabels } from './PlanPanel.tsx';
 
 /** Alle Geräte unter einem Eintrag, in Reihenfolge. */
@@ -61,6 +61,7 @@ describe('supplied plan and criteria state', () => {
         { kind: 'device', id: 'second', deviceId: 'b' },
       ],
     };
+    const external: PlanEntry = { kind: 'device', id: 'external', deviceId: 'c' };
     expect(
       planPositionLabels([
         { kind: 'device', id: 'before', deviceId: 'a' },
@@ -77,6 +78,7 @@ describe('supplied plan and criteria state', () => {
             devices: [
               { id: 'a', name: 'A', code: 'A', lab: 'Halle' },
               { id: 'b', name: 'B', code: 'B', lab: 'Halle' },
+              { id: 'c', name: 'C', code: 'C', lab: 'Halle' },
             ],
           },
         ]}
@@ -90,7 +92,11 @@ describe('supplied plan and criteria state', () => {
               onDissolveGroup={vi.fn()}
               onRequiredCountChange={vi.fn()}
               onGroupAlternatives={vi.fn()}
-              alternativeCandidates={[]}
+              alternativeCandidates={[
+                { entry: group.kind === 'group' ? group.members[0]! : group },
+                { entry: group.kind === 'group' ? group.members[1]! : group },
+                { entry: external, position: '05' },
+              ]}
             />
           </ul>
         </DndContext>
@@ -105,6 +111,13 @@ describe('supplied plan and criteria state', () => {
       screen.getByRole('button', { name: 'Bedarfsgruppe auflösen' }),
     );
     expect(screen.getAllByLabelText(/^Position/)).toHaveLength(1);
+    expect(
+      alternativeCandidatesFor(group.kind === 'group' ? group.members[0]! : group, [
+        { entry: group.kind === 'group' ? group.members[0]! : group },
+        { entry: group.kind === 'group' ? group.members[1]! : group },
+        { entry: external, position: '05' },
+      ]).map((candidate) => candidate.entry.id),
+    ).toEqual(['second', 'external']);
   });
 
   it('groups several sibling alternatives through the explicit action', () => {
@@ -129,21 +142,32 @@ describe('supplied plan and criteria state', () => {
         { kind: 'device', id: 'c-entry', deviceId: 'c' },
       ],
     };
-    act(() => result.current.setPlan([outer, { kind: 'device', id: 'd-entry', deviceId: 'd' }]));
-    act(() => result.current.groupAlternatives('a-entry', ['b-entry']));
+    const other: PlanEntry = {
+      kind: 'group',
+      id: 'other',
+      requiredCount: 1,
+      members: [
+        { kind: 'device', id: 'd-entry', deviceId: 'd' },
+        { kind: 'device', id: 'e-entry', deviceId: 'e' },
+      ],
+    };
+    act(() => result.current.setPlan([outer, other]));
+    act(() => result.current.groupAlternatives('a-entry', ['d-entry']));
     expect(result.current.plan[0]).toMatchObject({
       id: 'outer',
       members: [
-        { kind: 'group', members: [{ id: 'a-entry' }, { id: 'b-entry' }] },
+        { kind: 'group', members: [{ id: 'a-entry' }, { id: 'd-entry' }] },
+        { id: 'b-entry' },
         { id: 'c-entry' },
       ],
     });
-    act(() => result.current.groupAlternatives('outer', ['d-entry']));
+    expect(result.current.plan[1]).toMatchObject({ id: 'e-entry' });
+    act(() => result.current.groupAlternatives('outer', ['e-entry']));
     expect(result.current.plan).toHaveLength(1);
     expect(result.current.plan[0]).toMatchObject({
       id: 'outer',
       requiredCount: 1,
-      members: [expect.anything(), { id: 'c-entry' }, { id: 'd-entry' }],
+      members: [expect.anything(), { id: 'b-entry' }, { id: 'c-entry' }, { id: 'e-entry' }],
     });
   });
 

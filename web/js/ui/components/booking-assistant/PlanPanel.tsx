@@ -9,6 +9,7 @@ import { Tooltip } from './primitives.tsx';
 import { TooltipContent } from './primitives.tsx';
 import { TooltipTrigger } from './primitives.tsx';
 import { PLAN_LIST_ID } from './plan-tree.ts';
+import { type PlanDeviceEntry } from '../../../core/booking-assistant-types.ts';
 import { planTargets } from './planTargeting.ts';
 import { SECTION_LABEL_CLASS } from './styles.ts';
 import { PlanCard } from './PlanCards.tsx';
@@ -94,6 +95,13 @@ function PlanList({ state }: { state: AssistantState }) {
         : null;
   const positions = planPositionLabels(plan);
   const numberedEntries = plan.map((entry, index) => ({ entry, position: positions[index] }));
+  const topLevelPositions = new Map(
+    numberedEntries.map(({ entry, position }) => [entry.id, position]),
+  );
+  const alternativeCandidates = plan.flatMap(deviceEntriesOf).map((entry) => ({
+    entry,
+    position: topLevelPositions.get(entry.id),
+  }));
   return (
     /* Auffangfläche: alles unterhalb der Überschrift, was keine Karte ist. Ein Gerät hier
        loszulassen löst es aus seiner Bedarfsgruppe und hängt es hinten an — dafür muss
@@ -121,9 +129,7 @@ function PlanList({ state }: { state: AssistantState }) {
                 onDissolveGroup={dissolveGroup}
                 onRequiredCountChange={setRequiredCount}
                 onGroupAlternatives={groupAlternatives}
-                alternativeCandidates={numberedEntries.filter(
-                  (candidate) => candidate.entry.id !== entry.id,
-                )}
+                alternativeCandidates={alternativeCandidates}
               />
             ))}
           </ul>
@@ -141,6 +147,10 @@ export function planPositionLabels(plan: PlanEntry[]): string[] {
     const positions = Array.from({ length: count }, () => String(nextPosition++).padStart(2, '0'));
     return positions.join(', ');
   });
+}
+
+function deviceEntriesOf(entry: PlanEntry): PlanDeviceEntry[] {
+  return entry.kind === 'device' ? [entry] : entry.members.flatMap(deviceEntriesOf);
 }
 function PlanOverlay({ state }: { state: AssistantState }) {
   const { draggedEntry } = state;

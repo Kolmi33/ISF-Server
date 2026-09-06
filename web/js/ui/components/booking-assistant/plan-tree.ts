@@ -92,52 +92,52 @@ export function addMember(plan: PlanEntry[], targetId: string, moving: PlanEntry
   });
 }
 
-/** Groups an entry with selected siblings without requiring a drag gesture. The anchor keeps
- * its place. Existing groups receive the selected siblings as further alternatives; a device
- * becomes the first member of a new group. */
+/** Groups an entry with selected cards from anywhere in the plan. The anchor keeps its place;
+ * selected alternatives leave their former groups. Ancestors and descendants of the anchor are
+ * ignored because grouping those would duplicate or circularly contain the same entry. */
 export function groupAlternatives(
   plan: PlanEntry[],
   anchorId: string,
   alternativeIds: string[],
 ): PlanEntry[] {
   const selected = new Set(alternativeIds.filter((id) => id !== anchorId));
-  if (selected.size === 0) return plan;
-  const changed = groupAtLevel(plan, anchorId, selected);
-  return changed ? normalizePlan(changed) : plan;
+  const anchor = findEntry(plan, anchorId);
+  if (!anchor || selected.size === 0) return plan;
+  const alternatives = flattenEntries(plan).filter(
+    (entry) =>
+      selected.has(entry.id) && !entryContains(anchor, entry.id) && !entryContains(entry, anchorId),
+  );
+  if (alternatives.length === 0) return plan;
+  const rest = alternatives.reduce(
+    (current, alternative) => withoutEntry(current, alternative.id),
+    plan,
+  );
+  const currentAnchor = findEntry(rest, anchorId);
+  if (!currentAnchor) return plan;
+  const grouped: PlanGroupEntry =
+    currentAnchor.kind === 'group'
+      ? { ...currentAnchor, members: [...currentAnchor.members, ...alternatives] }
+      : {
+          kind: 'group',
+          id: createEntryId(),
+          members: [currentAnchor, ...alternatives],
+          requiredCount: 1,
+        };
+  return normalizePlan(replaceEntry(rest, anchorId, grouped));
 }
 
-function groupAtLevel(
-  entries: PlanEntry[],
-  anchorId: string,
-  selected: ReadonlySet<string>,
-): PlanEntry[] | null {
-  const anchor = entries.find((entry) => entry.id === anchorId);
-  if (anchor) {
-    const alternatives = entries.filter((entry) => selected.has(entry.id));
-    if (alternatives.length === 0) return null;
-    const grouped: PlanGroupEntry =
-      anchor.kind === 'group'
-        ? { ...anchor, members: [...anchor.members, ...alternatives] }
-        : {
-            kind: 'group',
-            id: createEntryId(),
-            members: [anchor, ...alternatives],
-            requiredCount: 1,
-          };
-    return entries.flatMap((entry) => {
-      if (entry.id === anchorId) return [grouped];
-      return selected.has(entry.id) ? [] : [entry];
-    });
-  }
-  for (const entry of entries) {
-    if (entry.kind !== 'group') continue;
-    const members = groupAtLevel(entry.members, anchorId, selected);
-    if (members)
-      return entries.map((candidate) =>
-        candidate.id === entry.id ? { ...entry, members } : candidate,
-      );
-  }
-  return null;
+const flattenEntries = (entries: PlanEntry[]): PlanEntry[] =>
+  entries.flatMap((entry) =>
+    entry.kind === 'group' ? [entry, ...flattenEntries(entry.members)] : [entry],
+  );
+
+function replaceEntry(entries: PlanEntry[], entryId: string, replacement: PlanEntry): PlanEntry[] {
+  return entries.map((entry) => {
+    if (entry.id === entryId) return replacement;
+    return entry.kind === 'group'
+      ? { ...entry, members: replaceEntry(entry.members, entryId, replacement) }
+      : entry;
+  });
 }
 
 /** Ersetzt die Gruppe durch ihre Mitglieder — an Ort und Stelle, auf ihrer Ebene. */
