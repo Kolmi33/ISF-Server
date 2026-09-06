@@ -58,7 +58,8 @@ export function assistantCatalog(
     for (const group of new Set(members.map((m) => m.group)))
       catalog.push({
         id: JSON.stringify([category.id, group]),
-        label: `${category.label} · ${group}`,
+        label: group,
+        section: { id: category.id, label: category.label },
         devices: members.filter((m) => m.group === group).map(device),
       });
   }

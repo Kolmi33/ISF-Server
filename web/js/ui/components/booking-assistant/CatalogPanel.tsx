@@ -3,7 +3,7 @@ import { Badge } from './primitives.tsx';
 import { Input } from './primitives.tsx';
 import { ScrollArea } from './primitives.tsx';
 import { SECTION_LABEL_CLASS } from './styles.ts';
-import { CatalogCategorySection } from './Catalog.tsx';
+import { CatalogTree } from './Catalog.tsx';
 import { type AssistantState } from './useAssistantState.ts';
 
 export function CatalogPanel({ state }: { state: AssistantState }) {
@@ -12,8 +12,8 @@ export function CatalogPanel({ state }: { state: AssistantState }) {
     query,
     setQuery,
     filteredCatalog,
-    openCategories,
-    setOpenCategories,
+    isCatalogOpen,
+    toggleCatalogOpen,
     toggleDevice,
   } = state;
 
@@ -41,19 +41,13 @@ export function CatalogPanel({ state }: { state: AssistantState }) {
             Kein Gerät passt zu „{query}“.
           </p>
         ) : (
-          <div className="flex flex-col gap-4">
-            {filteredCatalog.map(({ category, devices }) => (
-              <CatalogCategorySection
-                key={category.id}
-                category={category}
-                devices={devices}
-                open={openCategories[category.id] !== false}
-                onToggleOpen={(id) => setOpenCategories((s) => ({ ...s, [id]: !s[id] }))}
-                selectedIds={selectedDeviceIds}
-                onToggleDevice={toggleDevice}
-              />
-            ))}
-          </div>
+          <CatalogTree
+            nodes={filteredCatalog}
+            isOpen={isCatalogOpen}
+            onToggleOpen={toggleCatalogOpen}
+            selectedIds={selectedDeviceIds}
+            onToggleDevice={toggleDevice}
+          />
         )}
       </ScrollArea>
     </div>

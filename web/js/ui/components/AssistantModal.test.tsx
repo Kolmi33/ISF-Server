@@ -64,6 +64,7 @@ afterEach(() => {
 });
 const click = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
 const select = () => fireEvent.click(screen.getAllByRole('checkbox', { name: /Echte Fräse/ })[0]!);
+const openFold = (name: RegExp) => fireEvent.click(screen.getByRole('button', { name }));
 const search = () => click('Freie Termine suchen');
 const change = (name: string, value: string) => {
   const input = screen.getByRole('textbox', { name });
@@ -87,20 +88,28 @@ describe('supplied assistant host integration', () => {
       screen.getByRole('button', { name: 'Freie Termine suchen' }).hasAttribute('disabled'),
     ).toBe(true);
   });
-  it('preserves filtering and category collapse', () => {
+  it('preserves filtering, folds every super category shut but the favorites', () => {
     const input = screen.getByRole('textbox', { name: 'Gerät suchen' });
     fireEvent.change(input, { target: { value: 'Presse' } });
+    // Die Suche klappt auf, sonst läge der Treffer unter einer zugeklappten Rubrik.
     expect(screen.getAllByRole('checkbox')).toHaveLength(1);
     fireEvent.click(screen.getByRole('checkbox'));
     expect(screen.getByRole('button', { name: 'Echte Presse entfernen' })).toBeTruthy();
     fireEvent.change(input, { target: { value: 'unbekannt' } });
     expect(screen.getByText('Kein Gerät passt zu „unbekannt“.')).toBeTruthy();
     fireEvent.change(input, { target: { value: '' } });
-    const category = screen.getByRole('button', { name: /Maschinen · Alte Halle/ });
-    fireEvent.click(category);
+    // Ohne Suche steht nur der Favorit offen.
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    const section = screen.getByRole('button', { name: /^Maschinen/ });
+    expect(section.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(section);
+    expect(section.getAttribute('aria-expanded')).toBe('true');
+    const category = screen.getByRole('button', { name: /^Alte Halle/ });
     expect(category.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(category);
     expect(category.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(section);
+    expect(screen.queryByRole('button', { name: /^Alte Halle/ })).toBeNull();
   });
   it('transfers min/max, exact devices and selected calendar dates to confirmation', () => {
     select();
@@ -144,6 +153,8 @@ describe('supplied assistant host integration', () => {
     expect(screen.getByRole('button', { name: 'Neu suchen' })).toBeTruthy();
   });
   it('shows genuine no-results and enforces coupled duration bounds', () => {
+    openFold(/^Maschinen/);
+    openFold(/^Labor/);
     fireEvent.click(screen.getByRole('checkbox', { name: /Gesperrtes Gerät/ }));
     search();
     expect(

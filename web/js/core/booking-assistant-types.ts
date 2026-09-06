@@ -13,6 +13,9 @@ export interface CatalogCategory {
   label: string;
   /** Favoriten bekommen einen Stern in der Kopfzeile */
   starred?: boolean;
+  /** Oberkategorie ("Maschinen", "Messtechnik"), unter der die Kategorie eingeklappt liegt.
+   *  Ohne Angabe steht die Kategorie selbst auf oberster Ebene — so die Favoriten. */
+  section?: { id: string; label: string };
   devices: Device[];
 }
 

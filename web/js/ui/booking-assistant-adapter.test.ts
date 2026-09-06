@@ -19,10 +19,10 @@ const range = { from: new Date(2026, 9, 24), to: new Date(2026, 9, 27) };
 describe('backend/frontend assistant boundary', () => {
   it('uses actual IDs, labels, department, categories and favorites without demo data', () => {
     const catalog = assistantCatalog(data.machines, new Set(['meter']));
-    expect(catalog.map((c) => c.label)).toEqual([
-      'Favoriten',
-      'Maschinen · Alte Halle',
-      'Messtechnik · Labor',
+    expect(catalog.map((c) => [c.section?.label, c.label])).toEqual([
+      [undefined, 'Favoriten'],
+      ['Maschinen', 'Alte Halle'],
+      ['Messtechnik', 'Labor'],
     ]);
     expect(catalog[1]!.devices[0]).toEqual({
       id: 'real-id',
