@@ -16,7 +16,8 @@
 //
 // =======================================================================================
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { CalendarPlus, TriangleAlert } from 'lucide-react';
 import type { Machine } from '../../../../shared/types.ts';
 import { getAllDaysInRange, formatDateLong } from '../../../../shared/dates.ts';
 import { bookCells, type Conflict } from '../../core/bookings.ts';
@@ -24,6 +25,11 @@ import { closeReactModal, openReactModal } from '../modal.tsx';
 import { toast, offerUndo } from '../toast.ts';
 import { store } from '../../store-instance.ts';
 import { machById } from '../machine-lookup.ts';
+import { Button } from '../../components/ui/app-button.tsx';
+import { Input } from '../../components/ui/input.tsx';
+import { ScrollArea } from '../../components/ui/scroll-area.tsx';
+import { AppDialog, AppDialogBody, AppDialogFooter, AppDialogHeader } from './app/AppDialog.tsx';
+import { FormField } from './app/FormField.tsx';
 
 const MAX_CELLS_PER_BOOKING = 500;
 const MAX_CONFLICTS_SHOWN = 15;
@@ -67,31 +73,38 @@ function validateBookingInput(
 
 function MachineList({ machines }: { machines: readonly Machine[] }) {
   return (
-    <div style={{ flex: 1 }}>
+    <ul className="flex flex-wrap gap-1.5">
       {machines.map((machine) => (
-        <div key={machine.id}>{machine.name}</div>
+        <li
+          key={machine.id}
+          className="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-[11px] font-medium text-secondary-foreground"
+        >
+          {machine.name}
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
 function ConflictList({ conflicts }: { conflicts: readonly Conflict[] }) {
   const shown = conflicts.slice(0, MAX_CONFLICTS_SHOWN);
   return (
-    <div className="conflictbox">
-      <b>{conflicts.length} Termin(e) bereits belegt / gesperrt:</b>
-      <br />
-      {shown.map((conflict, index) => (
-        <span key={`${conflict.machineId}-${conflict.date}`}>
-          {index > 0 && <br />}• {machById(conflict.machineId)?.name ?? conflict.machineId}{' '}
-          {formatDateLong(conflict.date)}: {conflict.by}
-        </span>
-      ))}
-      {conflicts.length > MAX_CONFLICTS_SHOWN && (
-        <>
-          <br />…
-        </>
-      )}
+    <div className="conflictbox flex min-h-0 flex-col gap-2 rounded-xl border border-brand/40 bg-brand-soft px-3 py-2.5 text-brand-foreground">
+      <p className="flex items-center gap-1.5 text-xs font-semibold">
+        <TriangleAlert className="size-3.5 shrink-0" />
+        {conflicts.length} Termin(e) bereits belegt / gesperrt:
+      </p>
+      <ScrollArea className="-mr-3 max-h-32 min-h-0 pr-3">
+        <ul className="flex flex-col gap-0.5 text-[11px] tabular-nums">
+          {shown.map((conflict) => (
+            <li key={`${conflict.machineId}-${conflict.date}`}>
+              • {machById(conflict.machineId)?.name ?? conflict.machineId}{' '}
+              {formatDateLong(conflict.date)}: {conflict.by}
+            </li>
+          ))}
+          {conflicts.length > MAX_CONFLICTS_SHOWN && <li>…</li>}
+        </ul>
+      </ScrollArea>
     </div>
   );
 }
@@ -113,9 +126,37 @@ interface FormFieldsState {
  *  weekdays the search excluded. */
 function FixedDatesRow({ dates }: { dates: readonly string[] }) {
   return (
-    <div className="formrow">
-      <label>Termine</label>
-      <span>{dates.map((date) => formatDateLong(date)).join(', ')}</span>
+    <FormField label="Termine">
+      <p className="text-sm leading-relaxed tabular-nums text-foreground">
+        {dates.map((date) => formatDateLong(date)).join(', ')}
+      </p>
+    </FormField>
+  );
+}
+
+function DateRangeFields({ fields }: { fields: FormFieldsState }) {
+  const fromId = useId();
+  const toId = useId();
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormField label="Von" htmlFor={fromId}>
+        <Input
+          id={fromId}
+          type="date"
+          className="h-10 rounded-lg"
+          value={fields.fromDate}
+          onChange={(event) => fields.setFromDate(event.target.value)}
+        />
+      </FormField>
+      <FormField label="Bis" htmlFor={toId}>
+        <Input
+          id={toId}
+          type="date"
+          className="h-10 rounded-lg"
+          value={fields.toDate}
+          onChange={(event) => fields.setToDate(event.target.value)}
+        />
+      </FormField>
     </div>
   );
 }
@@ -129,47 +170,33 @@ function BookingFormFields({
   fields: FormFieldsState;
   fixedDates?: readonly string[];
 }) {
+  const nameId = useId();
+  const noteId = useId();
   return (
     <>
-      <div className="formrow">
-        <label>Maschine(n)</label>
+      <FormField label={`Maschine(n) · ${machines.length}`}>
         <MachineList machines={machines} />
-      </div>
-      <div className="formrow">
-        <label>Name</label>
-        <input
+      </FormField>
+      <FormField label="Name" htmlFor={nameId}>
+        <Input
+          id={nameId}
           type="text"
+          className="h-10 rounded-lg"
           value={fields.name}
           onChange={(event) => fields.setName(event.target.value)}
         />
-      </div>
-      {fixedDates ? (
-        <FixedDatesRow dates={fixedDates} />
-      ) : (
-        <div className="formrow">
-          <label>Von</label>
-          <input
-            type="date"
-            value={fields.fromDate}
-            onChange={(event) => fields.setFromDate(event.target.value)}
-          />
-          <label style={{ minWidth: 'auto' }}>Bis</label>
-          <input
-            type="date"
-            value={fields.toDate}
-            onChange={(event) => fields.setToDate(event.target.value)}
-          />
-        </div>
-      )}
-      <div className="formrow">
-        <label>Notiz</label>
-        <input
+      </FormField>
+      {fixedDates ? <FixedDatesRow dates={fixedDates} /> : <DateRangeFields fields={fields} />}
+      <FormField label="Notiz" htmlFor={noteId} hint="Dient zugleich als Titel der Buchungsgruppe.">
+        <Input
+          id={noteId}
           type="text"
+          className="h-10 rounded-lg"
           placeholder="optional – Zweck / Kommentar"
           value={fields.note}
           onChange={(event) => fields.setNote(event.target.value)}
         />
-      </div>
+      </FormField>
     </>
   );
 }
@@ -254,35 +281,43 @@ export function BookingForm({ machineIds, from, to, dates }: BookingFormProps) {
     if (newConflicts) setConflicts(newConflicts);
   }
 
+  const titleId = useId();
   return (
-    <>
-      <h2>Buchen</h2>
-      <BookingFormFields
-        machines={machines}
-        fields={{ name, setName, fromDate, setFromDate, toDate, setToDate, note, setNote }}
-        fixedDates={dates}
+    <AppDialog size="md" labelledBy={titleId}>
+      <AppDialogHeader
+        icon={<CalendarPlus className="size-6" />}
+        title="Buchen"
+        titleId={titleId}
+        subtitle={`${machines.length} Maschine${machines.length === 1 ? '' : 'n'} reservieren`}
       />
-      <div id="bkConflicts">
-        {conflicts && (
-          <>
-            <ConflictList conflicts={conflicts} />
-            <div className="modal-actions" style={{ marginTop: 4 }}>
-              <button className="btn primary" onClick={() => submit(true)}>
+      <AppDialogBody className="max-h-[65vh] overflow-y-auto">
+        <BookingFormFields
+          machines={machines}
+          fields={{ name, setName, fromDate, setFromDate, toDate, setToDate, note, setNote }}
+          fixedDates={dates}
+        />
+        <div id="bkConflicts" className="contents">
+          {conflicts && (
+            <>
+              <ConflictList conflicts={conflicts} />
+              <Button className="self-start" onClick={() => submit(true)}>
                 Nur freie Termine buchen
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-      <div className="modal-actions">
-        <button className="btn" onClick={closeReactModal}>
-          Abbrechen
-        </button>
-        <button className="btn primary" onClick={() => submit(false)}>
-          Buchen
-        </button>
-      </div>
-    </>
+              </Button>
+            </>
+          )}
+        </div>
+      </AppDialogBody>
+      <AppDialogFooter>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="ghost" size="lg" onClick={closeReactModal}>
+            Abbrechen
+          </Button>
+          <Button size="lg" onClick={() => submit(false)}>
+            Buchen
+          </Button>
+        </div>
+      </AppDialogFooter>
+    </AppDialog>
   );
 }
 

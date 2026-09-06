@@ -47,22 +47,22 @@ describe('BookingDetailModal', () => {
   // formatted date.
   it('titles the modal with the machine name and date, not a generic label', () => {
     render(<BookingDetailModal machine={machine()} date={TODAY} booking={booking()} />);
-    const heading = screen.getByRole('heading', { level: 2 });
+    const heading = screen.getByRole('heading', { level: 1 });
     expect(heading.textContent).toContain('Fräse');
     expect(heading.textContent).toContain('06.01.2021');
     expect(heading.textContent).not.toBe('Buchung');
   });
 
-  // What: "Schließen" is a top-right "×" icon button (user request), not a labeled button in
+  // What: "Schließen" is a top-right icon button (user request), not a labeled button in
   // the bottom action row — freeing that row for just the two destructive actions. Its
   // behavior (closing the modal) is unchanged.
   // How: renders, finds the close button by its accessible name, and checks clicking it closes
   // the overlay.
-  it('closes via a top-right "×" icon button', () => {
+  it('closes via a top-right icon button in the dialog header', () => {
     document.getElementById('overlay')!.classList.add('open');
     render(<BookingDetailModal machine={machine()} date={TODAY} booking={booking()} />);
     const closeButton = screen.getByRole('button', { name: 'Schließen' });
-    expect(closeButton.closest('.bkdetail-head')).not.toBeNull();
+    expect(closeButton.closest('header')).not.toBeNull();
     closeButton.click();
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
   });
@@ -177,9 +177,9 @@ describe('BookingDetailModal', () => {
   // What: the two destructive actions are visually distinguished by their actual blast radius
   // (user request: prevent a catastrophic accidental click) — the whole-series delete (removes
   // more) gets the bolder filled-red treatment, "just this one day" stays the lighter
-  // outline-only style, and they sit at opposite ends of the row rather than packed together.
+  // text-only style, and they sit at opposite ends of the row rather than packed together.
   // How: seeds a run so both buttons render, and checks each one's class and that "Diesen Tag
-  // löschen" is pushed away from the other (marginLeft: auto).
+  // löschen" is pushed away from the other (ml-auto).
   it('visually distinguishes the whole-series delete from the single-day delete', () => {
     window.S.data!.bookings = {
       m1: { '2021-01-05': booking(), [TODAY]: booking(), '2021-01-07': booking() },
@@ -187,10 +187,12 @@ describe('BookingDetailModal', () => {
     render(<BookingDetailModal machine={machine()} date={TODAY} booking={booking()} />);
     const seriesButton = screen.getByRole('button', { name: 'Ganze Serie löschen' });
     const dayButton = screen.getByRole('button', { name: 'Diesen Tag löschen' });
-    expect(seriesButton.className).toContain('dangerfill');
-    expect(dayButton.className).toContain('danger');
-    expect(dayButton.className).not.toContain('dangerfill');
-    expect(dayButton.style.marginLeft).toBe('auto');
+    // The wider-scope action carries the filled destructive tint; the single-day one is
+    // destructive text only (docs/UI_STYLE_GUIDE.md §8).
+    expect(seriesButton.className).toContain('bg-destructive/10');
+    expect(dayButton.className).toContain('text-destructive');
+    expect(dayButton.className).not.toContain('bg-destructive/10');
+    expect(dayButton.className).toContain('ml-auto');
   });
 
   // What: declining the whole-run delete confirmation aborts it — no write happens.

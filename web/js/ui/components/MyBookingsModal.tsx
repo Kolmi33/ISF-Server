@@ -13,7 +13,8 @@
 //
 // =======================================================================================
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { ClipboardList } from 'lucide-react';
 import type { Machine } from '../../../../shared/types.ts';
 import { todayAsIsoDateString } from '../../../../shared/dates.ts';
 import { groupsByCategory } from '../../core/machines.ts';
@@ -30,7 +31,11 @@ import {
 } from '../views/my-bookings.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { offerUndo } from '../toast.ts';
-import { Icon } from './Icon.tsx';
+import { Button } from '../../components/ui/app-button.tsx';
+import { ScrollArea } from '../../components/ui/scroll-area.tsx';
+import { AppDialog, AppDialogBody, AppDialogFooter, AppDialogHeader } from './app/AppDialog.tsx';
+import { EmptyState } from './app/EmptyState.tsx';
+import { StatTile } from './app/StatTile.tsx';
 import { MyBookingsFilters, MachineFilterButton } from './MyBookingsFilters.tsx';
 import {
   RunHead,
@@ -79,23 +84,17 @@ function nextInDaysText(days: number | null): string {
 function MyBookingsSummaryBar({ summary }: { summary: MyBookingsSummary }) {
   if (!summary.machineCount) return null;
   return (
-    <div className="mybk-summary">
-      <div className="mybk-stat">
-        <div className="mybk-stat-value">{summary.machineCount}</div>
-        <div className="mybk-stat-label">Maschine{summary.machineCount === 1 ? '' : 'n'}</div>
-      </div>
-      <div className="mybk-stat">
-        <div className="mybk-stat-value">{summary.groupCount}</div>
-        <div className="mybk-stat-label">Buchungsgruppe{summary.groupCount === 1 ? '' : 'n'}</div>
-      </div>
-      <div className="mybk-stat">
-        <div className="mybk-stat-value">{summary.totalDays}</div>
-        <div className="mybk-stat-label">Gebuchte Tage</div>
-      </div>
-      <div className="mybk-stat">
-        <div className="mybk-stat-value">{nextInDaysText(summary.nextInDays)}</div>
-        <div className="mybk-stat-label">Nächster Termin</div>
-      </div>
+    <div className="mybk-summary flex shrink-0 flex-wrap gap-3">
+      <StatTile
+        value={summary.machineCount}
+        label={`Maschine${summary.machineCount === 1 ? '' : 'n'}`}
+      />
+      <StatTile
+        value={summary.groupCount}
+        label={`Buchungsgruppe${summary.groupCount === 1 ? '' : 'n'}`}
+      />
+      <StatTile value={summary.totalDays} label="Gebuchte Tage" />
+      <StatTile value={nextInDaysText(summary.nextInDays)} label="Nächster Termin" />
     </div>
   );
 }
@@ -113,47 +112,49 @@ interface RunListProps {
 function RunList({ runs, hasAnyRuns, expandedKeys, onToggleExpand, onDeleteDates }: RunListProps) {
   if (!runs.length) {
     return (
-      <p className="hint">
+      <EmptyState>
         {hasAnyRuns
           ? 'Keine Buchungen für diese Filter gefunden.'
           : 'Keine zukünftigen Buchungen unter deinem Namen gefunden.'}
-      </p>
+      </EmptyState>
     );
   }
   return (
-    <div className="resultlist" style={{ maxHeight: 440 }}>
-      {groupRunsForDisplay(runs).map((item) => {
-        if (item.kind === 'group') {
+    <ScrollArea className="resultlist -mr-3 min-h-0 flex-1 pr-3">
+      <div className="flex flex-col gap-2">
+        {groupRunsForDisplay(runs).map((item) => {
+          if (item.kind === 'group') {
+            return (
+              <GroupCard
+                key={item.groupId}
+                groupId={item.groupId}
+                groupTitle={item.groupTitle}
+                runs={item.runs}
+                expandedKeys={expandedKeys}
+                onToggleExpand={onToggleExpand}
+                onDeleteDates={onDeleteDates}
+              />
+            );
+          }
+          const { run } = item;
+          const key = runKey(run);
+          const isExpanded = expandedKeys.has(key);
           return (
-            <GroupCard
-              key={item.groupId}
-              groupId={item.groupId}
-              groupTitle={item.groupTitle}
-              runs={item.runs}
-              expandedKeys={expandedKeys}
-              onToggleExpand={onToggleExpand}
-              onDeleteDates={onDeleteDates}
-            />
+            <div key={key}>
+              <RunHead
+                run={run}
+                isExpanded={isExpanded}
+                onToggleExpand={() => onToggleExpand(key)}
+                onDeleteDates={(dates) => onDeleteDates(run.machine, dates)}
+              />
+              {run.liveDates.length > 1 && isExpanded && (
+                <DayList run={run} onDeleteOneDay={(date) => onDeleteDates(run.machine, [date])} />
+              )}
+            </div>
           );
-        }
-        const { run } = item;
-        const key = runKey(run);
-        const isExpanded = expandedKeys.has(key);
-        return (
-          <div key={key}>
-            <RunHead
-              run={run}
-              isExpanded={isExpanded}
-              onToggleExpand={() => onToggleExpand(key)}
-              onDeleteDates={(dates) => onDeleteDates(run.machine, dates)}
-            />
-            {run.liveDates.length > 1 && isExpanded && (
-              <DayList run={run} onDeleteOneDay={(date) => onDeleteDates(run.machine, [date])} />
-            )}
-          </div>
-        );
-      })}
-    </div>
+        })}
+      </div>
+    </ScrollArea>
   );
 }
 
@@ -189,25 +190,19 @@ function useMyBookingsFilter(liveRuns: readonly LiveRun[]) {
   };
 }
 
-export function MyBookingsModal() {
-  const [frozenRuns] = useState<readonly BookingRun[]>(() =>
-    computeMyRuns(
-      orderedMachines(store.get('data')!.machines, store.get('favs')),
-      store.get('data')!.bookings,
-      store.get('user'),
-      todayAsIsoDateString(),
-    ),
-  );
+/** The two things the run list can do to a run — expand it, and delete some of its days.
+ *  Split out of `MyBookingsModal` purely to stay under the function-length budget. */
+function useMyBookingsRunActions() {
   const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set());
   const [, forceRerender] = useState(0);
-  const liveRuns = liveRunsFrom(frozenRuns);
-  const { filter, updateFilter, myMachineIds, groupOptions, runs } = useMyBookingsFilter(liveRuns);
 
   function toggleExpanded(key: string): void {
-    const next = new Set(expandedKeys);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    setExpandedKeys(next);
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   async function deleteDates(machine: Machine, dates: readonly string[]): Promise<void> {
@@ -222,37 +217,62 @@ export function MyBookingsModal() {
     }
   }
 
-  // Wrapped in its own `.mybookings` class so the CSS below (shaded filter card, sentence-case
-  // labels, standardized icon buttons, …) can scope its overrides to this modal specifically —
-  // `.abfilters`/`.mybk` are shared base classes AllBookingsModal also uses, and that modal's
-  // own look isn't part of this request.
+  return {
+    expandedKeys,
+    toggleExpanded,
+    onDeleteDates: (machine: Machine, dates: readonly string[]) => void deleteDates(machine, dates),
+  };
+}
+
+export function MyBookingsModal() {
+  const [frozenRuns] = useState<readonly BookingRun[]>(() =>
+    computeMyRuns(
+      orderedMachines(store.get('data')!.machines, store.get('favs')),
+      store.get('data')!.bookings,
+      store.get('user'),
+      todayAsIsoDateString(),
+    ),
+  );
+  const { expandedKeys, toggleExpanded, onDeleteDates } = useMyBookingsRunActions();
+  const liveRuns = liveRunsFrom(frozenRuns);
+  const { filter, updateFilter, myMachineIds, groupOptions, runs } = useMyBookingsFilter(liveRuns);
+  const titleId = useId();
+
   return (
-    <div className="mybookings">
-      <h2>
-        <Icon name="clip" /> Meine Buchungen (ab heute)
-      </h2>
-      <MyBookingsSummaryBar
-        summary={computeMyBookingsSummary(
-          liveRuns,
-          store.get('data')!.bookings,
-          todayAsIsoDateString(),
-        )}
+    <AppDialog size="lg" labelledBy={titleId} className="mybookings">
+      <AppDialogHeader
+        icon={<ClipboardList className="size-6" />}
+        title="Meine Buchungen"
+        titleId={titleId}
+        subtitle="Alle Reservierungen unter deinem Namen ab heute"
       />
-      <MyBookingsFilters filter={filter} groupOptions={groupOptions} onChange={updateFilter} />
-      <MachineFilterButton machineIds={myMachineIds} />
-      <RunList
-        runs={runs}
-        hasAnyRuns={liveRuns.length > 0}
-        expandedKeys={expandedKeys}
-        onToggleExpand={toggleExpanded}
-        onDeleteDates={(machine, dates) => void deleteDates(machine, dates)}
-      />
-      <div className="modal-actions">
-        <button className="btn" onClick={closeReactModal}>
+      <AppDialogBody className="max-h-[72vh]">
+        <MyBookingsSummaryBar
+          summary={computeMyBookingsSummary(
+            liveRuns,
+            store.get('data')!.bookings,
+            todayAsIsoDateString(),
+          )}
+        />
+        <MyBookingsFilters filter={filter} groupOptions={groupOptions} onChange={updateFilter} />
+        <MachineFilterButton machineIds={myMachineIds} />
+        <RunList
+          runs={runs}
+          hasAnyRuns={liveRuns.length > 0}
+          expandedKeys={expandedKeys}
+          onToggleExpand={toggleExpanded}
+          onDeleteDates={onDeleteDates}
+        />
+      </AppDialogBody>
+      <AppDialogFooter>
+        <span className="text-[11px] tabular-nums text-muted-foreground">
+          {runs.length} Eintr{runs.length === 1 ? 'ag' : 'äge'}
+        </span>
+        <Button size="lg" className="ml-auto" onClick={closeReactModal}>
           Schließen
-        </button>
-      </div>
-    </div>
+        </Button>
+      </AppDialogFooter>
+    </AppDialog>
   );
 }
 

@@ -10,9 +10,14 @@
 // - MUTUALLY EXCLUSIVE DELETE AFFORDANCES: a booking is never both grouped and a plain run
 //   at once in this UI — a grouped booking's cells don't also form a plain run, so exactly
 //   one of the two delete-more buttons ever shows, never both.
+// - BLAST RADIUS IS VISIBLE: the wider-scope delete is a filled destructive tint, the
+//   single-day one is text-only, and they sit at opposite ends of the footer so the two can
+//   never be confused for each other.
 //
 // =======================================================================================
 
+import { useId } from 'react';
+import { BarChart3, CalendarCheck, FolderOpen, X } from 'lucide-react';
 import type { Booking, Machine } from '../../../../shared/types.ts';
 import {
   formatDateLong,
@@ -35,11 +40,13 @@ import { daysMaskText, maintText } from '../machine-text.ts';
 import { escapeHtml } from '../escape-html.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { toast, offerUndo } from '../toast.ts';
-import { Icon } from './Icon.tsx';
 import { openBookingForm } from './BookingForm.tsx';
 import { store } from '../../store-instance.ts';
 import { machById } from '../machine-lookup.ts';
 import { openStats } from './StatsModal.tsx';
+import { Button } from '../../components/ui/app-button.tsx';
+import { AppDialog, AppDialogBody, AppDialogFooter, AppDialogHeader } from './app/AppDialog.tsx';
+import { LABEL_CLASS } from './app/typography.ts';
 
 async function deleteDates(
   machine: Machine,
@@ -71,9 +78,9 @@ function RunDeleteButton({ machine, booking, run }: RunDeleteButtonProps) {
     if (confirmed) await deleteDates(machine, booking, run);
   }
   return (
-    <button className="btn dangerfill" onClick={handleClick}>
+    <Button variant="destructive" size="lg" onClick={handleClick}>
       Ganze Serie löschen
-    </button>
+    </Button>
   );
 }
 
@@ -111,9 +118,9 @@ function GroupDeleteButton({
     }
   }
   return (
-    <button className="btn dangerfill" onClick={handleClick}>
+    <Button variant="destructive" size="lg" onClick={handleClick}>
       Ganze Buchungsgruppe löschen
-    </button>
+    </Button>
   );
 }
 
@@ -123,48 +130,49 @@ interface BookingFactsProps {
   booking: Booking;
 }
 
-/** The read-only fact rows: machine (+ the Statistik shortcut, now a small icon right next to
- *  the name instead of its own labeled button), date, who booked it, and the optional
- *  note/entered-at rows. A CSS grid (`.bkdetail-facts`), not the shared `.formrow` flex row —
- *  `.formrow label`'s fixed min-width left a wide gap after short labels like "Datum"; a grid
- *  sized to the longest label tightens that up (user request) without affecting every other
- *  modal's own `.formrow` rows. */
+/** The read-only fact rows: machine (+ the Statistik shortcut, a small icon right next to the
+ *  name instead of its own labeled button), date, who booked it, and the optional
+ *  note/entered-at rows. A two-column grid sized to the longest label, so a short label like
+ *  "Datum" leaves no gap before its value — each label's value is therefore its very next
+ *  sibling element, which the placement test relies on. */
 function BookingFacts({ machine, date, booking }: BookingFactsProps) {
   return (
-    <div className="bkdetail-facts">
-      <label>Maschine</label>
-      <div>
-        {machine.name}{' '}
-        <button
-          className="iconbtn small"
+    <dl className="bkdetail-facts grid grid-cols-[max-content_1fr] items-center gap-x-4 gap-y-3">
+      <dt className={LABEL_CLASS}>Maschine</dt>
+      <dd className="flex items-center gap-1.5 text-sm text-foreground">
+        {machine.name}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
           title={`Personenstatistik von ${booking.name} öffnen`}
           aria-label="Statistik"
           onClick={() => openStats(booking.name.toLowerCase())}
         >
-          <Icon name="chart" />
-        </button>
-      </div>
-      <label>Datum</label>
-      <div>{formatDateLong(date)}</div>
-      <label>Gebucht von</label>
+          <BarChart3 className="size-4" />
+        </Button>
+      </dd>
+      <dt className={LABEL_CLASS}>Datum</dt>
+      <dd className="text-sm tabular-nums text-foreground">{formatDateLong(date)}</dd>
+      <dt className={LABEL_CLASS}>Gebucht von</dt>
       {/* No bold here (user request) — keeps a consistent visual weight across every fact
           value instead of singling this one out. */}
-      <div>{booking.name}</div>
+      <dd className="text-sm text-foreground">{booking.name}</dd>
       {booking.note && (
         <>
-          <label>Notiz</label>
-          <div>{booking.note}</div>
+          <dt className={LABEL_CLASS}>Notiz</dt>
+          <dd className="text-sm text-foreground">{booking.note}</dd>
         </>
       )}
       {booking.ts && (
         <>
-          <label>Eingetragen</label>
-          <div className="hint" style={{ margin: 0 }}>
+          <dt className={LABEL_CLASS}>Eingetragen</dt>
+          <dd className="text-[11px] tabular-nums text-muted-foreground">
             {formatTimestamp(booking.ts)}
-          </div>
+          </dd>
         </>
       )}
-    </div>
+    </dl>
   );
 }
 
@@ -181,11 +189,11 @@ interface SeriesOrGroupHintProps {
 function SeriesOrGroupHint({ booking, run, group, groupWorkdays }: SeriesOrGroupHintProps) {
   if (group) {
     return (
-      <p className="hint">
-        <Icon name="folder" /> Teil einer Buchungsgruppe
+      <p className="flex flex-wrap items-center gap-1.5 rounded-xl border border-brand/30 bg-brand-soft px-3 py-2.5 text-[11px] leading-relaxed text-brand-foreground">
+        <FolderOpen className="size-3.5 shrink-0" /> Teil einer Buchungsgruppe
         {booking.gtitle ? (
           <>
-            : <b>{booking.gtitle}</b>
+            : <b className="font-semibold">{booking.gtitle}</b>
           </>
         ) : null}{' '}
         — {group.machineIds.size} Maschine{group.machineIds.size === 1 ? '' : 'n'},{' '}
@@ -196,7 +204,7 @@ function SeriesOrGroupHint({ booking, run, group, groupWorkdays }: SeriesOrGroup
   }
   if (run.length > 1) {
     return (
-      <p className="hint">
+      <p className="rounded-xl border border-border bg-muted/50 px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
         Diese Buchung ist Teil einer Serie: {formatDateLong(run[0]!)} –{' '}
         {formatDateLong(run[run.length - 1]!)} ({run.length} Werktage)
       </p>
@@ -215,33 +223,37 @@ export function BookingDetailModal({ machine, date, booking }: BookingDetailModa
   const run = findSameNameWorkdayRun(store.get('data')!.bookings, machine.id, date, booking.name);
   const group = booking.gid ? findBookingGroup(store.get('data')!.bookings, booking.gid) : null;
   const groupWorkdays = group ? group.dates.filter((d) => !isWeekend(parseIsoDateString(d))) : [];
+  const titleId = useId();
 
   // Title is the machine + date (user request), not the generic "Buchung" — immediate context
-  // without having to read the fact rows below. "Schließen" moved to a top-right "×" icon (same
-  // row as the title), freeing the bottom action row for just the two destructive actions.
+  // without having to read the fact rows below.
   return (
-    <>
-      <div className="bkdetail-head">
-        <h2>
-          {machine.name} – {formatDateLong(date)}
-        </h2>
-        <button
-          className="iconbtn"
-          onClick={closeReactModal}
-          aria-label="Schließen"
-          title="Schließen"
-        >
-          <Icon name="close" />
-        </button>
-      </div>
-      <BookingFacts machine={machine} date={date} booking={booking} />
-      <SeriesOrGroupHint booking={booking} run={run} group={group} groupWorkdays={groupWorkdays} />
+    <AppDialog size="md" labelledBy={titleId}>
+      <AppDialogHeader
+        icon={<CalendarCheck className="size-6" />}
+        title={`${machine.name} – ${formatDateLong(date)}`}
+        titleId={titleId}
+        subtitle={`Gebucht von ${booking.name}`}
+        actions={
+          <Button variant="ghost" size="icon" onClick={closeReactModal} aria-label="Schließen">
+            <X className="size-4" />
+          </Button>
+        }
+      />
+      <AppDialogBody>
+        <BookingFacts machine={machine} date={date} booking={booking} />
+        <SeriesOrGroupHint
+          booking={booking}
+          run={run}
+          group={group}
+          groupWorkdays={groupWorkdays}
+        />
+      </AppDialogBody>
       {/* The two destructive actions sit at opposite ends, not packed together (user request:
           separate them to prevent a catastrophic accidental click) — the broader-scope one
-          (a whole series/group) also gets the bolder filled-red treatment (.dangerfill) so it
-          visibly outweighs "just this one day" (.danger, outline only), matching the actual
-          difference in blast radius between the two. */}
-      <div className="modal-actions" style={{ justifyContent: 'flex-start', flexWrap: 'wrap' }}>
+          (a whole series/group) also gets the filled destructive tint so it visibly outweighs
+          "just this one day" (text only), matching the difference in blast radius. */}
+      <AppDialogFooter>
         {group ? (
           <GroupDeleteButton
             booking={booking}
@@ -254,15 +266,16 @@ export function BookingDetailModal({ machine, date, booking }: BookingDetailModa
         ) : (
           run.length > 1 && <RunDeleteButton machine={machine} booking={booking} run={run} />
         )}
-        <button
-          className="btn danger"
-          style={{ marginLeft: 'auto' }}
+        <Button
+          variant="ghost"
+          size="lg"
+          className="ml-auto text-destructive hover:text-destructive"
           onClick={() => void deleteDates(machine, booking, [date])}
         >
           Diesen Tag löschen
-        </button>
-      </div>
-    </>
+        </Button>
+      </AppDialogFooter>
+    </AppDialog>
   );
 }
 

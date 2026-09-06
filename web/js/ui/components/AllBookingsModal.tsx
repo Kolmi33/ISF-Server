@@ -13,8 +13,9 @@
 //
 // =======================================================================================
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { ChangeEvent } from 'react';
+import { MapPin, Table2, UserRound } from 'lucide-react';
 import {
   formatDateLong,
   formatTimestamp,
@@ -38,7 +39,14 @@ import {
 import { gotoDate, prependWeek, resetView } from '../grid-scroll.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { toast } from '../toast.ts';
-import { Icon } from './Icon.tsx';
+import { Badge } from '../../components/ui/badge.tsx';
+import { Button } from '../../components/ui/app-button.tsx';
+import { Input } from '../../components/ui/input.tsx';
+import { NativeSelect } from '../../components/ui/native-select.tsx';
+import { ScrollArea } from '../../components/ui/scroll-area.tsx';
+import { AppDialog, AppDialogBody, AppDialogFooter, AppDialogHeader } from './app/AppDialog.tsx';
+import { EmptyState } from './app/EmptyState.tsx';
+import { FormField } from './app/FormField.tsx';
 import { GroupOptions } from './GroupOptions.tsx';
 import { store } from '../../store-instance.ts';
 import { saveFilters, updateMachBtn } from './MachineFilterDropdown.tsx';
@@ -78,28 +86,44 @@ interface AllBookingsFiltersProps {
 
 /** The filter row: person/machine substrings, a group `<select>` (grouped by category), a sort
  *  key, and a date-overlap window. */
-function AllBookingsFilters({ filter, groupOptions, onChange }: AllBookingsFiltersProps) {
-  const onInput =
-    (key: keyof AllBookingsFilter) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      onChange({ [key]: event.target.value });
+/** The Person/Maschine/Bereich half. Split from the date half purely to stay under the
+ *  function-length budget — they render as one grid. */
+function AllBookingsWhoFields({
+  filter,
+  groupOptions,
+  onInput,
+}: {
+  filter: AllBookingsFilter;
+  groupOptions: readonly CategoryGroups[];
+  onInput: (
+    key: keyof AllBookingsFilter,
+  ) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+}) {
+  const ids = { person: useId(), mach: useId(), group: useId() };
   return (
-    <div className="abfilters">
-      <div className="fld">
-        <label>Person</label>
-        <input
+    <>
+      <FormField label="Person" htmlFor={ids.person}>
+        <Input
+          id={ids.person}
           type="text"
+          className="h-10 rounded-lg"
           placeholder="Kolmanovskyi"
           value={filter.person}
           onChange={onInput('person')}
         />
-      </div>
-      <div className="fld">
-        <label>Maschine</label>
-        <input type="text" placeholder="Berger" value={filter.mach} onChange={onInput('mach')} />
-      </div>
-      <div className="fld">
-        <label>Bereich</label>
-        <select value={filter.group} onChange={onInput('group')}>
+      </FormField>
+      <FormField label="Maschine" htmlFor={ids.mach}>
+        <Input
+          id={ids.mach}
+          type="text"
+          className="h-10 rounded-lg"
+          placeholder="Berger"
+          value={filter.mach}
+          onChange={onInput('mach')}
+        />
+      </FormField>
+      <FormField label="Bereich" htmlFor={ids.group}>
+        <NativeSelect id={ids.group} value={filter.group} onChange={onInput('group')}>
           <option value="">Alle</option>
           {groupOptions.map(({ category }) => (
             <option key={`cat:${category}`} value={`${CATEGORY_FILTER_PREFIX}${category}`}>
@@ -107,26 +131,64 @@ function AllBookingsFilters({ filter, groupOptions, onChange }: AllBookingsFilte
             </option>
           ))}
           <GroupOptions groupOptions={groupOptions} />
-        </select>
-      </div>
-      <div className="fld">
-        <label>Sortieren</label>
-        <select value={filter.sort} onChange={onInput('sort')}>
+        </NativeSelect>
+      </FormField>
+    </>
+  );
+}
+
+/** The sort key + date window half. See `AllBookingsWhoFields` for why this is separate. */
+function AllBookingsWhenFields({
+  filter,
+  onInput,
+}: {
+  filter: AllBookingsFilter;
+  onInput: (
+    key: keyof AllBookingsFilter,
+  ) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+}) {
+  const ids = { sort: useId(), from: useId(), to: useId() };
+  return (
+    <>
+      <FormField label="Sortieren" htmlFor={ids.sort}>
+        <NativeSelect id={ids.sort} value={filter.sort} onChange={onInput('sort')}>
           {SORT_OPTIONS.map(({ value, label }) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
-      </div>
-      <div className="fld">
-        <label>Von</label>
-        <input type="date" value={filter.from} onChange={onInput('from')} />
-      </div>
-      <div className="fld">
-        <label>Bis</label>
-        <input type="date" value={filter.to} onChange={onInput('to')} />
-      </div>
+        </NativeSelect>
+      </FormField>
+      <FormField label="Von" htmlFor={ids.from}>
+        <Input
+          id={ids.from}
+          type="date"
+          className="h-10 rounded-lg"
+          value={filter.from}
+          onChange={onInput('from')}
+        />
+      </FormField>
+      <FormField label="Bis" htmlFor={ids.to}>
+        <Input
+          id={ids.to}
+          type="date"
+          className="h-10 rounded-lg"
+          value={filter.to}
+          onChange={onInput('to')}
+        />
+      </FormField>
+    </>
+  );
+}
+
+function AllBookingsFilters({ filter, groupOptions, onChange }: AllBookingsFiltersProps) {
+  const onInput =
+    (key: keyof AllBookingsFilter) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      onChange({ [key]: event.target.value });
+  return (
+    <div className="abfilters grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-3">
+      <AllBookingsWhoFields filter={filter} groupOptions={groupOptions} onInput={onInput} />
+      <AllBookingsWhenFields filter={filter} onInput={onInput} />
     </div>
   );
 }
@@ -134,35 +196,35 @@ function AllBookingsFilters({ filter, groupOptions, onChange }: AllBookingsFilte
 function AllBookingsRow({ run }: { run: AllRun }) {
   const isSeries = run.dates.length > 1;
   return (
-    <div className="mybk">
-      <div style={{ minWidth: 0 }}>
-        <div className="abmach">
-          <b>{run.machine.name}</b>{' '}
-          <span className="hint" style={{ margin: 0 }}>
-            · {run.machine.group}
-          </span>
+    <div className="mybk flex items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:border-primary/40">
+      <div className="min-w-0 flex-1">
+        <div className="abmach flex flex-wrap items-center gap-1.5">
+          <b className="text-sm font-semibold text-foreground">{run.machine.name}</b>
+          <span className="text-[11px] text-muted-foreground">· {run.machine.group}</span>
         </div>
-        <div className="abdate">
+        <div className="abdate mt-0.5 flex flex-wrap items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
           {isSeries
             ? `${formatDateLong(run.dates[0]!)} – ${formatDateLong(run.dates[run.dates.length - 1]!)}`
-            : formatDateLong(run.dates[0]!)}{' '}
-          <span className="tag">
+            : formatDateLong(run.dates[0]!)}
+          <Badge>
             {run.dates.length} Tag{isSeries ? 'e' : ''}
-          </span>
+          </Badge>
         </div>
-        <div className="hint" style={{ margin: 0 }}>
-          <Icon name="user" /> {run.name}
-          {run.ts && <span style={{ opacity: 0.8 }}> · gebucht am {formatTimestamp(run.ts)}</span>}
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+          <UserRound className="size-3.5 shrink-0" /> {run.name}
+          {run.ts && <span className="tabular-nums">· gebucht am {formatTimestamp(run.ts)}</span>}
         </div>
       </div>
-      <button
-        className="btn small"
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-8 shrink-0 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
         title="Im Plan anzeigen"
         aria-label="Im Plan anzeigen"
         onClick={() => goto(run)}
       >
-        <Icon name="pin" />
-      </button>
+        <MapPin className="size-4" />
+      </Button>
     </div>
   );
 }
@@ -183,6 +245,7 @@ export function AllBookingsModal() {
     to: '',
     sort: localStorage.getItem('mb_absort') || 'termin',
   }));
+  const titleId = useId();
 
   function updateFilter(patch: Partial<AllBookingsFilter>): void {
     if (patch.sort) localStorage.setItem('mb_absort', patch.sort);
@@ -193,29 +256,36 @@ export function AllBookingsModal() {
   const rows = filterAllRuns(runsAll, filter);
 
   return (
-    <>
-      <h2>
-        <Icon name="table" /> Alle Buchungen (ab heute)
-      </h2>
-      <AllBookingsFilters filter={filter} groupOptions={groupOptions} onChange={updateFilter} />
-      <div className="hint" style={{ margin: '0 0 6px' }}>
-        {rows.length} Einträge{rows.length === 300 ? ' (gekürzt)' : ''}
-      </div>
-      <div className="resultlist" style={{ maxHeight: 420 }}>
+    <AppDialog size="lg" labelledBy={titleId}>
+      <AppDialogHeader
+        icon={<Table2 className="size-6" />}
+        title="Alle Buchungen"
+        titleId={titleId}
+        subtitle="Jede Reservierung ab heute, filter- und sortierbar"
+      />
+      <AppDialogBody className="max-h-[72vh]">
+        <AllBookingsFilters filter={filter} groupOptions={groupOptions} onChange={updateFilter} />
         {rows.length ? (
-          rows.map((run) => (
-            <AllBookingsRow key={`${run.machine.id}|${run.dates[0]}|${run.name}`} run={run} />
-          ))
+          <ScrollArea className="resultlist -mr-3 min-h-0 flex-1 pr-3">
+            <div className="flex flex-col gap-2">
+              {rows.map((run) => (
+                <AllBookingsRow key={`${run.machine.id}|${run.dates[0]}|${run.name}`} run={run} />
+              ))}
+            </div>
+          </ScrollArea>
         ) : (
-          <p className="hint">Keine Buchungen für diese Filter gefunden.</p>
+          <EmptyState>Keine Buchungen für diese Filter gefunden.</EmptyState>
         )}
-      </div>
-      <div className="modal-actions">
-        <button className="btn" onClick={closeReactModal}>
+      </AppDialogBody>
+      <AppDialogFooter>
+        <span className="text-[11px] tabular-nums text-muted-foreground">
+          {rows.length} Einträge{rows.length === 300 ? ' (gekürzt)' : ''}
+        </span>
+        <Button size="lg" className="ml-auto" onClick={closeReactModal}>
           Schließen
-        </button>
-      </div>
-    </>
+        </Button>
+      </AppDialogFooter>
+    </AppDialog>
   );
 }
 

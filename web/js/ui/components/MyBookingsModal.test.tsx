@@ -93,7 +93,9 @@ describe('MyBookingsModal', () => {
       m2: { '2021-01-05': { name: 'anna' } },
     };
     render(<MyBookingsModal />);
-    const values = [...document.querySelectorAll('.mybk-stat-value')].map((el) => el.textContent);
+    const values = [...document.querySelectorAll('[data-slot="stat-value"]')].map(
+      (el) => el.textContent,
+    );
     expect(values).toEqual(['2', '0', '2', 'Heute']);
   });
 
@@ -118,7 +120,7 @@ describe('MyBookingsModal', () => {
     };
     render(<MyBookingsModal />);
     fireEvent.change(screen.getByPlaceholderText('Berger'), { target: { value: 'Fräse' } });
-    expect(document.querySelector('.mybk-stat-value')!.textContent).toBe('2');
+    expect(document.querySelector('[data-slot="stat-value"]')!.textContent).toBe('2');
   });
 
   // What: a single-day booking shows its note inline and gets a direct "Löschen" (delete)
@@ -130,7 +132,7 @@ describe('MyBookingsModal', () => {
     render(<MyBookingsModal />);
     expect(screen.getByText('Fräse')).toBeInTheDocument();
     expect(screen.getByText('(wichtig)')).toBeInTheDocument();
-    expect(screen.queryByText('▸')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tage ausklappen' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Löschen' })).toBeInTheDocument();
   });
 
@@ -150,7 +152,7 @@ describe('MyBookingsModal', () => {
     expect(screen.queryByText('04.01.2021')).not.toBeInTheDocument(); // collapsed
 
     act(() => {
-      screen.getByText('▸').click();
+      screen.getByRole('button', { name: 'Tage ausklappen' }).click();
     });
     expect(screen.getAllByRole('button', { name: 'Löschen' })).toHaveLength(2); // one per day
   });
@@ -166,9 +168,9 @@ describe('MyBookingsModal', () => {
     };
     render(<MyBookingsModal />);
     const pinButton = screen.getByRole('button', { name: 'Im Plan anzeigen' });
-    const chip = screen.getByText('▸');
+    const chip = screen.getByRole('button', { name: 'Tage ausklappen' });
     expect(chip.parentElement).toBe(pinButton.parentElement);
-    expect(document.querySelector('.abdate')!.textContent).not.toContain('▸');
+    expect(document.querySelector('.abdate')!.contains(chip)).toBe(false);
   });
 
   // What: runs sharing a real (multi-machine) booking group are bundled into one parent
@@ -259,9 +261,11 @@ describe('MyBookingsModal', () => {
     expect(actions.classList.contains('mybk-actions')).toBe(true);
     expect(expandBtn.parentElement).toBe(actions);
     expect(del.parentElement).toBe(actions);
-    expect(pin.classList.contains('iconbtn')).toBe(true);
-    expect(del.classList.contains('iconbtn')).toBe(true);
-    expect(del.classList.contains('danger')).toBe(true);
+    // All three share the row icon-button shape; only the delete carries the destructive tint.
+    expect(pin.className).toContain('size-8');
+    expect(del.className).toContain('size-8');
+    expect(del.className).toContain('hover:text-destructive');
+    expect(pin.className).not.toContain('hover:text-destructive');
     // Icon-only: no visible text content, the label lives in aria-label/title instead.
     expect(pin.textContent).toBe('');
     expect(del.textContent).toBe('');
@@ -330,8 +334,7 @@ describe('MyBookingsModal', () => {
     render(<MyBookingsModal />);
     const bereichSelect = screen
       .getByText('Bereich', { selector: 'label' })
-      .closest('.fld')!
-      .querySelector('select')!;
+      .parentElement!.querySelector('select')!;
     fireEvent.change(bereichSelect, { target: { value: 'cat:messtechnik' } });
     expect(screen.getByText('Messgerät')).toBeInTheDocument();
     expect(screen.queryByText('Fräse')).not.toBeInTheDocument();
@@ -350,8 +353,7 @@ describe('MyBookingsModal', () => {
     render(<MyBookingsModal />);
     const bereichSelect = screen
       .getByText('Bereich', { selector: 'label' })
-      .closest('.fld')!
-      .querySelector('select')!;
+      .parentElement!.querySelector('select')!;
     fireEvent.change(bereichSelect, { target: { value: 'Halle 2' } });
     expect(screen.getByText('Presse')).toBeInTheDocument();
     expect(screen.queryByText('Fräse')).not.toBeInTheDocument();
@@ -505,6 +507,6 @@ describe('openMyBookings', () => {
   // How: opens with the default seeded user and checks the modal's heading appears.
   it('opens the modal when a name is already set', () => {
     act(() => openMyBookings());
-    expect(screen.getByText('Meine Buchungen (ab heute)')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Meine Buchungen' })).toBeInTheDocument();
   });
 });

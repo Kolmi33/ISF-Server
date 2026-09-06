@@ -18,7 +18,9 @@ import { FAVORITES_GROUP_LABEL, nameColor } from '../grid.ts';
 import { isDarkTheme } from '../theme.ts';
 import { gotoDate, prependWeek, resetView } from '../grid-scroll.ts';
 import { closeReactModal } from '../modal.tsx';
-import { Icon } from './Icon.tsx';
+import { ChevronDown, ChevronRight, FolderOpen, MapPin, Trash2 } from 'lucide-react';
+import { Badge } from '../../components/ui/badge.tsx';
+import { Button } from '../../components/ui/app-button.tsx';
 import { store } from '../../store-instance.ts';
 
 /** One run's live state: its frozen machine + full date list, and which of those dates are
@@ -41,12 +43,7 @@ export function runKey(run: LiveRun): string {
 /** A day's optional note, as the small trailing hint legacy shows next to its date. */
 function DayNote({ machine, date }: { machine: Machine; date: string }) {
   const note = getBooking(store.get('data')!.bookings, machine.id, date)?.note;
-  return note ? (
-    <span className="hint" style={{ margin: 0 }}>
-      {' '}
-      ({note})
-    </span>
-  ) : null;
+  return note ? <span className="text-muted-foreground"> ({note})</span> : null;
 }
 
 /** Jumps to a run's first live day in the grid: expands its category/group first (a
@@ -88,8 +85,8 @@ export function multiMachineGroup(run: LiveRun): { machineIds: Set<string> } | u
 function GroupMemberIcon({ run }: { run: LiveRun }) {
   if (!multiMachineGroup(run)) return null;
   return (
-    <span className="grpicon" title="Teil einer Buchungsgruppe">
-      <Icon name="folder" />
+    <span className="grpicon inline-flex text-muted-foreground" title="Teil einer Buchungsgruppe">
+      <FolderOpen className="size-3.5" />
     </span>
   );
 }
@@ -102,11 +99,11 @@ function GroupHint({ run }: { run: LiveRun }) {
   const group = multiMachineGroup(run);
   if (!group) return null;
   return (
-    <div className="hint" style={{ margin: '2px 0 0' }}>
-      <Icon name="folder" /> Teil einer Buchungsgruppe
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+      <FolderOpen className="size-3.5 shrink-0" /> Teil einer Buchungsgruppe
       {run.groupTitle ? (
         <>
-          : <b>{run.groupTitle}</b>
+          : <b className="font-semibold text-foreground">{run.groupTitle}</b>
         </>
       ) : null}{' '}
       — {group.machineIds.size} Maschinen
@@ -134,19 +131,18 @@ function RunCardBody({
   showGroupHint: boolean;
 }) {
   return (
-    <div style={{ minWidth: 0 }}>
-      <div className="abmach">
-        <b>{run.machine.name}</b> <GroupMemberIcon run={run} />{' '}
-        <span className="hint" style={{ margin: 0 }}>
-          · {run.machine.group}
-        </span>
+    <div className="min-w-0 flex-1">
+      <div className="abmach flex flex-wrap items-center gap-1.5">
+        <b className="text-sm font-semibold text-foreground">{run.machine.name}</b>
+        <GroupMemberIcon run={run} />
+        <span className="text-[11px] text-muted-foreground">· {run.machine.group}</span>
       </div>
-      <div className="abdate">
+      <div className="abdate mt-0.5 flex flex-wrap items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
         {isSeries ? (
           <>
             {formatDateLong(run.liveDates[0]!)} –{' '}
             {formatDateLong(run.liveDates[run.liveDates.length - 1]!)}{' '}
-            <span className="tag">{run.liveDates.length} Tage</span>
+            <Badge>{run.liveDates.length} Tage</Badge>
           </>
         ) : (
           <>
@@ -195,35 +191,41 @@ export function RunHead({
   // stack vertically), all sharing one standardized circular icon-button shape/border.
   const deleteLabel = isSeries ? 'Serie löschen' : 'Löschen';
   return (
-    <div className="mybk">
+    <div className="mybk flex items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:border-primary/40">
       <RunCardBody run={run} isSeries={isSeries} showGroupHint={showGroupHint} />
-      <div className="mybk-actions">
-        <button
-          className="iconbtn"
+      <div className="mybk-actions flex shrink-0 items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
           title="Im Plan anzeigen (dorthin springen)"
           aria-label="Im Plan anzeigen"
           onClick={() => gotoRun(run)}
         >
-          <Icon name="pin" />
-        </button>
+          <MapPin className="size-4" />
+        </Button>
         {isSeries && (
-          <button
-            className="iconbtn"
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
             title={`Tage ${isExpanded ? 'einklappen' : 'ausklappen'}`}
             aria-label={isExpanded ? 'Tage einklappen' : 'Tage ausklappen'}
             onClick={onToggleExpand}
           >
-            {isExpanded ? '▾' : '▸'}
-          </button>
+            {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+          </Button>
         )}
-        <button
-          className="iconbtn danger"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
           title={deleteLabel}
           aria-label={deleteLabel}
           onClick={() => void handleDeleteClick()}
         >
-          <Icon name="trash" />
-        </button>
+          <Trash2 className="size-4" />
+        </Button>
       </div>
     </div>
   );
@@ -237,16 +239,24 @@ export function DayList({
   onDeleteOneDay: (date: string) => void;
 }) {
   return (
-    <div className="daylist">
+    <div className="daylist ml-6 mt-1 flex flex-col gap-1 border-l-2 border-border pl-3">
       {run.liveDates.map((date) => (
-        <div className="mybk" key={date}>
-          <div className="abdate">
+        <div
+          className="mybk flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted"
+          key={date}
+        >
+          <div className="abdate min-w-0 flex-1 text-[11px] tabular-nums text-muted-foreground">
             {formatDateLong(date)}
             <DayNote machine={run.machine} date={date} />
           </div>
-          <button className="btn small danger" onClick={() => onDeleteOneDay(date)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => onDeleteOneDay(date)}
+          >
             Löschen
-          </button>
+          </Button>
         </div>
       ))}
     </div>
@@ -307,21 +317,19 @@ export function GroupCard({
 }) {
   return (
     <div
-      className="mybk-group"
+      className="mybk-group overflow-hidden rounded-xl border border-border border-l-4 border-l-[var(--groupcolor)]"
       style={{ '--groupcolor': nameColor(groupId, isDarkTheme()) } as CSSProperties}
     >
-      <div className="mybk-group-head">
-        <Icon name="folder" />
-        <b>{groupTitle || 'Buchungsgruppe'}</b>
-        <span className="hint" style={{ margin: 0 }}>
-          — {runs.length} Maschinen
-        </span>
+      <div className="mybk-group-head flex items-center gap-2 border-b border-border bg-[color-mix(in_srgb,var(--groupcolor)_18%,var(--muted))] px-3 py-2.5">
+        <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
+        <b className="text-sm font-semibold text-foreground">{groupTitle || 'Buchungsgruppe'}</b>
+        <span className="text-[11px] text-muted-foreground">— {runs.length} Maschinen</span>
       </div>
       {runs.map((run) => {
         const key = runKey(run);
         const isExpanded = expandedKeys.has(key);
         return (
-          <div key={key} className="mybk-group-item">
+          <div key={key} className="mybk-group-item p-2">
             <RunHead
               run={run}
               isExpanded={isExpanded}
