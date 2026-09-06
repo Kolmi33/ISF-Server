@@ -44,6 +44,7 @@ export function assistantCatalog(
     name: machine.name,
     code: machine.id,
     lab: machine.group,
+    info: machine.info,
   });
   const catalog: CatalogCategory[] = [
     {

@@ -11,6 +11,7 @@ import { cn } from 'cn';
 import { Button } from './primitives.tsx';
 import { useDevices } from './DeviceProvider.tsx';
 import { type PlanEntry } from '../../../core/booking-assistant-types.ts';
+import { DeviceSubtitle } from './DeviceSubtitle.tsx';
 import { entryDragId } from './model.ts';
 import { mergeDropId } from './model.ts';
 import { memberDragId } from './model.ts';
@@ -49,9 +50,7 @@ export function GroupMemberRow({
       <GripVertical className="size-4 shrink-0 text-muted-foreground/40" />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-foreground">{device.name}</span>
-        <span className="mt-0.5 block truncate font-mono text-[11px] tracking-tight text-muted-foreground">
-          {device.code} · {device.lab}
-        </span>
+        <DeviceSubtitle device={device} />
       </span>
       {onRemove && (
         <Button
@@ -224,9 +223,7 @@ function DeviceHeader({
         <span className="block truncate text-sm font-medium text-foreground">
           {DEVICES_BY_ID[entry.deviceId]!.name}
         </span>
-        <span className="mt-0.5 block truncate font-mono text-[11px] tracking-tight text-muted-foreground">
-          {DEVICES_BY_ID[entry.deviceId]!.code} · {DEVICES_BY_ID[entry.deviceId]!.lab}
-        </span>
+        <DeviceSubtitle device={DEVICES_BY_ID[entry.deviceId]!} />
       </span>
       <Button
         type="button"

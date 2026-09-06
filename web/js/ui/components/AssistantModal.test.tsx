@@ -45,7 +45,13 @@ beforeEach(() => {
     favs: new Set(['a']),
     data: {
       machines: [
-        { id: 'a', name: 'Echte Fräse', group: 'Alte Halle', days: '1111111' },
+        {
+          id: 'a',
+          name: 'Echte Fräse',
+          group: 'Alte Halle',
+          days: '1111111',
+          info: 'Nur mit Einweisung',
+        },
         { id: 'b', name: 'Echte Presse', group: 'Alte Halle', days: '1111100' },
         { id: 'broken', name: 'Gesperrtes Gerät', group: 'Labor', maint: [{ type: 'wartung' }] },
       ],
@@ -75,7 +81,11 @@ const change = (name: string, value: string) => {
 describe('supplied assistant host integration', () => {
   it('uses live catalog in all cards; favorite and category checkboxes share selection', () => {
     expect(screen.getByText('Laborgeräte reservieren')).toBeTruthy();
+    // Untertitel: erst der Bereich, dann die Info-Notiz aus der Maschinenverwaltung.
+    expect(screen.getByText('Alte Halle · Nur mit Einweisung')).toBeTruthy();
     select();
+    // Katalogzeile und Plankarte zeigen denselben Untertitel.
+    expect(screen.getAllByText('Alte Halle · Nur mit Einweisung')).toHaveLength(2);
     expect(
       screen
         .getAllByRole('checkbox', { name: /Echte Fräse/ })
@@ -93,6 +103,8 @@ describe('supplied assistant host integration', () => {
     fireEvent.change(input, { target: { value: 'Presse' } });
     // Die Suche klappt auf, sonst läge der Treffer unter einer zugeklappten Rubrik.
     expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    // Ohne Info-Notiz bleibt der Bereich allein stehen.
+    expect(screen.getByTitle('Alte Halle')).toBeTruthy();
     fireEvent.click(screen.getByRole('checkbox'));
     expect(screen.getByRole('button', { name: 'Echte Presse entfernen' })).toBeTruthy();
     fireEvent.change(input, { target: { value: 'unbekannt' } });

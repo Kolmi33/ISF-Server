@@ -117,7 +117,9 @@
   max-height: calc(100vh - 32px);
   max-height: calc(100dvh - 32px);
   padding: 0;
-  overflow: auto;
+  /* Der Dialog deckelt sich selbst auf dieselbe Höhe und lässt seine Mitte schrumpfen —
+     hier darf nichts mehr scrollen, sonst wandert die Fußzeile unter den Fensterrand. */
+  overflow: hidden;
   border: 0;
   background: transparent;
   border-radius: 16px;

@@ -9,7 +9,13 @@ import type { PlanEntry } from '../core/booking-assistant-types.ts';
 
 const data: BookingData = {
   machines: [
-    { id: 'real-id', name: 'Lange echte Maschine', group: 'Alte Halle', days: '1111111' },
+    {
+      id: 'real-id',
+      name: 'Lange echte Maschine',
+      group: 'Alte Halle',
+      days: '1111111',
+      info: 'Nur mit Einweisung',
+    },
     { id: 'meter', name: 'Messgerät', group: 'Labor', cat: 'messtechnik' },
   ],
   bookings: {},
@@ -29,6 +35,7 @@ describe('backend/frontend assistant boundary', () => {
       name: 'Lange echte Maschine',
       code: 'real-id',
       lab: 'Alte Halle',
+      info: 'Nur mit Einweisung',
     });
     expect(assistantCatalog([], new Set())).toEqual([]);
   });

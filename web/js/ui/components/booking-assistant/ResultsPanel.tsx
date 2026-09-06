@@ -11,7 +11,7 @@ export function ResultsPanel({ state }: { state: AssistantState }) {
   const { setView, results, changeResultDays, onBook, onShowCalendar } = state;
 
   return (
-    <div className="flex h-[506px] flex-col border-t border-border">
+    <div className="flex min-h-0 flex-[1_1_506px] flex-col border-t border-border">
       <div className="flex shrink-0 items-center gap-3 px-6 py-4 sm:px-7">
         <Button variant="ghost" size="sm" className="-ml-2" onClick={() => setView('select')}>
           <ChevronLeft className="size-4" />

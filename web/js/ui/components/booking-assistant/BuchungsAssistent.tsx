@@ -14,17 +14,20 @@ export function BuchungsAssistent(props: BuchungsAssistentProps) {
     <DeviceProvider catalog={props.catalog}>
       <TooltipProvider delayDuration={150}>
         <div className="booking-assistant flex w-full items-center justify-center">
+          {/* Der Dialog ist so hoch wie sein Inhalt, aber nie höher als das Fenster: die Mitte
+              schrumpft (siehe ihr `flex-[1_1_506px]`), Kopf und Fußzeile bleiben stehen. Sonst
+              rutschte die Fußzeile auf niedrigen Fenstern aus dem Bild. */}
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="buchungsassistent-title"
-            className="relative flex w-full max-w-[1040px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+            className="relative flex max-h-[calc(100dvh_-_32px)] w-full max-w-[1040px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
           >
             <AssistantHeader state={state} />
             {state.view === 'results' ? (
               <ResultsPanel state={state} />
             ) : (
-              <div className="flex h-[506px] flex-col border-t border-border md:flex-row">
+              <div className="flex min-h-0 flex-[1_1_506px] flex-col border-t border-border md:flex-row">
                 <CatalogPanel state={state} />
                 <PlanPanel state={state} />
               </div>

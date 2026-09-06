@@ -6,6 +6,8 @@ export interface Device {
   code: string;
   /** Standort, z. B. "Labor 2" */
   lab: string;
+  /** Freitext-Notiz aus der Maschinenverwaltung (`Machine.info`) */
+  info?: string;
 }
 
 export interface CatalogCategory {

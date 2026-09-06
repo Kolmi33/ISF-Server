@@ -6,6 +6,7 @@ import { Checkbox } from './primitives.tsx';
 import { Label } from './primitives.tsx';
 import { type Device } from '../../../core/booking-assistant-types.ts';
 import { type CatalogCategory } from '../../../core/booking-assistant-types.ts';
+import { DeviceSubtitle } from './DeviceSubtitle.tsx';
 import { type CatalogEntry } from './useCatalog.ts';
 import { type CatalogNode } from './useCatalog.ts';
 import { SECTION_LABEL_CLASS } from './styles.ts';
@@ -41,9 +42,7 @@ export function CatalogRow({
       />
       <span className="min-w-0">
         <span className="block truncate text-sm font-medium text-foreground">{device.name}</span>
-        <span className="mt-0.5 block truncate font-mono text-[11px] tracking-tight text-muted-foreground">
-          {device.code} · {device.lab}
-        </span>
+        <DeviceSubtitle device={device} />
       </span>
     </Label>
   );

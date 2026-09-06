@@ -26,7 +26,9 @@ export function useCatalog(catalog: CatalogCategory[]) {
     const sections = new Map<string, Extract<CatalogNode, { kind: 'section' }>>();
     for (const category of catalog) {
       const devices = q
-        ? category.devices.filter((d) => `${d.name} ${d.code} ${d.lab}`.toLowerCase().includes(q))
+        ? category.devices.filter((d) =>
+            `${d.name} ${d.code} ${d.lab} ${d.info ?? ''}`.toLowerCase().includes(q),
+          )
         : category.devices;
       if (devices.length === 0) continue;
       const entry = { category, devices };
