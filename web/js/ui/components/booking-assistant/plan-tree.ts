@@ -86,7 +86,8 @@ export function addMember(plan: PlanEntry[], targetId: string, moving: PlanEntry
         ? { ...entry, members: addMember(entry.members, targetId, moving) }
         : entry;
     if (entry.kind === 'group') return { ...entry, members: [...entry.members, moving] };
-    return { kind: 'group', id: entry.id, members: [entry, moving], requiredCount: 1 };
+    /* Group and target device stay visible at the same time, so each needs its own dnd-kit ID. */
+    return { kind: 'group', id: createEntryId(), members: [entry, moving], requiredCount: 1 };
   });
 }
 
@@ -113,8 +114,9 @@ export function normalizePlan(plan: PlanEntry[]): PlanEntry[] {
 }
 
 let entryCounter = 0;
+const createEntryId = () => `entry-${++entryCounter}-${Date.now().toString(36)}`;
 export const createDeviceEntry = (deviceId: string): PlanDeviceEntry => ({
   kind: 'device',
-  id: `entry-${++entryCounter}-${Date.now().toString(36)}`,
+  id: createEntryId(),
   deviceId,
 });

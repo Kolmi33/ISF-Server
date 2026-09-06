@@ -14,6 +14,9 @@ const memberIdOf = (entry: PlanEntry, deviceId: string): string => {
   if (entry.kind === 'device') return entry.deviceId === deviceId ? entry.id : '';
   return entry.members.map((m) => memberIdOf(m, deviceId)).find(Boolean) ?? '';
 };
+/** Every drag/drop identity in an entry, including the group itself. */
+const entryIdsOf = (entry: PlanEntry): string[] =>
+  entry.kind === 'group' ? [entry.id, ...entry.members.flatMap(entryIdsOf)] : [entry.id];
 
 afterEach(() => {
   cleanup();
@@ -50,7 +53,12 @@ describe('supplied plan and criteria state', () => {
     const [a, b, c] = result.current.plan;
     drop(a!.id, b!.id, 'merge');
     const group = result.current.plan[0]!;
-    expect(group).toMatchObject({ kind: 'group', id: b!.id, requiredCount: 1 });
+    expect(group).toMatchObject({ kind: 'group', requiredCount: 1 });
+    // The group and its members must register as distinct dnd-kit targets. Reusing the
+    // target device ID for the wrapper renders two drop markers and leaves a stale target
+    // behind when the wrapper is dissolved.
+    expect(new Set(entryIdsOf(group)).size).toBe(entryIdsOf(group).length);
+    expect(memberIdOf(group, 'b')).toBe(b!.id);
     expect(devicesOf(group)).toEqual(['b', 'a']);
     drop(c!.id, group.id, 'merge');
     act(() => result.current.setRequiredCount(group.id, 3));

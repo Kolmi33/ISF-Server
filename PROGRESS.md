@@ -1,5 +1,18 @@
 # PROGRESS — living project state
 
+## Assistant drag/drop identity fix (2026-09-06)
+
+Fixed duplicate green insertion markers and cards becoming non-draggable after dissolving a
+requirement group. A newly created group had reused its target device's plan-entry ID while
+also retaining that device as a child, registering two simultaneous dnd-kit targets under the
+same identity. New groups now receive their own entry ID; member IDs remain stable through
+grouping and dissolution. A regression assertion enforces unique IDs throughout the group tree.
+
+The full gate passes (1,011 tests). Browser verification against the restarted Vite server
+grouped two cards, observed exactly one insertion marker during the next drag, dissolved the
+group back to three draggable cards, and successfully dragged the former target card again;
+the console remained clean.
+
 ## Supplied booking assistant integration (2026-09-06)
 
 Replaced the earlier assistant UI with the user's Downloads/BuchungsAssistent.tsx and
