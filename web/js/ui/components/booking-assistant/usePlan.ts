@@ -36,6 +36,18 @@ export function usePlan() {
       ),
     );
 
+  /** Löst die Bedarfsgruppe auf, ohne etwas aus dem Plan zu werfen: ihre Geräte stehen
+   *  danach einzeln an derselben Stelle und in derselben Reihenfolge. Nur die
+   *  Austauschbarkeit ist weg — wer ein Gerät loswerden will, nimmt dessen eigene Karte. */
+  const dissolveGroup = (entryId: string) =>
+    setPlan((current) =>
+      current.flatMap((entry) =>
+        entry.id === entryId && entry.kind === 'group'
+          ? entry.deviceIds.map((deviceId) => createDeviceEntry(deviceId))
+          : [entry],
+      ),
+    );
+
   const setRequiredCount = (entryId: string, value: number) =>
     setPlan((current) =>
       current.map((entry) =>
@@ -43,5 +55,13 @@ export function usePlan() {
       ),
     );
 
-  return { plan, setPlan, toggleDevice, removeEntry, removeMember, setRequiredCount };
+  return {
+    plan,
+    setPlan,
+    toggleDevice,
+    removeEntry,
+    removeMember,
+    dissolveGroup,
+    setRequiredCount,
+  };
 }

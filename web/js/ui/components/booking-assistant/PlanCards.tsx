@@ -5,6 +5,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { useCombinedRefs } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 import { Trash2 } from 'lucide-react';
+import { Ungroup } from 'lucide-react';
 import { X } from 'lucide-react';
 import { cn } from 'cn';
 import { Button } from './primitives.tsx';
@@ -73,6 +74,7 @@ export interface PlanCardProps {
   position?: string;
   onRemoveEntry: (entryId: string) => void;
   onRemoveMember: (entryId: string, deviceId: string) => void;
+  onDissolveGroup: (entryId: string) => void;
   onRequiredCountChange: (entryId: string, value: number) => void;
   /** true = Rendering im DragOverlay (keine dnd-Hooks, keine Drop-Zone) */
   overlay?: boolean;
@@ -83,6 +85,7 @@ export function PlanCardContent({
   position,
   onRemoveEntry,
   onRemoveMember,
+  onDissolveGroup,
   onRequiredCountChange,
   overlay = false,
 }: PlanCardProps) {
@@ -103,7 +106,7 @@ export function PlanCardContent({
           <GroupHeader
             entry={entry}
             onRequiredCountChange={onRequiredCountChange}
-            onRemoveEntry={onRemoveEntry}
+            onDissolveGroup={onDissolveGroup}
           />
         ) : (
           <DeviceHeader entry={entry} position={position} onRemoveEntry={onRemoveEntry} />
@@ -185,8 +188,8 @@ export function PlanCard(
 function GroupHeader({
   entry,
   onRequiredCountChange,
-  onRemoveEntry,
-}: Pick<PlanCardProps, 'onRequiredCountChange' | 'onRemoveEntry'> & { entry: PlanGroupEntry }) {
+  onDissolveGroup,
+}: Pick<PlanCardProps, 'onRequiredCountChange' | 'onDissolveGroup'> & { entry: PlanGroupEntry }) {
   return (
     <>
       <NumberInput
@@ -200,16 +203,19 @@ function GroupHeader({
       <span className="text-sm text-muted-foreground">
         von {entry.deviceIds.length} Geräten benötigt
       </span>
+      {/* Löst nur die Gruppierung auf; die Geräte bleiben als eigene Karten stehen. Wer sie
+          loswerden will, nimmt danach deren eigenen Papierkorb. */}
       <Button
         type="button"
         variant="ghost"
         size="icon"
         aria-label="Bedarfsgruppe auflösen"
+        title="Bedarfsgruppe auflösen — die Geräte bleiben einzeln im Plan"
         onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => onRemoveEntry(entry.id)}
-        className="ml-auto size-8 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+        onClick={() => onDissolveGroup(entry.id)}
+        className="ml-auto size-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
       >
-        <Trash2 className="size-4" />
+        <Ungroup className="size-4" />
       </Button>
     </>
   );

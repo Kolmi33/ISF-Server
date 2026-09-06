@@ -105,6 +105,25 @@ describe('supplied plan and criteria state', () => {
       { kind: 'group', id: d!.id, deviceIds: ['d', 'b', 'a', 'c'], requiredCount: 1 },
     ]);
   });
+  it('dissolves a group back into single cards instead of dropping its machines', () => {
+    const { result, add, drop } = setup();
+    ['a', 'b', 'c'].forEach(add);
+    const [a, b, c] = result.current.plan;
+    drop(`entry:${a!.id}`, `entry:${b!.id}`, 'merge');
+    expect(result.current.plan[0]).toMatchObject({ kind: 'group', deviceIds: ['b', 'a'] });
+    act(() => result.current.dissolveGroup(b!.id));
+    // Beide Geräte bleiben im Plan, an der Stelle der Gruppe und in ihrer Reihenfolge.
+    expect(result.current.plan.map((e) => e.kind === 'device' && e.deviceId)).toEqual([
+      'b',
+      'a',
+      'c',
+    ]);
+    // Einzelkarten und unbekannte IDs lässt das Auflösen unberührt.
+    const before = result.current.plan;
+    act(() => result.current.dissolveGroup(c!.id));
+    act(() => result.current.dissolveGroup('gibtsnicht'));
+    expect(result.current.plan).toEqual(before);
+  });
   it('drops a member out into the free area below the cards, without aiming at a gap', () => {
     const { result, add, drop, over } = setup();
     add('a');

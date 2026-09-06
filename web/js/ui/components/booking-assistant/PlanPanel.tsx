@@ -62,7 +62,8 @@ function PlanHeading() {
   );
 }
 function PlanList({ state }: { state: AssistantState }) {
-  const { plan, mergeTargetId, dropIndex, removeEntry, removeMember, setRequiredCount } = state;
+  const { plan, mergeTargetId, dropIndex, removeEntry, removeMember, dissolveGroup } = state;
+  const { setRequiredCount } = state;
   const listArea = useDroppable({ id: PLAN_LIST_ID });
   /* Die Einfügestelle ist die Fuge über der Karte an dieser Stelle — hinter der letzten
      Karte gibt es keine mehr, dort trägt sie die letzte Karte an ihrer Unterkante. */
@@ -96,6 +97,7 @@ function PlanList({ state }: { state: AssistantState }) {
                 indicator={indicatorFor(index)}
                 onRemoveEntry={removeEntry}
                 onRemoveMember={removeMember}
+                onDissolveGroup={dissolveGroup}
                 onRequiredCountChange={setRequiredCount}
               />
             ))}
@@ -116,6 +118,7 @@ function PlanOverlay({ state }: { state: AssistantState }) {
             entry={draggedEntry}
             onRemoveEntry={() => {}}
             onRemoveMember={() => {}}
+            onDissolveGroup={() => {}}
             onRequiredCountChange={() => {}}
           />
         </div>
