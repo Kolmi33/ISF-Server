@@ -37,7 +37,7 @@ export function PlanCard({
   ...handlers
 }: PlanCardHandlers & {
   entry: PlanEntry;
-  /** laufende Nummer, nur bei Einzelgeräten auf oberster Ebene und bewusst sehr klein */
+  /** Laufende Nummer des Eintrags auf der obersten Ebene. */
   position?: string;
   depth?: number;
 }) {
@@ -122,7 +122,7 @@ function PlanCardBody({
       <div className={cn('flex items-center gap-3 px-3', isGroup ? 'py-2.5' : 'py-0')}>
         <GripVertical className="size-4 shrink-0 cursor-grab text-muted-foreground/45" />
         {entry.kind === 'group' ? (
-          <GroupHeader entry={entry} {...handlers} />
+          <GroupHeader entry={entry} position={position} {...handlers} />
         ) : (
           <DeviceHeader entry={entry} position={position} onRemoveEntry={handlers.onRemoveEntry} />
         )}
@@ -160,10 +160,12 @@ function OrSeparator() {
 
 function GroupHeader({
   entry,
+  position,
   onRequiredCountChange,
   onDissolveGroup,
 }: Pick<PlanCardHandlers, 'onRequiredCountChange' | 'onDissolveGroup'> & {
   entry: PlanGroupEntry;
+  position?: string;
 }) {
   /* "Geräten" stimmt nur, solange keine Untergruppe dabei ist — sonst sind es Möglichkeiten. */
   const noun = entry.members.every((m) => m.kind === 'device') ? 'Geräten' : 'Möglichkeiten';
@@ -180,19 +182,22 @@ function GroupHeader({
       <span className="text-sm text-muted-foreground">
         von {entry.members.length} {noun} benötigt
       </span>
-      {/* Löst nur die Gruppierung auf; die Mitglieder bleiben als eigene Karten stehen. */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label="Bedarfsgruppe auflösen"
-        title="Bedarfsgruppe auflösen — die Geräte bleiben einzeln im Plan"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={() => onDissolveGroup(entry.id)}
-        className="ml-auto size-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
-      >
-        <Ungroup className="size-4" />
-      </Button>
+      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+        <PositionBadge position={position} />
+        {/* Löst nur die Gruppierung auf; die Mitglieder bleiben als eigene Karten stehen. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Bedarfsgruppe auflösen"
+          title="Bedarfsgruppe auflösen — die Geräte bleiben einzeln im Plan"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => onDissolveGroup(entry.id)}
+          className="size-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <Ungroup className="size-4" />
+        </Button>
+      </span>
     </>
   );
 }
@@ -206,15 +211,11 @@ function DeviceHeader({
   const device = DEVICES_BY_ID[entry.deviceId]!;
   return (
     <>
-      {position && (
-        <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/70">
-          {position}
-        </span>
-      )}
       <span className="min-w-0 flex-1 py-2.5">
         <span className="block truncate text-sm font-medium text-foreground">{device.name}</span>
         <DeviceSubtitle device={device} />
       </span>
+      <PositionBadge position={position} />
       <Button
         type="button"
         variant="ghost"
@@ -227,5 +228,17 @@ function DeviceHeader({
         <Trash2 className="size-4" />
       </Button>
     </>
+  );
+}
+
+function PositionBadge({ position }: { position?: string }) {
+  if (!position) return null;
+  return (
+    <span
+      aria-label={`Position ${position}`}
+      className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-md border border-border/70 bg-muted/70 px-1.5 font-mono text-[10px] font-semibold tabular-nums text-muted-foreground"
+    >
+      {position}
+    </span>
   );
 }

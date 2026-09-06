@@ -23,7 +23,7 @@ export function BuchungsAssistent(props: BuchungsAssistentProps) {
             aria-labelledby="buchungsassistent-title"
             className="relative flex max-h-[calc(100dvh_-_32px)] w-full max-w-[1040px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
           >
-            <AssistantHeader state={state} />
+            <AssistantHeader />
             {state.view === 'results' ? (
               <ResultsPanel state={state} />
             ) : (

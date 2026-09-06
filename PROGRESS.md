@@ -1,5 +1,17 @@
 # PROGRESS — living project state
 
+## Assistant controlled dismissal and card numbering (2026-09-06)
+
+The booking Assistant now opens as a sticky modal: Escape and backdrop clicks leave it open,
+and the redundant header close button is gone. “Abbrechen” remains the explicit dismissal
+action. Top-level plan positions moved from the left edge into a compact badge directly before
+the card action on the right. Requirement groups now receive the same top-level numbering;
+their nested alternatives remain unnumbered.
+
+The full gate passes (1,012 tests). Browser verification confirmed both blocked dismissal
+paths, dismissal through “Abbrechen”, the right-aligned `01`/`02` badges on a group and loose
+device, and a clean console.
+
 ## Assistant drag/drop identity fix (2026-09-06)
 
 Fixed duplicate green insertion markers and cards becoming non-draggable after dissolving a

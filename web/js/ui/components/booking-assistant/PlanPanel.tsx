@@ -92,7 +92,7 @@ function PlanList({ state }: { state: AssistantState }) {
               <PlanCard
                 key={entry.id}
                 entry={entry}
-                position={entry.kind === 'device' ? String(index + 1).padStart(2, '0') : undefined}
+                position={String(index + 1).padStart(2, '0')}
                 mergeTargetId={mergeTargetId}
                 marker={marker}
                 onRemoveEntry={removeEntry}

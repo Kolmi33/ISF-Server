@@ -91,7 +91,9 @@ describe('supplied assistant host integration', () => {
         .getAllByRole('checkbox', { name: /Echte Fräse/ })
         .every((c) => c.getAttribute('aria-checked') === 'true'),
     ).toBe(true);
-    expect(screen.getByRole('button', { name: 'Echte Fräse entfernen' })).toBeTruthy();
+    const removeButton = screen.getByRole('button', { name: 'Echte Fräse entfernen' });
+    const position = screen.getByLabelText('Position 01');
+    expect(position.nextElementSibling).toBe(removeButton);
     click('Echte Fräse entfernen');
     expect(screen.getByText('Noch nichts ausgewählt.')).toBeTruthy();
     expect(
@@ -225,20 +227,21 @@ describe('supplied assistant host integration', () => {
     // anfänglichen sieben Tage.
     expect(trigger).not.toContain('· 7 Tage');
   });
-  it('grouping help opens on focus and cancel/close retain host behavior', () => {
+  it('grouping help opens on focus and only Abbrechen dismisses the assistant', () => {
     const help = screen.getByRole('button', { name: 'Hinweis zu Bedarfsgruppen' });
     fireEvent.keyDown(document.body, { key: 'Tab' });
     act(() => help.focus());
     // Floating UI positions asynchronously; positioning/visibility is verified in Orca.
     expect(screen.getByRole('tooltip', { hidden: true }).textContent).toContain('Bedarfsgruppe');
-    click('Abbrechen');
-    expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
-    act(() => openAssistant());
-    click('Dialog schließen');
+    expect(screen.queryByRole('button', { name: 'Dialog schließen' })).toBeNull();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    fireEvent.click(document.getElementById('overlay')!);
     expect(
-      within(document.getElementById('modal')!).queryByRole('heading', {
+      within(document.getElementById('modal')!).getByRole('heading', {
         name: 'Buchungsassistent',
       }),
-    ).toBeNull();
+    ).toBeTruthy();
+    click('Abbrechen');
+    expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
   });
 });

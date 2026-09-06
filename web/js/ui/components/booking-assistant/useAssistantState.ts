@@ -24,7 +24,6 @@ export interface BuchungsAssistentProps {
   initialRange?: DateRange;
   /** frühester buchbarer Tag; Default: heute */
   today?: Date;
-  onClose?: () => void;
   onCancel?: () => void;
   onBook?: (window: AvailabilityWindow) => void;
 }

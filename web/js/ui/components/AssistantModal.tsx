@@ -62,12 +62,11 @@ export function AssistantModal() {
       }
       onBook={bookResult}
       onShowCalendar={showCalendar}
-      onClose={closeReactModal}
       onCancel={closeReactModal}
     />
   );
 }
 
 export function openAssistant(): void {
-  openReactModal(<AssistantModal />);
+  openReactModal(<AssistantModal />, { sticky: true });
 }

@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-import { act, renderHook, cleanup } from '@testing-library/react';
+import { act, render, renderHook, cleanup, screen } from '@testing-library/react';
+import { DndContext } from '@dnd-kit/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAssistantState } from './useAssistantState.ts';
 import { formatDate, formatDateLong, rangeLengthOf, pickRangeDay } from './model.ts';
 import { deviceIdsOf, normalizePlan } from './plan-tree.ts';
 import type { PlanEntry } from '../../../core/booking-assistant-types.ts';
 import type { DropZone } from './plan-drop.ts';
+import { DeviceProvider } from './DeviceProvider.tsx';
+import { PlanCard } from './PlanCards.tsx';
 
 /** Alle Geräte unter einem Eintrag, in Reihenfolge. */
 const devicesOf = (entry: PlanEntry) => deviceIdsOf(entry);
@@ -47,6 +50,49 @@ function setup() {
   return { ...hook, add, drop, over, onSearch };
 }
 describe('supplied plan and criteria state', () => {
+  it('numbers a top-level group beside its dissolve action, without numbering its members', () => {
+    const group: PlanEntry = {
+      kind: 'group',
+      id: 'group',
+      requiredCount: 1,
+      members: [
+        { kind: 'device', id: 'first', deviceId: 'a' },
+        { kind: 'device', id: 'second', deviceId: 'b' },
+      ],
+    };
+    render(
+      <DeviceProvider
+        catalog={[
+          {
+            id: 'machines',
+            label: 'Maschinen',
+            devices: [
+              { id: 'a', name: 'A', code: 'A', lab: 'Halle' },
+              { id: 'b', name: 'B', code: 'B', lab: 'Halle' },
+            ],
+          },
+        ]}
+      >
+        <DndContext>
+          <ul>
+            <PlanCard
+              entry={group}
+              position="03"
+              onRemoveEntry={vi.fn()}
+              onDissolveGroup={vi.fn()}
+              onRequiredCountChange={vi.fn()}
+            />
+          </ul>
+        </DndContext>
+      </DeviceProvider>,
+    );
+    const position = screen.getByLabelText('Position 03');
+    expect(position.nextElementSibling).toBe(
+      screen.getByRole('button', { name: 'Bedarfsgruppe auflösen' }),
+    );
+    expect(screen.getAllByLabelText(/^Position/)).toHaveLength(1);
+  });
+
   it('groups two cards, edits the count, removes a member and collapses the leftover', () => {
     const { result, add, drop } = setup();
     ['a', 'b', 'c'].forEach(add);
