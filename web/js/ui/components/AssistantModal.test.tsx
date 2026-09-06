@@ -200,6 +200,31 @@ describe('supplied assistant host integration', () => {
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(true);
   });
+  it('picks a fresh start date on the first click, then the end on the second', () => {
+    fireEvent.click(screen.getByRole('button', { name: /Zeitraum/ }));
+    const days = screen
+      .getAllByRole('gridcell')
+      .map((cell) => cell.querySelector('button'))
+      .filter((b): b is HTMLButtonElement => !!b && !b.disabled);
+    expect(days.length).toBeGreaterThan(7);
+    const todayText = format(today, 'dd.MM.yyyy');
+    // Ein Klick weit hinter dem laufenden Zeitraum setzt den Start dorthin — vorher zog er
+    // nur das Ende nach, und der Start blieb für immer auf heute stehen.
+    fireEvent.click(days[days.length - 1]!);
+    const pending = screen.getByText(/Enddatum wählen/);
+    expect(pending.textContent).not.toContain(todayText);
+    expect(screen.getByRole('button', { name: 'Übernehmen' }).hasAttribute('disabled')).toBe(true);
+    // Der zweite Klick liegt davor: Start und Ende tauschen, statt einen Rückwärts-Zeitraum
+    // zu ergeben.
+    fireEvent.click(days[0]!);
+    expect(screen.queryByText(/Enddatum wählen/)).toBeNull();
+    click('Übernehmen');
+    const trigger = screen.getByRole('button', { name: /Zeitraum/ }).textContent ?? '';
+    expect(trigger).toContain(todayText);
+    // Der übernommene Zeitraum reicht bis in den Folgemonat, ist also länger als die
+    // anfänglichen sieben Tage.
+    expect(trigger).not.toContain('· 7 Tage');
+  });
   it('grouping help opens on focus and cancel/close retain host behavior', () => {
     const help = screen.getByRole('button', { name: 'Hinweis zu Bedarfsgruppen' });
     fireEvent.keyDown(document.body, { key: 'Tab' });

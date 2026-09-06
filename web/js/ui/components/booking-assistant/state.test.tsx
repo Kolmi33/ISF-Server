@@ -3,6 +3,7 @@ import { act, renderHook, cleanup } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAssistantState } from './useAssistantState.ts';
 import { normalizePlan, parseDragId, formatDate, formatDateLong, rangeLengthOf } from './model.ts';
+import { pickRangeDay } from './model.ts';
 import type { PlanEntry } from '../../../core/booking-assistant-types.ts';
 import type { DropZone } from './model.ts';
 
@@ -256,6 +257,19 @@ describe('supplied plan and criteria state', () => {
     });
     act(() => result.current.runSearch());
     expect(document.getElementById('toast')!.textContent).toContain('Suche');
+  });
+  it('builds a range from two clicks and starts over on a finished one', () => {
+    const empty = { from: undefined, to: undefined };
+    const first = new Date(2026, 8, 10);
+    const later = new Date(2026, 8, 20);
+    expect(pickRangeDay(empty, first)).toEqual({ from: first, to: undefined });
+    expect(pickRangeDay({ from: first, to: undefined }, later)).toEqual({ from: first, to: later });
+    // Rückwärts geklickt: die beiden tauschen, statt ein negatives Fenster zu ergeben.
+    expect(pickRangeDay({ from: later, to: undefined }, first)).toEqual({ from: first, to: later });
+    // Derselbe Tag zweimal ist ein Ein-Tages-Fenster.
+    expect(pickRangeDay({ from: first, to: undefined }, first)).toEqual({ from: first, to: first });
+    // Auf einen fertigen Zeitraum folgt ein neuer Start — sonst wäre er unveränderbar.
+    expect(pickRangeDay({ from: first, to: later }, later)).toEqual({ from: later, to: undefined });
   });
   it('keeps supplied date formatting and removes empty groups', () => {
     expect(formatDate()).toBe('TT.MM.JJJJ');

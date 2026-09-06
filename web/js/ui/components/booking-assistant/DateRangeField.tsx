@@ -12,6 +12,7 @@ import { PopoverTrigger } from './primitives.tsx';
 import { type DateRange } from '../../../core/booking-assistant-types.ts';
 import { formatDate } from './model.ts';
 import { countDays } from './model.ts';
+import { pickRangeDay } from './model.ts';
 import { LABEL_CLASS } from './styles.ts';
 import { FOOTER_SHELL } from './styles.ts';
 import { FOOTER_SHELL_IDLE } from './styles.ts';
@@ -69,7 +70,9 @@ export function DateRangeField({
           numberOfMonths={2}
           defaultMonth={range.from ?? today}
           selected={{ from: draft.from, to: draft.to }}
-          onSelect={(next) => setDraft({ from: next?.from, to: next?.to })}
+          /* Der angeklickte Tag statt der von react-day-picker fertig gerechneten Auswahl:
+             siehe `pickRangeDay`, sonst bliebe der Startpunkt unveränderbar. */
+          onSelect={(_range, day) => setDraft(pickRangeDay(draft, day))}
           disabled={{ before: today }}
         />
 
