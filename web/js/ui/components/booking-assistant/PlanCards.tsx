@@ -1,8 +1,8 @@
 import type { PlanGroupEntry, PlanDeviceEntry } from '../../../core/booking-assistant-types.ts';
 import * as React from 'react';
 import { useDraggable } from '@dnd-kit/core';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { useDroppable } from '@dnd-kit/core';
+import { useCombinedRefs } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 import { Trash2 } from 'lucide-react';
 import { X } from 'lucide-react';
@@ -141,26 +141,29 @@ export function PlanCardContent({
   );
 }
 
-/** Sortable-Wrapper: die Karte ist Drag-Quelle und zugleich das einzige Drop-Ziel auf ihrer
- *  Höhe. Der Abstand zur nächsten Karte steckt als `pb-2` in ihr drin und nicht als `gap`
- *  in der Liste — so kacheln die Ziele die Liste lückenlos (siehe `planTargeting.ts`).
- *  `mergeActive` und `indicator` sind reine Überlagerungen: sie verschieben nichts. */
-export function SortablePlanCard(
+/** Die Karte ist Drag-Quelle und zugleich das einzige Drop-Ziel auf ihrer Höhe (dieselbe
+ *  ID in beiden Registern). Der Abstand zur nächsten Karte steckt als `pb-2` in ihr drin
+ *  und nicht als `gap` in der Liste — so kacheln die Ziele die Liste lückenlos (siehe
+ *  `planTargeting.ts`).
+ *
+ *  Die Karte trägt bewusst keine Transformation: während eines Zuges rührt sich in der
+ *  Liste nichts, der Platz der gezogenen Karte bleibt als blasser Abdruck stehen. Ring und
+ *  Einfügemarke sind reine Überlagerungen. */
+export function PlanCard(
   props: PlanCardProps & { mergeActive: boolean; indicator?: 'before' | 'after' },
 ) {
   const { entry, mergeActive, indicator, ...rest } = props;
-  const sortable = useSortable({ id: entryDragId(entry.id) });
+  const id = entryDragId(entry.id);
+  const draggable = useDraggable({ id });
+  const droppable = useDroppable({ id });
+  const setNodeRef = useCombinedRefs(draggable.setNodeRef, droppable.setNodeRef);
 
   return (
     <li
-      ref={sortable.setNodeRef}
-      style={{
-        transform: CSS.Translate.toString(sortable.transform),
-        transition: sortable.transition,
-      }}
-      {...sortable.attributes}
-      {...sortable.listeners}
-      className={cn('relative cursor-grab touch-none pb-2', sortable.isDragging && 'opacity-40')}
+      ref={setNodeRef}
+      {...draggable.attributes}
+      {...draggable.listeners}
+      className={cn('relative cursor-grab touch-none pb-2', draggable.isDragging && 'opacity-40')}
     >
       <div className={cn('rounded-xl', mergeActive && 'ring-2 ring-brand/60')}>
         <PlanCardContent entry={entry} {...rest} />

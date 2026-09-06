@@ -66,13 +66,39 @@ export type DropZone = 'before' | 'merge' | 'after';
 export const entryIdOf = (overId: string) =>
   overId.startsWith(ENTRY_PREFIX) ? overId.slice(ENTRY_PREFIX.length) : '';
 
-/** Stelle in der Planliste, an der eine Karte eingefügt würde. `null` = es wird gar nicht
- *  eingefügt (gruppieren) oder das Ziel gibt es nicht mehr. */
-export function insertIndexOf(plan: PlanEntry[], overId: string, zone: DropZone): number | null {
-  if (zone === 'merge') return null;
-  const entryId = entryIdOf(overId);
-  if (!entryId) return null;
-  const index = plan.findIndex((entry) => entry.id === entryId);
-  if (index < 0) return null;
-  return zone === 'after' ? index + 1 : index;
+/** Was ein Ablegen an dieser Stelle bewirken würde. `index` zählt in der Liste *mit* der
+ *  gezogenen Karte — genau die Fuge, in der die grüne Linie steht. `null` = der Zug ändert
+ *  nichts, dann zeigt die Liste auch keine Marke. */
+export type DropPlan = { kind: 'merge'; targetId: string } | { kind: 'insert'; index: number };
+
+/** Die eine Auslegung eines Zuges: Anzeige während des Ziehens und Änderung beim Loslassen
+ *  fragen dieselbe Funktion, damit die Marke nicht etwas anderes verspricht als passiert. */
+export function planDrop(
+  plan: PlanEntry[],
+  source: DragSource,
+  overId: string,
+  zone: DropZone,
+): DropPlan | null {
+  const targetId = entryIdOf(overId);
+  const targetIndex = targetId ? plan.findIndex((entry) => entry.id === targetId) : -1;
+  if (targetIndex < 0) return null;
+  /* Auf die eigene Karte bzw. zurück in die eigene Bedarfsgruppe: nichts zu tun. */
+  if (zone === 'merge')
+    return targetId === source.entryId ? null : { kind: 'merge', targetId: targetId };
+  const index = zone === 'after' ? targetIndex + 1 : targetIndex;
+  if (source.type === 'entry') {
+    /* Die Fugen direkt über und unter der Karte sind ihr eigener Platz. */
+    const from = plan.findIndex((entry) => entry.id === source.entryId);
+    if (from < 0 || index === from || index === from + 1) return null;
+  }
+  return { kind: 'insert', index };
+}
+
+/** Setzt die Karte an `from` in die Fuge `insertAt` um, die in der Liste *mit* dieser Karte
+ *  gezählt ist: nach dem Herausnehmen rutschen alle Fugen dahinter um eins vor. */
+export function moveEntryTo(plan: PlanEntry[], from: number, insertAt: number): PlanEntry[] {
+  const next = [...plan];
+  const [moving] = next.splice(from, 1);
+  next.splice(insertAt > from ? insertAt - 1 : insertAt, 0, moving!);
+  return next;
 }

@@ -1,20 +1,17 @@
 import * as React from 'react';
 import { DndContext } from '@dnd-kit/core';
 import { DragOverlay } from '@dnd-kit/core';
-import { SortableContext } from '@dnd-kit/sortable';
 import { Inbox } from 'lucide-react';
 import { Info } from 'lucide-react';
 import { ScrollArea } from './primitives.tsx';
 import { Tooltip } from './primitives.tsx';
 import { TooltipContent } from './primitives.tsx';
 import { TooltipTrigger } from './primitives.tsx';
-import { entryDragId } from './model.ts';
-import { planSorting } from './planTargeting.ts';
 import { planTargets } from './planTargeting.ts';
 import { SECTION_LABEL_CLASS } from './styles.ts';
 import { GroupMemberRow } from './PlanCards.tsx';
 import { PlanCardContent } from './PlanCards.tsx';
-import { SortablePlanCard } from './PlanCards.tsx';
+import { PlanCard } from './PlanCards.tsx';
 import { type AssistantState } from './useAssistantState.ts';
 
 export function PlanPanel({ state }: { state: AssistantState }) {
@@ -64,15 +61,13 @@ function PlanHeading() {
 }
 function PlanList({ state }: { state: AssistantState }) {
   const { plan, mergeTargetId, dropIndex, removeEntry, removeMember, setRequiredCount } = state;
-  /* Die Einfügestelle gehört zur Fuge über der Karte an dieser Stelle — hinter der letzten
+  /* Die Einfügestelle ist die Fuge über der Karte an dieser Stelle — hinter der letzten
      Karte gibt es keine mehr, dort trägt sie die letzte Karte an ihrer Unterkante. */
   const indicatorFor = (index: number) => {
     if (dropIndex === index) return 'before' as const;
     if (dropIndex === plan.length && index === plan.length - 1) return 'after' as const;
     return undefined;
   };
-  /* Beim Gruppieren macht die Liste keine Lücke auf; der Ring um die Zielkarte sagt es. */
-  const strategy = React.useMemo(() => planSorting(mergeTargetId !== null), [mergeTargetId]);
   return (
     <ScrollArea className="-mr-3 min-h-0 flex-1 pr-3">
       {plan.length === 0 ? (
@@ -81,24 +76,22 @@ function PlanList({ state }: { state: AssistantState }) {
           <p className="max-w-[26ch] text-sm text-muted-foreground">Noch nichts ausgewählt.</p>
         </div>
       ) : (
-        <SortableContext items={plan.map((entry) => entryDragId(entry.id))} strategy={strategy}>
-          {/* Kein `gap`: den Abstand trägt jede Karte selbst, damit die Drop-Ziele die
-              Liste lückenlos kacheln (siehe `planTargeting.ts`). */}
-          <ul className="flex flex-col">
-            {plan.map((entry, index) => (
-              <SortablePlanCard
-                key={entry.id}
-                entry={entry}
-                position={entry.kind === 'device' ? String(index + 1).padStart(2, '0') : undefined}
-                mergeActive={mergeTargetId === entry.id}
-                indicator={indicatorFor(index)}
-                onRemoveEntry={removeEntry}
-                onRemoveMember={removeMember}
-                onRequiredCountChange={setRequiredCount}
-              />
-            ))}
-          </ul>
-        </SortableContext>
+        /* Kein `gap`: den Abstand trägt jede Karte selbst, damit die Drop-Ziele die Liste
+           lückenlos kacheln (siehe `planTargeting.ts`). */
+        <ul className="flex flex-col">
+          {plan.map((entry, index) => (
+            <PlanCard
+              key={entry.id}
+              entry={entry}
+              position={entry.kind === 'device' ? String(index + 1).padStart(2, '0') : undefined}
+              mergeActive={mergeTargetId === entry.id}
+              indicator={indicatorFor(index)}
+              onRemoveEntry={removeEntry}
+              onRemoveMember={removeMember}
+              onRequiredCountChange={setRequiredCount}
+            />
+          ))}
+        </ul>
       )}
     </ScrollArea>
   );

@@ -10,9 +10,9 @@ import { type DragSource } from './model.ts';
 import { type DropZone } from './model.ts';
 import { parseDragId } from './model.ts';
 import { deviceIdsOf } from './model.ts';
-import { entryIdOf } from './model.ts';
 import { normalizePlan } from './model.ts';
-import { insertIndexOf } from './model.ts';
+import { planDrop } from './model.ts';
+import { moveEntryTo } from './model.ts';
 import { createDeviceEntry } from './model.ts';
 import { zoneOf } from './planTargeting.ts';
 
@@ -34,31 +34,20 @@ function movePlan(
   overId: string,
   zone: DropZone,
 ): PlanEntry[] {
-  const targetEntryId = entryIdOf(overId);
-  /* Auf sich selbst gruppieren heißt nichts tun — bei der eigenen Karte wie bei der
-     eigenen Bedarfsgruppe. */
-  const isMerge = zone === 'merge' && targetEntryId !== '';
+  const drop = planDrop(current, source, overId, zone);
+  if (!drop) return current;
 
   /* (a) ganze Karte bewegt */
   if (source.type === 'entry') {
-    const fromIndex = current.findIndex((e) => e.id === source.entryId);
-    if (fromIndex < 0) return current;
-    const moving = current[fromIndex]!;
-
-    if (isMerge) {
-      if (targetEntryId === source.entryId) return current;
+    const from = current.findIndex((e) => e.id === source.entryId);
+    if (from < 0) return current;
+    /* Auf eine andere Karte gelegt: die beiden werden eine Bedarfsgruppe. Ist das Ziel
+       schon eine, wandern die Geräte der gezogenen Karte einfach hinein. */
+    if (drop.kind === 'merge') {
       const without = current.filter((e) => e.id !== source.entryId);
-      return normalizePlan(mergeInto(without, targetEntryId, deviceIdsOf(moving)));
+      return normalizePlan(mergeInto(without, drop.targetId, deviceIdsOf(current[from]!)));
     }
-
-    /* Umsortieren folgt der Lücke, die die Liste beim Ziehen aufmacht: die Karte nimmt den
-       Platz der Zielkarte ein. Vorher/dahinter wäre eine zweite, widersprüchliche Aussage. */
-    const toIndex = current.findIndex((e) => e.id === targetEntryId);
-    if (toIndex < 0 || toIndex === fromIndex) return current;
-    const next = [...current];
-    next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, moving);
-    return next;
+    return moveEntryTo(current, from, drop.index);
   }
 
   /* (b) einzelnes Gerät aus einer Bedarfsgruppe gezogen */
@@ -67,19 +56,15 @@ function movePlan(
       ? { ...entry, deviceIds: entry.deviceIds.filter((id) => id !== source.deviceId) }
       : entry,
   );
+  if (drop.kind === 'merge')
+    return normalizePlan(mergeInto(stripped, drop.targetId, [source.deviceId]));
 
-  if (isMerge) {
-    if (targetEntryId === source.entryId) return current;
-    return normalizePlan(mergeInto(stripped, targetEntryId, [source.deviceId]));
-  }
-
-  /* Herausgelöst → eigene Karte an der Stelle, die die grüne Linie gezeigt hat. Das
-     Ausdünnen der Quellgruppe verschiebt keine Indizes: bleibt ein Gerät übrig, wird die
-     Gruppe an derselben Stelle zur normalen Karte. */
+  /* Herausgelöst → eigene Karte in der Fuge, in der die grüne Linie stand. Das Ausdünnen
+     der Quellgruppe verschiebt keine Fugen: bleibt ein Gerät übrig, wird die Gruppe an
+     derselben Stelle zur normalen Karte. */
   const cleaned = normalizePlan(stripped);
-  const insertAt = insertIndexOf(cleaned, overId, zone) ?? cleaned.length;
   const next = [...cleaned];
-  next.splice(insertAt, 0, createDeviceEntry(source.deviceId));
+  next.splice(drop.index, 0, createDeviceEntry(source.deviceId));
   return next;
 }
 export function usePlanDrag(
@@ -87,8 +72,10 @@ export function usePlanDrag(
   setPlan: React.Dispatch<React.SetStateAction<PlanEntry[]>>,
 ) {
   const [activeDrag, setActiveDrag] = React.useState<DragSource | null>(null);
-  /* Die zwei Anzeigen, die ein Zug hat: der Ring um die Karte, auf die gruppiert wird, und
-     die grüne Linie an der Stelle, an der ein herausgelöstes Gerät landet. Nie beide. */
+  /* Die zwei Anzeigen eines Zuges — nie beide zugleich, weil `planDrop` sich für eine
+     Auslegung entscheidet: der Ring um die Karte, auf die gruppiert wird, und die grüne
+     Linie in der Fuge, in der die Karte landet. Beide überlagern nur, sie verschieben
+     nichts: der Platz der gezogenen Karte bleibt, wo er ist. */
   const [mergeTargetId, setMergeTargetId] = React.useState<string | null>(null);
   const [dropIndex, setDropIndex] = React.useState<number | null>(null);
   const sensors = useSensors(
@@ -104,15 +91,11 @@ export function usePlanDrag(
   /* Quelle und Zone kommen aus dem Ereignis, nicht aus dem State: dnd-kit meldet das erste
      `over` noch im selben Durchlauf wie den Start, `activeDrag` wäre dann leer. */
   const handleDragOver = (event: DragOverEvent) => {
-    const overId = event.over ? String(event.over.id) : '';
     const source = parseDragId(String(event.active.id));
-    const zone = zoneOf(event.collisions);
-    const targetEntryId = entryIdOf(overId);
-    const onSelf = targetEntryId === source?.entryId;
-    setMergeTargetId(zone === 'merge' && targetEntryId && !onSelf ? targetEntryId : null);
-    /* Nur beim Herauslösen aus einer Bedarfsgruppe: beim Umsortieren ganzer Karten zeigt
-       schon die Lücke in der Liste, wohin die Karte fällt. */
-    setDropIndex(source?.type === 'member' ? insertIndexOf(plan, overId, zone) : null);
+    const overId = event.over ? String(event.over.id) : '';
+    const drop = source && overId ? planDrop(plan, source, overId, zoneOf(event.collisions)) : null;
+    setMergeTargetId(drop?.kind === 'merge' ? drop.targetId : null);
+    setDropIndex(drop?.kind === 'insert' ? drop.index : null);
   };
 
   /** Alles zurück auf Anfang — nach dem Ablegen wie nach dem Abbrechen. */

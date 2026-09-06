@@ -6,23 +6,19 @@
 // gruppiert oder vor bzw. hinter sie eingefügt wird, entscheidet allein die Höhe des
 // Zeigers innerhalb dieser Karte.
 //
-// Warum das eine Regel und keine zweite Drop-Zone ist:
-// `SortableContext` bestimmt die Zielposition über `items.indexOf(over.id)`. Jedes
-// Drop-Ziel, das kein Sortable-Eintrag ist, ergibt dort `-1`, und
-// `verticalListSortingStrategy` nimmt `-1` wörtlich: die Bedingung `index < activeIndex &&
-// index >= overIndex` trifft dann auf *jede* Karte oberhalb der gezogenen zu und schiebt
-// sie um eine volle Kartenhöhe nach unten. Früher gab es genau solche Ziele — eine
-// Merge-Zone über der mittleren Hälfte jeder Karte und die Liste selbst — und die Fugen
-// zwischen den Karten gehörten zu gar keinem Ziel. Beim Ziehen wechselte `over` deshalb
-// mehrmals pro Karte zwischen "Sortable" und "kein Sortable", und die halbe Liste sprang
-// jedes Mal um eine Kartenhöhe auf und ab.
+// Die Liste ordnet sich während eines Zuges nicht um: der Platz der gezogenen Karte bleibt
+// als blasser Abdruck stehen, keine Karte verschiebt sich, und was passieren würde, sagen
+// zwei Überlagerungen — eine grüne Linie in der Fuge, in der die Karte landet, oder ein
+// Ring um die Karte, mit der sie eine Bedarfsgruppe bildet. Damit ist ein Springen der
+// Liste baulich ausgeschlossen und nicht bloß gut eingestellt. (Deshalb auch kein
+// `@dnd-kit/sortable`: dessen Aufgabe ist genau das Umlegen der Karten während des Zuges.)
 //
-// Daraus die zwei Regeln, die hier durchgesetzt werden:
-// 1. NUR KARTEN SIND ZIELE. Die Karten kacheln die Liste lückenlos (jede Karte trägt ihren
-//    Abstand als eigenes `pb-2`, die Liste hat kein `gap`), also trifft der Zeiger überall
-//    innerhalb der Liste genau eine Karte — nie eine Fuge, nie die Liste selbst.
-// 2. DIE STRATEGIE SIEHT `-1` NIE. Bleibt doch kein Ziel übrig (der Zeiger hat die Liste
-//    verlassen), rührt sich die Liste gar nicht, statt die Karten falsch herum zu schieben.
+// Bleibt die eine Regel, die dieses Modul durchsetzt:
+// NUR KARTEN SIND ZIELE, UND SIE ÜBERLAPPEN NICHT. Sie kacheln die Liste lückenlos — jede
+// Karte trägt ihren Abstand als eigenes `pb-2`, die Liste hat kein `gap` —, also trifft
+// der Zeiger innerhalb der Liste immer genau eine Karte: nie eine Fuge, nie zwei Ziele,
+// nie die Liste selbst. Überlappende Ziele ließen `over` mehrmals pro Karte hin- und
+// herspringen, und mit ihm die Anzeige.
 //
 // =======================================================================================
 
@@ -31,8 +27,6 @@ import { type ClientRect } from '@dnd-kit/core';
 import { type Collision } from '@dnd-kit/core';
 import { type CollisionDetection } from '@dnd-kit/core';
 import { type Coordinates } from '@dnd-kit/utilities';
-import { verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { type SortingStrategy } from '@dnd-kit/sortable';
 import { ENTRY_PREFIX } from './model.ts';
 import { type DropZone } from './model.ts';
 
@@ -71,11 +65,3 @@ export function zoneOf(collisions: Collision[] | null | undefined): DropZone {
   const zone: unknown = collisions?.[0]?.data?.['zone'];
   return zone === 'before' || zone === 'after' ? zone : 'merge';
 }
-
-/** Die Liste macht eine Lücke nur dort auf, wo die Karte auch wirklich landet: nicht beim
- *  Gruppieren (dann wird kein Platz gebraucht, das sagt der Ring um die Zielkarte) und
- *  nicht ohne Ziel (siehe Regel 2 oben). */
-export const planSorting =
-  (merging: boolean): SortingStrategy =>
-  (args) =>
-    merging || args.overIndex === -1 ? null : verticalListSortingStrategy(args);

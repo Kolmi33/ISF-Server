@@ -758,7 +758,8 @@ function/file budgets without changing its markup or interaction model. The host
 `AssistantModal` injects catalog/search/book/calendar/close callbacks. No demo machines,
 random scheduling, additional backend endpoint, or alternative write path is used.
 
-The expressly requested frontend dependencies are dnd-kit (core/sortable/utilities),
+The expressly requested frontend dependencies are dnd-kit (core/utilities; sortable was
+dropped once the plan list stopped re-ordering itself mid-drag, see below),
 lucide-react, direct date-fns, and the locally served JetBrains Mono font. These preserve
 the supplied gestures, iconography and date/number typography. Base UI remains the single
 primitive library; small adapters translate the supplied shadcn composition API.
@@ -773,17 +774,27 @@ takes whenever the window allows, and it gives way before the footer does, so th
 range, the day fields and the actions are always reachable without scrolling. Nothing
 outside the dialog scrolls; the catalog and plan panels scroll inside themselves.
 
-**Drag targeting invariant.** In the plan list a card is exactly one drop target, and
-whether a drop groups onto that card or inserts before/after it is decided by the pointer's
-height within it — never by a second, overlapping droppable. `SortableContext` resolves the
-target through `items.indexOf(over.id)`, so any target that is not a sortable entry yields
-`-1`, and `verticalListSortingStrategy` then shifts *every* card above the dragged one down
-by a full card height. Earlier such targets existed (a merge zone over each card's middle
-half, plus the list itself) and the gaps between cards belonged to no target at all, so the
-list jumped several times per card of travel. `planTargeting.ts` holds both halves of the
-rule: only cards are collision candidates, and the sorting strategy never sees `-1`. The
-cards therefore tile the list without gaps — each carries its own `pb-2` instead of the list
-carrying a `gap`. Merge highlight and insertion marker are pure overlays that move nothing.
+**Plan drag model.** The list never re-orders itself mid-drag: the grabbed card's slot stays
+put as a faded placeholder, no other card moves, and the outcome is shown by two overlays —
+a green line in the gap the card would land in, or a ring around the card it would group
+with. Jumping is therefore structurally impossible rather than merely tuned away. That is
+why `@dnd-kit/sortable` is gone: shuffling cards during the drag is precisely its job.
+
+Two rules carry the model. **One target per card, no overlap** (`planTargeting.ts`): a card
+is the only drop target on its own height, and grouping vs. inserting before/after is
+decided by the pointer's height within it, never by a second droppable. The cards tile the
+list without gaps — each carries its own `pb-2` instead of the list carrying a `gap` — so
+the pointer always hits exactly one. Earlier a merge zone overlapped each card's middle half
+and the list itself was a target, so `over` flipped several times per card of travel; while
+`SortableContext` was still in play each flip fed `items.indexOf(over.id) === -1` into
+`verticalListSortingStrategy`, which shoved every card above the dragged one down by a full
+card height. **One reading of a drop** (`planDrop` in `model.ts`): the same function answers
+both the preview during the drag and the mutation on release, so the marker cannot promise
+something the drop does not do. Its insertion index counts the gaps of the list *including*
+the dragged card — exactly where the line sits — and dropping into either gap touching the
+card's own slot is a no-op that shows no marker. Dropping onto a card merges: two device
+cards become a Bedarfsgruppe, and a card dropped onto an existing group joins it, keeping
+the group's required count.
 
 The supplied inclusive duration represents calendar days. `core/booking-assistant-search`
 computes deterministic maximal windows with the same resolved machines available on

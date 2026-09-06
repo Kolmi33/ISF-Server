@@ -56,15 +56,22 @@ describe('supplied plan and criteria state', () => {
     act(() => result.current.removeEntry(b!.id));
     expect(result.current.plan).toEqual([]);
   });
-  it('reorders onto the target slot and extracts group members into independent entries', () => {
+  it('reorders into the marked gap and extracts group members into independent entries', () => {
     const { result, add, drop } = setup();
     add('a');
     add('b');
     add('c');
     const [a, b, c] = result.current.plan;
-    // Umsortieren nimmt den Platz der Zielkarte ein — genau die Lücke, die die Liste zeigt.
+    // Die Fuge zählt in der Liste *mit* der gezogenen Karte: hinter c ist Fuge 3.
     drop(`entry:${a!.id}`, `entry:${c!.id}`, 'after');
     expect(result.current.plan.map((e) => e.id)).toEqual([b!.id, c!.id, a!.id]);
+    drop(`entry:${a!.id}`, `entry:${b!.id}`, 'before');
+    expect(result.current.plan.map((e) => e.id)).toEqual([a!.id, b!.id, c!.id]);
+    // Die Fugen direkt über und unter der Karte sind ihr eigener Platz: nichts passiert.
+    drop(`entry:${b!.id}`, `entry:${b!.id}`, 'before');
+    drop(`entry:${b!.id}`, `entry:${b!.id}`, 'after');
+    drop(`entry:${b!.id}`, `entry:${c!.id}`, 'before');
+    expect(result.current.plan.map((e) => e.id)).toEqual([a!.id, b!.id, c!.id]);
     drop(`entry:${a!.id}`, `entry:${b!.id}`, 'merge');
     drop(`member:${b!.id}:a`, `entry:${c!.id}`, 'after');
     expect(result.current.plan.map((e) => e.kind === 'device' && e.deviceId)).toEqual([
@@ -73,23 +80,41 @@ describe('supplied plan and criteria state', () => {
       'a',
     ]);
   });
-  it('moves members between groups and leaves self/cancel/unknown drops unchanged', () => {
+  it('groups onto a card and into an existing Bedarfsgruppe, leaving no-op drops alone', () => {
+    const { result, add, drop } = setup();
+    ['a', 'b', 'c', 'd'].forEach(add);
+    const [a, b, c, d] = result.current.plan;
+    // Karte auf Karte → neue Bedarfsgruppe aus beiden.
+    drop(`entry:${a!.id}`, `entry:${b!.id}`, 'merge');
+    expect(result.current.plan[0]).toMatchObject({ kind: 'group', deviceIds: ['b', 'a'] });
+    // Karte auf eine bestehende Gruppe → das Gerät wandert hinein, die Gruppe bleibt.
+    drop(`entry:${c!.id}`, `entry:${b!.id}`, 'merge');
+    expect(result.current.plan[0]).toMatchObject({ deviceIds: ['b', 'a', 'c'], requiredCount: 1 });
+    expect(result.current.plan.map((e) => e.id)).toEqual([b!.id, d!.id]);
+    const before = result.current.plan;
+    drop('unknown', `entry:${d!.id}`);
+    drop(`entry:${b!.id}`, null);
+    drop('entry:missing', `entry:${d!.id}`);
+    drop(`entry:${b!.id}`, `entry:${b!.id}`, 'merge');
+    drop(`member:${b!.id}:a`, `entry:${b!.id}`, 'merge');
+    drop(`entry:${b!.id}`, 'entry:missing');
+    expect(result.current.plan).toEqual(before);
+    // Gruppe auf Karte → alle ihre Geräte wandern hinüber, die Gruppe verschwindet.
+    drop(`entry:${b!.id}`, `entry:${d!.id}`, 'merge');
+    expect(result.current.plan).toEqual([
+      { kind: 'group', id: d!.id, deviceIds: ['d', 'b', 'a', 'c'], requiredCount: 1 },
+    ]);
+  });
+  it('moves members between groups and back out into their own card', () => {
     const { result, add, drop } = setup();
     ['a', 'b', 'c', 'd'].forEach(add);
     const [a, b, c, d] = result.current.plan;
     drop(`entry:${a!.id}`, `entry:${b!.id}`, 'merge');
     drop(`entry:${c!.id}`, `entry:${d!.id}`, 'merge');
-    const before = result.current.plan;
-    drop('unknown', `entry:${d!.id}`);
-    drop(`entry:${b!.id}`, null);
-    drop('entry:missing', `entry:${d!.id}`);
-    drop(`entry:${b!.id}`, `entry:${b!.id}`);
-    drop(`entry:${b!.id}`, `entry:${b!.id}`, 'merge');
-    drop(`member:${b!.id}:a`, `entry:${b!.id}`, 'merge');
-    drop(`entry:${b!.id}`, 'entry:missing');
-    expect(result.current.plan).toEqual(before);
     drop(`member:${b!.id}:a`, `entry:${d!.id}`, 'merge');
     expect(result.current.plan[1]).toMatchObject({ deviceIds: ['d', 'c', 'a'] });
+    // Die Quellgruppe hatte nur noch b übrig und ist an Ort und Stelle Karte geworden.
+    expect(result.current.plan[0]).toMatchObject({ kind: 'device', deviceId: 'b' });
     drop(`member:${d!.id}:a`, `entry:${b!.id}`, 'before');
     expect(result.current.plan[0]).toMatchObject({ kind: 'device', deviceId: 'a' });
   });
@@ -102,44 +127,47 @@ describe('supplied plan and criteria state', () => {
     expect(result.current.draggedEntry?.id).toBe(a!.id);
     over(`entry:${a!.id}`, `entry:${b!.id}`, 'merge');
     expect(result.current.mergeTargetId).toBe(b!.id);
+    expect(result.current.dropIndex).toBeNull();
     // Auf sich selbst gruppieren passiert nicht — dann auch kein Ring.
     over(`entry:${a!.id}`, `entry:${a!.id}`, 'merge');
-    expect(result.current.mergeTargetId).toBeNull();
-    over(`entry:${a!.id}`, `entry:${b!.id}`, 'before');
     expect(result.current.mergeTargetId).toBeNull();
     over(`entry:${a!.id}`, null, 'merge');
     expect(result.current.mergeTargetId).toBeNull();
     act(() => result.current.cancelDrag());
     expect(result.current.draggedEntry).toBeUndefined();
   });
-  it('marks the slot a group member would drop into, but not while whole cards move', () => {
+  it('marks the gap a drop would land in, and nothing when the card is already there', () => {
     const { result, add, drop, over } = setup();
     ['a', 'b', 'c'].forEach(add);
     const [a, b, c] = result.current.plan;
+    // Ganze Karte: die Marke steht in der Fuge, in der die Karte landet …
+    over(`entry:${a!.id}`, `entry:${c!.id}`, 'after');
+    expect(result.current.dropIndex).toBe(3);
+    expect(result.current.mergeTargetId).toBeNull();
+    // … aber nicht an ihrem eigenen Platz, denn dort ändert ein Drop nichts.
+    over(`entry:${a!.id}`, `entry:${a!.id}`, 'before');
+    expect(result.current.dropIndex).toBeNull();
+    over(`entry:${a!.id}`, `entry:${a!.id}`, 'after');
+    expect(result.current.dropIndex).toBeNull();
+    over(`entry:${a!.id}`, `entry:${b!.id}`, 'before');
+    expect(result.current.dropIndex).toBeNull();
+    // Gruppenmitglied: hier zählt jede Fuge, auch die neben der eigenen Gruppe.
     drop(`entry:${a!.id}`, `entry:${b!.id}`, 'merge');
     const group = result.current.plan[0]!;
     const member = `member:${group.id}:a`;
     over(member, `entry:${c!.id}`, 'before');
     expect(result.current.dropIndex).toBe(1);
-    // Hinter der letzten Karte: die Marke sitzt an deren Unterkante.
     over(member, `entry:${c!.id}`, 'after');
     expect(result.current.dropIndex).toBe(2);
-    // Gruppieren statt einfügen — dafür steht der Ring, keine Linie.
     over(member, `entry:${c!.id}`, 'merge');
     expect(result.current.dropIndex).toBeNull();
     expect(result.current.mergeTargetId).toBe(c!.id);
-    // Verschwundene Zielkarte: keine Linie, der Drop hängt das Gerät hinten an.
+    // Verschwundene Zielkarte: keine Marke und beim Ablegen keine Änderung.
     over(member, 'entry:weg', 'before');
     expect(result.current.dropIndex).toBeNull();
-    // Ganze Karten zeigen keine Linie, die Lücke der Liste sagt es schon.
-    over(`entry:${c!.id}`, `entry:${group.id}`, 'before');
-    expect(result.current.dropIndex).toBeNull();
+    const before = result.current.plan;
     drop(member, 'entry:weg', 'before');
-    expect(result.current.plan.map((e) => e.kind === 'device' && e.deviceId)).toEqual([
-      'b',
-      'c',
-      'a',
-    ]);
+    expect(result.current.plan).toEqual(before);
     expect(result.current.dropIndex).toBeNull();
   });
   it('couples min/max, retains partial ranges, applies range bounds and expires hints', () => {
