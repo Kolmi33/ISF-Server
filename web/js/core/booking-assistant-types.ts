@@ -64,7 +64,7 @@ export interface AvailabilityWindow {
   end: Date;
   /** Fenster läuft über das Suchende hinaus weiter ("durchgehend frei") */
   openEnded: boolean;
-  /** Länge des freien Fensters in Tagen */
+  /** Länge des angebotenen Slots in Tagen, bereits auf das Suchmaximum begrenzt */
   spanDays: number;
   /** Untere/obere Grenze der wählbaren Buchungslänge in diesem Fenster */
   minSelectableDays: number;

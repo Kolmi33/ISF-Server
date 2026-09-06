@@ -5,6 +5,7 @@ import { isMachineAvailableOnWeekday, isMachineBlockedOnDate } from './machines.
 import type { PlanEntry, ResolvedDevice } from './booking-assistant-types.ts';
 
 export interface BookingWindow {
+  /** Der einmal angebotene Buchungszeitraum, bereits auf `maxDays` begrenzt. */
   dates: string[];
   devices: ResolvedDevice[];
   minDays: number;
@@ -91,7 +92,8 @@ function validatePlan(plan: PlanEntry[]): void {
 const deviceIdsOf = (entry: PlanEntry): string[] =>
   entry.kind === 'group' ? entry.members.flatMap(deviceIdsOf) : [entry.deviceId];
 
-/** Each non-dominated window is maximal for a fixed device assignment, within the search horizon. */
+/** Each non-dominated free run produces one result. Its raw end suppresses shorter variants of
+ * the same run; only the offered dates are capped to the requested maximum duration. */
 export function searchBookingWindows(
   data: BookingData,
   plan: PlanEntry[],
@@ -110,15 +112,19 @@ export function searchBookingWindows(
   let lastEnd = -1;
   for (let index = 0; index < dates.length; index++) {
     const choices = plan.map((entry) => chooseAt(entry, lengths, index));
-    const length = Math.min(...choices.map((choice) => choice.length));
-    if (length < minDays || index + length - 1 <= lastEnd) continue;
-    lastEnd = index + length - 1;
+    const availableLength = Math.min(...choices.map((choice) => choice.length));
+    const availableEnd = index + availableLength - 1;
+    if (availableLength < minDays || availableEnd <= lastEnd) continue;
+    lastEnd = availableEnd;
+    const offeredLength = Math.min(availableLength, maxDays);
     windows.push({
-      dates: dates.slice(index, index + length),
+      dates: dates.slice(index, index + offeredLength),
       devices: choices.flatMap((choice) => choice.devices),
       minDays,
-      maxDays: Math.min(maxDays, length),
+      maxDays: offeredLength,
     });
   }
-  return windows;
+  return windows.sort(
+    (a, b) => b.dates.length - a.dates.length || a.dates[0]!.localeCompare(b.dates[0]!),
+  );
 }

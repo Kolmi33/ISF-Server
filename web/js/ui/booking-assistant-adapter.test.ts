@@ -42,6 +42,9 @@ describe('backend/frontend assistant boundary', () => {
   it('transfers exact local calendar dates across the DST boundary and selected result duration', () => {
     const window = searchAssistant(data, plan, range, 2, 3)[0]!;
     expect(window.openEnded).toBe(false);
+    expect(window.start).toEqual(new Date(2026, 9, 24));
+    expect(window.end).toEqual(new Date(2026, 9, 26));
+    expect(window.spanDays).toBe(3);
     expect(window.selectedDays).toBe(3);
     expect(assistantBooking(data, { ...window, selectedDays: 2 })).toEqual({
       ids: ['real-id'],

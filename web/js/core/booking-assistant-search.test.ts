@@ -21,7 +21,7 @@ const data = (): BookingData => ({
 const booked = { name: 'Andere Person', comment: '' };
 
 describe('supplied assistant live calendar-day scheduler', () => {
-  it('offers the full verified window while capping selectable duration', () => {
+  it('offers a long free run once and caps the result to the maximum duration', () => {
     const windows = searchBookingWindows(data(), [device], from, to, 2, 4);
     expect(windows).toHaveLength(1);
     expect(windows[0]).toMatchObject({
@@ -29,15 +29,28 @@ describe('supplied assistant live calendar-day scheduler', () => {
       maxDays: 4,
       devices: [{ deviceId: 'a', fromGroup: false }],
     });
-    expect(windows[0]!.dates).toEqual([
-      '2026-09-07',
-      '2026-09-08',
-      '2026-09-09',
-      '2026-09-10',
-      '2026-09-11',
-      '2026-09-12',
-      '2026-09-13',
+    expect(windows[0]!.dates).toEqual(['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10']);
+  });
+  it('sorts separate slots by offered length and breaks equal lengths by earlier start', () => {
+    const state = data();
+    state.bookings.a = {
+      '2026-09-10': booked,
+      '2026-09-17': booked,
+      '2026-09-20': booked,
+    };
+    const windows = searchBookingWindows(state, [device], from, '2026-09-21', 2, 4);
+    expect(windows.map((window) => window.dates)).toEqual([
+      ['2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14'],
+      ['2026-09-07', '2026-09-08', '2026-09-09'],
+      ['2026-09-18', '2026-09-19'],
     ]);
+
+    state.bookings.a = { '2026-09-10': booked, '2026-09-14': booked };
+    expect(
+      searchBookingWindows(state, [device], from, '2026-09-15', 3, 3).map(
+        (window) => window.dates[0],
+      ),
+    ).toEqual(['2026-09-07', '2026-09-11']);
   });
   it('breaks at bookings and maintenance, including inclusive endpoints', () => {
     const state = data();
@@ -89,14 +102,14 @@ describe('supplied assistant live calendar-day scheduler', () => {
         for (const day of window.dates)
           expect(availableForBooking(state, resolved.deviceId, day)).toBe(true);
   });
-  it('chooses the longest-lived alternative and emits later windows only when they extend availability', () => {
+  it('chooses the longest-lived alternative and sorts its slots by offered length', () => {
     const state = data();
     state.bookings.a = { '2026-09-10': booked };
     state.bookings.b = { [from]: booked };
     const windows = searchBookingWindows(state, [group], from, to, 2, 7);
     expect(windows.map((w) => [w.dates[0], w.dates.at(-1), w.devices[0]!.deviceId])).toEqual([
-      [from, '2026-09-09', 'a'],
       ['2026-09-08', to, 'b'],
+      [from, '2026-09-09', 'a'],
     ]);
   });
   it('resolves a requirement group nested inside a requirement group', () => {

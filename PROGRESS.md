@@ -1,5 +1,24 @@
 # PROGRESS — living project state
 
+## Assistant slot length and ordering (2026-09-06)
+
+The booking Assistant now returns each distinct continuous free run exactly once. A run shorter
+than the requested minimum is omitted; a longer run is capped to the requested maximum before it
+is shown. For example, one seven-day run with a three-to-six-day duration request produces one
+six-day result, rather than separate four-, five-, and six-day variants or another result from
+the unused remainder. The booking-duration control still allows any value from the requested
+minimum through the offered slot length and initially selects the longest value.
+
+Results are ordered by offered length from longest to shortest, with earlier start dates first
+when lengths match. The adapter and booking handoff use the same capped interval, so the displayed
+end date, duration control, and submitted dates remain aligned. Focused regression tests cover
+run de-duplication, maximum clipping, duration selection, descending length order, and the
+equal-length date tie-break.
+
+The full quality gate passes with 1,017 tests. A real browser run searched GIANA across 30 days
+with a three-to-six-day request. Its long remaining free run appeared once as a six-day result,
+defaulted to six booking days, remained adjustable to three, and produced no console errors.
+
 ## Assistant ODER picker (2026-09-06)
 
 Every plan card now has a branch/ODER action beside its position and remove/ungroup control.
