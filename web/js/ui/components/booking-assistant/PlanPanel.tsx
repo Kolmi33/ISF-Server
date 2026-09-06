@@ -60,7 +60,8 @@ function PlanHeading() {
             </li>
             <li>
               <strong>Alternativen gruppieren (ODER):</strong> Geräte per Drag &amp; Drop
-              übereinanderziehen, um sie als austauschbare Alternativen festzulegen.
+              übereinanderziehen oder über die ODER-Schaltfläche auswählen, um sie als austauschbare
+              Alternativen festzulegen.
             </li>
             <li>
               <strong>Trennen:</strong> Einzelne Geräte jederzeit wieder aus einer Gruppe
@@ -73,7 +74,15 @@ function PlanHeading() {
   );
 }
 function PlanList({ state }: { state: AssistantState }) {
-  const { plan, mergeTargetId, preview, removeEntry, dissolveGroup, setRequiredCount } = state;
+  const {
+    plan,
+    mergeTargetId,
+    preview,
+    removeEntry,
+    dissolveGroup,
+    setRequiredCount,
+    groupAlternatives,
+  } = state;
   const listArea = useDroppable({ id: PLAN_LIST_ID });
   /* Die Marke sitzt an dem Eintrag, neben den die Karte rückt — beim Anhängen an die
      letzte Karte der obersten Ebene. */
@@ -84,6 +93,7 @@ function PlanList({ state }: { state: AssistantState }) {
         ? ([plan[plan.length - 1]!.id, 'after'] as const)
         : null;
   const positions = planPositionLabels(plan);
+  const numberedEntries = plan.map((entry, index) => ({ entry, position: positions[index] }));
   return (
     /* Auffangfläche: alles unterhalb der Überschrift, was keine Karte ist. Ein Gerät hier
        loszulassen löst es aus seiner Bedarfsgruppe und hängt es hinten an — dafür muss
@@ -100,16 +110,20 @@ function PlanList({ state }: { state: AssistantState }) {
           /* Kein `gap`: den Abstand trägt jede Karte selbst, damit die Drop-Ziele die Liste
            lückenlos kacheln (siehe `planTargeting.ts`). */
           <ul className="flex flex-col">
-            {plan.map((entry, index) => (
+            {numberedEntries.map(({ entry, position }) => (
               <PlanCard
                 key={entry.id}
                 entry={entry}
-                position={positions[index]}
+                position={position}
                 mergeTargetId={mergeTargetId}
                 marker={marker}
                 onRemoveEntry={removeEntry}
                 onDissolveGroup={dissolveGroup}
                 onRequiredCountChange={setRequiredCount}
+                onGroupAlternatives={groupAlternatives}
+                alternativeCandidates={numberedEntries.filter(
+                  (candidate) => candidate.entry.id !== entry.id,
+                )}
               />
             ))}
           </ul>

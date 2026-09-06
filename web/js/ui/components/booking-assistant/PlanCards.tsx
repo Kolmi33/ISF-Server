@@ -13,11 +13,15 @@ import { type PlanEntry } from '../../../core/booking-assistant-types.ts';
 import { DeviceSubtitle } from './DeviceSubtitle.tsx';
 import { entryDragId } from './plan-tree.ts';
 import { NumberInput } from './NumberField.tsx';
+import { AlternativePicker } from './AlternativePicker.tsx';
+import { type AlternativeCandidate } from './AlternativePicker.tsx';
 
 export interface PlanCardHandlers {
   onRemoveEntry: (entryId: string) => void;
   onDissolveGroup: (entryId: string) => void;
   onRequiredCountChange: (entryId: string, value: number) => void;
+  onGroupAlternatives: (entryId: string, alternativeIds: string[]) => void;
+  alternativeCandidates: AlternativeCandidate[];
   /** Eintrag, dessen Mitglied die gezogene Karte würde — bekommt einen Ring. */
   mergeTargetId?: string | null;
   /** Fuge, in der die gezogene Karte landet: `[Eintrags-ID, Seite]`. */
@@ -77,6 +81,8 @@ export function PlanCardPreview({ entry }: { entry: PlanEntry }) {
         onRemoveEntry={noop}
         onDissolveGroup={noop}
         onRequiredCountChange={noop}
+        onGroupAlternatives={noop}
+        alternativeCandidates={[]}
       />
     </li>
   );
@@ -110,6 +116,14 @@ function PlanCardBody({
   preview?: boolean;
 }) {
   const isGroup = entry.kind === 'group';
+  const alternativeAction = preview ? null : (
+    <AlternativePicker
+      entry={entry}
+      position={position}
+      candidates={handlers.alternativeCandidates}
+      onGroup={handlers.onGroupAlternatives}
+    />
+  );
   return (
     <div
       className={cn(
@@ -122,27 +136,60 @@ function PlanCardBody({
       <div className={cn('flex items-center gap-3 px-3', isGroup ? 'py-2.5' : 'py-0')}>
         <GripVertical className="size-4 shrink-0 cursor-grab text-muted-foreground/45" />
         {entry.kind === 'group' ? (
-          <GroupHeader entry={entry} position={position} {...handlers} />
+          <GroupHeader
+            entry={entry}
+            position={position}
+            alternativeAction={alternativeAction}
+            {...handlers}
+          />
         ) : (
-          <DeviceHeader entry={entry} position={position} onRemoveEntry={handlers.onRemoveEntry} />
+          <DeviceHeader
+            entry={entry}
+            position={position}
+            alternativeAction={alternativeAction}
+            onRemoveEntry={handlers.onRemoveEntry}
+          />
         )}
       </div>
 
       {entry.kind === 'group' && (
-        <ul className="flex flex-col px-3 pb-3">
-          {entry.members.map((member, index) => (
-            <React.Fragment key={member.id}>
-              {index > 0 && <OrSeparator />}
-              {preview ? (
-                <PlanCardPreview entry={member} />
-              ) : (
-                <PlanCard entry={member} depth={depth + 1} {...handlers} />
-              )}
-            </React.Fragment>
-          ))}
-        </ul>
+        <GroupMembers entry={entry} depth={depth} preview={preview} handlers={handlers} />
       )}
     </div>
+  );
+}
+
+function GroupMembers({
+  entry,
+  depth,
+  preview,
+  handlers,
+}: {
+  entry: PlanGroupEntry;
+  depth: number;
+  preview: boolean;
+  handlers: PlanCardHandlers;
+}) {
+  return (
+    <ul className="flex flex-col px-3 pb-3">
+      {entry.members.map((member, index) => (
+        <React.Fragment key={member.id}>
+          {index > 0 && <OrSeparator />}
+          {preview ? (
+            <PlanCardPreview entry={member} />
+          ) : (
+            <PlanCard
+              entry={member}
+              depth={depth + 1}
+              {...handlers}
+              alternativeCandidates={entry.members
+                .filter((candidate) => candidate.id !== member.id)
+                .map((candidate) => ({ entry: candidate }))}
+            />
+          )}
+        </React.Fragment>
+      ))}
+    </ul>
   );
 }
 
@@ -161,11 +208,13 @@ function OrSeparator() {
 function GroupHeader({
   entry,
   position,
+  alternativeAction,
   onRequiredCountChange,
   onDissolveGroup,
 }: Pick<PlanCardHandlers, 'onRequiredCountChange' | 'onDissolveGroup'> & {
   entry: PlanGroupEntry;
   position?: string;
+  alternativeAction: React.ReactNode;
 }) {
   /* "Geräten" stimmt nur, solange keine Untergruppe dabei ist — sonst sind es Möglichkeiten. */
   const noun = entry.members.every((m) => m.kind === 'device') ? 'Geräten' : 'Möglichkeiten';
@@ -184,6 +233,7 @@ function GroupHeader({
       </span>
       <span className="ml-auto flex shrink-0 items-center gap-1.5">
         <PositionBadge position={position} />
+        {alternativeAction}
         {/* Löst nur die Gruppierung auf; die Mitglieder bleiben als eigene Karten stehen. */}
         <Button
           type="button"
@@ -205,8 +255,13 @@ function GroupHeader({
 function DeviceHeader({
   entry,
   position,
+  alternativeAction,
   onRemoveEntry,
-}: Pick<PlanCardHandlers, 'onRemoveEntry'> & { entry: PlanDeviceEntry; position?: string }) {
+}: Pick<PlanCardHandlers, 'onRemoveEntry'> & {
+  entry: PlanDeviceEntry;
+  position?: string;
+  alternativeAction: React.ReactNode;
+}) {
   const DEVICES_BY_ID = useDevices();
   const device = DEVICES_BY_ID[entry.deviceId]!;
   return (
@@ -216,6 +271,7 @@ function DeviceHeader({
         <DeviceSubtitle device={device} />
       </span>
       <PositionBadge position={position} />
+      {alternativeAction}
       <Button
         type="button"
         variant="ghost"

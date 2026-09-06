@@ -73,8 +73,8 @@ export function PopoverContent({
 }: {
   children: ReactNode;
   className?: string;
-  side?: 'top';
-  align?: 'start';
+  side?: 'top' | 'right' | 'bottom' | 'left';
+  align?: 'start' | 'center' | 'end';
 }) {
   return (
     <PopoverPrimitive.Portal container={document.getElementById('modal')}>

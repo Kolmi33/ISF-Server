@@ -2,6 +2,7 @@ import * as React from 'react';
 import { type PlanEntry } from '../../../core/booking-assistant-types.ts';
 import { createDeviceEntry } from './plan-tree.ts';
 import { dissolveEntry } from './plan-tree.ts';
+import { groupAlternatives as groupPlanAlternatives } from './plan-tree.ts';
 import { normalizePlan } from './plan-tree.ts';
 import { withoutEntry } from './plan-tree.ts';
 
@@ -37,7 +38,18 @@ export function usePlan() {
   const setRequiredCount = (entryId: string, value: number) =>
     setPlan((current) => withRequiredCount(current, entryId, value));
 
-  return { plan, setPlan, toggleDevice, removeEntry, dissolveGroup, setRequiredCount };
+  const groupAlternatives = (entryId: string, alternativeIds: string[]) =>
+    setPlan((current) => groupPlanAlternatives(current, entryId, alternativeIds));
+
+  return {
+    plan,
+    setPlan,
+    toggleDevice,
+    removeEntry,
+    dissolveGroup,
+    setRequiredCount,
+    groupAlternatives,
+  };
 }
 
 function withRequiredCount(plan: PlanEntry[], entryId: string, value: number): PlanEntry[] {

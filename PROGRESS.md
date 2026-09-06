@@ -1,5 +1,20 @@
 # PROGRESS — living project state
 
+## Assistant ODER picker (2026-09-06)
+
+Every plan card now has a branch/ODER action beside its position and remove/ungroup control.
+The action opens a compact multi-select popover containing the card's sibling machines and
+groups. Applying the selection groups those entries as interchangeable alternatives while
+keeping the chosen anchor in place. The action works at the top level and inside nested groups;
+drag and drop remains available and both paths use the same normalized plan tree.
+
+Focused state and integration coverage exercises multi-selection, device anchors, existing
+group anchors, nested cards, control placement, and the resulting requirement group. A real
+browser run selected three machines, grouped two alternatives through the picker, verified the
+resulting group controls and card actions, and reported a clean console.
+
+The full quality gate passes with 1,015 tests.
+
 ## Assistant controlled dismissal and card numbering (2026-09-06)
 
 The booking Assistant now opens as a sticky modal: Escape and backdrop clicks leave it open,

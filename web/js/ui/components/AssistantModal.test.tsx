@@ -93,7 +93,11 @@ describe('supplied assistant host integration', () => {
     ).toBe(true);
     const removeButton = screen.getByRole('button', { name: 'Echte Fräse entfernen' });
     const position = screen.getByLabelText('Position 01');
-    expect(position.nextElementSibling).toBe(removeButton);
+    const alternativeButton = screen.getByRole('button', {
+      name: 'Alternativen für Echte Fräse auswählen',
+    });
+    expect(position.nextElementSibling).toBe(alternativeButton);
+    expect(alternativeButton.nextElementSibling).toBe(removeButton);
     click('Echte Fräse entfernen');
     expect(screen.getByText('Noch nichts ausgewählt.')).toBeTruthy();
     expect(
@@ -124,6 +128,23 @@ describe('supplied assistant host integration', () => {
     expect(category.getAttribute('aria-expanded')).toBe('true');
     fireEvent.click(section);
     expect(screen.queryByRole('button', { name: /^Alte Halle/ })).toBeNull();
+  });
+  it('groups selected plan cards through the ODER picker', () => {
+    select();
+    const input = screen.getByRole('textbox', { name: 'Gerät suchen' });
+    fireEvent.change(input, { target: { value: 'Presse' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: /Echte Presse/ }));
+    click('Alternativen für Echte Fräse auswählen');
+    expect(screen.getByText(/Diese Karten werden mit Echte Fräse/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Echte Presse' }));
+    click('Als ODER gruppieren');
+    expect(
+      (screen.getByRole('textbox', { name: 'Benötigte Geräte' }) as HTMLInputElement).value,
+    ).toBe('1');
+    expect(screen.getByRole('button', { name: 'Bedarfsgruppe auflösen' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /Alternativen für .* auswählen/ })).toHaveLength(
+      3,
+    );
   });
   it('transfers min/max, exact devices and selected calendar dates to confirmation', () => {
     select();

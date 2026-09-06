@@ -89,16 +89,62 @@ describe('supplied plan and criteria state', () => {
               onRemoveEntry={vi.fn()}
               onDissolveGroup={vi.fn()}
               onRequiredCountChange={vi.fn()}
+              onGroupAlternatives={vi.fn()}
+              alternativeCandidates={[]}
             />
           </ul>
         </DndContext>
       </DeviceProvider>,
     );
     const position = screen.getByLabelText('Positionen 03, 04');
-    expect(position.nextElementSibling).toBe(
+    const alternativeButton = screen.getByRole('button', {
+      name: 'Alternativen für Bedarfsgruppe 03, 04 auswählen',
+    });
+    expect(position.nextElementSibling).toBe(alternativeButton);
+    expect(alternativeButton.nextElementSibling).toBe(
       screen.getByRole('button', { name: 'Bedarfsgruppe auflösen' }),
     );
     expect(screen.getAllByLabelText(/^Position/)).toHaveLength(1);
+  });
+
+  it('groups several sibling alternatives through the explicit action', () => {
+    const { result, add } = setup();
+    ['a', 'b', 'c'].forEach(add);
+    const [a, b, c] = result.current.plan;
+    act(() => result.current.groupAlternatives(b!.id, [a!.id, c!.id]));
+    expect(result.current.plan).toHaveLength(1);
+    expect(result.current.plan[0]).toMatchObject({ kind: 'group', requiredCount: 1 });
+    expect(devicesOf(result.current.plan[0]!)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('applies the alternative action to nested cards and existing groups', () => {
+    const { result } = setup();
+    const outer: PlanEntry = {
+      kind: 'group',
+      id: 'outer',
+      requiredCount: 1,
+      members: [
+        { kind: 'device', id: 'a-entry', deviceId: 'a' },
+        { kind: 'device', id: 'b-entry', deviceId: 'b' },
+        { kind: 'device', id: 'c-entry', deviceId: 'c' },
+      ],
+    };
+    act(() => result.current.setPlan([outer, { kind: 'device', id: 'd-entry', deviceId: 'd' }]));
+    act(() => result.current.groupAlternatives('a-entry', ['b-entry']));
+    expect(result.current.plan[0]).toMatchObject({
+      id: 'outer',
+      members: [
+        { kind: 'group', members: [{ id: 'a-entry' }, { id: 'b-entry' }] },
+        { id: 'c-entry' },
+      ],
+    });
+    act(() => result.current.groupAlternatives('outer', ['d-entry']));
+    expect(result.current.plan).toHaveLength(1);
+    expect(result.current.plan[0]).toMatchObject({
+      id: 'outer',
+      requiredCount: 1,
+      members: [expect.anything(), { id: 'c-entry' }, { id: 'd-entry' }],
+    });
   });
 
   it('groups two cards, edits the count, removes a member and collapses the leftover', () => {

@@ -13,6 +13,7 @@
 // =======================================================================================
 
 import { type PlanDeviceEntry } from '../../../core/booking-assistant-types.ts';
+import { type PlanGroupEntry } from '../../../core/booking-assistant-types.ts';
 import { type PlanEntry } from '../../../core/booking-assistant-types.ts';
 
 export const ENTRY_PREFIX = 'entry:';
@@ -89,6 +90,54 @@ export function addMember(plan: PlanEntry[], targetId: string, moving: PlanEntry
     /* Group and target device stay visible at the same time, so each needs its own dnd-kit ID. */
     return { kind: 'group', id: createEntryId(), members: [entry, moving], requiredCount: 1 };
   });
+}
+
+/** Groups an entry with selected siblings without requiring a drag gesture. The anchor keeps
+ * its place. Existing groups receive the selected siblings as further alternatives; a device
+ * becomes the first member of a new group. */
+export function groupAlternatives(
+  plan: PlanEntry[],
+  anchorId: string,
+  alternativeIds: string[],
+): PlanEntry[] {
+  const selected = new Set(alternativeIds.filter((id) => id !== anchorId));
+  if (selected.size === 0) return plan;
+  const changed = groupAtLevel(plan, anchorId, selected);
+  return changed ? normalizePlan(changed) : plan;
+}
+
+function groupAtLevel(
+  entries: PlanEntry[],
+  anchorId: string,
+  selected: ReadonlySet<string>,
+): PlanEntry[] | null {
+  const anchor = entries.find((entry) => entry.id === anchorId);
+  if (anchor) {
+    const alternatives = entries.filter((entry) => selected.has(entry.id));
+    if (alternatives.length === 0) return null;
+    const grouped: PlanGroupEntry =
+      anchor.kind === 'group'
+        ? { ...anchor, members: [...anchor.members, ...alternatives] }
+        : {
+            kind: 'group',
+            id: createEntryId(),
+            members: [anchor, ...alternatives],
+            requiredCount: 1,
+          };
+    return entries.flatMap((entry) => {
+      if (entry.id === anchorId) return [grouped];
+      return selected.has(entry.id) ? [] : [entry];
+    });
+  }
+  for (const entry of entries) {
+    if (entry.kind !== 'group') continue;
+    const members = groupAtLevel(entry.members, anchorId, selected);
+    if (members)
+      return entries.map((candidate) =>
+        candidate.id === entry.id ? { ...entry, members } : candidate,
+      );
+  }
+  return null;
 }
 
 /** Ersetzt die Gruppe durch ihre Mitglieder — an Ort und Stelle, auf ihrer Ebene. */
