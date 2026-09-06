@@ -17,6 +17,9 @@ shows `01, 02`, and the next top-level machine continues at `03`. The label upda
 when the group count changes. Browser verification covered grouping two machines, increasing
 the requirement, cumulative numbering of the following card, badge fit, and a clean console.
 
+The grouping tooltip is now a scannable three-item list explaining checkbox selection as UND,
+drag-and-drop grouping as ODER, and both ways to separate grouped machines.
+
 ## Assistant drag/drop identity fix (2026-09-06)
 
 Fixed duplicate green insertion markers and cards becoming non-draggable after dissolving a

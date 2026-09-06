@@ -232,7 +232,10 @@ describe('supplied assistant host integration', () => {
     fireEvent.keyDown(document.body, { key: 'Tab' });
     act(() => help.focus());
     // Floating UI positions asynchronously; positioning/visibility is verified in Orca.
-    expect(screen.getByRole('tooltip', { hidden: true }).textContent).toContain('Bedarfsgruppe');
+    const tooltip = screen.getByRole('tooltip', { hidden: true });
+    expect(tooltip.textContent).toContain('Auswählen (UND):');
+    expect(tooltip.textContent).toContain('Alternativen gruppieren (ODER):');
+    expect(tooltip.textContent).toContain('Trennen:');
     expect(screen.queryByRole('button', { name: 'Dialog schließen' })).toBeNull();
     fireEvent.keyDown(document.body, { key: 'Escape' });
     fireEvent.click(document.getElementById('overlay')!);

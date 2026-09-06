@@ -52,11 +52,21 @@ function PlanHeading() {
             <Info className="size-3.5" />
           </button>
         </TooltipTrigger>
-        <TooltipContent side="right" className="max-w-[19rem]">
-          Links Geräte auswählen, dann hier per Drag &amp; Drop übereinander ziehen — daraus wird
-          eine <strong>Bedarfsgruppe</strong>, in der die Geräte austauschbar sind. Eine Gruppe auf
-          eine andere gezogen wird deren Mitglied: so entsteht „entweder das eine Gerät oder diese
-          zwei zusammen". Alles lässt sich wieder herausziehen.
+        <TooltipContent side="right" className="max-w-[24rem]">
+          <ul className="list-disc space-y-2 pl-4 text-left">
+            <li>
+              <strong>Auswählen (UND):</strong> Die benötigten Geräte über die Checkboxen in der
+              linken Liste auswählen.
+            </li>
+            <li>
+              <strong>Alternativen gruppieren (ODER):</strong> Geräte per Drag &amp; Drop
+              übereinanderziehen, um sie als austauschbare Alternativen festzulegen.
+            </li>
+            <li>
+              <strong>Trennen:</strong> Einzelne Geräte jederzeit wieder aus einer Gruppe
+              herausziehen oder die Gruppierung komplett auflösen.
+            </li>
+          </ul>
         </TooltipContent>
       </Tooltip>
     </div>
