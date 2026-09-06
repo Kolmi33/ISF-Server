@@ -8,12 +8,11 @@ import { ScrollArea } from './primitives.tsx';
 import { Tooltip } from './primitives.tsx';
 import { TooltipContent } from './primitives.tsx';
 import { TooltipTrigger } from './primitives.tsx';
-import { PLAN_LIST_ID } from './model.ts';
+import { PLAN_LIST_ID } from './plan-tree.ts';
 import { planTargets } from './planTargeting.ts';
 import { SECTION_LABEL_CLASS } from './styles.ts';
-import { GroupMemberRow } from './PlanCards.tsx';
-import { PlanCardContent } from './PlanCards.tsx';
 import { PlanCard } from './PlanCards.tsx';
+import { PlanCardPreview } from './PlanCards.tsx';
 import { type AssistantState } from './useAssistantState.ts';
 
 export function PlanPanel({ state }: { state: AssistantState }) {
@@ -54,24 +53,25 @@ function PlanHeading() {
         </TooltipTrigger>
         <TooltipContent side="right" className="max-w-[19rem]">
           Links Geräte auswählen, dann hier per Drag &amp; Drop übereinander ziehen — daraus wird
-          eine <strong>Bedarfsgruppe</strong>, in der die Geräte austauschbar sind. Einzelne Geräte
-          lassen sich wieder herausziehen.
+          eine <strong>Bedarfsgruppe</strong>, in der die Geräte austauschbar sind. Eine Gruppe auf
+          eine andere gezogen wird deren Mitglied: so entsteht „entweder das eine Gerät oder diese
+          zwei zusammen". Alles lässt sich wieder herausziehen.
         </TooltipContent>
       </Tooltip>
     </div>
   );
 }
 function PlanList({ state }: { state: AssistantState }) {
-  const { plan, mergeTargetId, dropIndex, removeEntry, removeMember, dissolveGroup } = state;
-  const { setRequiredCount } = state;
+  const { plan, mergeTargetId, preview, removeEntry, dissolveGroup, setRequiredCount } = state;
   const listArea = useDroppable({ id: PLAN_LIST_ID });
-  /* Die Einfügestelle ist die Fuge über der Karte an dieser Stelle — hinter der letzten
-     Karte gibt es keine mehr, dort trägt sie die letzte Karte an ihrer Unterkante. */
-  const indicatorFor = (index: number) => {
-    if (dropIndex === index) return 'before' as const;
-    if (dropIndex === plan.length && index === plan.length - 1) return 'after' as const;
-    return undefined;
-  };
+  /* Die Marke sitzt an dem Eintrag, neben den die Karte rückt — beim Anhängen an die
+     letzte Karte der obersten Ebene. */
+  const marker =
+    preview?.kind === 'insert'
+      ? ([preview.targetId, preview.side] as const)
+      : preview?.kind === 'append' && plan.length > 0
+        ? ([plan[plan.length - 1]!.id, 'after'] as const)
+        : null;
   return (
     /* Auffangfläche: alles unterhalb der Überschrift, was keine Karte ist. Ein Gerät hier
        loszulassen löst es aus seiner Bedarfsgruppe und hängt es hinten an — dafür muss
@@ -93,10 +93,9 @@ function PlanList({ state }: { state: AssistantState }) {
                 key={entry.id}
                 entry={entry}
                 position={entry.kind === 'device' ? String(index + 1).padStart(2, '0') : undefined}
-                mergeActive={mergeTargetId === entry.id}
-                indicator={indicatorFor(index)}
+                mergeTargetId={mergeTargetId}
+                marker={marker}
                 onRemoveEntry={removeEntry}
-                onRemoveMember={removeMember}
                 onDissolveGroup={dissolveGroup}
                 onRequiredCountChange={setRequiredCount}
               />
@@ -108,26 +107,10 @@ function PlanList({ state }: { state: AssistantState }) {
   );
 }
 function PlanOverlay({ state }: { state: AssistantState }) {
-  const { activeDrag, draggedEntry } = state;
+  const { draggedEntry } = state;
   return (
     <DragOverlay dropAnimation={null}>
-      {activeDrag?.type === 'entry' && draggedEntry && (
-        <div className="rotate-[1.5deg]">
-          <PlanCardContent
-            overlay
-            entry={draggedEntry}
-            onRemoveEntry={() => {}}
-            onRemoveMember={() => {}}
-            onDissolveGroup={() => {}}
-            onRequiredCountChange={() => {}}
-          />
-        </div>
-      )}
-      {activeDrag?.type === 'member' && (
-        <div className="rotate-[1.5deg]">
-          <GroupMemberRow overlay entryId={activeDrag.entryId} deviceId={activeDrag.deviceId} />
-        </div>
-      )}
+      {draggedEntry && <PlanCardPreview entry={draggedEntry} />}
     </DragOverlay>
   );
 }

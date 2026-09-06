@@ -35,33 +35,61 @@ function freeLengths(data: BookingData, ids: string[], dates: string[]): Map<str
   );
 }
 
-/** Choose the longest-lived alternatives, retaining exactly those devices for the whole row. */
-function resolveAt(plan: PlanEntry[], lengths: Map<string, number[]>, index: number) {
-  return plan.flatMap((entry) => {
-    const fromGroup = entry.kind === 'group';
-    const ids = entry.kind === 'group' ? entry.deviceIds : [entry.deviceId];
-    const need = entry.kind === 'group' ? entry.requiredCount : 1;
-    return ids
-      .map((deviceId) => ({ deviceId, fromGroup, length: lengths.get(deviceId)![index]! }))
-      .sort((a, b) => b.length - a.length)
-      .slice(0, need);
-  });
+interface Choice {
+  /** Tage, die diese Wahl ab `index` am Stück trägt — bei einer Gruppe die kürzeste ihrer
+   *  gewählten Alternativen, denn alle müssen gleichzeitig frei sein. */
+  length: number;
+  devices: ResolvedDevice[];
+}
+
+/** Choose the longest-lived alternatives, retaining exactly those devices for the whole row.
+ *
+ *  Recurses through nested requirement groups: a group takes the `requiredCount` longest-lived
+ *  of its members, each member having been resolved the same way. Greedy is exact here because
+ *  the members' device sets are disjoint (`validatePlan`), so taking the longest-lived ones
+ *  maximises the minimum — no member's choice can improve another's. */
+function chooseAt(entry: PlanEntry, lengths: Map<string, number[]>, index: number): Choice {
+  if (entry.kind === 'device')
+    return {
+      length: lengths.get(entry.deviceId)![index]!,
+      devices: [{ deviceId: entry.deviceId, fromGroup: false }],
+    };
+  const chosen = entry.members
+    .map((member) => chooseAt(member, lengths, index))
+    .sort((a, b) => b.length - a.length)
+    .slice(0, entry.requiredCount);
+  return {
+    length: Math.min(...chosen.map((choice) => choice.length)),
+    /* Alles, was über eine Gruppe hereinkommt, ist stellvertretend gewählt — auch aus einer
+       Untergruppe. */
+    devices: chosen.flatMap((choice) =>
+      choice.devices.map((device) => ({ ...device, fromGroup: true })),
+    ),
+  };
 }
 
 function validatePlan(plan: PlanEntry[]): void {
-  const ids = plan.flatMap((entry) => {
-    if (entry.kind === 'device') return [entry.deviceId];
-    if (
-      !Number.isInteger(entry.requiredCount) ||
-      entry.requiredCount < 1 ||
-      entry.requiredCount > entry.deviceIds.length
-    )
-      throw new Error('Bitte die Anzahl benötigter Geräte prüfen.');
-    return entry.deviceIds;
-  });
+  const ids = plan.flatMap(deviceIdsOf);
   if (!ids.length || new Set(ids).size !== ids.length)
     throw new Error('Bitte Geräte eindeutig auswählen.');
+  const checkCounts = (entries: PlanEntry[]): void => {
+    for (const entry of entries) {
+      if (entry.kind !== 'group') continue;
+      if (
+        !Number.isInteger(entry.requiredCount) ||
+        entry.requiredCount < 1 ||
+        entry.requiredCount > entry.members.length
+      )
+        throw new Error('Bitte die Anzahl benötigter Geräte prüfen.');
+      checkCounts(entry.members);
+    }
+  };
+  checkCounts(plan);
 }
+
+/** Every device below an entry, however deeply nested. */
+const deviceIdsOf = (entry: PlanEntry): string[] =>
+  entry.kind === 'group' ? entry.members.flatMap(deviceIdsOf) : [entry.deviceId];
 
 /** Each non-dominated window is maximal for a fixed device assignment, within the search horizon. */
 export function searchBookingWindows(
@@ -77,20 +105,17 @@ export function searchBookingWindows(
   if (!Number.isInteger(minDays) || !Number.isInteger(maxDays) || minDays < 1 || maxDays < minDays)
     throw new Error('Bitte gültige Mindest- und Höchstdauer eingeben.');
   const dates = getAllDaysInRange(from, to);
-  const ids = plan.flatMap((entry) =>
-    entry.kind === 'group' ? entry.deviceIds : [entry.deviceId],
-  );
-  const lengths = freeLengths(data, ids, dates);
+  const lengths = freeLengths(data, plan.flatMap(deviceIdsOf), dates);
   const windows: BookingWindow[] = [];
   let lastEnd = -1;
   for (let index = 0; index < dates.length; index++) {
-    const devices = resolveAt(plan, lengths, index);
-    const length = Math.min(...devices.map((device) => device.length));
+    const choices = plan.map((entry) => chooseAt(entry, lengths, index));
+    const length = Math.min(...choices.map((choice) => choice.length));
     if (length < minDays || index + length - 1 <= lastEnd) continue;
     lastEnd = index + length - 1;
     windows.push({
       dates: dates.slice(index, index + length),
-      devices: devices.map(({ deviceId, fromGroup }) => ({ deviceId, fromGroup })),
+      devices: choices.flatMap((choice) => choice.devices),
       minDays,
       maxDays: Math.min(maxDays, length),
     });

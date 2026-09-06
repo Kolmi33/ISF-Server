@@ -780,11 +780,21 @@ a green line in the gap the card would land in, or a ring around the card it wou
 with. Jumping is therefore structurally impossible rather than merely tuned away. That is
 why `@dnd-kit/sortable` is gone: shuffling cards during the drag is precisely its job.
 
+**The plan is a tree.** A requirement group's members are plan entries, so a member may be a
+group in turn — "either the big press, or both small ones", which a flat device list cannot
+say. Every entry, at any depth, carries its own id and is therefore draggable and droppable
+in its own right; there is no separate "member" concept and `PlanCard` renders its members
+through itself. The solver follows the same shape: `chooseAt` takes a group's `requiredCount`
+longest-lived members, each member resolved the same way. Greedy is exact because members'
+device sets are disjoint (`validatePlan`), so maximising each member's own run maximises the
+group's minimum.
+
 Two rules carry the model. **Targets rank, they never compete** (`planTargeting.ts`): a card
 is the only drop target on its own height, and grouping vs. inserting before/after is
-decided by the pointer's height within it, never by a second droppable. The cards tile the
-list without gaps — each carries its own `pb-2` instead of the list carrying a `gap` — so
-the pointer always hits exactly one. Only when no card is hit does the list area catch the
+decided by the pointer's height within it, never by a second droppable. Cards tile their own
+level without gaps — each carries its own `pb-2` instead of the list carrying a `gap` — so
+the pointer always hits exactly one per level; across levels a nested group necessarily lies
+inside its parent, and there the innermost (smallest) hit wins. Only when no card is hit does the list area catch the
 drag, which is what makes the space below the last card a real target: releasing a device
 there lifts it out of its Bedarfsgruppe onto the end of the list without having to hit a
 gap, and it is the only way out when the group is the sole card. That fallback overlaps the
@@ -798,8 +808,10 @@ both the preview during the drag and the mutation on release, so the marker cann
 something the drop does not do. Its insertion index counts the gaps of the list *including*
 the dragged card — exactly where the line sits — and dropping into either gap touching the
 card's own slot is a no-op that shows no marker. Dropping onto a card merges: two device
-cards become a Bedarfsgruppe, and a card dropped onto an existing group joins it, keeping
-the group's required count.
+cards become a Bedarfsgruppe, a card dropped onto an existing group joins it keeping the
+group's required count, and a *group* dropped onto a group becomes its member rather than
+dissolving into it — that one rule is where nesting comes from. Nothing can be dropped into
+itself or into one of its own members (`entryContains`), which is what keeps the tree a tree.
 
 The supplied inclusive duration represents calendar days. `core/booking-assistant-search`
 computes deterministic maximal windows with the same resolved machines available on

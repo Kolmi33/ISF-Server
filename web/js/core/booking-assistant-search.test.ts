@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { searchBookingWindows, availableForBooking } from './booking-assistant-search.ts';
 import type { BookingData } from '../../../shared/types.ts';
-import type { PlanEntry } from './booking-assistant-types.ts';
+import { getAllDaysInRange } from '../../../shared/dates.ts';
+import type { PlanEntry, PlanGroupEntry } from './booking-assistant-types.ts';
 
 const from = '2026-09-07';
 const to = '2026-09-13';
 const device: PlanEntry = { kind: 'device', id: 'entry-a', deviceId: 'a' };
-const group: PlanEntry = { kind: 'group', id: 'group', deviceIds: ['a', 'b'], requiredCount: 1 };
+const member = (deviceId: string): PlanEntry => ({ kind: 'device', id: `m-${deviceId}`, deviceId });
+const group: PlanGroupEntry = {
+  kind: 'group',
+  id: 'group',
+  members: [member('a'), member('b')],
+  requiredCount: 1,
+};
 const data = (): BookingData => ({
   machines: ['a', 'b', 'c'].map((id) => ({ id, name: id, group: 'Halle', days: '1111111' })),
   bookings: {},
@@ -68,7 +75,7 @@ describe('supplied assistant live calendar-day scheduler', () => {
     const state = data();
     state.bookings.a = { '2026-09-10': booked };
     const plan: PlanEntry[] = [
-      { ...group, deviceIds: ['a', 'b'], requiredCount: 2 },
+      { ...group, requiredCount: 2 },
       { kind: 'device', id: 'e-c', deviceId: 'c' },
     ];
     const windows = searchBookingWindows(state, plan, from, to, 2, 7);
@@ -91,6 +98,48 @@ describe('supplied assistant live calendar-day scheduler', () => {
       [from, '2026-09-09', 'a'],
       ['2026-09-08', to, 'b'],
     ]);
+  });
+  it('resolves a requirement group nested inside a requirement group', () => {
+    const state = data();
+    // "Entweder c allein, oder a und b zusammen" — flach nicht ausdrückbar.
+    const plan: PlanEntry[] = [
+      {
+        kind: 'group',
+        id: 'outer',
+        requiredCount: 1,
+        members: [member('c'), { ...group, id: 'inner', requiredCount: 2 }],
+      },
+    ];
+    // Solange c frei ist, ist c die längstlebende Möglichkeit und gewinnt allein.
+    expect(searchBookingWindows(state, plan, from, to, 1, 7)[0]!.devices).toEqual([
+      { deviceId: 'c', fromGroup: true },
+    ]);
+    // Fällt c mittendrin aus, trägt das Paar a+b länger — und beide werden eingeplant.
+    state.bookings.c = { '2026-09-09': booked };
+    const windows = searchBookingWindows(state, plan, from, to, 1, 7);
+    expect(windows[0]!.devices).toEqual([
+      { deviceId: 'a', fromGroup: true },
+      { deviceId: 'b', fromGroup: true },
+    ]);
+    expect(windows[0]!.dates).toEqual(getAllDaysInRange(from, to));
+    // Auch das eingebettete "2 von 2" wird geprüft.
+    expect(() =>
+      searchBookingWindows(
+        state,
+        [
+          {
+            kind: 'group',
+            id: 'outer',
+            requiredCount: 1,
+            members: [member('c'), { ...group, id: 'inner', requiredCount: 3 }],
+          },
+        ],
+        from,
+        to,
+        1,
+        7,
+      ),
+    ).toThrow('Anzahl');
   });
   it('rejects invalid requirements and durations; missing machines produce no result', () => {
     const search = (plan: PlanEntry[], min = 1, max = 7) =>

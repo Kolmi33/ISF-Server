@@ -29,12 +29,17 @@ export interface PlanDeviceEntry {
   deviceId: string;
 }
 
-/** Bedarfsgruppe: austauschbare Alternativen, von denen `requiredCount` gebraucht werden. */
+/** Bedarfsgruppe: austauschbare Alternativen, von denen `requiredCount` gebraucht werden.
+ *
+ *  Eine Alternative ist ein Gerät ODER wieder eine Bedarfsgruppe. Damit lässt sich auch
+ *  "entweder die große Presse oder zwei kleine" ausdrücken, was mit einer flachen Liste
+ *  von Geräten nicht geht. Der Plan ist dadurch ein Baum; jeder Eintrag trägt eine eigene
+ *  ID und ist für sich zieh- und ablegbar. */
 export interface PlanGroupEntry {
   kind: 'group';
   id: string;
-  deviceIds: string[];
-  /** 1 … deviceIds.length */
+  members: PlanEntry[];
+  /** 1 … members.length */
   requiredCount: number;
 }
 

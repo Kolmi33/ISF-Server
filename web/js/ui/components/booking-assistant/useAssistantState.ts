@@ -5,7 +5,7 @@ import { type CatalogCategory } from '../../../core/booking-assistant-types.ts';
 import { type PlanEntry } from '../../../core/booking-assistant-types.ts';
 import { type DateRange } from '../../../core/booking-assistant-types.ts';
 import { type AvailabilityWindow } from '../../../core/booking-assistant-types.ts';
-import { deviceIdsOf } from './model.ts';
+import { deviceIdsOf } from './plan-tree.ts';
 import { usePlan } from './usePlan.ts';
 import { usePlanDrag } from './usePlanDrag.ts';
 import { useCriteria } from './useCriteria.ts';
