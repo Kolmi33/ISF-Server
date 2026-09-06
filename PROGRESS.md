@@ -1,5 +1,29 @@
 # PROGRESS — living project state
 
+## Assistant workday slots and open end (2026-09-07)
+
+The booking Assistant now treats Monday through Friday as its only booking-day sequence. Weekend
+days are excluded from the search, duration bounds, result counts, and the exact dates passed to
+the booking form; Friday followed by Monday remains continuous. Date-range presets still cover
+their stated calendar span, while the range summary and Min./Max. controls show its actual number
+of workdays. A weekend-only search range is rejected explicitly.
+
+Availability is now event-based rather than bounded by an arbitrary future scan. For each fixed
+device resolution, the scheduler finds the next known weekday booking, maintenance boundary, or
+recurring machine-day restriction. No such future conflict marks the result as open ended “nach
+aktuellem Buchungsstand”. Nested N-of-M groups choose the fixed alternatives with the furthest
+boundary, open-ended results sort before finite results, and the live booking handoff rechecks the
+exact workday list before confirmation.
+
+Focused coverage exercises Friday-to-Monday continuity, ignored weekend bookings and maintenance,
+finite weekday boundaries, recurring weekday masks, open maintenance, stable alternative choices,
+nested groups, exact DST-weekend handoff, and stale-result rejection. The full quality gate passes
+with 1,019 tests.
+
+A real browser run searched a Sunday-to-Saturday range and correctly reported five workdays. An
+open-ended result offered three to five workdays; reducing it to three passed Friday, Monday, and
+Tuesday to the booking form without either weekend date. The browser console remained clean.
+
 ## Assistant slot length and ordering (2026-09-06)
 
 The booking Assistant now returns each distinct continuous free run exactly once. A run shorter

@@ -11,12 +11,17 @@ import { PopoverContent } from './primitives.tsx';
 import { PopoverTrigger } from './primitives.tsx';
 import { type DateRange } from '../../../core/booking-assistant-types.ts';
 import { formatDate } from './model.ts';
-import { countDays } from './model.ts';
+import { countCalendarDays, countWorkdays } from './model.ts';
 import { pickRangeDay } from './model.ts';
 import { LABEL_CLASS } from './styles.ts';
 import { FOOTER_SHELL } from './styles.ts';
 import { FOOTER_SHELL_IDLE } from './styles.ts';
 import { FOOTER_SHELL_ACTIVE } from './styles.ts';
+
+const rangeLengths = (range: DateRange) => ({
+  calendar: range.from && range.to ? countCalendarDays(range.from, range.to) : null,
+  workdays: range.from && range.to ? countWorkdays(range.from, range.to) : null,
+});
 
 export function DateRangeField({
   range,
@@ -35,8 +40,8 @@ export function DateRangeField({
     if (open) setDraft(range);
   }, [open, range]);
 
-  const draftLength = draft.from && draft.to ? countDays(draft.from, draft.to) : null;
-  const appliedLength = range.from && range.to ? countDays(range.from, range.to) : null;
+  const draftLength = rangeLengths(draft);
+  const appliedLength = rangeLengths(range).workdays;
 
   const applyPreset = (days: number) => {
     const start = draft.from ?? today;
@@ -56,7 +61,7 @@ export function DateRangeField({
               onClick={() => applyPreset(days)}
               className={cn(
                 'rounded-full border border-border px-2.5 py-1 text-[11px] tabular-nums text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                draftLength === days && 'border-primary/50 bg-primary/10 text-primary',
+                draftLength.calendar === days && 'border-primary/50 bg-primary/10 text-primary',
               )}
             >
               {days} Tage
@@ -78,7 +83,7 @@ export function DateRangeField({
 
         <RangeActions
           draft={draft}
-          draftLength={draftLength}
+          draftLength={draftLength.workdays}
           setDraft={setDraft}
           onApply={onApply}
           setOpen={setOpen}
@@ -111,7 +116,9 @@ function RangeTrigger({
           <span className={cn('block', LABEL_CLASS)}>
             Zeitraum
             {appliedLength !== null && (
-              <span className="ml-1.5 normal-case tracking-normal">· {appliedLength} Tage</span>
+              <span className="ml-1.5 normal-case tracking-normal">
+                · {appliedLength} Arbeitstage
+              </span>
             )}
           </span>
           <span className="mt-0.5 block text-sm font-semibold tabular-nums text-foreground">
@@ -148,7 +155,7 @@ function RangeActions({
         {draft.from ? formatDate(draft.from) : 'Startdatum wählen'}
         {draft.from && ' → '}
         {draft.from && (draft.to ? formatDate(draft.to) : 'Enddatum wählen')}
-        {draftLength !== null && `  ·  ${draftLength} Tage`}
+        {draftLength !== null && `  ·  ${draftLength} Arbeitstage`}
       </span>
       <div className="ml-auto flex items-center gap-2">
         <Button

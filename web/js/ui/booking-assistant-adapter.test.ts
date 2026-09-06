@@ -21,7 +21,7 @@ const data: BookingData = {
   bookings: {},
 };
 const plan: PlanEntry[] = [{ kind: 'device', id: 'card', deviceId: 'real-id' }];
-const range = { from: new Date(2026, 9, 24), to: new Date(2026, 9, 27) };
+const range = { from: new Date(2026, 9, 23), to: new Date(2026, 9, 27) };
 describe('backend/frontend assistant boundary', () => {
   it('uses actual IDs, labels, department, categories and favorites without demo data', () => {
     const catalog = assistantCatalog(data.machines, new Set(['meter']));
@@ -39,25 +39,26 @@ describe('backend/frontend assistant boundary', () => {
     });
     expect(assistantCatalog([], new Set())).toEqual([]);
   });
-  it('transfers exact local calendar dates across the DST boundary and selected result duration', () => {
+  it('transfers exact workdays across the DST weekend and selected result duration', () => {
     const window = searchAssistant(data, plan, range, 2, 3)[0]!;
-    expect(window.openEnded).toBe(false);
-    expect(window.start).toEqual(new Date(2026, 9, 24));
-    expect(window.end).toEqual(new Date(2026, 9, 26));
+    expect(window.openEnded).toBe(true);
+    expect(window.dates).toEqual(['2026-10-23', '2026-10-26', '2026-10-27']);
+    expect(window.start).toEqual(new Date(2026, 9, 23));
+    expect(window.end).toEqual(new Date(2026, 9, 27));
     expect(window.spanDays).toBe(3);
     expect(window.selectedDays).toBe(3);
     expect(assistantBooking(data, { ...window, selectedDays: 2 })).toEqual({
       ids: ['real-id'],
-      from: '2026-10-24',
-      to: '2026-10-25',
-      dates: ['2026-10-24', '2026-10-25'],
+      from: '2026-10-23',
+      to: '2026-10-26',
+      dates: ['2026-10-23', '2026-10-26'],
     });
   });
   it('rechecks live bookings before confirmation instead of trusting a stale search', () => {
     const window = searchAssistant(data, plan, range, 1, 4)[0]!;
     const changed = {
       ...data,
-      bookings: { 'real-id': { '2026-10-25': { name: 'Andere Person', comment: '' } } },
+      bookings: { 'real-id': { '2026-10-26': { name: 'Andere Person', comment: '' } } },
     };
     expect(() => assistantBooking(changed, window)).toThrow('Verfügbarkeit');
     expect(() => assistantBooking({ ...data, machines: [] }, window)).toThrow('Verfügbarkeit');

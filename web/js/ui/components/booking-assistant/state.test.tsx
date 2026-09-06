@@ -3,7 +3,7 @@ import { act, render, renderHook, cleanup, screen } from '@testing-library/react
 import { DndContext } from '@dnd-kit/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAssistantState } from './useAssistantState.ts';
-import { formatDate, formatDateLong, rangeLengthOf, pickRangeDay } from './model.ts';
+import { countWorkdays, formatDate, formatDateLong, rangeLengthOf, pickRangeDay } from './model.ts';
 import { deviceIdsOf, normalizePlan } from './plan-tree.ts';
 import type { PlanEntry } from '../../../core/booking-assistant-types.ts';
 import type { DropZone } from './plan-drop.ts';
@@ -386,7 +386,7 @@ describe('supplied plan and criteria state', () => {
     expect(result.current.maxDays).toBe(2);
     expect(result.current.minDays).toBe(2);
     act(() => result.current.flagLimit('upper'));
-    expect(result.current.limitHint?.message).toContain('2 Tage');
+    expect(result.current.limitHint?.message).toContain('2 Arbeitstage');
     act(() => vi.advanceTimersByTime(2800));
     expect(result.current.limitHint).toBeNull();
     act(() => result.current.flagLimit('lower'));
@@ -432,6 +432,7 @@ describe('supplied plan and criteria state', () => {
     expect(formatDate()).toBe('TT.MM.JJJJ');
     expect(formatDate(new Date(2026, 8, 7))).toBe('07.09.2026');
     expect(formatDateLong(new Date(2026, 8, 7))).toContain('07.09.2026');
+    expect(countWorkdays(new Date(2026, 8, 11), new Date(2026, 8, 14))).toBe(2);
     expect(rangeLengthOf({ from: undefined, to: undefined })).toBe(90);
     // Eine Gruppe ohne Mitglieder verschwindet, eine mit einem einzigen wird zu diesem.
     expect(normalizePlan([{ kind: 'group', id: 'g', members: [], requiredCount: 1 }])).toEqual([]);

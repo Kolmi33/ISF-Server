@@ -2,18 +2,23 @@ import { differenceInCalendarDays } from 'date-fns';
 import { format } from 'date-fns';
 import { startOfDay } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { getWeekdaysInRange } from '../../../../../shared/dates.ts';
 import { type DateRange } from '../../../core/booking-assistant-types.ts';
 
 export const formatDate = (d?: Date) => (d ? format(d, 'dd.MM.yyyy') : 'TT.MM.JJJJ');
 /** Mo., 18.09.2026 */
 export const formatDateLong = (d: Date) => format(d, 'EE, dd.MM.yyyy', { locale: de });
 
-/** Inklusive Tageszählung: 18.09. → 24.09. sind 7 Tage. */
-export const countDays = (from: Date, to: Date) =>
+/** Inklusive Kalendertage, nur für die 7/14/30-Tage-Presets. */
+export const countCalendarDays = (from: Date, to: Date) =>
   differenceInCalendarDays(startOfDay(to), startOfDay(from)) + 1;
 
+/** Buchbare Arbeitstage Montag bis Freitag; Wochenenden zählen nicht mit. */
+export const countWorkdays = (from: Date, to: Date) =>
+  getWeekdaysInRange(format(from, 'yyyy-MM-dd'), format(to, 'yyyy-MM-dd')).length;
+
 export const rangeLengthOf = (r: DateRange, fallback = 90) =>
-  r.from && r.to ? countDays(r.from, r.to) : fallback;
+  r.from && r.to ? countWorkdays(r.from, r.to) : fallback;
 
 /** Zwei Klicks ergeben einen Zeitraum: der erste setzt den Start, der zweite das Ende — wer
  *  früher klickt, dreht beide um. Auf einen fertigen Zeitraum folgt wieder ein Start.

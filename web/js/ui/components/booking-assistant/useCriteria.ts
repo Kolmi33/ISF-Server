@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { type DateRange } from '../../../core/booking-assistant-types.ts';
-import { countDays } from './model.ts';
+import { countWorkdays } from './model.ts';
 import { rangeLengthOf } from './model.ts';
 import { type LimitEdge } from './NumberField.tsx';
 
@@ -18,7 +18,7 @@ export function useCriteria(initialRange: DateRange) {
       seq: limitSeq.current,
       message:
         edge === 'upper'
-          ? `Der gewählte Zeitraum umfasst nur ${rangeLength} Tage.`
+          ? `Der gewählte Zeitraum umfasst nur ${rangeLength} Arbeitstage.`
           : 'Weniger als 1 Tag ist nicht buchbar.',
     });
     clearTimeout(limitTimer.current);
@@ -39,7 +39,7 @@ export function useCriteria(initialRange: DateRange) {
   const applyRange = (next: DateRange) => {
     setRange(next);
     if (!next.from || !next.to) return;
-    const length = countDays(next.from, next.to);
+    const length = countWorkdays(next.from, next.to);
     setMinDays((v) => Math.min(v, length));
     setMaxDays((v) => Math.min(v, length));
   };

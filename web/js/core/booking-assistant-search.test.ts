@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { searchBookingWindows, availableForBooking } from './booking-assistant-search.ts';
+import { availableForBooking, searchBookingWindows } from './booking-assistant-search.ts';
 import type { BookingData } from '../../../shared/types.ts';
-import { getAllDaysInRange } from '../../../shared/dates.ts';
 import type { PlanEntry, PlanGroupEntry } from './booking-assistant-types.ts';
 
 const from = '2026-09-07';
@@ -20,101 +19,147 @@ const data = (): BookingData => ({
 });
 const booked = { name: 'Andere Person', comment: '' };
 
-describe('supplied assistant live calendar-day scheduler', () => {
-  it('offers a long free run once and caps the result to the maximum duration', () => {
+describe('booking assistant workday scheduler', () => {
+  it('offers an open run once and caps it to the maximum duration', () => {
     const windows = searchBookingWindows(data(), [device], from, to, 2, 4);
     expect(windows).toHaveLength(1);
     expect(windows[0]).toMatchObject({
+      openEnded: true,
       minDays: 2,
       maxDays: 4,
       devices: [{ deviceId: 'a', fromGroup: false }],
     });
     expect(windows[0]!.dates).toEqual(['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10']);
   });
-  it('sorts separate slots by offered length and breaks equal lengths by earlier start', () => {
+
+  it('counts only Monday through Friday and treats Friday to Monday as continuous', () => {
+    const state = data();
+    state.bookings.a = {
+      '2026-09-12': booked,
+      '2026-09-13': booked,
+    };
+    state.machines[0]!.maint = [{ type: 'wartung', from: '2026-09-12', until: '2026-09-13' }];
+    const window = searchBookingWindows(state, [device], '2026-09-11', '2026-09-18', 6, 6)[0]!;
+    expect(window.dates).toEqual([
+      '2026-09-11',
+      '2026-09-14',
+      '2026-09-15',
+      '2026-09-16',
+      '2026-09-17',
+      '2026-09-18',
+    ]);
+    expect(window.openEnded).toBe(true);
+  });
+
+  it('sorts finite slots by offered workdays and breaks equal lengths by earlier start', () => {
     const state = data();
     state.bookings.a = {
       '2026-09-10': booked,
       '2026-09-17': booked,
-      '2026-09-20': booked,
+      '2026-09-22': booked,
     };
-    const windows = searchBookingWindows(state, [device], from, '2026-09-21', 2, 4);
-    expect(windows.map((window) => window.dates)).toEqual([
-      ['2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14'],
+    expect(
+      searchBookingWindows(state, [device], from, '2026-09-21', 2, 4).map((window) => window.dates),
+    ).toEqual([
+      ['2026-09-11', '2026-09-14', '2026-09-15', '2026-09-16'],
       ['2026-09-07', '2026-09-08', '2026-09-09'],
-      ['2026-09-18', '2026-09-19'],
+      ['2026-09-18', '2026-09-21'],
     ]);
 
-    state.bookings.a = { '2026-09-10': booked, '2026-09-14': booked };
+    state.bookings.a = {
+      '2026-09-10': booked,
+      '2026-09-14': booked,
+      '2026-09-18': booked,
+    };
     expect(
-      searchBookingWindows(state, [device], from, '2026-09-15', 3, 3).map(
+      searchBookingWindows(state, [device], from, '2026-09-17', 3, 3).map(
         (window) => window.dates[0],
       ),
-    ).toEqual(['2026-09-07', '2026-09-11']);
+    ).toEqual(['2026-09-07', '2026-09-15']);
   });
-  it('breaks at bookings and maintenance, including inclusive endpoints', () => {
+
+  it('breaks finite slots at weekday bookings and maintenance boundaries', () => {
     const state = data();
     state.bookings.a = { '2026-09-09': booked };
-    state.machines[0]!.maint = [{ type: 'wartung', from: '2026-09-12', until: '2026-09-13' }];
-    expect(searchBookingWindows(state, [device], from, to, 2, 7).map((w) => w.dates)).toEqual([
+    state.machines[0]!.maint = [{ type: 'wartung', from: '2026-09-14', until: '2026-09-15' }];
+    expect(
+      searchBookingWindows(state, [device], from, '2026-09-15', 2, 7).map((window) => window.dates),
+    ).toEqual([
       ['2026-09-07', '2026-09-08'],
       ['2026-09-10', '2026-09-11'],
     ]);
   });
-  it('honors machine weekdays and never skips an unavailable weekend', () => {
+
+  it('honors recurring machine weekday restrictions inside the Monday-to-Friday calendar', () => {
     const state = data();
-    state.machines[0]!.days = '1111100';
-    expect(searchBookingWindows(state, [device], '2026-09-11', '2026-09-14', 2, 4)).toEqual([]);
-    state.machines[0]!.days = '1111111';
-    expect(
-      searchBookingWindows(state, [device], '2026-09-11', '2026-09-14', 4, 4)[0]!.dates,
-    ).toHaveLength(4);
     state.machines[0]!.days = '1010000';
-    expect(searchBookingWindows(state, [device], from, to, 1, 7).map((w) => w.dates)).toEqual([
-      [from],
-      ['2026-09-09'],
-    ]);
+    expect(
+      searchBookingWindows(state, [device], from, to, 1, 5).map((window) => window.dates),
+    ).toEqual([['2026-09-07'], ['2026-09-09']]);
   });
-  it('does not combine different alternatives across days into a fictional window', () => {
+
+  it('does not combine different alternatives across workdays into a fictional window', () => {
     const state = data();
     state.bookings.a = { '2026-09-08': booked };
-    state.bookings.b = { [from]: booked };
+    state.bookings.b = { [from]: booked, '2026-09-09': booked };
     expect(searchBookingWindows(state, [group], from, '2026-09-08', 2, 2)).toEqual([]);
     expect(
-      searchBookingWindows(state, [group], from, '2026-09-08', 1, 2).map((w) => w.devices),
+      searchBookingWindows(state, [group], from, '2026-09-08', 1, 1).map(
+        (window) => window.devices,
+      ),
     ).toEqual([[{ deviceId: 'a', fromGroup: true }], [{ deviceId: 'b', fromGroup: true }]]);
   });
-  it('resolves N-of-M together with mandatory devices for their whole window', () => {
+
+  it('resolves N-of-M together with mandatory devices for their whole finite window', () => {
     const state = data();
-    state.bookings.a = { '2026-09-10': booked };
+    state.machines[0]!.maint = [{ type: 'wartung', from: '2026-09-10' }];
     const plan: PlanEntry[] = [
       { ...group, requiredCount: 2 },
       { kind: 'device', id: 'e-c', deviceId: 'c' },
     ];
-    const windows = searchBookingWindows(state, plan, from, to, 2, 7);
-    expect(windows[0]!.devices).toEqual([
+    const window = searchBookingWindows(state, plan, from, to, 2, 7)[0]!;
+    expect(window.openEnded).toBe(false);
+    expect(window.dates).toEqual(['2026-09-07', '2026-09-08', '2026-09-09']);
+    expect(window.devices).toEqual([
       { deviceId: 'b', fromGroup: true },
       { deviceId: 'a', fromGroup: true },
       { deviceId: 'c', fromGroup: false },
     ]);
-    for (const window of windows)
-      for (const resolved of window.devices)
-        for (const day of window.dates)
-          expect(availableForBooking(state, resolved.deviceId, day)).toBe(true);
+    for (const resolved of window.devices)
+      for (const day of window.dates)
+        expect(availableForBooking(state, resolved.deviceId, day)).toBe(true);
   });
-  it('chooses the longest-lived alternative and sorts its slots by offered length', () => {
+
+  it('prefers an open-ended alternative and sorts that result before finite slots', () => {
     const state = data();
     state.bookings.a = { '2026-09-10': booked };
     state.bookings.b = { [from]: booked };
-    const windows = searchBookingWindows(state, [group], from, to, 2, 7);
-    expect(windows.map((w) => [w.dates[0], w.dates.at(-1), w.devices[0]!.deviceId])).toEqual([
-      ['2026-09-08', to, 'b'],
-      [from, '2026-09-09', 'a'],
+    const windows = searchBookingWindows(state, [group], from, to, 2, 5);
+    expect(
+      windows.map((window) => [window.openEnded, window.dates[0], window.devices[0]!.deviceId]),
+    ).toEqual([
+      [true, '2026-09-08', 'b'],
+      [false, from, 'a'],
     ]);
   });
-  it('resolves a requirement group nested inside a requirement group', () => {
+
+  it('marks future bookings and maintenance as finite, including an open-ended maintenance block', () => {
     const state = data();
-    // "Entweder c allein, oder a und b zusammen" — flach nicht ausdrückbar.
+    state.bookings.a = { '2026-09-30': booked };
+    let window = searchBookingWindows(state, [device], from, from, 2, 5)[0]!;
+    expect(window.openEnded).toBe(false);
+    expect(window.dates).toHaveLength(5);
+
+    state.bookings.a = {};
+    state.machines[0]!.maint = [{ type: 'defekt', from: '2026-09-30' }];
+    window = searchBookingWindows(state, [device], from, from, 2, 5)[0]!;
+    expect(window.openEnded).toBe(false);
+    state.machines[0]!.maint = [{ type: 'defekt', from }];
+    expect(searchBookingWindows(state, [device], from, to, 1, 5)).toEqual([]);
+  });
+
+  it('resolves nested requirement groups with one fixed choice for the complete result', () => {
+    const state = data();
     const plan: PlanEntry[] = [
       {
         kind: 'group',
@@ -123,19 +168,14 @@ describe('supplied assistant live calendar-day scheduler', () => {
         members: [member('c'), { ...group, id: 'inner', requiredCount: 2 }],
       },
     ];
-    // Solange c frei ist, ist c die längstlebende Möglichkeit und gewinnt allein.
-    expect(searchBookingWindows(state, plan, from, to, 1, 7)[0]!.devices).toEqual([
+    expect(searchBookingWindows(state, plan, from, to, 1, 5)[0]!.devices).toEqual([
       { deviceId: 'c', fromGroup: true },
     ]);
-    // Fällt c mittendrin aus, trägt das Paar a+b länger — und beide werden eingeplant.
-    state.bookings.c = { '2026-09-09': booked };
-    const windows = searchBookingWindows(state, plan, from, to, 1, 7);
-    expect(windows[0]!.devices).toEqual([
+    state.machines[2]!.maint = [{ type: 'wartung', from: '2026-09-09' }];
+    expect(searchBookingWindows(state, plan, from, to, 1, 5)[0]!.devices).toEqual([
       { deviceId: 'a', fromGroup: true },
       { deviceId: 'b', fromGroup: true },
     ]);
-    expect(windows[0]!.dates).toEqual(getAllDaysInRange(from, to));
-    // Auch das eingebettete "2 von 2" wird geprüft.
     expect(() =>
       searchBookingWindows(
         state,
@@ -150,12 +190,13 @@ describe('supplied assistant live calendar-day scheduler', () => {
         from,
         to,
         1,
-        7,
+        5,
       ),
     ).toThrow('Anzahl');
   });
+
   it('rejects invalid requirements and durations; missing machines produce no result', () => {
-    const search = (plan: PlanEntry[], min = 1, max = 7) =>
+    const search = (plan: PlanEntry[], min = 1, max = 5) =>
       searchBookingWindows(data(), plan, from, to, min, max);
     expect(() => search([])).toThrow();
     expect(() => search([device, device])).toThrow();
@@ -168,9 +209,11 @@ describe('supplied assistant live calendar-day scheduler', () => {
       [1, 2.5],
     ])
       expect(() => search([device], min, max)).toThrow();
-    expect(() => searchBookingWindows(data(), [device], to, from, 1, 7)).toThrow();
-    expect(() => searchBookingWindows(data(), [device], '', to, 1, 7)).toThrow();
+    expect(() => searchBookingWindows(data(), [device], to, from, 1, 5)).toThrow();
+    expect(() => searchBookingWindows(data(), [device], '', to, 1, 5)).toThrow();
+    expect(() => searchBookingWindows(data(), [device], '2026-09-12', '2026-09-13', 1, 1)).toThrow(
+      'keine Arbeitstage',
+    );
     expect(search([{ ...device, deviceId: 'missing' }])).toEqual([]);
-    expect(search([device], 8, 9)).toEqual([]);
   });
 });

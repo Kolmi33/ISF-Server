@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, act, fireEvent, within } from '@testing-library/react';
 import { addDays, format, startOfDay } from 'date-fns';
+import { getWeekdaysInRange } from '../../../../shared/dates.ts';
 import { store } from '../../store-instance.ts';
 import { openAssistant } from './AssistantModal.tsx';
 import { closeReactModal } from '../modal.tsx';
@@ -19,7 +20,10 @@ vi.mock('./MachineFilterDropdown.tsx', () => ({ saveFilters: vi.fn(), updateMach
 
 const today = startOfDay(new Date());
 const startISO = format(today, 'yyyy-MM-dd');
-const nextISO = format(addDays(today, 1), 'yyyy-MM-dd');
+const initialEndISO = format(addDays(today, 6), 'yyyy-MM-dd');
+const initialWorkdays = getWeekdaysInRange(startISO, initialEndISO);
+const firstWorkdayISO = initialWorkdays[0]!;
+const secondWorkdayISO = initialWorkdays[1]!;
 
 // jsdom's selector engine recurses on top-layer pseudo-classes queried by
 // Floating UI, including queued positioning after unmount. Keep this shim for
@@ -151,11 +155,16 @@ describe('supplied assistant host integration', () => {
     change('Min. Tage', '2');
     change('Max. Tage', '4');
     search();
+    expect(screen.getByText('durchgehend frei', { exact: true })).toBeTruthy();
+    expect(screen.getByText(/2–4 Arbeitstage wählbar/)).toBeTruthy();
     const input = screen.getByRole('textbox', { name: 'Buchungstage' });
     expect((input as HTMLInputElement).value).toBe('4');
     change('Buchungstage', '2');
     click('Buchen');
-    expect(openBookingForm).toHaveBeenCalledWith(['a'], startISO, nextISO, [startISO, nextISO]);
+    expect(openBookingForm).toHaveBeenCalledWith(['a'], firstWorkdayISO, secondWorkdayISO, [
+      firstWorkdayISO,
+      secondWorkdayISO,
+    ]);
     click('Zurück zur Auswahl');
     expect(screen.getByRole('button', { name: 'Echte Fräse entfernen' })).toBeTruthy();
     search();
@@ -168,7 +177,7 @@ describe('supplied assistant host integration', () => {
   it('blocks stale availability and read-only booking without writing', () => {
     select();
     search();
-    store.get('data')!.bookings.a = { [startISO]: { name: 'Belegt' } };
+    store.get('data')!.bookings.a = { [firstWorkdayISO]: { name: 'Belegt' } };
     click('Buchen');
     expect(openBookingForm).not.toHaveBeenCalled();
     expect(document.getElementById('toast')!.textContent).toContain('Verfügbarkeit');
@@ -180,7 +189,7 @@ describe('supplied assistant host integration', () => {
     select();
     search();
     click('Im Kalender anzeigen');
-    expect(gotoDate).toHaveBeenCalledWith(startISO);
+    expect(gotoDate).toHaveBeenCalledWith(firstWorkdayISO);
     expect([...store.get('machSel')]).toEqual(['a']);
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
     expect(document.getElementById('modalReopen')!.classList.contains('show')).toBe(true);
@@ -197,9 +206,11 @@ describe('supplied assistant host integration', () => {
     ).toBeTruthy();
     change('Min. Tage', '999');
     expect((screen.getByRole('textbox', { name: 'Max. Tage' }) as HTMLInputElement).value).toBe(
-      '7',
+      String(initialWorkdays.length),
     );
-    expect(screen.getByRole('alert').textContent).toContain('7 Tage');
+    expect(screen.getByRole('alert').textContent).toContain(
+      `${initialWorkdays.length} Arbeitstage`,
+    );
     change('Max. Tage', '1');
     expect((screen.getByRole('textbox', { name: 'Min. Tage' }) as HTMLInputElement).value).toBe(
       '1',
@@ -212,7 +223,7 @@ describe('supplied assistant host integration', () => {
     click('7 Tage');
     click('Übernehmen');
     expect((screen.getByRole('textbox', { name: 'Max. Tage' }) as HTMLInputElement).value).toBe(
-      '7',
+      String(initialWorkdays.length),
     );
     expect(screen.getByRole('button', { name: /Zeitraum/ }).textContent).toContain(
       format(addDays(today, 6), 'dd.MM.yyyy'),
@@ -246,7 +257,7 @@ describe('supplied assistant host integration', () => {
     expect(trigger).toContain(todayText);
     // Der übernommene Zeitraum reicht bis in den Folgemonat, ist also länger als die
     // anfänglichen sieben Tage.
-    expect(trigger).not.toContain('· 7 Tage');
+    expect(trigger).not.toContain(`· ${initialWorkdays.length} Arbeitstage`);
   });
   it('grouping help opens on focus and only Abbrechen dismisses the assistant', () => {
     const help = screen.getByRole('button', { name: 'Hinweis zu Bedarfsgruppen' });

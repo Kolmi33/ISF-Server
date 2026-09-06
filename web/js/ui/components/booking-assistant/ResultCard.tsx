@@ -71,7 +71,7 @@ function ResultDetails({ window }: { window: AvailabilityWindow }) {
               : 'bg-secondary text-secondary-foreground',
           )}
         >
-          {openEnded ? 'durchgehend frei' : `${spanDays} Tage frei`}
+          {openEnded ? 'durchgehend frei' : `${spanDays} Arbeitstage frei`}
         </span>
       </div>
 
@@ -80,12 +80,12 @@ function ResultDetails({ window }: { window: AvailabilityWindow }) {
 
       <p className="mt-2.5 text-[11px] tabular-nums text-muted-foreground">
         {openEnded
-          ? `ab ${formatDate(start)} durchgehend frei`
-          : `freies Fenster · ${spanDays} Tage`}
+          ? `ab ${formatDate(start)} nach aktuellem Buchungsstand durchgehend frei`
+          : `freies Fenster · ${spanDays} Arbeitstage`}
         {' · '}
         {minSelectableDays === maxSelectableDays
-          ? `genau ${minSelectableDays} Buchungstage`
-          : `${minSelectableDays}–${maxSelectableDays} Buchungstage wählbar`}
+          ? `genau ${minSelectableDays} Arbeitstage`
+          : `${minSelectableDays}–${maxSelectableDays} Arbeitstage wählbar`}
       </p>
     </div>
   );

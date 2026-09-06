@@ -1,6 +1,5 @@
 import { format, parseISO } from 'date-fns';
 import type { BookingData, Machine } from '../../../shared/types.ts';
-import { getAllDaysInRange } from '../../../shared/dates.ts';
 import { CATEGORIES, getMachineCategory } from '../core/machines.ts';
 import { availableForBooking, searchBookingWindows } from '../core/booking-assistant-search.ts';
 import type {
@@ -23,9 +22,10 @@ export function searchAssistant(
   const to = format(range.to, 'yyyy-MM-dd');
   return searchBookingWindows(data, plan, from, to, minDays, maxDays).map((window, index) => ({
     id: `window-${index}-${window.dates[0]}`,
+    dates: window.dates,
     start: parseISO(window.dates[0]!),
     end: parseISO(window.dates[window.dates.length - 1]!),
-    openEnded: false,
+    openEnded: window.openEnded,
     spanDays: window.dates.length,
     minSelectableDays: window.minDays,
     maxSelectableDays: window.maxDays,
@@ -76,10 +76,7 @@ export function assistantBooking(data: BookingData, window: AvailabilityWindow) 
     count > window.maxSelectableDays
   )
     throw new Error('Bitte eine gültige Anzahl Buchungstage wählen.');
-  const dates = getAllDaysInRange(
-    format(window.start, 'yyyy-MM-dd'),
-    format(window.end, 'yyyy-MM-dd'),
-  ).slice(0, count);
+  const dates = window.dates.slice(0, count);
   const ids = window.devices.map((device) => device.deviceId);
   if (
     dates.length !== count ||
