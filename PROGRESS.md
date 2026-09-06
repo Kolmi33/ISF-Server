@@ -12,6 +12,11 @@ The full gate passes (1,012 tests). Browser verification confirmed both blocked 
 paths, dismissal through “Abbrechen”, the right-aligned `01`/`02` badges on a group and loose
 device, and a clean console.
 
+Group badges now reflect the number of required alternatives: a group requiring two machines
+shows `01, 02`, and the next top-level machine continues at `03`. The label updates immediately
+when the group count changes. Browser verification covered grouping two machines, increasing
+the requirement, cumulative numbering of the following card, badge fit, and a clean console.
+
 ## Assistant drag/drop identity fix (2026-09-06)
 
 Fixed duplicate green insertion markers and cards becoming non-draggable after dissolving a

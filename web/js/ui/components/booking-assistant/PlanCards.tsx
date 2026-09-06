@@ -233,9 +233,10 @@ function DeviceHeader({
 
 function PositionBadge({ position }: { position?: string }) {
   if (!position) return null;
+  const label = position.includes(',') ? `Positionen ${position}` : `Position ${position}`;
   return (
     <span
-      aria-label={`Position ${position}`}
+      aria-label={label}
       className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-md border border-border/70 bg-muted/70 px-1.5 font-mono text-[10px] font-semibold tabular-nums text-muted-foreground"
     >
       {position}

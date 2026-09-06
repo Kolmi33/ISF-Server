@@ -14,6 +14,7 @@ import { SECTION_LABEL_CLASS } from './styles.ts';
 import { PlanCard } from './PlanCards.tsx';
 import { PlanCardPreview } from './PlanCards.tsx';
 import { type AssistantState } from './useAssistantState.ts';
+import { type PlanEntry } from '../../../core/booking-assistant-types.ts';
 
 export function PlanPanel({ state }: { state: AssistantState }) {
   const { sensors, handleDragStart, handleDragOver, handleDragEnd, cancelDrag } = state;
@@ -72,6 +73,7 @@ function PlanList({ state }: { state: AssistantState }) {
       : preview?.kind === 'append' && plan.length > 0
         ? ([plan[plan.length - 1]!.id, 'after'] as const)
         : null;
+  const positions = planPositionLabels(plan);
   return (
     /* Auffangfläche: alles unterhalb der Überschrift, was keine Karte ist. Ein Gerät hier
        loszulassen löst es aus seiner Bedarfsgruppe und hängt es hinten an — dafür muss
@@ -92,7 +94,7 @@ function PlanList({ state }: { state: AssistantState }) {
               <PlanCard
                 key={entry.id}
                 entry={entry}
-                position={String(index + 1).padStart(2, '0')}
+                position={positions[index]}
                 mergeTargetId={mergeTargetId}
                 marker={marker}
                 onRemoveEntry={removeEntry}
@@ -105,6 +107,16 @@ function PlanList({ state }: { state: AssistantState }) {
       </ScrollArea>
     </div>
   );
+}
+
+/** A group occupies one visible plan position for every required alternative. */
+export function planPositionLabels(plan: PlanEntry[]): string[] {
+  let nextPosition = 1;
+  return plan.map((entry) => {
+    const count = entry.kind === 'group' ? entry.requiredCount : 1;
+    const positions = Array.from({ length: count }, () => String(nextPosition++).padStart(2, '0'));
+    return positions.join(', ');
+  });
 }
 function PlanOverlay({ state }: { state: AssistantState }) {
   const { draggedEntry } = state;

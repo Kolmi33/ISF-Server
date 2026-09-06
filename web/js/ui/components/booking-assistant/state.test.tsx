@@ -9,6 +9,7 @@ import type { PlanEntry } from '../../../core/booking-assistant-types.ts';
 import type { DropZone } from './plan-drop.ts';
 import { DeviceProvider } from './DeviceProvider.tsx';
 import { PlanCard } from './PlanCards.tsx';
+import { planPositionLabels } from './PlanPanel.tsx';
 
 /** Alle Geräte unter einem Eintrag, in Reihenfolge. */
 const devicesOf = (entry: PlanEntry) => deviceIdsOf(entry);
@@ -50,16 +51,23 @@ function setup() {
   return { ...hook, add, drop, over, onSearch };
 }
 describe('supplied plan and criteria state', () => {
-  it('numbers a top-level group beside its dissolve action, without numbering its members', () => {
+  it('numbers every required group position and advances following cards', () => {
     const group: PlanEntry = {
       kind: 'group',
       id: 'group',
-      requiredCount: 1,
+      requiredCount: 2,
       members: [
         { kind: 'device', id: 'first', deviceId: 'a' },
         { kind: 'device', id: 'second', deviceId: 'b' },
       ],
     };
+    expect(
+      planPositionLabels([
+        { kind: 'device', id: 'before', deviceId: 'a' },
+        group,
+        { kind: 'device', id: 'after', deviceId: 'b' },
+      ]),
+    ).toEqual(['01', '02, 03', '04']);
     render(
       <DeviceProvider
         catalog={[
@@ -77,7 +85,7 @@ describe('supplied plan and criteria state', () => {
           <ul>
             <PlanCard
               entry={group}
-              position="03"
+              position="03, 04"
               onRemoveEntry={vi.fn()}
               onDissolveGroup={vi.fn()}
               onRequiredCountChange={vi.fn()}
@@ -86,7 +94,7 @@ describe('supplied plan and criteria state', () => {
         </DndContext>
       </DeviceProvider>,
     );
-    const position = screen.getByLabelText('Position 03');
+    const position = screen.getByLabelText('Positionen 03, 04');
     expect(position.nextElementSibling).toBe(
       screen.getByRole('button', { name: 'Bedarfsgruppe auflösen' }),
     );
