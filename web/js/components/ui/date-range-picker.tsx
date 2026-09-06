@@ -132,7 +132,9 @@ export function DateRangePicker({ from, to, onChange, error }: DateRangePickerPr
           </span>
         )}
       </div>
-      <Popover.Portal container={fieldRef}>
+      <Popover.Portal
+        container={fieldRef.current?.closest<HTMLElement>('#modal') ?? fieldRef.current}
+      >
         <Popover.Positioner sideOffset={8} align="end" className="range-positioner">
           <Popover.Popup
             className="range-popup"

@@ -1,1006 +1,196 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, act, fireEvent, within } from '@testing-library/react';
-import type { AppState, Machine } from '../../../../shared/types.ts';
+import { addDays, format, startOfDay } from 'date-fns';
 import { store } from '../../store-instance.ts';
-import { initGridInteraction } from '../grid-interaction.ts';
 import { openAssistant } from './AssistantModal.tsx';
+import { closeReactModal } from '../modal.tsx';
+import { openBookingForm } from './BookingForm.tsx';
+import { gotoDate } from '../grid-scroll.ts';
 
-// AssistantResults.tsx's "pin" button ("Termin anzeigen") calls grid-interaction.ts's
-// `clearSelection()`, which hands `hideCtx` off to the injected `GridInteractionHandlers`
-// struct (F8 cleanup, ARCHITECTURE_AUDIT.md) rather than `window.hideCtx` — initialized once
-// here, matching `initGridInteraction`'s real one-time-at-boot contract. The `#grid` element
-// only this one call needs is thrown away immediately after; nothing else in this file drives
-// grid DOM interactions.
-document.body.innerHTML = '<table id="grid"></table>';
-initGridInteraction({
-  showCtx: vi.fn(),
-  hideCtx: vi.fn(),
-  toggleFav: vi.fn(),
-  gotoPrevFree: vi.fn(),
-  gotoNextFree: vi.fn(),
-  openCellAction: vi.fn(),
+vi.mock('./BookingForm.tsx', () => ({ openBookingForm: vi.fn() }));
+vi.mock('../grid-scroll.ts', () => ({
+  gotoDate: vi.fn(),
   prependWeek: vi.fn(),
+  resetView: vi.fn(),
+}));
+vi.mock('../grid-interaction.ts', () => ({ clearSelection: vi.fn() }));
+vi.mock('./MachineFilterDropdown.tsx', () => ({ saveFilters: vi.fn(), updateMachBtn: vi.fn() }));
+
+const today = startOfDay(new Date());
+const startISO = format(today, 'yyyy-MM-dd');
+const nextISO = format(addDays(today, 1), 'yyyy-MM-dd');
+
+// jsdom's selector engine recurses on top-layer pseudo-classes queried by
+// Floating UI, including queued positioning after unmount. Keep this shim for
+// this isolated test environment's lifetime. Portals and their behavior stay real.
+const matches = Element.prototype.matches;
+vi.spyOn(Element.prototype, 'matches').mockImplementation(function (this: Element, selector) {
+  if ([':modal', ':popover-open', ':fullscreen'].includes(selector)) return false;
+  return matches.call(this, selector);
 });
-
-const TODAY = '2021-01-04'; // a Monday
-
-function machine(overrides: Partial<Machine> = {}): Machine {
-  return { id: 'm1', name: 'M1', group: 'Halle 1', ...overrides };
-}
-
-// jsdom has no native DataTransfer — a plain object with the members our DnD code touches is
-// enough for `fireEvent.dragStart/dragOver/drop`'s `dataTransfer` event-init property.
-function dataTransferStub() {
-  return { setData: vi.fn(), effectAllowed: '', dropEffect: '' };
-}
-
-// window.S is kept aliased to store.state so the component (migrated onto the real store) and
-// this test agree; window.notify forwards to store.notify() exactly as app.ts does in
-// production, so notifySpy sees every repaint trigger.
-const notifySpy = vi.spyOn(store, 'notify');
 
 beforeEach(() => {
-  // jsdom lacks PointerEvent; Base UI forwards checkbox clicks through this constructor.
+  vi.clearAllMocks();
+  // jsdom has no Web Animations API; expose the browser's empty-animation case.
+  Object.defineProperty(Element.prototype, 'getAnimations', {
+    configurable: true,
+    value: () => [],
+  });
   vi.stubGlobal('PointerEvent', MouseEvent);
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date(`${TODAY}T12:00:00Z`));
   document.body.innerHTML =
-    '<div id="overlay"><div id="modal" tabindex="-1"></div></div><div id="modalReopen"></div><div id="toast"></div><div id="gridWrap"></div>';
+    '<div id="overlay"><div id="modal" tabindex="-1"></div></div><div id="modalReopen"></div><div id="toast"></div>';
   store.set({
-    user: 'anna',
+    readOnly: false,
+    favs: new Set(['a']),
     data: {
       machines: [
-        machine({ id: 'm1', name: 'Fräse', group: 'Halle 1' }),
-        machine({ id: 'm2', name: 'Presse', group: 'Halle 1' }),
-        machine({
-          id: 'm3',
-          name: 'Kaputte Presse',
-          group: 'Halle 1',
-          info: 'Ansprechpartner: X',
-          maint: [{ type: 'wartung', from: '2000-01-01' }],
-        }),
+        { id: 'a', name: 'Echte Fräse', group: 'Alte Halle', days: '1111111' },
+        { id: 'b', name: 'Echte Presse', group: 'Alte Halle', days: '1111100' },
+        { id: 'broken', name: 'Gesperrtes Gerät', group: 'Labor', maint: [{ type: 'wartung' }] },
       ],
       bookings: {},
+      groups: ['Alte Halle', 'Labor'],
+      revision: 1,
+      log: [],
     },
-    favs: new Set(),
-    cats: new Set(['maschine', 'messtechnik']),
-    collapsed: new Set(),
-    machSel: new Set(),
-    startMonday: new Date(`${TODAY}T00:00:00Z`),
-    extraWeeks: 0,
-  } as unknown as Partial<AppState>);
-  window.S = store.state;
-  notifySpy.mockClear();
-  // machById (../machine-lookup.ts), saveFilters/updateMachBtn (./MachineFilterDropdown.tsx)
-  // are direct imports now (F8 cleanup, ARCHITECTURE_AUDIT.md) — the real implementations run
-  // fine here unmocked: machById reads the store data set up above, and saveFilters/
-  // updateMachBtn's DOM/localStorage side effects are harmless with no #machBtn present.
-  window.mutate = vi.fn();
-  window.askConfirm = vi.fn().mockResolvedValue(true);
-  window.notify = () => store.notify();
-  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
-    cb(0);
-    return 0;
   });
+  act(() => openAssistant());
 });
-
 afterEach(() => {
+  act(() => closeReactModal());
+  vi.clearAllTimers();
   vi.useRealTimers();
 });
+const click = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
+const select = () => fireEvent.click(screen.getAllByRole('checkbox', { name: /Echte Fräse/ })[0]!);
+const search = () => click('Freie Termine suchen');
+const change = (name: string, value: string) => {
+  const input = screen.getByRole('textbox', { name });
+  fireEvent.change(input, { target: { value } });
+  fireEvent.blur(input);
+};
 
-function openChecklistCategory(): void {
-  act(() => {
-    screen.getByText('Maschinen').click(); // opens the 'maschine' category header
-  });
-  act(() => {
-    screen.getByText('Halle 1').click(); // opens its one group header, now rendered
-  });
-}
-
-// The search action is deferred by one macrotask (a real `setTimeout(fn, 0)`, so the
-// "Termine werden gesucht…" loading state gets a paint before the — synchronous, in-memory —
-// search actually runs). Fake timers (stubbed in beforeEach) don't advance on their own, so
-// every test that clicks search needs to explicitly fire that pending timer afterward.
-function clickSearch(): void {
-  act(() => {
-    screen.getByRole('button', { name: 'Freie Termine suchen' }).click();
-    vi.advanceTimersByTime(0);
-  });
-}
-
-describe('AssistantModal — card layout', () => {
-  it('places a shared "Zeitraum & Dauer" card below the two device cards', () => {
-    act(() => openAssistant());
-    const columns = document.querySelector('.assist-columns')!;
-    expect(columns.children).toHaveLength(2);
-    expect(columns.querySelector('.assist-catalog')).toBeInTheDocument();
-    expect(columns.querySelector('.assist-cart')).toBeInTheDocument();
-    const parameters = screen.getByRole('region', { name: 'Zeitraum & Dauer' });
-    expect(columns.nextElementSibling).toBe(parameters);
-    expect(document.querySelectorAll('.assist-card')).toHaveLength(3);
-    expect(within(parameters).getByRole('group', { name: 'Suchzeitraum' })).toBeInTheDocument();
-    expect(within(parameters).getByLabelText('Mindestdauer')).toHaveAccessibleDescription(
-      'Arbeitstage am Stück (Mo–Fr)',
-    );
-    // The search action sits directly beside this card's own criteria (feature 9), not in a
-    // page-level footer below the results.
+describe('supplied assistant host integration', () => {
+  it('uses live catalog in all cards; favorite and category checkboxes share selection', () => {
+    expect(screen.getByText('Laborgeräte reservieren')).toBeTruthy();
+    select();
     expect(
-      within(parameters).getByRole('button', { name: 'Freie Termine suchen' }),
-    ).toBeInTheDocument();
-    expect(within(parameters).getByRole('button', { name: 'Abbrechen' })).toBeInTheDocument();
+      screen
+        .getAllByRole('checkbox', { name: /Echte Fräse/ })
+        .every((c) => c.getAttribute('aria-checked') === 'true'),
+    ).toBe(true);
+    expect(screen.getByRole('button', { name: 'Echte Fräse entfernen' })).toBeTruthy();
+    click('Echte Fräse entfernen');
+    expect(screen.getByText('Noch nichts ausgewählt.')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Freie Termine suchen' }).hasAttribute('disabled'),
+    ).toBe(true);
   });
-
-  it('names the left/right device cards "Geräte auswählen" / "Ausgewählte Geräte"', () => {
-    act(() => openAssistant());
-    const columns = document.querySelector('.assist-columns')!;
-    expect(columns.querySelector('.assist-catalog .assist-card-title')).toHaveTextContent(
-      'Geräte auswählen',
-    );
-    expect(columns.querySelector('.assist-cart .assist-card-title')).toHaveTextContent(
-      'Ausgewählte Geräte',
-    );
+  it('preserves filtering and category collapse', () => {
+    const input = screen.getByRole('textbox', { name: 'Gerät suchen' });
+    fireEvent.change(input, { target: { value: 'Presse' } });
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(screen.getByRole('button', { name: 'Echte Presse entfernen' })).toBeTruthy();
+    fireEvent.change(input, { target: { value: 'unbekannt' } });
+    expect(screen.getByText('Kein Gerät passt zu „unbekannt“.')).toBeTruthy();
+    fireEvent.change(input, { target: { value: '' } });
+    const category = screen.getByRole('button', { name: /Maschinen · Alte Halle/ });
+    fireEvent.click(category);
+    expect(category.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(category);
+    expect(category.getAttribute('aria-expanded')).toBe('true');
   });
-
-  it('keeps final actions at the shared control height', () => {
-    act(() => openAssistant());
-    expect(screen.getByRole('button', { name: 'Abbrechen' }).className).toContain('h-9');
-    expect(screen.getByRole('button', { name: 'Freie Termine suchen' }).className).toContain('h-9');
-  });
-});
-
-describe('AssistantModal — checklist → work area', () => {
-  // What: with no devices checked yet, the work area shows a bare empty-state status line
-  // (not instructional prose — drag-and-drop is communicated visually now) rather than a
-  // blank, ambiguous-looking area.
-  // How: opens the assistant with nothing checked and checks the status text appears.
-  it('shows the empty-work status until a device is checked', () => {
-    act(() => openAssistant());
-    expect(screen.getByText(/Keine Geräte ausgewählt/)).toBeInTheDocument();
-  });
-
-  // What: the empty state is centered with a faint icon (`.aswork-empty`), not a bare left-
-  // aligned line of text, so it reads as an intentional state (user request).
-  // How: opens the assistant with nothing checked and checks the wrapper + icon are present.
-  it('renders the empty-work status centered with an icon, not bare text', () => {
-    act(() => openAssistant());
-    const wrapper = document.querySelector('.aswork-empty')!;
-    expect(wrapper).toBeInTheDocument();
-    expect(wrapper.querySelector('svg.ic')).toBeInTheDocument();
-    expect(wrapper.textContent).toContain('Keine Geräte ausgewählt');
-  });
-
-  // What: checking a device's checklist checkbox adds it to the work area (and clears the
-  // empty hint); unchecking it removes it again (and the hint reappears).
-  // How: opens the checklist, checks a device, checks the hint is gone and the device node
-  // appears in the work area, then unchecks it and checks the hint is back.
-  it('checking a device adds it to the work area; unchecking removes it', () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /Fräse/ }).click();
-    });
-    expect(screen.queryByText(/Keine Geräte ausgewählt/)).not.toBeInTheDocument();
-    expect(document.querySelector('.asdev[title^="Fräse"]')).toBeInTheDocument();
-
-    act(() => {
-      screen.getByRole('checkbox', { name: /Fräse/ }).click();
-    });
-    expect(screen.getByText(/Keine Geräte ausgewählt/)).toBeInTheDocument();
-  });
-
-  // What: a selection chip carries a category-color custom property (blue Maschinen, green
-  // Messtechnik — user request), not a plain inline background, so the existing hover/
-  // dragover CSS rules (app.css) can still override it.
-  // How: checks a device chip and reads its own `--devcolor` custom property.
-  it('sets a category-color custom property on each selection chip', () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /Fräse/ }).click();
-    });
-    const chip = document.querySelector<HTMLElement>('.asdev[title^="Fräse"]')!;
-    expect(chip.style.getPropertyValue('--devcolor')).not.toBe('');
-  });
-});
-
-describe('AssistantModal — checklist details', () => {
-  // What: a machine with an info note shows an info icon, and one with active maintenance
-  // shows a "Wartung" badge — both are per-machine decorations shown right in the checklist.
-  // How: opens the checklist (the fixture's "Kaputte Presse" has both an info note and an
-  // active maintenance slot) and checks the icon and badge both appear.
-  it('shows the info icon and the maintenance badge for a machine that has them', () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    expect(document.querySelector('.machinfo')).toBeInTheDocument();
-    expect(screen.getByText('Wartung')).toBeInTheDocument();
-  });
-
-  // What: each category header shows a category icon next to its title (user request), to
-  // make it faster to spot "Maschinen" vs. "Messtechnik" while scanning.
-  // How: opens the checklist and checks the "Maschinen" header's own row contains an icon.
-  it('shows a category icon next to each accordion header title', () => {
-    act(() => openAssistant());
-    const maschinenHeader = screen.getByText('Maschinen').closest('.cathead')!;
-    expect(maschinenHeader.querySelector('svg.ic')).toBeInTheDocument();
-  });
-
-  // What: clicking the info icon shows the info (a tooltip/toast, not asserted here) without
-  // also toggling that row's checkbox — the two are independent click targets.
-  // How: clicks the info icon and checks the corresponding checkbox is still unchecked.
-  it('clicking the info icon does not toggle the checkbox', () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      fireEvent.click(document.querySelector('.machinfo')!);
-    });
-    expect(screen.getByRole('checkbox', { name: /Kaputte Presse/ })).not.toBeChecked();
-  });
-
-  // What: the search box switches the checklist to a flat list of matches, the same
-  // search-bypasses-fold-state behavior the machine filter dropdown and checklist share.
-  // How: searches for a substring matching two machines and checks exactly those two
-  // checkboxes render while a non-matching one is absent.
-  it('the search box filters the checklist, bypassing fold state entirely', () => {
-    act(() => openAssistant());
-    fireEvent.change(screen.getByPlaceholderText('filtern…'), { target: { value: 'presse' } });
-    expect(screen.getAllByRole('checkbox')).toHaveLength(2); // Presse + Kaputte Presse
-    expect(screen.queryByRole('checkbox', { name: /^Fräse/ })).not.toBeInTheDocument();
-  });
-});
-
-describe('AssistantModal — search validation', () => {
-  // What: searching with no devices in the work area at all is rejected client-side with a
-  // toast, rather than running a meaningless empty search — the one validation case with no
-  // natural field to attach an inline error to (a cart-level concern, not a labeled control).
-  // How: opens the assistant and clicks search with nothing checked, checking the toast text.
-  it('toasts when no devices have been added', () => {
-    act(() => openAssistant());
-    clickSearch();
-    expect(document.getElementById('toast')!.textContent).toBe('Bitte oben Geräte übernehmen.');
-  });
-
-  // What: a missing date endpoint shows an inline error beside the range field (feature 6)
-  // instead of a toast, and blocks the search action entirely (no meaningless search runs).
-  // How: checks a device, clears the "bis" date, clicks search, and checks the inline error
-  // appears while no toast fires and no results panel appears.
-  it('shows an inline error on an incomplete date range, blocking the search', () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /Fräse/ }).click();
-    });
-    const dateInputs = document.querySelectorAll('#modal input[type="date"]');
-    fireEvent.change(dateInputs[1]!, { target: { value: '' } }); // an endpoint was cleared
-    expect(screen.getByText('Bitte Start- und Enddatum wählen.')).toBeInTheDocument();
-    clickSearch();
-    expect(document.getElementById('toast')!.textContent).toBe('');
-    expect(screen.queryByText(/Passende Termine/)).not.toBeInTheDocument();
-  });
-
-  // What: clearing every weekday shows an inline error and blocks the search (feature 7) —
-  // a purely visual filter the search silently ignored would be worse than not having one.
-  // How: unpresses every weekday toggle, checks the error appears, then clicks search and
-  // checks no toast/results follow.
-  it('shows an inline error and blocks the search when no weekday is selected', () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /Fräse/ }).click();
-    });
-    for (const day of ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag']) {
-      act(() => {
-        screen.getByRole('button', { name: day }).click();
-      });
-    }
-    expect(screen.getByText('Wählen Sie mindestens einen Wochentag aus.')).toBeInTheDocument();
-    clickSearch();
-    expect(document.getElementById('toast')!.textContent).toBe('');
-    expect(screen.queryByText(/Passende Termine/)).not.toBeInTheDocument();
-  });
-});
-
-describe('AssistantModal — search results', () => {
-  it('uses the requested days on every search, resetting previous result edits', () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
-    fireEvent.change(screen.getByLabelText('Mindestdauer'), { target: { value: '4' } });
-    clickSearch();
-    expect(document.querySelector('.asDays')).toHaveValue(4);
-    fireEvent.change(document.querySelector('.asDays')!, { target: { value: '2' } });
-    fireEvent.click(screen.getByRole('button', { name: /aus diesem Termin entfernen/ }));
-    fireEvent.change(screen.getByLabelText('Mindestdauer'), { target: { value: '6' } });
-    clickSearch();
-    expect(document.querySelector('.asDays')).toHaveValue(6);
-    expect(document.querySelector('.aspill-name')).toHaveTextContent('Fräse');
-  });
-
-  it('clears a filter after adding a device and focuses the filter for the next search', () => {
-    act(() => openAssistant());
-    const filter = screen.getByRole('textbox', { name: 'Geräte filtern' });
-    fireEvent.change(filter, { target: { value: 'Fräse' } });
-    fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
-    expect(filter).toHaveValue('');
-    expect(filter).toHaveFocus();
-    expect(document.querySelector('.asdev')).toHaveTextContent('Fräse');
-  });
-
-  it('implies required selection without an UND label', () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /^Presse/ }));
-    const work = document.getElementById('asWork')!;
-    expect(within(work).queryByText(/^und$/i)).not.toBeInTheDocument();
-  });
-
-  // What: the old permanently-visible grouping-hint paragraph is gone, replaced by a small,
-  // always-present help trigger beside the "Bedarfsgruppen" heading (visible even before any
-  // group has been formed) — the explanatory text now only shows via that tooltip/popover.
-  // How: opens the assistant with one device checked (no group formed yet), checks the
-  // "Bedarfsgruppen" heading and its help trigger are present with no permanent hint text in
-  // the DOM, then focuses the trigger and checks the tooltip content appears.
-  it('replaces the permanent drag-hint paragraph with a focusable help tooltip', () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
-    const work = document.getElementById('asWork')!;
-    expect(within(work).getByText('Bedarfsgruppen')).toBeInTheDocument();
-    expect(document.querySelector('.assist-drag-hint')).not.toBeInTheDocument();
-    expect(screen.queryByText(/Ähnliche Geräte aufeinander ziehen/)).not.toBeInTheDocument();
-    const helpTrigger = screen.getByRole('button', { name: 'Hilfe zu Bedarfsgruppen' });
-    act(() => {
-      helpTrigger.focus();
-      vi.advanceTimersByTime(1000);
-    });
-    expect(screen.getByText(/Ähnliche Geräte aufeinander ziehen/)).toBeInTheDocument();
-  });
-
-  it('keeps alternatives grouped and labels intermediate N-of-M choices', () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    for (const name of [/^Fräse/, /^Presse/, /^Kaputte Presse/]) {
-      fireEvent.click(screen.getByRole('checkbox', { name }));
-    }
-    const devices = [...document.querySelectorAll('.asdev')];
-    const transfer = dataTransferStub();
-    fireEvent.dragStart(devices[1]!, { dataTransfer: transfer });
-    fireEvent.drop(devices[0]!, { dataTransfer: transfer });
-    const group = document.querySelector('.asgrp')!;
-    expect(within(group as HTMLElement).getByText('oder')).toBeInTheDocument();
-    fireEvent.change(group.querySelector('.asNeed')!, { target: { value: '2' } });
-    expect(within(group as HTMLElement).queryByText(/^und$/i)).not.toBeInTheDocument();
-    expect(within(group as HTMLElement).queryByText('oder')).not.toBeInTheDocument();
-    fireEvent.dragStart(devices[2]!, { dataTransfer: transfer });
-    fireEvent.drop(group, { dataTransfer: transfer });
-    expect(within(group as HTMLElement).getAllByText('Auswahl')).toHaveLength(2);
-  });
-
-  it('keeps the result booking-day count at least one', () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    fireEvent.click(screen.getByRole('checkbox', { name: /^Fräse/ }));
-    clickSearch();
-    fireEvent.change(screen.getByLabelText('Buchungstage für diesen Termin'), {
-      target: { value: '-2' },
-    });
-    expect(screen.getByLabelText('Buchungstage für diesen Termin')).toHaveValue(1);
-  });
-
-  // What: the suggested-device pill row is a universal feature (user request) — it shows even
-  // for a bare device with no Bedarfsgruppe at all, not just when a group's own structure
-  // suggests something.
-  // How: checks one bare device, searches, and checks both the results header and a pill
-  // naming that exact device appear.
-  it('finds a free run and shows a suggestion pill even with no group in the tree', async () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /Fräse/ }).click();
-    });
-    clickSearch();
-    expect(screen.getByText(/^Passende Termine · \d+$/)).toBeInTheDocument();
-    expect(document.querySelector('.aspills')).not.toBeNull();
-    expect(screen.getByText('Fräse', { selector: '.aspill-name' })).toBeInTheDocument();
-  });
-
-  // What: the result's title shows the free window's own full start – end span, not just the
-  // (often single-day, since "Mind. Tage am Stück" defaults to 1) currently-selected subset —
-  // user request: "The Title should not just be the bold date -> but the time slot available
-  // date start -> date end".
-  // How: searches with the default wide (56-day) window and an unbooked machine, so the found
-  // run spans many days while the default day-count selection is still just 1 — checks the
-  // title (.asRange) reads as a real range (contains an en dash), not a single bare date.
-  it("titles each result with the free window's full start – end range", async () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
-    });
-    clickSearch();
-    const title = document.querySelector('.asRange')!;
-    expect(title.textContent).toContain('–');
-  });
-
-  // What: hovering a suggestion pill reveals a "×" that removes just that one device from THIS
-  // result's own booking, without touching the Assistant's overall device selection — user
-  // request: "the option to remove individual items by pressing the x which appears".
-  // How: searches with two devices, clicks the first pill's remove button, and checks it (and
-  // only it) disappears from that result's pills while the checklist selection itself is
-  // untouched.
-  it('removes a single device from one result via its pill\'s "×"', async () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
-      screen.getByRole('checkbox', { name: /^Presse/ }).click();
-    });
-    clickSearch();
-    expect(screen.getByText('Fräse', { selector: '.aspill-name' })).toBeInTheDocument();
-    expect(screen.getByText('Presse', { selector: '.aspill-name' })).toBeInTheDocument();
-    act(() => {
-      screen.getByRole('button', { name: 'Fräse aus diesem Termin entfernen' }).click();
-    });
-    expect(screen.queryByText('Fräse', { selector: '.aspill-name' })).not.toBeInTheDocument();
-    expect(screen.getByText('Presse', { selector: '.aspill-name' })).toBeInTheDocument();
-    // Still checked in the checklist itself — this only affected the one result's own pills.
-    expect(screen.getByRole('checkbox', { name: /^Fräse/ })).toBeChecked();
-  });
-
-  // What: the suggestion pills are colored by resource CATEGORY, not by device name (user
-  // request) — two differently-named devices of the same category (both "Maschinen" in the
-  // fixture) get the exact same pill color, unlike the old per-name hash which would have
-  // given them two unrelated colors.
-  // How: checks two devices of the same category, searches, and compares both pills' inline
-  // background color.
-  it('colors suggestion pills by resource category, not by device name', async () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
-      screen.getByRole('checkbox', { name: /^Presse/ }).click();
-    });
-    clickSearch();
-    const fraese = screen
-      .getByText('Fräse', { selector: '.aspill-name' })
-      .closest('.aspill') as HTMLElement;
-    const presse = screen
-      .getByText('Presse', { selector: '.aspill-name' })
-      .closest('.aspill') as HTMLElement;
-    expect(fraese.style.backgroundColor).not.toBe('');
-    expect(fraese.style.backgroundColor).toBe(presse.style.backgroundColor);
-  });
-
-  // What: when the searched machine has no free days anywhere in the requested range, the
-  // results show an explicit "no matching dates found" message, not an empty/ambiguous list.
-  // How: books every day in a 5-day range, searches that exact range, and checks the message.
-  it('shows "keine passenden Termine" when the machine is fully booked in range', async () => {
-    window.S.data!.bookings = {
-      m1: Object.fromEntries(
-        ['2021-01-04', '2021-01-05', '2021-01-06', '2021-01-07', '2021-01-08'].map((d) => [
-          d,
-          { name: 'bob' },
-        ]),
-      ),
-    };
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /Fräse/ }).click();
-    });
-    const dateInputs = document.querySelectorAll('#modal input[type="date"]');
-    fireEvent.change(dateInputs[0]!, { target: { value: '2021-01-04' } });
-    fireEvent.change(dateInputs[1]!, { target: { value: '2021-01-08' } });
-    clickSearch();
-    expect(screen.getByText(/Keine passenden Termine im Zeitraum gefunden/)).toBeInTheDocument();
-  });
-
-  // What: a found run's "Buchen…" (book) button opens the booking form pre-filled with that
-  // run's exact dates.
-  // How: runs a search, clicks the result's Buchen button, and checks the booking form's
-  // heading appears.
-  it('"Buchen…" opens the booking form pre-picked with the run\'s dates', async () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /Fräse/ }).click();
-    });
-    clickSearch();
-    act(() => {
-      screen.getByRole('button', { name: 'Buchen…' }).click();
-    });
-    expect(screen.getByRole('heading', { name: 'Buchen' })).toBeInTheDocument(); // BookingForm opened
-  });
-
-  // What: a found run's "days to book" field clamps to the run's own actual length when the
-  // user types a value longer than what's really free, and shows an explanatory tip.
-  // How: sets up a run that ends at a fixed length (booked short of the search window's end,
-  // so it's NOT open-ended and extendable), searches, types a too-large day count into the
-  // run's days field, and checks it clamped to the run's real length with a tip explaining why.
-  it('entering more days than the free window has clamps the value and shows a tip', async () => {
-    // A booking on the 11th ends the run at the 8th WITHOUT reaching the search window's end
-    // (the 15th) — so it stays a fixed 5-day run instead of being extended as "open-ended".
-    window.S.data!.bookings = { m1: { '2021-01-11': { name: 'bob' } } };
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
-    });
-    const dateInputs = document.querySelectorAll('#modal input[type="date"]');
-    fireEvent.change(dateInputs[0]!, { target: { value: '2021-01-04' } });
-    fireEvent.change(dateInputs[1]!, { target: { value: '2021-01-15' } });
-    clickSearch();
-    const daysInput = document.querySelector<HTMLInputElement>('.asDays')!;
-    act(() => {
-      fireEvent.change(daysInput, { target: { value: '99' } });
-    });
-    expect(daysInput.value).toBe('5'); // clamped to the run's own length
-    expect(screen.getByText(/nur 5 Tage am Stück verfügbar/)).toBeInTheDocument();
-  });
-
-  // What: "pinning" a result (Termin anzeigen) filters the live grid to every device in the
-  // work tree and collapses the assistant modal (not closing it entirely — it's still mounted
-  // and reachable via the "reopen" affordance), so the user can look at the grid with the
-  // assistant's work still available.
-  // How: searches, clicks the pin button, and checks the grid's machine filter, that the
-  // overlay is no longer "open" but the reopen indicator is showing and the modal content is
-  // still actually in the DOM.
-  it('"pin" collapses the modal and filters the grid to every device in the tree', async () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /Fräse/ }).click();
-    });
-    clickSearch();
-    act(() => {
-      screen.getByRole('button', { name: 'Termin anzeigen' }).click();
-    });
-    expect(window.S.machSel).toEqual(new Set(['m1']));
-    expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false); // collapsed
-    expect(document.getElementById('modalReopen')!.classList.contains('show')).toBe(true);
-    expect(document.getElementById('modal')!.textContent).not.toBe(''); // still mounted
-  });
-
-  // What: a group with real redundancy (need < member count — the search could substitute
-  // between equivalent devices) no longer blocks the search behind a confirmation dialog
-  // (user request: the extra question every time a group exists was unwanted friction) — the
-  // search just runs immediately, and the results still show a suggestion pill for the group.
-  // How: forms a need-1-of-2 group, searches with no confirm mock involved at all, and checks
-  // both that results appeared and that a suggested-device pill is shown.
-  it('searches immediately with no confirmation when a group has redundancy, showing suggestion pills', async () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /Fräse/ }).click();
-      screen.getByRole('checkbox', { name: /^Presse/ }).click();
-    });
-    // Drag Presse onto Fräse to form a need-1-of-2 group (real redundancy: need < members).
-    const devNodes = () => document.querySelectorAll('.asdev');
-    const dt = dataTransferStub();
-    act(() => {
-      fireEvent.dragStart(devNodes()[1]!, { dataTransfer: dt });
-      fireEvent.drop(devNodes()[0]!, { dataTransfer: dt });
-    });
-    expect(document.querySelectorAll('.asgrp')).toHaveLength(1);
-
-    clickSearch();
-    expect(screen.getByText(/^Passende Termine · \d+$/)).toBeInTheDocument();
-    expect(document.querySelector('.aspill')).toBeInTheDocument();
-  });
-});
-
-describe('AssistantModal — the work-area group node', () => {
-  function addGroupedPair(): void {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /Fräse/ }).click();
-      screen.getByRole('checkbox', { name: /^Presse/ }).click();
-    });
-    const dt = dataTransferStub();
-    act(() => {
-      const devNodes = document.querySelectorAll('.asdev');
-      fireEvent.dragStart(devNodes[1]!, { dataTransfer: dt });
-      fireEvent.drop(devNodes[0]!, { dataTransfer: dt });
-    });
-  }
-
-  // What: a freshly-formed group (drag one device onto another) phrases the requirement as
-  // "N von M Geräten benötigt" (feature: communicate the requirement as "1 von 2 Geräten
-  // benötigt" with the editable quantity control incorporated cleanly) and its stepper
-  // defaults to needing 1 (of however many members the group has — 2 here).
-  // How: forms a 2-device group and checks the phrase and the stepper's default value.
-  it('phrases the requirement as "N von M Geräten benötigt", stepper defaulting to 1 of 2', () => {
-    addGroupedPair();
-    expect(screen.getByText(/von 2 Geräten benötigt/)).toBeInTheDocument();
-    expect((document.querySelector('.asNeed') as HTMLInputElement).value).toBe('1');
-  });
-
-  // What: a Bedarfsgruppe card gets a distinct pastel color, set via a --groupcolor custom
-  // property (user request: "Ich möchte, dass die verschiedenen 'Bedarfsgruppen' auch coloured
-  // Card borders [haben]") — not the flat neutral card from the earlier "no per-group color"
-  // redesign.
-  // How: forms a group and checks its card carries a non-empty --groupcolor custom property.
-  it('gives the group card a distinct pastel color via --groupcolor', () => {
-    addGroupedPair();
-    const card = document.querySelector<HTMLElement>('.asgrp')!;
-    expect(card.style.getPropertyValue('--groupcolor')).not.toBe('');
-  });
-
-  // What: forming (or growing) a Bedarfsgruppe that mixes a "maschine"-category device with a
-  // "messtechnik"-category one asks for confirmation (user request: "if i have a machine and a
-  // messtechnik in my bedarfsgruppe ... popup question with this information and if thats
-  // correct") — a same-category group (every other test in this file) asks nothing at all.
-  // How: adds a Messtechnik device, groups it with a Maschine device, and checks askConfirm was
-  // called naming the mix.
-  it('asks to confirm when a group ends up mixing machine and Messtechnik categories', () => {
-    window.S.data!.machines.push(
-      machine({ id: 'm4', name: 'Messgerät', group: 'Labor', cat: 'messtechnik' }),
-    );
-    act(() => openAssistant());
-    act(() => {
-      screen.getByText('Maschinen').click();
-    });
-    act(() => {
-      screen.getByText('Halle 1').click();
-    });
-    act(() => {
-      screen.getByText('Messtechnik').click();
-    });
-    act(() => {
-      screen.getByText('Labor').click();
-    });
-    act(() => {
-      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
-      screen.getByRole('checkbox', { name: /^Messgerät/ }).click();
-    });
-    const dt = dataTransferStub();
-    act(() => {
-      const devNodes = document.querySelectorAll('.asdev');
-      fireEvent.dragStart(devNodes[1]!, { dataTransfer: dt });
-      fireEvent.drop(devNodes[0]!, { dataTransfer: dt });
-    });
-    expect(window.askConfirm).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Gemischte Bedarfsgruppe' }),
+  it('transfers min/max, exact devices and selected calendar dates to confirmation', () => {
+    select();
+    change('Min. Tage', '2');
+    change('Max. Tage', '4');
+    search();
+    const input = screen.getByRole('textbox', { name: 'Buchungstage' });
+    expect((input as HTMLInputElement).value).toBe('4');
+    change('Buchungstage', '2');
+    click('Buchen');
+    expect(openBookingForm).toHaveBeenCalledWith(['a'], startISO, nextISO, [startISO, nextISO]);
+    click('Zurück zur Auswahl');
+    expect(screen.getByRole('button', { name: 'Echte Fräse entfernen' })).toBeTruthy();
+    search();
+    change('Max. Tage', '3');
+    click('Neu suchen');
+    expect((screen.getByRole('textbox', { name: 'Buchungstage' }) as HTMLInputElement).value).toBe(
+      '3',
     );
   });
-
-  // What: declining that confirmation reverts the merge — the dragged device goes back to being
-  // loose rather than staying stuck in a group the user just said wasn't intended.
-  // How: same mixed-category setup, but with askConfirm stubbed to resolve false, and checks no
-  // group remains once the decline's revert has run.
-  it('reverts the merge when the mixed-category confirmation is declined', async () => {
-    window.askConfirm = vi.fn().mockResolvedValue(false);
-    window.S.data!.machines.push(
-      machine({ id: 'm4', name: 'Messgerät', group: 'Labor', cat: 'messtechnik' }),
-    );
-    act(() => openAssistant());
-    act(() => {
-      screen.getByText('Maschinen').click();
-    });
-    act(() => {
-      screen.getByText('Halle 1').click();
-    });
-    act(() => {
-      screen.getByText('Messtechnik').click();
-    });
-    act(() => {
-      screen.getByText('Labor').click();
-    });
-    act(() => {
-      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
-      screen.getByRole('checkbox', { name: /^Messgerät/ }).click();
-    });
-    const dt = dataTransferStub();
-    await act(async () => {
-      const devNodes = document.querySelectorAll('.asdev');
-      fireEvent.dragStart(devNodes[1]!, { dataTransfer: dt });
-      fireEvent.drop(devNodes[0]!, { dataTransfer: dt });
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(document.querySelectorAll('.asgrp')).toHaveLength(0);
-    expect(document.querySelectorAll('.asdev')).toHaveLength(2);
+  it('blocks stale availability and read-only booking without writing', () => {
+    select();
+    search();
+    store.get('data')!.bookings.a = { [startISO]: { name: 'Belegt' } };
+    click('Buchen');
+    expect(openBookingForm).not.toHaveBeenCalled();
+    expect(document.getElementById('toast')!.textContent).toContain('Verfügbarkeit');
+    store.set({ readOnly: true });
+    click('Buchen');
+    expect(document.getElementById('toast')!.textContent).toContain('Lesemodus');
   });
-
-  // What: incrementing the need stepper raises the group's need.
-  // How: clicks the "+" stepper once (need 1→2, matching the group's 2 members) and checks
-  // the value updated.
-  it('the "+" stepper increases need', () => {
-    addGroupedPair();
-    act(() => {
-      document.querySelector<HTMLButtonElement>('.asstep[title="mehr"]')!.click();
-    });
-    expect((document.querySelector('.asNeed') as HTMLInputElement).value).toBe('2');
-  });
-
-  // What: grouping two devices of the SAME category asks nothing at all — the confirm is only
-  // for an actual mix.
-  // How: forms the standard same-category pair (addGroupedPair, both plain Maschinen) and
-  // checks askConfirm was never called.
-  it('asks nothing when a group stays within one category', () => {
-    addGroupedPair();
-    expect(window.askConfirm).not.toHaveBeenCalled();
-  });
-
-  // What: an "oder" separator sits between a group's own sibling children, clarifying that
-  // "Benötigt: N von M" means alternatives, not a required set — user request.
-  // How: forms a 2-device group and checks exactly one separator appears (one gap between two
-  // children).
-  it("shows an 'oder' separator between a group's own sibling children", () => {
-    addGroupedPair();
-    expect(screen.getByText('oder')).toBeInTheDocument();
-    expect(document.querySelectorAll('.asgrp-or')).toHaveLength(1);
-  });
-
-  // What: a nested subgroup formed partway through no longer splits its parent's sibling
-  // devices apart — every device renders together, before any nested subgroup, regardless of
-  // the raw order the tree happened to acquire them in (user report: a device added after a
-  // nested subgroup formed rendered arbitrarily displaced below it, cut off from its actual
-  // siblings by the subgroup's own card).
-  // How: forms group RED (Fräse+Presse), a separate group BLUE (Kaputte Presse+Bohrer), nests
-  // BLUE inside RED, THEN adds a 5th device (Dewetron) to RED flatly — in the tree's own raw
-  // insertion order this pushes Dewetron after the already-nested BLUE; checks the rendered
-  // order is devices-first regardless (three .asdev children, then the nested .asgrp).
-  it('keeps sibling devices together, not split apart by a subgroup nested in after them', () => {
-    window.S.data!.machines.push(
-      machine({ id: 'm4', name: 'Bohrer' }),
-      machine({ id: 'm5', name: 'Dewetron' }),
-    );
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
-      screen.getByRole('checkbox', { name: /^Presse/ }).click();
-      screen.getByRole('checkbox', { name: /^Kaputte Presse/ }).click();
-      screen.getByRole('checkbox', { name: /^Bohrer/ }).click();
-      screen.getByRole('checkbox', { name: /^Dewetron/ }).click();
-    });
-    const devNodes = () => [...document.querySelectorAll<HTMLElement>('.asdev')];
-    const looseDevs = () => devNodes().filter((el) => !el.closest('.asgrp-kids'));
-    // Group RED: Fräse + Presse.
-    const dtRed = dataTransferStub();
-    act(() => {
-      const [first, second] = looseDevs();
-      fireEvent.dragStart(second!, { dataTransfer: dtRed });
-      fireEvent.drop(first!, { dataTransfer: dtRed });
-    });
-    // Group BLUE: Kaputte Presse + Bohrer.
-    const dtBlue = dataTransferStub();
-    act(() => {
-      const [first, second] = looseDevs();
-      fireEvent.dragStart(second!, { dataTransfer: dtBlue });
-      fireEvent.drop(first!, { dataTransfer: dtBlue });
-    });
-    // Nest BLUE inside RED (drag BLUE's whole card onto RED's own head).
-    const groups = () => [...document.querySelectorAll<HTMLElement>('.asgrp')];
-    const redHead = groups()[0]!.querySelector<HTMLElement>('.asgrp-head')!;
-    const blueGroup = groups()[1]!;
-    const dtNest = dataTransferStub();
-    act(() => {
-      fireEvent.dragStart(blueGroup, { dataTransfer: dtNest });
-      fireEvent.drop(redHead, { dataTransfer: dtNest });
-    });
-    // Add Dewetron to RED flatly, dropped onto Fräse (already a RED member) — pushed to the
-    // END of RED's own raw child order, after the already-nested BLUE.
-    const dtJoin = dataTransferStub();
-    act(() => {
-      const dewetron = looseDevs()[0]!;
-      // Not screen.getByText — "Fräse" also matches its still-checked checklist checkbox
-      // label on the left; .asdev's own textContent includes the drag-handle/remove-icon
-      // glyphs too, so a plain text-node lookup wouldn't match it as its own element either.
-      const fraese = devNodes().find((el) => el.textContent!.includes('Fräse'))!;
-      fireEvent.dragStart(dewetron, { dataTransfer: dtJoin });
-      fireEvent.drop(fraese, { dataTransfer: dtJoin });
-    });
-    // RED's own (outer, first-in-document-order) kids container: every device renders before
-    // the nested BLUE group, not split apart by it.
-    const redKids = document.querySelector('.asgrp .asgrp-kids')!;
-    const kinds = [...redKids.children]
-      .filter((el) => !el.classList.contains('asgrp-or'))
-      .map((el) => (el.classList.contains('asgrp') ? 'grp' : 'dev'));
-    expect(kinds).toEqual(['dev', 'dev', 'dev', 'grp']);
-  });
-
-  // What: the dissolve button (icon-only now, no "✕ auflösen" text — user request) breaks a
-  // group apart, returning its member devices to being loose devices directly in the work area.
-  // How: clicks the "Gruppe auflösen"-labeled button (by its accessible name, not visible
-  // text) on a 2-device group and checks no groups remain while both devices now exist as
-  // standalone nodes.
-  it('the dissolve button breaks the group back into loose devices', () => {
-    addGroupedPair();
-    act(() => {
-      screen.getByRole('button', { name: 'Gruppe auflösen' }).click();
-    });
-    expect(document.querySelectorAll('.asgrp')).toHaveLength(0);
-    expect(document.querySelectorAll('.asdev')).toHaveLength(2);
-  });
-
-  // What: removing one device from a 2-device group leaves the group with only 1 child, so
-  // it auto-dissolves (a group needs 2+ members to make sense) rather than lingering as a
-  // pointless single-device group.
-  // How: removes one device from a group of 2 via its own "remove" button and checks no
-  // group remains, with exactly one loose device left.
-  it('removing a device from within a group dissolves the now-single-child group', () => {
-    addGroupedPair();
-    act(() => {
-      document
-        .querySelectorAll('.rm[title="Aus Auswahl entfernen"]')[0]!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(document.querySelectorAll('.asgrp')).toHaveLength(0); // 1 child left → auto-dissolved
-    expect(document.querySelectorAll('.asdev')).toHaveLength(1);
-  });
-
-  // What: dragging a 3rd device onto one of a group's EXISTING members joins that group
-  // flatly (same as dropping on the group's own background), rather than wrapping just that
-  // one member and the new device in a brand-new nested subgroup — a real bug fix: with 2+
-  // existing members, aiming for one of them (the easiest, biggest target) used to bury it
-  // one level deeper each time, which looked like the drag had silently failed once a group
-  // had more than 2 members.
-  // How: forms a 2-device group, drags a 3rd device onto one of its two existing members, and
-  // checks the result is still exactly one group, now with 3 flat children (no nested .asgrp).
-  it('dropping a 3rd device onto an existing group member joins the group flatly, not nested', () => {
-    addGroupedPair();
-    act(() => {
-      screen.getByRole('checkbox', { name: /Kaputte Presse/ }).click();
-    });
-    const dt = dataTransferStub();
-    act(() => {
-      // The freshly-checked 3rd device is the only .asdev NOT already inside the group.
-      const newDevice = [...document.querySelectorAll<HTMLElement>('.asdev')].find(
-        (el) => !el.closest('.asgrp-kids'),
-      )!;
-      const existingMember = document.querySelector<HTMLElement>('.asgrp-kids .asdev')!;
-      fireEvent.dragStart(newDevice, { dataTransfer: dt });
-      fireEvent.drop(existingMember, { dataTransfer: dt });
-    });
-    expect(document.querySelectorAll('.asgrp')).toHaveLength(1); // still one group, not nested
-    expect(document.querySelectorAll('.asgrp-kids .asdev')).toHaveLength(3);
-  });
-
-  // What: two separate Bedarfsgruppen get two distinct colors, not the same one repeated — the
-  // whole point of coloring them per-group is telling them apart at a glance.
-  // How: forms two separate 2-device groups (needs a 4th machine, same as the nesting test
-  // below) and checks their --groupcolor values differ.
-  it('gives two separate groups two different colors', () => {
-    window.S.data!.machines.push(machine({ id: 'm4', name: 'Bohrer' }));
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
-      screen.getByRole('checkbox', { name: /^Presse/ }).click();
-      screen.getByRole('checkbox', { name: /^Kaputte Presse/ }).click();
-      screen.getByRole('checkbox', { name: /^Bohrer/ }).click();
-    });
-    const devNodes = () => [...document.querySelectorAll<HTMLElement>('.asdev')];
-    const looseDevs = () => devNodes().filter((el) => !el.closest('.asgrp-kids'));
-    const dtA = dataTransferStub();
-    act(() => {
-      const [first, second] = looseDevs();
-      fireEvent.dragStart(second!, { dataTransfer: dtA });
-      fireEvent.drop(first!, { dataTransfer: dtA });
-    });
-    const dtB = dataTransferStub();
-    act(() => {
-      const [first, second] = looseDevs();
-      fireEvent.dragStart(second!, { dataTransfer: dtB });
-      fireEvent.drop(first!, { dataTransfer: dtB });
-    });
-    const groups = [...document.querySelectorAll<HTMLElement>('.asgrp')];
-    expect(groups).toHaveLength(2);
-    expect(groups[0]!.style.getPropertyValue('--groupcolor')).not.toBe(
-      groups[1]!.style.getPropertyValue('--groupcolor'),
-    );
-  });
-
-  // What: dragging one whole Bedarfsgruppe onto ANOTHER group's own HEAD (its title bar — the
-  // drag handle/stepper/dissolve row, titled "Gruppe ziehen zum Verschachteln") nests it inside
-  // that group, same as dropping on the target group's kids background — a real regression:
-  // the head used to fall outside every recognized drop target, so a group dropped there
-  // silently moved to the root instead of nesting, looking exactly like nesting a Bedarfsgruppe
-  // inside another had stopped working (the group's own head is the single biggest, most
-  // obvious part of its card — the most natural thing to aim a drop at).
-  // How: forms two separate 2-device groups (needs a 4th machine, since the shared fixture's
-  // 3 machines only make one group's worth), drags the first group onto the second group's own
-  // head element specifically, and checks the result is one group nested inside the other, not
-  // two groups still sitting side by side at the root.
-  it("dropping a whole group onto another group's own head nests it, not just its kids area", () => {
-    window.S.data!.machines.push(machine({ id: 'm4', name: 'Bohrer' }));
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
-      screen.getByRole('checkbox', { name: /^Presse/ }).click();
-      screen.getByRole('checkbox', { name: /^Kaputte Presse/ }).click();
-      screen.getByRole('checkbox', { name: /^Bohrer/ }).click();
-    });
-    const devNodes = () => [...document.querySelectorAll<HTMLElement>('.asdev')];
-    const looseDevs = () => devNodes().filter((el) => !el.closest('.asgrp-kids'));
-    // Group A: Fräse + Presse.
-    const dtA = dataTransferStub();
-    act(() => {
-      const [first, second] = looseDevs();
-      fireEvent.dragStart(second!, { dataTransfer: dtA });
-      fireEvent.drop(first!, { dataTransfer: dtA });
-    });
-    // Group B: Kaputte Presse + Bohrer (the two still-loose devices).
-    const dtB = dataTransferStub();
-    act(() => {
-      const [first, second] = looseDevs();
-      fireEvent.dragStart(second!, { dataTransfer: dtB });
-      fireEvent.drop(first!, { dataTransfer: dtB });
-    });
-    expect(document.querySelectorAll('.asgrp')).toHaveLength(2); // two separate groups so far
-
-    const groups = () => [...document.querySelectorAll<HTMLElement>('.asgrp')];
-    const groupA = groups()[0]!;
-    const groupBHead = groups()[1]!.querySelector<HTMLElement>('.asgrp-head')!;
-    const dtNest = dataTransferStub();
-    act(() => {
-      fireEvent.dragStart(groupA, { dataTransfer: dtNest });
-      fireEvent.drop(groupBHead, { dataTransfer: dtNest });
-    });
-    expect(document.querySelectorAll('.asgrp')).toHaveLength(2); // still two groups...
-    expect(document.querySelector('.asgrp-kids > .asgrp')).not.toBeNull(); // ...one nested in the other
-  });
-});
-
-describe('AssistantModal — drag-and-drop highlighting', () => {
-  // What: dragging one device over another highlights the hovered device as a drop target,
-  // and the highlight clears once the drag ends (whether or not a drop actually happened).
-  // How: starts a drag on one device, drags over another, checks the target got the dragover
-  // class, then ends the drag and checks the class was removed.
-  it('highlights the hovered device during dragover, and clears it on dragend', () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
-      screen.getByRole('checkbox', { name: /^Presse/ }).click();
-    });
-    const dt = dataTransferStub();
-    const devNodes = () => document.querySelectorAll('.asdev');
-    act(() => {
-      fireEvent.dragStart(devNodes()[1]!, { dataTransfer: dt });
-      fireEvent.dragOver(devNodes()[0]!, { dataTransfer: dt });
-    });
-    expect(devNodes()[0]!.classList.contains('dragover')).toBe(true);
-    act(() => {
-      fireEvent.dragEnd(devNodes()[1]!);
-    });
-    expect(devNodes()[0]!.classList.contains('dragover')).toBe(false);
-  });
-
-  // What: dragging a device onto the empty work-area canvas (not onto another device)
-  // highlights the canvas itself as a valid drop target — the "move this device to root
-  // level" gesture, distinct from dropping onto another device (which would group them).
-  // How: drags a device over the work-area container itself and checks it got the
-  // dragover-root class.
-  it('dragging onto the empty canvas highlights dragover-root', () => {
-    act(() => openAssistant());
-    openChecklistCategory();
-    act(() => {
-      screen.getByRole('checkbox', { name: /^Fräse/ }).click();
-    });
-    const dt = dataTransferStub();
-    const work = document.getElementById('asWork')!;
-    act(() => {
-      fireEvent.dragStart(document.querySelector('.asdev')!, { dataTransfer: dt });
-      fireEvent.dragOver(work, { dataTransfer: dt });
-    });
-    expect(work.classList.contains('dragover-root')).toBe(true);
-  });
-});
-
-describe('openAssistant', () => {
-  // What: the "Abbrechen" (cancel) button closes the assistant modal.
-  // How: opens the assistant, clicks Abbrechen, and checks the overlay's open class is gone.
-  it('closes on "Abbrechen"', () => {
-    act(() => openAssistant());
-    act(() => {
-      screen.getByRole('button', { name: 'Abbrechen' }).click();
-    });
+  it('shows only resolved machines in the calendar and retains the assistant for reopening', () => {
+    select();
+    search();
+    click('Im Kalender anzeigen');
+    expect(gotoDate).toHaveBeenCalledWith(startISO);
+    expect([...store.get('machSel')]).toEqual(['a']);
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
+    expect(document.getElementById('modalReopen')!.classList.contains('show')).toBe(true);
+    fireEvent.click(document.getElementById('modalReopen')!);
+    expect(screen.getByRole('button', { name: 'Neu suchen' })).toBeTruthy();
+  });
+  it('shows genuine no-results and enforces coupled duration bounds', () => {
+    fireEvent.click(screen.getByRole('checkbox', { name: /Gesperrtes Gerät/ }));
+    search();
+    expect(
+      screen.getByText('Kein Fenster gefunden, in dem alle Geräte gleichzeitig frei sind.'),
+    ).toBeTruthy();
+    change('Min. Tage', '999');
+    expect((screen.getByRole('textbox', { name: 'Max. Tage' }) as HTMLInputElement).value).toBe(
+      '7',
+    );
+    expect(screen.getByRole('alert').textContent).toContain('7 Tage');
+    change('Max. Tage', '1');
+    expect((screen.getByRole('textbox', { name: 'Min. Tage' }) as HTMLInputElement).value).toBe(
+      '1',
+    );
+    click('Min. Tage verringern');
+    expect(screen.getByRole('alert').textContent).toContain('1 Tag');
+  });
+  it('calendar presets keep the draft until applied and clamp duration to the new range', () => {
+    fireEvent.click(screen.getByRole('button', { name: /Zeitraum/ }));
+    click('7 Tage');
+    click('Übernehmen');
+    expect((screen.getByRole('textbox', { name: 'Max. Tage' }) as HTMLInputElement).value).toBe(
+      '7',
+    );
+    expect(screen.getByRole('button', { name: /Zeitraum/ }).textContent).toContain(
+      format(addDays(today, 6), 'dd.MM.yyyy'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Zeitraum/ }));
+    click('Zurücksetzen');
+    expect(screen.getByRole('button', { name: 'Übernehmen' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(document.getElementById('overlay')!.classList.contains('open')).toBe(true);
+  });
+  it('grouping help opens on focus and cancel/close retain host behavior', () => {
+    const help = screen.getByRole('button', { name: 'Hinweis zu Bedarfsgruppen' });
+    fireEvent.keyDown(document.body, { key: 'Tab' });
+    act(() => help.focus());
+    // Floating UI positions asynchronously; positioning/visibility is verified in Orca.
+    expect(screen.getByRole('tooltip', { hidden: true }).textContent).toContain('Bedarfsgruppe');
+    click('Abbrechen');
+    expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
+    act(() => openAssistant());
+    click('Dialog schließen');
+    expect(
+      within(document.getElementById('modal')!).queryByRole('heading', {
+        name: 'Buchungsassistent',
+      }),
+    ).toBeNull();
   });
 });

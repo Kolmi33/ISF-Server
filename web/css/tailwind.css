@@ -38,12 +38,16 @@
    regression — see PROGRESS.md's Phase 14 section for the actual numbers.
    ======================================================================================= */
 
+@layer theme, base, components, utilities;
+
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import '@fontsource-variable/inter';
 @import '@fontsource-variable/manrope';
+@import '@fontsource-variable/jetbrains-mono';
+@import './booking-assistant.css';
 
 /* app.css's own tokens, exposed under their real (--app- prefixed, non-colliding) names for
    whatever still-unmigrated screen wants a Tailwind utility against them, e.g. bg-app-panel. */
@@ -67,6 +71,10 @@
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 @theme inline {
+  --color-primary-deep: var(--primary-deep);
+  --color-brand: var(--brand-accent);
+  --color-brand-soft: var(--brand-accent-soft);
+  --color-brand-foreground: var(--brand-accent-foreground);
   --font-sans: 'Inter Variable', sans-serif;
   --font-heading: 'Manrope Variable', sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);

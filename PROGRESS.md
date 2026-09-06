@@ -1,5 +1,48 @@
 # PROGRESS — living project state
 
+## Supplied booking assistant integration (2026-09-06)
+
+Replaced the earlier assistant UI with the user's Downloads/BuchungsAssistent.tsx and
+README design. The supplied section markup, green/orange palette, fonts, range presets,
+Min./Max. controls, plan cards, drag gestures and separate results view are preserved.
+Small component/API adapters reuse the installed Base UI shadcn variant; the supplied
+file is split into focused modules to meet existing code-size gates. Theme/reset rules
+are scoped to this dialog and its portals. The host provides scrolling and responsive
+footer wrapping. Initial dates use the current day and the supplied one-week range length.
+
+Live catalog fields use actual names, IDs and departments (the backend has no separate
+inventory-code or laboratory field). Random results are replaced by deterministic
+calendar-day availability with fixed N-of-M device assignments across each whole result.
+Booking validates the latest state and opens the existing confirmation form with exact
+IDs/dates. Calendar navigation filters to the resolved devices and retains the assistant
+for reopening. Cancel/close and authoritative server writes use the existing host flow.
+
+Progress and validation: `docs/ASSISTANT-INTEGRATION-PLAN.md`. Earlier entries below describe
+superseded designs. Formatting, types, lint, dead-code checks and all 1,002 tests pass
+(97.81% line / 93.03% branch coverage). Browser checks in Orca cover real catalog/search,
+grouping, calendar/help and mobile scrolling. Production rebuilt on localhost:3000.
+No live test reservations were created.
+
+## Assistant scrolling and duration bounds (2026-09-05)
+
+Supersedes the weekday-selection UI described below. The Assistant searches Monday–Friday
+again. The selected-device/group count now lives beside “Ausgewählte Geräte”. “Zeitraum &
+Dauer” contains date endpoints, Mindestdauer and Höchstdauer, then right-aligned actions.
+Duration bounds are positive integers (initially 1–30, with no new hard maximum). An inverted
+range blocks search with an inline error. A longer free window remains a match; each result
+freezes and enforces the requested minimum and the smaller of maximum/window length. Booking
+receives the exact selected weekdays as before; existing server weekend bridging is unchanged.
+
+Fixed the missing flex/height constraint on `.assist-shell` and prevented body sections from
+shrinking. The body now scrolls inside the viewport-bounded dialog; the header and close
+button remain visible. Mobile date endpoints stack so their values have sufficient room.
+Calendar popovers are hosted at the dialog level, outside its scrolling body.
+
+Focused regression tests cover duration bounds, invalid ranges, summary placement, removal
+of weekday selection, staleness, and the Friday/Monday booking handoff. Browser inspection
+through Orca reproduced the old 680px dialog / 847px overflowing shell at 1280×720 and
+confirmed body scrolling and reachable actions after the fix, including at 390px width.
+
 ## Assistant redesign — spacious layout, weekday selection, help tooltip (2026-09-05)
 
 User-requested full redesign of the booking Assistant on the existing shadcn/Tailwind

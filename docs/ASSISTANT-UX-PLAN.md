@@ -78,3 +78,15 @@ timezone/DST shifts. No backend dependencies are added.
 Docker Node 22: full `npm run verify` passed with the same 1,006 tests / 71 files.
 Both lists also scrolled independently with 25 selected devices while preserving equal
 card heights; the temporary backend revision remained 0.
+# Scrolling and duration bounds follow-up (2026-09-05)
+
+- [x] Inspect the current form, dialog sizing, selection state, and booking handoff.
+- [x] Constrain the shell and let its body scroll; prevent sections from shrinking.
+- [x] Remove weekday controls; use Monday–Friday search continuity.
+- [x] Move the live device/group summary beside the selected-devices heading.
+- [x] Add minimum/maximum workday duration and enforce both in each result's booking input.
+- [x] Align the bottom card's search/cancel actions on the right; integrate calendar triggers.
+- [ ] Verify regression tests, browser sizes/scrolling, and the repository gate.
+
+Maximum duration caps selectable booking days, not the length of an available window.
+Friday and Monday remain consecutive workdays. Existing server weekend bridging is unchanged.

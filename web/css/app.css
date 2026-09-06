@@ -301,16 +301,22 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    later, dvh, declaration wins in a supporting browser and is simply ignored otherwise) minus
    the reduced overlay margin below, so the dialog uses nearly the full viewport while still
    leaving a visible gap above/below it. */
-#overlay:has(.assist-shell){padding:20px 12px}
+#overlay:has(.assist-shell){padding:20px 12px;box-sizing:border-box;overflow:hidden}
 #modal:has(.assist-shell){background:var(--app-bg);display:flex;flex-direction:column;
   width:100%;max-width:1200px;padding:0;overflow:hidden;
+  height:calc(100vh - 40px);height:calc(100dvh - 40px);
   max-height:calc(100vh - 40px);max-height:calc(100dvh - 40px)}
-.assist-header{flex:0 0 auto;padding:24px 24px 12px}
+.assist-shell{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;overflow:hidden}
+.assist-header{display:block;position:relative;flex:0 0 auto;padding:24px 64px 16px 24px}
+.assist-header-close{position:absolute;right:20px;top:20px}
 /* #modal h2{margin:0 0 12px;font-size:16px} outranks a bare .assist-header h2 (ID beats
    class regardless of source order) — scope through #modal itself to actually win. */
 #modal:has(.assist-shell) .assist-header h2{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
 .assist-subtitle{margin:4px 0 0;font-size:14px;color:var(--app-muted)}
 .assist-body{flex:1;min-height:0;overflow:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:16px}
+.assist-body> *{flex-shrink:0}
+.assist-cart-heading{margin-bottom:12px}
+.assist-cart-heading .assist-card-title{margin:0}
 .assist-columns{display:grid;grid-template-columns:1fr;gap:16px}
 .assist-card{background:var(--app-panel);border:1px solid var(--app-border);border-radius:10px;padding:20px;min-width:0}
 .assist-card-title{font-size:16px;font-weight:600;letter-spacing:-.01em;margin:0 0 12px;color:var(--heading-ink)}
@@ -324,27 +330,26 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .assist-cart{display:flex;flex-direction:column}
 .assist-cart .aswork,.assist-cart .aswork-empty{flex:1}
 .assist-parameter-fields{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:24px;align-items:start}
-.assist-weekdays{display:flex;flex-direction:column;gap:8px;margin-top:20px}
-.assist-weekdays-label{font-size:14px;font-weight:500;color:var(--app-text)}
-.assist-weekdays-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-.assist-weekday-presets{display:flex;gap:6px}
-.assist-weekday-toggles{display:flex;gap:6px;flex-wrap:wrap}
-.assist-weekday-toggle{min-width:44px;height:36px;padding:0 10px;box-sizing:border-box;border:1px solid var(--app-border);border-radius:8px;background:var(--app-panel);color:var(--app-text);font-size:13px;font-weight:500;cursor:pointer;transition:background .12s,border-color .12s}
-.assist-weekday-toggle:hover{background:var(--hover)}
-.assist-weekday-toggle[data-pressed]{background:var(--app-accent);border-color:var(--app-accent);color:#fff}
-.assist-weekday-toggle:focus-visible{outline:2px solid var(--app-accent);outline-offset:2px}
 .assist-field-error{display:block;font-size:12px;color:var(--danger)}
-.assist-parameters-separator{margin:20px 0 16px}
-.assist-search-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.assist-parameters-separator{margin:20px 0}
+.assist-search-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .assist-selection-summary{font-size:13px;color:var(--app-muted)}
-.assist-actions{display:flex;gap:8px;align-items:center}
+.assist-actions{display:flex;gap:8px;align-items:center;margin-left:auto}
+.assist-actions [data-slot=button]{height:40px}
+.assist-duration-range [data-slot=number-field]{min-width:0}
+.assist-duration-range [data-slot=number-field]>div{width:100%;min-width:0;box-sizing:border-box;height:40px}
+.assist-duration-range [data-slot=number-field] input{width:100%;min-width:0}
+.assist-duration-range [data-slot=field-description]{margin:0}
 .assist-cancel-action{background:transparent;color:var(--app-text)}
-.assist-search-action{background:var(--app-accent);border-color:var(--app-accent);color:#fff;font-weight:600;min-width:190px;gap:6px}
+.assist-search-action{background:var(--app-accent);border-color:var(--app-accent);color:#fff;font-weight:500;min-width:240px;gap:6px}
 .assist-search-action:hover{background:var(--app-accent-hover)}
 .assist-stale-banner{background:var(--warnbg);color:var(--confink);border:1px solid var(--confbrd);border-radius:8px;padding:8px 12px;font-size:13px;margin:0 0 12px}
 .assist-results-heading{font-size:16px;font-weight:600;letter-spacing:-.01em;margin:20px 0 8px}
+.assist-body .res{flex-wrap:wrap;gap:16px}
+.assist-body .res>div:first-child{flex:1 1 260px;min-width:0;overflow-wrap:anywhere}
+.assist-body .res>div:last-child{margin-left:auto;flex-wrap:wrap;max-width:100%}
 .assist-hint{font-size:12px;color:var(--app-muted)}
-.assist-card input[type=date],.assist-card input[type=number],.assist-card input[type=text]{height:36px;box-sizing:border-box}
+.assist-card input[type=date],.assist-card input[type=number],.assist-card input[type=text]{height:40px;box-sizing:border-box}
 .assist-card .grp.cathead{background:transparent;color:var(--heading-ink);border-radius:0;
   border-bottom:1px solid var(--app-border);padding:8px 4px;display:flex;align-items:center;gap:6px}
 .assist-catalog button.grp{width:100%;text-align:left;font:inherit;cursor:pointer;border:0;background:transparent;color:var(--heading-ink)}
@@ -375,15 +380,18 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
   .assist-cart{min-height:clamp(340px,45vh,480px)}
 }
 @media(max-width:859px){
+  .assist-catalog{height:300px;box-sizing:border-box}
   .assist-parameter-fields{grid-template-columns:1fr;gap:16px}
 }
 @media(max-width:640px){
-  .assist-header{padding:16px 16px 10px}
+  .assist-header{padding:16px 56px 12px 16px}
+  .assist-header-close{right:12px;top:12px}
   .assist-body{padding:0 16px 16px}
 }
 @media(max-width:480px){
   .assist-search-row{flex-direction:column;align-items:stretch}
-  .assist-actions{display:grid;grid-template-columns:1fr}
+  .assist-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;width:100%}
+  .assist-search-action{min-width:0;flex:1}
 }
 .aswork-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:6px;min-height:54px;color:var(--app-muted)}

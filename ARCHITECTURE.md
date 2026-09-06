@@ -749,3 +749,33 @@ artifact specific to the sandboxed verification environment rather than a real b
 rather than either declared fixed or chased indefinitely on unresolved automated evidence.
 
 Full slice-by-slice backlog and rationale: `PROGRESS.md`'s Phase 14 section.
+
+### Supplied assistant integration (2026-09-06)
+
+The user's replacement TSX/README supersedes the earlier Assistant presentation. Its
+sections are split under `ui/components/booking-assistant/` to retain the existing
+function/file budgets without changing its markup or interaction model. The host
+`AssistantModal` injects catalog/search/book/calendar/close callbacks. No demo machines,
+random scheduling, additional backend endpoint, or alternative write path is used.
+
+The expressly requested frontend dependencies are dnd-kit (core/sortable/utilities),
+lucide-react, direct date-fns, and the locally served JetBrains Mono font. These preserve
+the supplied gestures, iconography and date/number typography. Base UI remains the single
+primitive library; small adapters translate the supplied shadcn composition API.
+The backend remains zero-dependency. This is the reasoned frontend guardrail extension.
+
+`booking-assistant.css` scopes the supplied green/orange light/dark palette and reset to
+the dialog and its portals. Explicit CSS layer ordering keeps the local reset below
+utilities; `revert-layer` isolates legacy unlayered element rules. Other screens retain
+their theme. The existing overlay owns viewport scrolling and narrow panes allow the
+footer blocks to wrap. The supplied 506px middle section is retained.
+
+The supplied inclusive duration represents calendar days. `core/booking-assistant-search`
+computes deterministic maximal windows with the same resolved machines available on
+every day (bookings, maintenance and machine weekday masks included). Excluded/off days
+break a window; no workday skipping or claims about holidays are introduced. Windows
+stay within the requested date range; unchecked future availability is never called open.
+Local Date objects cross into the existing ISO contract through their calendar components,
+then the established UTC date utilities enumerate exact reservation dates. Booking
+rechecks the latest store snapshot and enters the existing confirmation/mutation flow,
+including its read-only, conflict and batch-size checks. Server weekend bridging is unchanged.

@@ -12,8 +12,8 @@ describe('buildAssistantResults', () => {
     const long = ['2021-01-04', '2021-01-05', '2021-01-06'];
     const results = buildAssistantResults([short, long], new Set([long]), 2);
     expect(results).toEqual([
-      { dates: short, isOpenEnded: false, defaultDays: 1 }, // clamped to the run's own length
-      { dates: long, isOpenEnded: true, defaultDays: 2 },
+      { dates: short, isOpenEnded: false, defaultDays: 1, minDays: 1, maxDays: 1 },
+      { dates: long, isOpenEnded: true, defaultDays: 2, minDays: 2, maxDays: 3 },
     ]);
   });
 
@@ -31,5 +31,14 @@ describe('buildAssistantResults', () => {
   // How: calls with an empty runs array.
   it('is empty for no runs', () => {
     expect(buildAssistantResults([], new Set(), 1)).toEqual([]);
+  });
+
+  it('caps booking duration without dropping or shortening a longer available window', () => {
+    const dates = ['2021-01-08', '2021-01-11', '2021-01-12', '2021-01-13'];
+    expect(buildAssistantResults([dates], new Set([dates]), 2, 3)).toEqual([
+      { dates, isOpenEnded: true, defaultDays: 2, minDays: 2, maxDays: 3 },
+    ]);
+    expect(buildAssistantResults([dates], new Set(), 2, 2)[0]?.maxDays).toBe(2);
+    expect(buildAssistantResults([dates], new Set(), 2, 10)[0]?.maxDays).toBe(4);
   });
 });

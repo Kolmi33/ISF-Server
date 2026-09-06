@@ -8,7 +8,8 @@
     "shadcn",
     "tw-animate-css",
     "@fontsource-variable/inter",
-    "@fontsource-variable/manrope"
+    "@fontsource-variable/manrope",
+    "@fontsource-variable/jetbrains-mono"
   ],
   "rules": {
     "duplicates": "off"

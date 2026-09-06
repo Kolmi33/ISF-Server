@@ -22,6 +22,9 @@ export interface AssistantResultRow {
   isOpenEnded: boolean;
   /** The initial "days to book" count: `minDays`, clamped to the run's own length. */
   defaultDays: number;
+  /** Booking bounds frozen with the search; the full availability window remains visible. */
+  minDays: number;
+  maxDays: number;
 }
 
 /**
@@ -32,10 +35,13 @@ export function buildAssistantResults(
   runs: readonly (readonly string[])[],
   openRuns: ReadonlySet<readonly string[]>,
   minDays: number,
+  maxDays = Number.POSITIVE_INFINITY,
 ): AssistantResultRow[] {
   return runs.slice(0, MAX_RESULTS).map((dates) => ({
     dates,
     isOpenEnded: openRuns.has(dates),
     defaultDays: Math.min(minDays, dates.length),
+    minDays: Math.min(minDays, dates.length),
+    maxDays: Math.min(maxDays, dates.length),
   }));
 }

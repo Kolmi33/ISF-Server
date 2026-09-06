@@ -107,6 +107,9 @@ Project-specific rules (full list `ARCHITECTURE.md §5`) — the ones that bite 
   dependency, either side, without an explicit, reasoned guardrail change like those.
   The user-requested range calendar adds `react-day-picker` (and its locked date-fns
   dependencies) on the frontend only; rationale and boundaries are in ARCHITECTURE §19.
+  The user-supplied replacement Assistant additionally authorizes dnd-kit, lucide-react,
+  direct date-fns and JetBrains Mono on the frontend; see ARCHITECTURE §19's supplied
+  assistant integration decision. The backend still has no runtime dependencies.
 - Do not edit the untouched baseline behavior without a test that pins the change.
 - If a gate is wrong, change the gate deliberately (with reasoning in the commit), never
   bypass it with `--no-verify` or inline disables.

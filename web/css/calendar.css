@@ -131,6 +131,7 @@
 /* Fills the rest of its endpoint so the two halves span the column evenly and the arrow
    lands between them, instead of both halves shrink-wrapping and leaving a hole. */
 .date-range-control {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -140,10 +141,21 @@
 .date-range-control input[data-slot='input'] {
   flex: 1;
   min-width: 0;
+  padding-right: 36px;
+  height: 40px;
+}
+.date-range-control input::-webkit-calendar-picker-indicator {
+  display: none;
 }
 /* Matches the 36px control height the inputs and the number field use. */
 .date-endpoint-trigger {
-  flex: 0 0 36px;
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  width: 32px;
+  height: 36px;
+  border: 0;
+  background: transparent;
 }
 .range-arrow {
   color: var(--app-muted);
@@ -155,6 +167,8 @@
   }
   .date-range-field {
     gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
   }
   .range-arrow {
     display: none;

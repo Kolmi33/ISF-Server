@@ -1,0 +1,114 @@
+import { describe, expect, it } from 'vitest';
+import { searchBookingWindows, availableForBooking } from './booking-assistant-search.ts';
+import type { BookingData } from '../../../shared/types.ts';
+import type { PlanEntry } from './booking-assistant-types.ts';
+
+const from = '2026-09-07';
+const to = '2026-09-13';
+const device: PlanEntry = { kind: 'device', id: 'entry-a', deviceId: 'a' };
+const group: PlanEntry = { kind: 'group', id: 'group', deviceIds: ['a', 'b'], requiredCount: 1 };
+const data = (): BookingData => ({
+  machines: ['a', 'b', 'c'].map((id) => ({ id, name: id, group: 'Halle', days: '1111111' })),
+  bookings: {},
+});
+const booked = { name: 'Andere Person', comment: '' };
+
+describe('supplied assistant live calendar-day scheduler', () => {
+  it('offers the full verified window while capping selectable duration', () => {
+    const windows = searchBookingWindows(data(), [device], from, to, 2, 4);
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatchObject({
+      minDays: 2,
+      maxDays: 4,
+      devices: [{ deviceId: 'a', fromGroup: false }],
+    });
+    expect(windows[0]!.dates).toEqual([
+      '2026-09-07',
+      '2026-09-08',
+      '2026-09-09',
+      '2026-09-10',
+      '2026-09-11',
+      '2026-09-12',
+      '2026-09-13',
+    ]);
+  });
+  it('breaks at bookings and maintenance, including inclusive endpoints', () => {
+    const state = data();
+    state.bookings.a = { '2026-09-09': booked };
+    state.machines[0]!.maint = [{ type: 'wartung', from: '2026-09-12', until: '2026-09-13' }];
+    expect(searchBookingWindows(state, [device], from, to, 2, 7).map((w) => w.dates)).toEqual([
+      ['2026-09-07', '2026-09-08'],
+      ['2026-09-10', '2026-09-11'],
+    ]);
+  });
+  it('honors machine weekdays and never skips an unavailable weekend', () => {
+    const state = data();
+    state.machines[0]!.days = '1111100';
+    expect(searchBookingWindows(state, [device], '2026-09-11', '2026-09-14', 2, 4)).toEqual([]);
+    state.machines[0]!.days = '1111111';
+    expect(
+      searchBookingWindows(state, [device], '2026-09-11', '2026-09-14', 4, 4)[0]!.dates,
+    ).toHaveLength(4);
+    state.machines[0]!.days = '1010000';
+    expect(searchBookingWindows(state, [device], from, to, 1, 7).map((w) => w.dates)).toEqual([
+      [from],
+      ['2026-09-09'],
+    ]);
+  });
+  it('does not combine different alternatives across days into a fictional window', () => {
+    const state = data();
+    state.bookings.a = { '2026-09-08': booked };
+    state.bookings.b = { [from]: booked };
+    expect(searchBookingWindows(state, [group], from, '2026-09-08', 2, 2)).toEqual([]);
+    expect(
+      searchBookingWindows(state, [group], from, '2026-09-08', 1, 2).map((w) => w.devices),
+    ).toEqual([[{ deviceId: 'a', fromGroup: true }], [{ deviceId: 'b', fromGroup: true }]]);
+  });
+  it('resolves N-of-M together with mandatory devices for their whole window', () => {
+    const state = data();
+    state.bookings.a = { '2026-09-10': booked };
+    const plan: PlanEntry[] = [
+      { ...group, deviceIds: ['a', 'b'], requiredCount: 2 },
+      { kind: 'device', id: 'e-c', deviceId: 'c' },
+    ];
+    const windows = searchBookingWindows(state, plan, from, to, 2, 7);
+    expect(windows[0]!.devices).toEqual([
+      { deviceId: 'b', fromGroup: true },
+      { deviceId: 'a', fromGroup: true },
+      { deviceId: 'c', fromGroup: false },
+    ]);
+    for (const window of windows)
+      for (const resolved of window.devices)
+        for (const day of window.dates)
+          expect(availableForBooking(state, resolved.deviceId, day)).toBe(true);
+  });
+  it('chooses the longest-lived alternative and emits later windows only when they extend availability', () => {
+    const state = data();
+    state.bookings.a = { '2026-09-10': booked };
+    state.bookings.b = { [from]: booked };
+    const windows = searchBookingWindows(state, [group], from, to, 2, 7);
+    expect(windows.map((w) => [w.dates[0], w.dates.at(-1), w.devices[0]!.deviceId])).toEqual([
+      [from, '2026-09-09', 'a'],
+      ['2026-09-08', to, 'b'],
+    ]);
+  });
+  it('rejects invalid requirements and durations; missing machines produce no result', () => {
+    const search = (plan: PlanEntry[], min = 1, max = 7) =>
+      searchBookingWindows(data(), plan, from, to, min, max);
+    expect(() => search([])).toThrow();
+    expect(() => search([device, device])).toThrow();
+    for (const requiredCount of [0, 3, 1.5])
+      expect(() => search([{ ...group, requiredCount }])).toThrow();
+    for (const [min, max] of [
+      [0, 3],
+      [2, 1],
+      [1.5, 3],
+      [1, 2.5],
+    ])
+      expect(() => search([device], min, max)).toThrow();
+    expect(() => searchBookingWindows(data(), [device], to, from, 1, 7)).toThrow();
+    expect(() => searchBookingWindows(data(), [device], '', to, 1, 7)).toThrow();
+    expect(search([{ ...device, deviceId: 'missing' }])).toEqual([]);
+    expect(search([device], 8, 9)).toEqual([]);
+  });
+});
