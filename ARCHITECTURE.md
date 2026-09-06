@@ -780,15 +780,20 @@ a green line in the gap the card would land in, or a ring around the card it wou
 with. Jumping is therefore structurally impossible rather than merely tuned away. That is
 why `@dnd-kit/sortable` is gone: shuffling cards during the drag is precisely its job.
 
-Two rules carry the model. **One target per card, no overlap** (`planTargeting.ts`): a card
+Two rules carry the model. **Targets rank, they never compete** (`planTargeting.ts`): a card
 is the only drop target on its own height, and grouping vs. inserting before/after is
 decided by the pointer's height within it, never by a second droppable. The cards tile the
 list without gaps — each carries its own `pb-2` instead of the list carrying a `gap` — so
-the pointer always hits exactly one. Earlier a merge zone overlapped each card's middle half
-and the list itself was a target, so `over` flipped several times per card of travel; while
-`SortableContext` was still in play each flip fed `items.indexOf(over.id) === -1` into
-`verticalListSortingStrategy`, which shoved every card above the dragged one down by a full
-card height. **One reading of a drop** (`planDrop` in `model.ts`): the same function answers
+the pointer always hits exactly one. Only when no card is hit does the list area catch the
+drag, which is what makes the space below the last card a real target: releasing a device
+there lifts it out of its Bedarfsgruppe onto the end of the list without having to hit a
+gap, and it is the only way out when the group is the sole card. That fallback overlaps the
+cards but cannot rival them, because it is consulted only after they miss — the order in the
+collision function is the whole ranking. Earlier a merge zone overlapped each card's middle
+half and the list competed on equal footing, so `over` flipped several times per card of
+travel; while `SortableContext` was still in play each flip fed `items.indexOf(over.id) ===
+-1` into `verticalListSortingStrategy`, which shoved every card above the dragged one down
+by a full card height. **One reading of a drop** (`planDrop` in `model.ts`): the same function answers
 both the preview during the drag and the mutation on release, so the marker cannot promise
 something the drop does not do. Its insertion index counts the gaps of the list *including*
 the dragged card — exactly where the line sits — and dropping into either gap touching the

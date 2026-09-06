@@ -14,11 +14,11 @@
 // `@dnd-kit/sortable`: dessen Aufgabe ist genau das Umlegen der Karten während des Zuges.)
 //
 // Bleibt die eine Regel, die dieses Modul durchsetzt:
-// NUR KARTEN SIND ZIELE, UND SIE ÜBERLAPPEN NICHT. Sie kacheln die Liste lückenlos — jede
-// Karte trägt ihren Abstand als eigenes `pb-2`, die Liste hat kein `gap` —, also trifft
-// der Zeiger innerhalb der Liste immer genau eine Karte: nie eine Fuge, nie zwei Ziele,
-// nie die Liste selbst. Überlappende Ziele ließen `over` mehrmals pro Karte hin- und
-// herspringen, und mit ihm die Anzeige.
+// ZIELE STEHEN IN EINER RANGORDNUNG, NIE IM WETTBEWERB. Die Karten kacheln die Liste
+// lückenlos — jede trägt ihren Abstand als eigenes `pb-2`, die Liste hat kein `gap` —,
+// also trifft der Zeiger dort immer genau eine Karte und nie eine Fuge. Nur wenn keine
+// Karte getroffen ist, fängt die Listenfläche den Zug auf. Zwei Ziele gleichzeitig gibt
+// es nie: sonst spränge `over` mehrmals pro Karte hin und her, und mit ihm die Anzeige.
 //
 // =======================================================================================
 
@@ -28,6 +28,7 @@ import { type Collision } from '@dnd-kit/core';
 import { type CollisionDetection } from '@dnd-kit/core';
 import { type Coordinates } from '@dnd-kit/utilities';
 import { ENTRY_PREFIX } from './model.ts';
+import { PLAN_LIST_ID } from './model.ts';
 import { type DropZone } from './model.ts';
 
 /** Anteil der Kartenhöhe in der Mitte, der "auf diese Karte gruppieren" bedeutet; der Rest
@@ -44,14 +45,23 @@ function zoneAt(pointer: Coordinates | null, rect: ClientRect | undefined): Drop
 }
 
 /** Die getroffene Karte, angereichert um die Zone. Höchstens ein Treffer: überlappende
- *  Ziele gibt es nicht mehr, und ein zweiter Platz wäre nur eine Karte, auf der der Zeiger
- *  gar nicht steht. */
+ *  Ziele gibt es nicht, und ein zweiter Platz wäre nur eine Karte, auf der der Zeiger gar
+ *  nicht steht.
+ *
+ *  Trifft der Zeiger keine Karte, steht er aber noch in der Listenfläche, fängt diese den
+ *  Zug auf. Sie überlappt die Karten zwar, kann aber nie mit ihnen konkurrieren, weil sie
+ *  erst gefragt wird, wenn keine Karte getroffen ist — die Reihenfolge hier ist die ganze
+ *  Rangordnung. Ohne dieses Auffangziel wäre die Fläche unter der letzten Karte tot, und
+ *  ein Gerät aus einer Bedarfsgruppe ließe sich nur durch genaues Treffen einer Fuge
+ *  herauslösen. */
 export const planTargets: CollisionDetection = (args) => {
-  const cards = args.droppableContainers.filter((container) =>
-    String(container.id).startsWith(ENTRY_PREFIX),
-  );
-  const [hit] = pointerWithin({ ...args, droppableContainers: cards });
-  if (!hit) return [];
+  const within = (match: (id: string) => boolean) =>
+    pointerWithin({
+      ...args,
+      droppableContainers: args.droppableContainers.filter((c) => match(String(c.id))),
+    });
+  const [hit] = within((id) => id.startsWith(ENTRY_PREFIX));
+  if (!hit) return within((id) => id === PLAN_LIST_ID).slice(0, 1);
   return [
     {
       ...hit,

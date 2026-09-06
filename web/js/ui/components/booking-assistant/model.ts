@@ -18,6 +18,8 @@ export const rangeLengthOf = (r: DateRange, fallback = 90) =>
   r.from && r.to ? countDays(r.from, r.to) : fallback;
 
 export const ENTRY_PREFIX = 'entry:';
+/** Die Listenfläche als Ganzes — Auffangziel für alles, was keine Karte trifft. */
+export const PLAN_LIST_ID = 'plan-list';
 export const entryDragId = (entryId: string) => `${ENTRY_PREFIX}${entryId}`;
 export const memberDragId = (entryId: string, deviceId: string) => `member:${entryId}:${deviceId}`;
 
@@ -79,18 +81,23 @@ export function planDrop(
   overId: string,
   zone: DropZone,
 ): DropPlan | null {
+  /* Die freie Fläche unter den Karten ist einfach die letzte Fuge — dort loslassen heißt
+     "raus damit", ohne eine Fuge treffen zu müssen. Eine Zone hat sie nicht. */
+  if (overId === PLAN_LIST_ID) return insertInto(plan, source, plan.length);
   const targetId = entryIdOf(overId);
   const targetIndex = targetId ? plan.findIndex((entry) => entry.id === targetId) : -1;
   if (targetIndex < 0) return null;
   /* Auf die eigene Karte bzw. zurück in die eigene Bedarfsgruppe: nichts zu tun. */
-  if (zone === 'merge')
-    return targetId === source.entryId ? null : { kind: 'merge', targetId: targetId };
-  const index = zone === 'after' ? targetIndex + 1 : targetIndex;
-  if (source.type === 'entry') {
-    /* Die Fugen direkt über und unter der Karte sind ihr eigener Platz. */
-    const from = plan.findIndex((entry) => entry.id === source.entryId);
-    if (from < 0 || index === from || index === from + 1) return null;
-  }
+  if (zone === 'merge') return targetId === source.entryId ? null : { kind: 'merge', targetId };
+  return insertInto(plan, source, zone === 'after' ? targetIndex + 1 : targetIndex);
+}
+
+/** Eine ganze Karte an ihrem eigenen Platz zu lassen ist keine Änderung; ein Gerät aus einer
+ *  Bedarfsgruppe zu lösen dagegen immer, auch direkt neben seiner Gruppe. */
+function insertInto(plan: PlanEntry[], source: DragSource, index: number): DropPlan | null {
+  if (source.type === 'member') return { kind: 'insert', index };
+  const from = plan.findIndex((entry) => entry.id === source.entryId);
+  if (from < 0 || index === from || index === from + 1) return null;
   return { kind: 'insert', index };
 }
 

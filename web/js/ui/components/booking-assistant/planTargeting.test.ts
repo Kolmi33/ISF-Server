@@ -9,12 +9,12 @@ const rect = (top: number, height: number) => ({
   width: 200,
   height,
 });
-/* Zwei 100px hohe Karten, lückenlos untereinander, dazu die Liste als umschließendes
-   Rechteck — genau die Überlappung, an der `over` früher aus der Sortierung fiel. */
+/* Zwei 100px hohe Karten, lückenlos untereinander, in einer 600px hohen Listenfläche: die
+   Karten überlappen sie, dürfen aber nie mit ihr konkurrieren. */
 const droppableRects = new Map([
   ['entry:one', rect(0, 100)],
   ['entry:two', rect(100, 100)],
-  ['plan-list', rect(0, 200)],
+  ['plan-list', rect(0, 600)],
 ]);
 const targetsAt = (y: number) =>
   planTargets({
@@ -30,11 +30,14 @@ describe('plan drag targeting', () => {
     expect(targetsAt(90).map((c) => [c.id, c.data?.['zone']])).toEqual([['entry:one', 'after']]);
     expect(targetsAt(150).map((c) => [c.id, c.data?.['zone']])).toEqual([['entry:two', 'merge']]);
   });
-  it('never targets the surrounding list, and nothing at all outside the cards', () => {
+  it('lets the card win over the list it lies in, and falls back to the list below them', () => {
     // Der Zeiger steht auch in `plan-list` — trotzdem gewinnt die Karte, sonst spränge
     // die Anzeige zwischen zwei Zielen hin und her.
     expect(targetsAt(150).every((c) => c.id !== 'plan-list')).toBe(true);
-    expect(targetsAt(500)).toEqual([]);
+    // Unter der letzten Karte, aber noch in der Liste: die Fläche fängt den Zug auf.
+    expect(targetsAt(400).map((c) => c.id)).toEqual(['plan-list']);
+    // Ganz außerhalb: kein Ziel, das Loslassen ändert nichts.
+    expect(targetsAt(900)).toEqual([]);
   });
   it('falls back to grouping when the zone is missing or unknown', () => {
     expect(zoneOf(null)).toBe('merge');

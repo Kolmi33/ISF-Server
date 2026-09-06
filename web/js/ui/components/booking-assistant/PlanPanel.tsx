@@ -1,12 +1,14 @@
 import * as React from 'react';
 import { DndContext } from '@dnd-kit/core';
 import { DragOverlay } from '@dnd-kit/core';
+import { useDroppable } from '@dnd-kit/core';
 import { Inbox } from 'lucide-react';
 import { Info } from 'lucide-react';
 import { ScrollArea } from './primitives.tsx';
 import { Tooltip } from './primitives.tsx';
 import { TooltipContent } from './primitives.tsx';
 import { TooltipTrigger } from './primitives.tsx';
+import { PLAN_LIST_ID } from './model.ts';
 import { planTargets } from './planTargeting.ts';
 import { SECTION_LABEL_CLASS } from './styles.ts';
 import { GroupMemberRow } from './PlanCards.tsx';
@@ -61,6 +63,7 @@ function PlanHeading() {
 }
 function PlanList({ state }: { state: AssistantState }) {
   const { plan, mergeTargetId, dropIndex, removeEntry, removeMember, setRequiredCount } = state;
+  const listArea = useDroppable({ id: PLAN_LIST_ID });
   /* Die Einfügestelle ist die Fuge über der Karte an dieser Stelle — hinter der letzten
      Karte gibt es keine mehr, dort trägt sie die letzte Karte an ihrer Unterkante. */
   const indicatorFor = (index: number) => {
@@ -69,31 +72,37 @@ function PlanList({ state }: { state: AssistantState }) {
     return undefined;
   };
   return (
-    <ScrollArea className="-mr-3 min-h-0 flex-1 pr-3">
-      {plan.length === 0 ? (
-        <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-12 text-center">
-          <Inbox className="size-7 text-muted-foreground/60" />
-          <p className="max-w-[26ch] text-sm text-muted-foreground">Noch nichts ausgewählt.</p>
-        </div>
-      ) : (
-        /* Kein `gap`: den Abstand trägt jede Karte selbst, damit die Drop-Ziele die Liste
+    /* Auffangfläche: alles unterhalb der Überschrift, was keine Karte ist. Ein Gerät hier
+       loszulassen löst es aus seiner Bedarfsgruppe und hängt es hinten an — dafür muss
+       niemand eine Fuge treffen. Bewusst als Flex-Kind bemessen und nicht über eine
+       Prozenthöhe, damit die Fläche unter der letzten Karte sicher dazugehört. */
+    <div ref={listArea.setNodeRef} className="flex min-h-0 flex-1 flex-col">
+      <ScrollArea className="-mr-3 min-h-0 flex-1 pr-3">
+        {plan.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-12 text-center">
+            <Inbox className="size-7 text-muted-foreground/60" />
+            <p className="max-w-[26ch] text-sm text-muted-foreground">Noch nichts ausgewählt.</p>
+          </div>
+        ) : (
+          /* Kein `gap`: den Abstand trägt jede Karte selbst, damit die Drop-Ziele die Liste
            lückenlos kacheln (siehe `planTargeting.ts`). */
-        <ul className="flex flex-col">
-          {plan.map((entry, index) => (
-            <PlanCard
-              key={entry.id}
-              entry={entry}
-              position={entry.kind === 'device' ? String(index + 1).padStart(2, '0') : undefined}
-              mergeActive={mergeTargetId === entry.id}
-              indicator={indicatorFor(index)}
-              onRemoveEntry={removeEntry}
-              onRemoveMember={removeMember}
-              onRequiredCountChange={setRequiredCount}
-            />
-          ))}
-        </ul>
-      )}
-    </ScrollArea>
+          <ul className="flex flex-col">
+            {plan.map((entry, index) => (
+              <PlanCard
+                key={entry.id}
+                entry={entry}
+                position={entry.kind === 'device' ? String(index + 1).padStart(2, '0') : undefined}
+                mergeActive={mergeTargetId === entry.id}
+                indicator={indicatorFor(index)}
+                onRemoveEntry={removeEntry}
+                onRemoveMember={removeMember}
+                onRequiredCountChange={setRequiredCount}
+              />
+            ))}
+          </ul>
+        )}
+      </ScrollArea>
+    </div>
   );
 }
 function PlanOverlay({ state }: { state: AssistantState }) {

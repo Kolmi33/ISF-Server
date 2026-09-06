@@ -105,6 +105,31 @@ describe('supplied plan and criteria state', () => {
       { kind: 'group', id: d!.id, deviceIds: ['d', 'b', 'a', 'c'], requiredCount: 1 },
     ]);
   });
+  it('drops a member out into the free area below the cards, without aiming at a gap', () => {
+    const { result, add, drop, over } = setup();
+    add('a');
+    add('b');
+    const [a, b] = result.current.plan;
+    drop(`entry:${a!.id}`, `entry:${b!.id}`, 'merge');
+    const group = result.current.plan[0]!;
+    expect(result.current.plan).toHaveLength(1);
+    // Die Gruppe ist die einzige Karte — ohne die Auffangfläche gäbe es kein Ziel.
+    over(`member:${group.id}:a`, 'plan-list');
+    expect(result.current.dropIndex).toBe(1);
+    drop(`member:${group.id}:a`, 'plan-list');
+    expect(result.current.plan).toEqual([
+      { kind: 'device', id: group.id, deviceId: 'b' },
+      { kind: 'device', id: expect.any(String), deviceId: 'a' },
+    ]);
+    // Für ganze Karten ist die Fläche schlicht die letzte Fuge: die letzte liegt schon dort.
+    over(`entry:${group.id}`, 'plan-list');
+    expect(result.current.dropIndex).toBe(2);
+    const last = result.current.plan[1]!;
+    over(`entry:${last.id}`, 'plan-list');
+    expect(result.current.dropIndex).toBeNull();
+    drop(`entry:${group.id}`, 'plan-list');
+    expect(result.current.plan.map((e) => e.kind === 'device' && e.deviceId)).toEqual(['a', 'b']);
+  });
   it('moves members between groups and back out into their own card', () => {
     const { result, add, drop } = setup();
     ['a', 'b', 'c', 'd'].forEach(add);
