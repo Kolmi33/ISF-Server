@@ -9,6 +9,7 @@ import { type DragSource } from './model.ts';
 import { parseDragId } from './model.ts';
 import { deviceIdsOf } from './model.ts';
 import { normalizePlan } from './model.ts';
+import { dropIndexOf } from './model.ts';
 import { createDeviceEntry } from './model.ts';
 
 const mergeInto = (list: PlanEntry[], targetId: string, deviceIds: string[]): PlanEntry[] =>
@@ -61,13 +62,7 @@ function movePlan(current: PlanEntry[], source: DragSource, overId: string): Pla
 
   /* aus der Gruppe herausgelöst → eigene Karte an der Zielposition */
   const cleaned = normalizePlan(stripped);
-  const insertAt =
-    overId === 'plan-list'
-      ? cleaned.length
-      : Math.max(
-          0,
-          cleaned.findIndex((e) => e.id === targetEntryId),
-        );
+  const insertAt = dropIndexOf(cleaned, overId) ?? cleaned.length;
   const next = [...cleaned];
   next.splice(insertAt, 0, createDeviceEntry(source.deviceId));
   return next;
@@ -78,24 +73,42 @@ export function usePlanDrag(
 ) {
   const [activeDrag, setActiveDrag] = React.useState<DragSource | null>(null);
   const [mergeTargetId, setMergeTargetId] = React.useState<string | null>(null);
+  /* Index, an dem ein herausgezogenes Gruppenmitglied landen würde — die grüne Linie. */
+  const [dropIndex, setDropIndex] = React.useState<number | null>(null);
   const sensors = useSensors(
-    /* 5px Toleranz, damit Klicks auf Buttons in der Karte nicht als Drag gelten */
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    /* 12px Toleranz: Klicks auf Buttons in der Karte gelten nicht als Drag, und ein
+       beim Klicken verrutschter Zeiger sortiert die Liste nicht versehentlich um. */
+    useSensor(PointerSensor, { activationConstraint: { distance: 12 } }),
   );
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveDrag(parseDragId(String(event.active.id)));
   };
 
-  const handleDragOver = (event: { over: { id: string | number } | null }) => {
+  /* Die Quelle kommt aus dem Ereignis, nicht aus `activeDrag`: dnd-kit meldet das erste
+     `over` noch im selben Durchlauf wie den Start, `activeDrag` wäre dann leer. */
+  const handleDragOver = (event: {
+    active: { id: string | number };
+    over: { id: string | number } | null;
+  }) => {
     const overId = event.over ? String(event.over.id) : '';
     setMergeTargetId(overId.startsWith('merge:') ? overId.slice('merge:'.length) : null);
+    /* Nur beim Herauslösen aus einer Bedarfsgruppe: beim Umsortieren ganzer Karten zeigt
+       schon das Auseinanderrücken der Liste, wohin die Karte fällt. */
+    const source = parseDragId(String(event.active.id));
+    setDropIndex(source?.type === 'member' ? dropIndexOf(plan, overId) : null);
+  };
+
+  /** Alles zurück auf Anfang — nach dem Ablegen wie nach dem Abbrechen. */
+  const cancelDrag = () => {
+    setActiveDrag(null);
+    setMergeTargetId(null);
+    setDropIndex(null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const source = parseDragId(String(event.active.id));
-    setActiveDrag(null);
-    setMergeTargetId(null);
+    cancelDrag();
     if (source && event.over)
       setPlan((current) => movePlan(current, source, String(event.over!.id)));
   };
@@ -104,9 +117,9 @@ export function usePlanDrag(
   return {
     sensors,
     activeDrag,
-    setActiveDrag,
     mergeTargetId,
-    setMergeTargetId,
+    dropIndex,
+    cancelDrag,
     handleDragStart,
     handleDragOver,
     handleDragEnd,

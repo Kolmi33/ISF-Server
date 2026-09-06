@@ -94,10 +94,47 @@ describe('supplied plan and criteria state', () => {
     const id = result.current.plan[0]!.id;
     act(() => result.current.handleDragStart({ active: { id: `entry:${id}` } } as any));
     expect(result.current.draggedEntry?.id).toBe(id);
-    act(() => result.current.handleDragOver({ over: { id: `merge:${id}` } }));
+    const over = (target: string | null) =>
+      act(() =>
+        result.current.handleDragOver({
+          active: { id: `entry:${id}` },
+          over: target ? { id: target } : null,
+        }),
+      );
+    over(`merge:${id}`);
     expect(result.current.mergeTargetId).toBe(id);
-    act(() => result.current.handleDragOver({ over: null }));
+    over(null);
     expect(result.current.mergeTargetId).toBeNull();
+    act(() => result.current.cancelDrag());
+    expect(result.current.draggedEntry).toBeUndefined();
+  });
+  it('marks the slot a group member would drop into, but not while whole cards move', () => {
+    const { result, add, drop } = setup();
+    ['a', 'b', 'c'].forEach(add);
+    const [a, b, c] = result.current.plan;
+    drop(`entry:${a!.id}`, `merge:${b!.id}`);
+    const group = result.current.plan[0]!;
+    const over = (active: string, target: string) =>
+      act(() => result.current.handleDragOver({ active: { id: active }, over: { id: target } }));
+    over(`member:${group.id}:a`, `entry:${c!.id}`);
+    expect(result.current.dropIndex).toBe(1);
+    over(`member:${group.id}:a`, 'plan-list');
+    expect(result.current.dropIndex).toBe(2);
+    // Über der Merge-Zone wird gruppiert statt eingefügt — dafür steht der Ring, keine Linie.
+    over(`member:${group.id}:a`, `merge:${c!.id}`);
+    expect(result.current.dropIndex).toBeNull();
+    // Verschwundene Zielkarte: keine Linie, der Drop hängt das Gerät hinten an.
+    over(`member:${group.id}:a`, 'entry:weg');
+    expect(result.current.dropIndex).toBeNull();
+    over(`entry:${c!.id}`, `entry:${group.id}`);
+    expect(result.current.dropIndex).toBeNull();
+    drop(`member:${group.id}:a`, 'entry:weg');
+    expect(result.current.plan.map((e) => e.kind === 'device' && e.deviceId)).toEqual([
+      'b',
+      'c',
+      'a',
+    ]);
+    expect(result.current.dropIndex).toBeNull();
   });
   it('couples min/max, retains partial ranges, applies range bounds and expires hints', () => {
     vi.useFakeTimers();

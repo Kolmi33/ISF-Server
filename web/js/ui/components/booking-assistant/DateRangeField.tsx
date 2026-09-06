@@ -54,7 +54,7 @@ export function DateRangeField({
               type="button"
               onClick={() => applyPreset(days)}
               className={cn(
-                'rounded-full border border-border px-2.5 py-1 font-mono text-[11px] tabular-nums text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'rounded-full border border-border px-2.5 py-1 text-[11px] tabular-nums text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 draftLength === days && 'border-primary/50 bg-primary/10 text-primary',
               )}
             >
@@ -108,12 +108,10 @@ function RangeTrigger({
           <span className={cn('block', LABEL_CLASS)}>
             Zeitraum
             {appliedLength !== null && (
-              <span className="ml-1.5 font-mono normal-case tracking-normal">
-                · {appliedLength} Tage
-              </span>
+              <span className="ml-1.5 normal-case tracking-normal">· {appliedLength} Tage</span>
             )}
           </span>
-          <span className="mt-0.5 block font-mono text-sm font-semibold tabular-nums text-foreground">
+          <span className="mt-0.5 block text-sm font-semibold tabular-nums text-foreground">
             {formatDate(range.from)} <span className="text-muted-foreground">→</span>{' '}
             {formatDate(range.to)}
           </span>
@@ -143,7 +141,7 @@ function RangeActions({
 }) {
   return (
     <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-      <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+      <span className="text-[11px] tabular-nums text-muted-foreground">
         {draft.from ? formatDate(draft.from) : 'Startdatum wählen'}
         {draft.from && ' → '}
         {draft.from && (draft.to ? formatDate(draft.to) : 'Enddatum wählen')}

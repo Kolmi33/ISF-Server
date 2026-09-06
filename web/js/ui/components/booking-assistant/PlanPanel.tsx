@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { DndContext } from '@dnd-kit/core';
 import { DragOverlay } from '@dnd-kit/core';
 import { pointerWithin } from '@dnd-kit/core';
@@ -18,14 +19,7 @@ import { SortablePlanCard } from './PlanCards.tsx';
 import { type AssistantState } from './useAssistantState.ts';
 
 export function PlanPanel({ state }: { state: AssistantState }) {
-  const {
-    sensors,
-    handleDragStart,
-    handleDragOver,
-    handleDragEnd,
-    setActiveDrag,
-    setMergeTargetId,
-  } = state;
+  const { sensors, handleDragStart, handleDragOver, handleDragEnd, cancelDrag } = state;
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 px-6 py-5 sm:px-7 md:basis-1/2">
       <PlanHeading />
@@ -36,10 +30,7 @@ export function PlanPanel({ state }: { state: AssistantState }) {
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
-        onDragCancel={() => {
-          setActiveDrag(null);
-          setMergeTargetId(null);
-        }}
+        onDragCancel={cancelDrag}
       >
         <PlanList state={state} />
 
@@ -72,8 +63,15 @@ function PlanHeading() {
     </div>
   );
 }
+/** Grüne Einfügemarke: zeigt beim Herausziehen aus einer Bedarfsgruppe, zwischen welchen
+ *  Karten das Gerät als eigene Karte landet. Die negativen Ränder heben die Listenlücke
+ *  wieder auf, damit die Marke die Karten nicht auseinanderschiebt. */
+function DropLine() {
+  return <li aria-hidden className="-my-1 h-0.5 shrink-0 rounded-full bg-primary" />;
+}
+
 function PlanList({ state }: { state: AssistantState }) {
-  const { plan, mergeTargetId, removeEntry, removeMember, setRequiredCount } = state;
+  const { plan, mergeTargetId, dropIndex, removeEntry, removeMember, setRequiredCount } = state;
   const planList = useDroppable({ id: 'plan-list' });
   return (
     <ScrollArea className="-mr-3 min-h-0 flex-1 pr-3">
@@ -92,16 +90,21 @@ function PlanList({ state }: { state: AssistantState }) {
         >
           <ul ref={planList.setNodeRef} className="flex flex-col gap-2">
             {plan.map((entry, index) => (
-              <SortablePlanCard
-                key={entry.id}
-                entry={entry}
-                position={entry.kind === 'device' ? String(index + 1).padStart(2, '0') : undefined}
-                mergeActive={mergeTargetId === entry.id}
-                onRemoveEntry={removeEntry}
-                onRemoveMember={removeMember}
-                onRequiredCountChange={setRequiredCount}
-              />
+              <React.Fragment key={entry.id}>
+                {dropIndex === index && <DropLine />}
+                <SortablePlanCard
+                  entry={entry}
+                  position={
+                    entry.kind === 'device' ? String(index + 1).padStart(2, '0') : undefined
+                  }
+                  mergeActive={mergeTargetId === entry.id}
+                  onRemoveEntry={removeEntry}
+                  onRemoveMember={removeMember}
+                  onRequiredCountChange={setRequiredCount}
+                />
+              </React.Fragment>
             ))}
+            {dropIndex === plan.length && <DropLine />}
           </ul>
         </SortableContext>
       )}

@@ -57,3 +57,14 @@ export const createDeviceEntry = (deviceId: string): PlanDeviceEntry => ({
   id: `entry-${++entryCounter}-${Date.now().toString(36)}`,
   deviceId,
 });
+
+/** Stelle in der Planliste, an der ein Drop einfügt: ans Ende, wenn die Liste selbst das
+ *  Ziel ist, sonst vor die getroffene Karte. `null` = kein Einfügeziel (Merge-Zone, das
+ *  Herausziehen auf nichts, eine inzwischen verschwundene Karte). */
+export function dropIndexOf(plan: PlanEntry[], overId: string): number | null {
+  if (overId === 'plan-list') return plan.length;
+  const [prefix, entryId] = overId.split(':');
+  if (prefix !== 'entry' || !entryId) return null;
+  const index = plan.findIndex((entry) => entry.id === entryId);
+  return index < 0 ? null : index;
+}

@@ -58,7 +58,7 @@ function ResultDetails({ window }: { window: AvailabilityWindow }) {
   return (
     <div className="min-w-[16rem] flex-1">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-sm font-semibold tabular-nums text-foreground">
+        <span className="text-sm font-semibold tabular-nums text-foreground">
           {formatDateLong(start)}
           <span className="mx-1.5 text-muted-foreground">→</span>
           {openEnded ? <span className="text-muted-foreground">offen</span> : formatDateLong(end)}
@@ -78,7 +78,7 @@ function ResultDetails({ window }: { window: AvailabilityWindow }) {
       {/* grün = direkt gewähltes Gerät · orange = aus einer Bedarfsgruppe aufgelöst */}
       <ResultDevices devices={window.devices} />
 
-      <p className="mt-2.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+      <p className="mt-2.5 text-[11px] tabular-nums text-muted-foreground">
         {openEnded
           ? `ab ${formatDate(start)} durchgehend frei`
           : `freies Fenster · ${spanDays} Tage`}
