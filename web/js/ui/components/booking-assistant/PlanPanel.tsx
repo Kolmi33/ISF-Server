@@ -1,10 +1,7 @@
 import * as React from 'react';
 import { DndContext } from '@dnd-kit/core';
 import { DragOverlay } from '@dnd-kit/core';
-import { pointerWithin } from '@dnd-kit/core';
-import { useDroppable } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
-import { verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Inbox } from 'lucide-react';
 import { Info } from 'lucide-react';
 import { ScrollArea } from './primitives.tsx';
@@ -12,6 +9,8 @@ import { Tooltip } from './primitives.tsx';
 import { TooltipContent } from './primitives.tsx';
 import { TooltipTrigger } from './primitives.tsx';
 import { entryDragId } from './model.ts';
+import { planSorting } from './planTargeting.ts';
+import { planTargets } from './planTargeting.ts';
 import { SECTION_LABEL_CLASS } from './styles.ts';
 import { GroupMemberRow } from './PlanCards.tsx';
 import { PlanCardContent } from './PlanCards.tsx';
@@ -26,7 +25,7 @@ export function PlanPanel({ state }: { state: AssistantState }) {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={pointerWithin}
+        collisionDetection={planTargets}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
@@ -63,48 +62,41 @@ function PlanHeading() {
     </div>
   );
 }
-/** Grüne Einfügemarke: zeigt beim Herausziehen aus einer Bedarfsgruppe, zwischen welchen
- *  Karten das Gerät als eigene Karte landet. Die negativen Ränder heben die Listenlücke
- *  wieder auf, damit die Marke die Karten nicht auseinanderschiebt. */
-function DropLine() {
-  return <li aria-hidden className="-my-1 h-0.5 shrink-0 rounded-full bg-primary" />;
-}
-
 function PlanList({ state }: { state: AssistantState }) {
   const { plan, mergeTargetId, dropIndex, removeEntry, removeMember, setRequiredCount } = state;
-  const planList = useDroppable({ id: 'plan-list' });
+  /* Die Einfügestelle gehört zur Fuge über der Karte an dieser Stelle — hinter der letzten
+     Karte gibt es keine mehr, dort trägt sie die letzte Karte an ihrer Unterkante. */
+  const indicatorFor = (index: number) => {
+    if (dropIndex === index) return 'before' as const;
+    if (dropIndex === plan.length && index === plan.length - 1) return 'after' as const;
+    return undefined;
+  };
+  /* Beim Gruppieren macht die Liste keine Lücke auf; der Ring um die Zielkarte sagt es. */
+  const strategy = React.useMemo(() => planSorting(mergeTargetId !== null), [mergeTargetId]);
   return (
     <ScrollArea className="-mr-3 min-h-0 flex-1 pr-3">
       {plan.length === 0 ? (
-        <div
-          ref={planList.setNodeRef}
-          className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-12 text-center"
-        >
+        <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-12 text-center">
           <Inbox className="size-7 text-muted-foreground/60" />
           <p className="max-w-[26ch] text-sm text-muted-foreground">Noch nichts ausgewählt.</p>
         </div>
       ) : (
-        <SortableContext
-          items={plan.map((entry) => entryDragId(entry.id))}
-          strategy={verticalListSortingStrategy}
-        >
-          <ul ref={planList.setNodeRef} className="flex flex-col gap-2">
+        <SortableContext items={plan.map((entry) => entryDragId(entry.id))} strategy={strategy}>
+          {/* Kein `gap`: den Abstand trägt jede Karte selbst, damit die Drop-Ziele die
+              Liste lückenlos kacheln (siehe `planTargeting.ts`). */}
+          <ul className="flex flex-col">
             {plan.map((entry, index) => (
-              <React.Fragment key={entry.id}>
-                {dropIndex === index && <DropLine />}
-                <SortablePlanCard
-                  entry={entry}
-                  position={
-                    entry.kind === 'device' ? String(index + 1).padStart(2, '0') : undefined
-                  }
-                  mergeActive={mergeTargetId === entry.id}
-                  onRemoveEntry={removeEntry}
-                  onRemoveMember={removeMember}
-                  onRequiredCountChange={setRequiredCount}
-                />
-              </React.Fragment>
+              <SortablePlanCard
+                key={entry.id}
+                entry={entry}
+                position={entry.kind === 'device' ? String(index + 1).padStart(2, '0') : undefined}
+                mergeActive={mergeTargetId === entry.id}
+                indicator={indicatorFor(index)}
+                onRemoveEntry={removeEntry}
+                onRemoveMember={removeMember}
+                onRequiredCountChange={setRequiredCount}
+              />
             ))}
-            {dropIndex === plan.length && <DropLine />}
           </ul>
         </SortableContext>
       )}

@@ -17,8 +17,8 @@ export const countDays = (from: Date, to: Date) =>
 export const rangeLengthOf = (r: DateRange, fallback = 90) =>
   r.from && r.to ? countDays(r.from, r.to) : fallback;
 
-export const entryDragId = (entryId: string) => `entry:${entryId}`;
-export const mergeDropId = (entryId: string) => `merge:${entryId}`;
+export const ENTRY_PREFIX = 'entry:';
+export const entryDragId = (entryId: string) => `${ENTRY_PREFIX}${entryId}`;
 export const memberDragId = (entryId: string, deviceId: string) => `member:${entryId}:${deviceId}`;
 
 export type DragSource =
@@ -58,13 +58,21 @@ export const createDeviceEntry = (deviceId: string): PlanDeviceEntry => ({
   deviceId,
 });
 
-/** Stelle in der Planliste, an der ein Drop einfügt: ans Ende, wenn die Liste selbst das
- *  Ziel ist, sonst vor die getroffene Karte. `null` = kein Einfügeziel (Merge-Zone, das
- *  Herausziehen auf nichts, eine inzwischen verschwundene Karte). */
-export function dropIndexOf(plan: PlanEntry[], overId: string): number | null {
-  if (overId === 'plan-list') return plan.length;
-  const [prefix, entryId] = overId.split(':');
-  if (prefix !== 'entry' || !entryId) return null;
+/** Wohin ein Zug innerhalb der getroffenen Karte zielt: auf sie drauf (gruppieren) oder in
+ *  die Fuge davor bzw. dahinter (einfügen). */
+export type DropZone = 'before' | 'merge' | 'after';
+
+/** Karten-ID hinter einer Ziel-ID — `''`, wenn das Ziel keine Karte ist. */
+export const entryIdOf = (overId: string) =>
+  overId.startsWith(ENTRY_PREFIX) ? overId.slice(ENTRY_PREFIX.length) : '';
+
+/** Stelle in der Planliste, an der eine Karte eingefügt würde. `null` = es wird gar nicht
+ *  eingefügt (gruppieren) oder das Ziel gibt es nicht mehr. */
+export function insertIndexOf(plan: PlanEntry[], overId: string, zone: DropZone): number | null {
+  if (zone === 'merge') return null;
+  const entryId = entryIdOf(overId);
+  if (!entryId) return null;
   const index = plan.findIndex((entry) => entry.id === entryId);
-  return index < 0 ? null : index;
+  if (index < 0) return null;
+  return zone === 'after' ? index + 1 : index;
 }

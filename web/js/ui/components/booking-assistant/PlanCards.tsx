@@ -1,7 +1,6 @@
 import type { PlanGroupEntry, PlanDeviceEntry } from '../../../core/booking-assistant-types.ts';
 import * as React from 'react';
 import { useDraggable } from '@dnd-kit/core';
-import { useDroppable } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
@@ -13,7 +12,6 @@ import { useDevices } from './DeviceProvider.tsx';
 import { type PlanEntry } from '../../../core/booking-assistant-types.ts';
 import { DeviceSubtitle } from './DeviceSubtitle.tsx';
 import { entryDragId } from './model.ts';
-import { mergeDropId } from './model.ts';
 import { memberDragId } from './model.ts';
 import { NumberInput } from './NumberField.tsx';
 
@@ -143,12 +141,15 @@ export function PlanCardContent({
   );
 }
 
-/** Sortable-Wrapper: die Karte ist Drag-Quelle UND Drop-Ziel, plus eine
- *  eingelegte Mittelzone, deren Treffer "gruppieren" statt "umsortieren" bedeutet. */
-export function SortablePlanCard(props: PlanCardProps & { mergeActive: boolean }) {
-  const { entry, mergeActive, ...rest } = props;
+/** Sortable-Wrapper: die Karte ist Drag-Quelle und zugleich das einzige Drop-Ziel auf ihrer
+ *  Höhe. Der Abstand zur nächsten Karte steckt als `pb-2` in ihr drin und nicht als `gap`
+ *  in der Liste — so kacheln die Ziele die Liste lückenlos (siehe `planTargeting.ts`).
+ *  `mergeActive` und `indicator` sind reine Überlagerungen: sie verschieben nichts. */
+export function SortablePlanCard(
+  props: PlanCardProps & { mergeActive: boolean; indicator?: 'before' | 'after' },
+) {
+  const { entry, mergeActive, indicator, ...rest } = props;
   const sortable = useSortable({ id: entryDragId(entry.id) });
-  const mergeZone = useDroppable({ id: mergeDropId(entry.id) });
 
   return (
     <li
@@ -159,18 +160,22 @@ export function SortablePlanCard(props: PlanCardProps & { mergeActive: boolean }
       }}
       {...sortable.attributes}
       {...sortable.listeners}
-      className={cn('relative cursor-grab touch-none', sortable.isDragging && 'opacity-40')}
+      className={cn('relative cursor-grab touch-none pb-2', sortable.isDragging && 'opacity-40')}
     >
       <div className={cn('rounded-xl', mergeActive && 'ring-2 ring-brand/60')}>
         <PlanCardContent entry={entry} {...rest} />
       </div>
 
-      {/* Mittelzone: nur hier bedeutet ein Drop "Bedarfsgruppe bilden". */}
-      <div
-        ref={mergeZone.setNodeRef}
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-1/2 h-1/2 -translate-y-1/2"
-      />
+      {/* Grüne Einfügemarke, mittig in der Fuge über bzw. unter der Karte. */}
+      {indicator && (
+        <span
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute inset-x-0 h-0.5 rounded-full bg-primary',
+            indicator === 'before' ? '-top-1' : 'bottom-1',
+          )}
+        />
+      )}
     </li>
   );
 }

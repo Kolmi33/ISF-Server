@@ -767,8 +767,23 @@ The backend remains zero-dependency. This is the reasoned frontend guardrail ext
 `booking-assistant.css` scopes the supplied green/orange light/dark palette and reset to
 the dialog and its portals. Explicit CSS layer ordering keeps the local reset below
 utilities; `revert-layer` isolates legacy unlayered element rules. Other screens retain
-their theme. The existing overlay owns viewport scrolling and narrow panes allow the
-footer blocks to wrap. The supplied 506px middle section is retained.
+their theme. Narrow panes allow the footer blocks to wrap. The dialog caps itself at the
+window height and its middle section is `flex: 1 1 506px`: the supplied 506px is what it
+takes whenever the window allows, and it gives way before the footer does, so the date
+range, the day fields and the actions are always reachable without scrolling. Nothing
+outside the dialog scrolls; the catalog and plan panels scroll inside themselves.
+
+**Drag targeting invariant.** In the plan list a card is exactly one drop target, and
+whether a drop groups onto that card or inserts before/after it is decided by the pointer's
+height within it — never by a second, overlapping droppable. `SortableContext` resolves the
+target through `items.indexOf(over.id)`, so any target that is not a sortable entry yields
+`-1`, and `verticalListSortingStrategy` then shifts *every* card above the dragged one down
+by a full card height. Earlier such targets existed (a merge zone over each card's middle
+half, plus the list itself) and the gaps between cards belonged to no target at all, so the
+list jumped several times per card of travel. `planTargeting.ts` holds both halves of the
+rule: only cards are collision candidates, and the sorting strategy never sees `-1`. The
+cards therefore tile the list without gaps — each carries its own `pb-2` instead of the list
+carrying a `gap`. Merge highlight and insertion marker are pure overlays that move nothing.
 
 The supplied inclusive duration represents calendar days. `core/booking-assistant-search`
 computes deterministic maximal windows with the same resolved machines available on
