@@ -5,7 +5,7 @@ import { cn } from 'cn';
 import { Button } from './primitives.tsx';
 import { Input } from './primitives.tsx';
 import { Label } from './primitives.tsx';
-import { LABEL_CLASS } from './styles.ts';
+import { LABEL_CLASS } from '../app/typography.ts';
 
 export type LimitEdge = 'upper' | 'lower';
 

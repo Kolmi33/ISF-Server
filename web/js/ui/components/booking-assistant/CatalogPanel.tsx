@@ -2,7 +2,7 @@ import { Search } from 'lucide-react';
 import { Badge } from './primitives.tsx';
 import { Input } from './primitives.tsx';
 import { ScrollArea } from './primitives.tsx';
-import { SECTION_LABEL_CLASS } from './styles.ts';
+import { SECTION_LABEL_CLASS } from '../app/typography.ts';
 import { CatalogTree } from './Catalog.tsx';
 import { type AssistantState } from './useAssistantState.ts';
 

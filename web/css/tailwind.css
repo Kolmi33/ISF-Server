@@ -47,6 +47,7 @@
 @import '@fontsource-variable/inter';
 @import '@fontsource-variable/manrope';
 @import '@fontsource-variable/jetbrains-mono';
+@import './ui-scope.css';
 @import './booking-assistant.css';
 
 /* app.css's own tokens, exposed under their real (--app- prefixed, non-colliding) names for

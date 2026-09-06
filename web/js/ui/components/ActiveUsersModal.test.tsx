@@ -25,18 +25,19 @@ beforeEach(() => {
 });
 
 describe('ActiveUsersModal', () => {
-  // What: with nobody active, the modal shows a placeholder message and a bare (no count) heading.
+  // What: with nobody active, the modal shows a placeholder message and no count badge.
   // How: renders with an empty rows array and checks both texts.
   it('shows "niemand aktiv" with no rows', () => {
     render(<ActiveUsersModal rows={[]} />);
     expect(screen.getByText('Zurzeit ist niemand aktiv.')).toBeInTheDocument();
     expect(screen.getByRole('heading')).toHaveTextContent('Gerade aktiv');
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
   });
 
-  // What: each active user renders as its own row, the heading shows the total count, and
+  // What: each active user renders as its own row, a badge beside the title shows the total count, and
   // each row's activity time renders as a relative label (a special "just now" phrase under a
   // threshold, a numeric "N s ago" above it).
-  // How: renders two rows with different `ago` values and checks the heading count and both
+  // How: renders two rows with different `ago` values and checks the count badge and both
   // relative-time label forms.
   it('lists each row with a count in the heading, and a relative-time label', () => {
     render(
@@ -47,7 +48,8 @@ describe('ActiveUsersModal', () => {
         ]}
       />,
     );
-    expect(screen.getByRole('heading')).toHaveTextContent('Gerade aktiv (2)');
+    expect(screen.getByRole('heading')).toHaveTextContent('Gerade aktiv');
+    expect(screen.getByText('2')).toBeInTheDocument(); // the count badge beside the title
     expect(screen.getByText('bob')).toBeInTheDocument();
     expect(screen.getByText('gerade eben')).toBeInTheDocument();
     expect(screen.getByText('vor 90 s')).toBeInTheDocument();

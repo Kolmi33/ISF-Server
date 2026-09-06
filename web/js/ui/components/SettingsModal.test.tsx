@@ -85,7 +85,7 @@ describe('SettingsModal', () => {
     // checked; a real click (not a manually-set .checked + dispatched event -- React's
     // value tracker on checkboxes needs the real user gesture) unchecks it.
     render(<SettingsModal />);
-    screen.getByLabelText(/als „aktiv" teilen/).click();
+    screen.getByRole('checkbox', { name: /als „aktiv" teilen/ }).click();
     expect(localStorage.getItem('mb_presence')).toBe('off');
     expect(presenceTick).toHaveBeenCalledOnce();
   });
@@ -96,7 +96,7 @@ describe('SettingsModal', () => {
   // How: clicks the weekends checkbox and checks all three effects.
   it('toggling weekends resets extraWeeks, notifies, and re-centers today', () => {
     render(<SettingsModal />);
-    screen.getByLabelText(/Samstag/).click();
+    screen.getByRole('checkbox', { name: /Samstag/ }).click();
     expect(localStorage.getItem('mb_weekends')).toBe('on');
     expect(window.S.extraWeeks).toBe(0);
     expect(notifySpy).toHaveBeenCalledOnce();
@@ -109,7 +109,7 @@ describe('SettingsModal', () => {
   // body's class list, without asserting on notify.
   it('toggling compact mode adds/removes the body class directly (no notify needed)', () => {
     render(<SettingsModal />);
-    screen.getByLabelText(/kompakte Zeilen/).click();
+    screen.getByRole('checkbox', { name: /kompakte Zeilen/ }).click();
     expect(localStorage.getItem('mb_compact')).toBe('on');
     expect(document.body.classList.contains('compact')).toBe(true);
   });
@@ -184,7 +184,7 @@ describe('SettingsModal', () => {
   // How: clicks the debug checkbox and checks both the persisted value and that applyDebug fired.
   it('toggling debug persists mb_debug and re-applies the debug panel', () => {
     render(<SettingsModal />);
-    screen.getByLabelText(/Debug-Panel anzeigen/).click();
+    screen.getByRole('checkbox', { name: /Debug-Panel anzeigen/ }).click();
     expect(localStorage.getItem('mb_debug')).toBe('on');
     expect(applyDebug).toHaveBeenCalledOnce();
   });

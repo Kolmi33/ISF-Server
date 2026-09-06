@@ -13,7 +13,7 @@ import { type DateRange } from '../../../core/booking-assistant-types.ts';
 import { formatDate } from './model.ts';
 import { countCalendarDays, countWorkdays } from './model.ts';
 import { pickRangeDay } from './model.ts';
-import { LABEL_CLASS } from './styles.ts';
+import { LABEL_CLASS } from '../app/typography.ts';
 import { FOOTER_SHELL } from './styles.ts';
 import { FOOTER_SHELL_IDLE } from './styles.ts';
 import { FOOTER_SHELL_ACTIVE } from './styles.ts';

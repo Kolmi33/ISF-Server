@@ -7,7 +7,7 @@ import { type AvailabilityWindow } from '../../../core/booking-assistant-types.t
 import { formatDate } from './model.ts';
 import { formatDateLong } from './model.ts';
 import { NumberInput } from './NumberField.tsx';
-import { LABEL_CLASS } from './styles.ts';
+import { LABEL_CLASS } from '../app/typography.ts';
 
 export function ResultCard({
   window,

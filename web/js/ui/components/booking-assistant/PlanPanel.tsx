@@ -10,7 +10,7 @@ import { TooltipContent } from './primitives.tsx';
 import { TooltipTrigger } from './primitives.tsx';
 import { PLAN_LIST_ID } from './plan-tree.ts';
 import { planTargets } from './planTargeting.ts';
-import { SECTION_LABEL_CLASS } from './styles.ts';
+import { SECTION_LABEL_CLASS } from '../app/typography.ts';
 import { PlanCard } from './PlanCards.tsx';
 import { PlanCardPreview } from './PlanCards.tsx';
 import { type AlternativeCandidate } from './AlternativePicker.tsx';

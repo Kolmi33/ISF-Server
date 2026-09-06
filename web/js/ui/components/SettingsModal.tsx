@@ -7,10 +7,15 @@
 // `localStorage` key directly and calls straight into the module that actually owns that
 // behavior (`applyTheme`/`connectSSE`/`refreshNow`/`applyDebug`/`dbgOn`/`centerToday`).
 //
+// Key Principles:
+// - ONE ROW SHAPE: every setting is a `SettingRow` — name + explanation on the left, the
+//   control on the right — so the list reads as one thing however different the controls
+//   are (docs/UI_STYLE_GUIDE.md §12).
+//
 // =======================================================================================
 
-import { useState } from 'react';
-import { Icon } from './Icon.tsx';
+import { useId, useState, type ReactNode } from 'react';
+import { RefreshCw, Settings, UserRound } from 'lucide-react';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { askUserName } from './AskUserNameModal.tsx';
 import { store } from '../../store-instance.ts';
@@ -19,36 +24,96 @@ import { refreshNow } from '../mutate.ts';
 import { applyTheme } from '../theme.ts';
 import { centerToday } from '../grid-scroll.ts';
 import { applyDebug, dbgOn } from '../debug-panel.ts';
+import { Button } from '../../components/ui/app-button.tsx';
+import { Checkbox } from '../../components/ui/checkbox.tsx';
+import { NativeSelect } from '../../components/ui/native-select.tsx';
+import { ScrollArea } from '../../components/ui/scroll-area.tsx';
+import { AppDialog, AppDialogBody, AppDialogFooter, AppDialogHeader } from './app/AppDialog.tsx';
+import { SectionHeading } from './app/SectionHeading.tsx';
+
+/** Name + explanation on the left, the control on the right. `htmlFor` makes the whole text
+ *  block the control's label, which is what keeps a checkbox row clickable across its width. */
+function SettingRow({
+  name,
+  description,
+  htmlFor,
+  children,
+}: {
+  name: ReactNode;
+  description?: ReactNode;
+  htmlFor?: string;
+  children: ReactNode;
+}) {
+  const Text = htmlFor ? 'label' : 'div';
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 transition-colors hover:bg-muted">
+      <Text htmlFor={htmlFor} className={`min-w-0 flex-1 ${htmlFor ? 'cursor-pointer' : ''}`}>
+        <span className="block text-sm font-medium text-foreground">{name}</span>
+        {description && (
+          <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+            {description}
+          </span>
+        )}
+      </Text>
+      <div className="flex shrink-0 items-center gap-2">{children}</div>
+    </div>
+  );
+}
+
+/** A checkbox setting: persists `on`/`off` under `storageKey`, then runs `onApply`. */
+function ToggleRow({
+  name,
+  description,
+  storageKey,
+  defaultChecked,
+  onApply,
+}: {
+  name: ReactNode;
+  description: ReactNode;
+  storageKey: string;
+  defaultChecked: boolean;
+  onApply: (checked: boolean) => void;
+}) {
+  const id = useId();
+  return (
+    <SettingRow name={name} description={description} htmlFor={id}>
+      <Checkbox
+        id={id}
+        className="size-5 rounded-[6px]"
+        defaultChecked={defaultChecked}
+        onCheckedChange={(checked) => {
+          localStorage.setItem(storageKey, checked ? 'on' : 'off');
+          onApply(checked);
+        }}
+      />
+    </SettingRow>
+  );
+}
 
 function DataSourceRow() {
   return (
-    <div className="formrow">
-      <label>Datenquelle</label>
-      <div style={{ flex: 1 }}>
-        <b>Server</b>{' '}
-        <span className="hint" style={{ margin: 0 }}>
-          (zentrale Datenbank · Live-Updates)
-        </span>
-      </div>
-      <button
-        className="btn"
+    <SettingRow name="Datenquelle" description="Server · zentrale Datenbank · Live-Updates">
+      <Button
+        variant="outline"
+        size="sm"
         onClick={() => {
           connectSSE();
           void refreshNow(false);
         }}
       >
-        <Icon name="refresh" /> Neu verbinden
-      </button>
-    </div>
+        <RefreshCw className="size-4" /> Neu verbinden
+      </Button>
+    </SettingRow>
   );
 }
 
 function ThemeRow() {
   const theme = localStorage.getItem('mb_theme') || 'auto';
   return (
-    <div className="formrow">
-      <label>Design</label>
-      <select
+    <SettingRow name="Design" description="Hell, dunkel oder der Systemeinstellung folgen">
+      <NativeSelect
+        aria-label="Design"
+        className="h-9 w-[10rem]"
         defaultValue={theme}
         onChange={(event) => {
           localStorage.setItem('mb_theme', event.target.value);
@@ -59,48 +124,8 @@ function ThemeRow() {
         <option value="auto">Wie System</option>
         <option value="light">Hell</option>
         <option value="dark">Dunkel</option>
-      </select>
-    </div>
-  );
-}
-
-function PresenceRow() {
-  const presence = localStorage.getItem('mb_presence') !== 'off';
-  return (
-    <div className="formrow">
-      <label>Anwesenheit</label>
-      <label style={{ minWidth: 'auto' }}>
-        <input
-          type="checkbox"
-          defaultChecked={presence}
-          onChange={(event) => {
-            localStorage.setItem('mb_presence', event.target.checked ? 'on' : 'off');
-            void presenceTick();
-          }}
-        />{' '}
-        meinen Namen als „aktiv" teilen
-      </label>
-    </div>
-  );
-}
-
-function CompactRow() {
-  const compact = localStorage.getItem('mb_compact') === 'on';
-  return (
-    <div className="formrow">
-      <label>Ansicht</label>
-      <label style={{ minWidth: 'auto' }}>
-        <input
-          type="checkbox"
-          defaultChecked={compact}
-          onChange={(event) => {
-            localStorage.setItem('mb_compact', event.target.checked ? 'on' : 'off');
-            document.body.classList.toggle('compact', event.target.checked);
-          }}
-        />{' '}
-        kompakte Zeilen (mehr Maschinen sichtbar)
-      </label>
-    </div>
+      </NativeSelect>
+    </SettingRow>
   );
 }
 
@@ -159,8 +184,7 @@ function GridlineSliderRow({
 }) {
   const [width, setWidth] = useState(() => readGridlineWidth(storageKey));
   return (
-    <div className="formrow">
-      <label>{label}</label>
+    <SettingRow name={label} description="Stärke der Trennlinien im Buchungsraster">
       <input
         type="range"
         min={0}
@@ -168,6 +192,7 @@ function GridlineSliderRow({
         step={GRIDLINE_WIDTH_STEP}
         value={width}
         aria-label={ariaLabel}
+        className="h-1.5 w-32 cursor-pointer appearance-none rounded-full bg-border accent-primary"
         onChange={(event) => {
           const px = clampGridlineWidth(parseFloat(event.target.value));
           setWidth(px);
@@ -175,16 +200,45 @@ function GridlineSliderRow({
           apply(px);
         }}
       />
-      <span className="hint" style={{ margin: 0, minWidth: '3.5em' }}>
+      <span className="w-12 text-right text-[11px] tabular-nums text-muted-foreground">
         {width === 0 ? 'aus' : `${width}px`}
       </span>
-    </div>
+    </SettingRow>
   );
 }
 
-function GridLinesRow() {
+function NameRow() {
   return (
-    <>
+    <SettingRow name="Name" description="Unter diesem Namen erscheinen deine Buchungen">
+      <span className="text-sm font-medium text-foreground">{store.get('user') || '–'}</span>
+      <Button variant="outline" size="sm" onClick={() => askUserName(false)}>
+        <UserRound className="size-4" /> Ändern…
+      </Button>
+    </SettingRow>
+  );
+}
+
+/** Every setting, in one list — split out of `SettingsModal` purely to stay under the
+ *  function-length budget. */
+function SettingsList() {
+  return (
+    <div className="flex flex-col gap-1">
+      <DataSourceRow />
+      <ThemeRow />
+      <ToggleRow
+        name="Anwesenheit"
+        description={`meinen Namen als „aktiv" teilen`}
+        storageKey="mb_presence"
+        defaultChecked={localStorage.getItem('mb_presence') !== 'off'}
+        onApply={() => void presenceTick()}
+      />
+      <ToggleRow
+        name="Ansicht"
+        description="kompakte Zeilen (mehr Maschinen sichtbar)"
+        storageKey="mb_compact"
+        defaultChecked={localStorage.getItem('mb_compact') === 'on'}
+        onApply={(checked) => document.body.classList.toggle('compact', checked)}
+      />
       <GridlineSliderRow
         label="Raster (Tabelle)"
         ariaLabel="Rasterlinien-Stärke"
@@ -197,84 +251,50 @@ function GridLinesRow() {
         storageKey="mb_gridline_width_header"
         apply={applyGridlineWidthHeader}
       />
-    </>
-  );
-}
-
-function WeekendsRow() {
-  const weekends = localStorage.getItem('mb_weekends') === 'on';
-  return (
-    <div className="formrow">
-      <label>Wochenenden</label>
-      <label style={{ minWidth: 'auto' }}>
-        <input
-          type="checkbox"
-          defaultChecked={weekends}
-          onChange={(event) => {
-            localStorage.setItem('mb_weekends', event.target.checked ? 'on' : 'off');
-            store.set({ extraWeeks: 0 });
-            centerToday();
-          }}
-        />{' '}
-        Samstag &amp; Sonntag anzeigen (grau markiert)
-      </label>
-    </div>
-  );
-}
-
-function NameRow() {
-  return (
-    <div className="formrow">
-      <label>Name</label>
-      <div style={{ flex: 1 }}>
-        <b>{store.get('user') || '–'}</b>
-      </div>
-      <button className="btn" onClick={() => askUserName(false)}>
-        <Icon name="user" /> Ändern…
-      </button>
-    </div>
-  );
-}
-
-function DebugRow() {
-  return (
-    <div className="formrow">
-      <label>Debug</label>
-      <label style={{ minWidth: 'auto' }}>
-        <input
-          type="checkbox"
-          defaultChecked={dbgOn()}
-          onChange={(event) => {
-            localStorage.setItem('mb_debug', event.target.checked ? 'on' : 'off');
-            applyDebug();
-          }}
-        />{' '}
-        Debug-Panel anzeigen (protokolliert Schreiben, Updates, Nutzer, Fehler)
-      </label>
+      <ToggleRow
+        name="Wochenenden"
+        description="Samstag & Sonntag anzeigen (grau markiert)"
+        storageKey="mb_weekends"
+        defaultChecked={localStorage.getItem('mb_weekends') === 'on'}
+        onApply={() => {
+          store.set({ extraWeeks: 0 });
+          centerToday();
+        }}
+      />
+      <NameRow />
+      <ToggleRow
+        name="Debug"
+        description="Debug-Panel anzeigen (protokolliert Schreiben, Updates, Nutzer, Fehler)"
+        storageKey="mb_debug"
+        defaultChecked={dbgOn()}
+        onApply={applyDebug}
+      />
     </div>
   );
 }
 
 export function SettingsModal() {
+  const titleId = useId();
   return (
-    <>
-      <h2>
-        <Icon name="gear" /> Einstellungen
-      </h2>
-      <DataSourceRow />
-      <ThemeRow />
-      <PresenceRow />
-      <CompactRow />
-      <GridLinesRow />
-      <WeekendsRow />
-      <NameRow />
-      <DebugRow />
-      <div className="modal-actions">
-        <button className="btn primary" onClick={closeReactModal}>
+    <AppDialog size="md" labelledBy={titleId}>
+      <AppDialogHeader
+        icon={<Settings className="size-6" />}
+        title="Einstellungen"
+        titleId={titleId}
+        subtitle="Gilt nur auf diesem Gerät"
+      />
+      <AppDialogBody className="max-h-[65vh]">
+        <SectionHeading label="Allgemein" />
+        <ScrollArea className="-mr-3 min-h-0 flex-1 pr-3">
+          <SettingsList />
+        </ScrollArea>
+      </AppDialogBody>
+      <AppDialogFooter>
+        <Button size="lg" className="ml-auto" onClick={closeReactModal}>
           Fertig
-        </button>
-      </div>
-    </>
+        </Button>
+      </AppDialogFooter>
+    </AppDialog>
   );
 }
 

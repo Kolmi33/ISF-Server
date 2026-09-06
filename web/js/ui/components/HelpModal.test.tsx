@@ -9,8 +9,10 @@ describe('HelpModal', () => {
   it('renders the legend headings and the close button', () => {
     render(<HelpModal />);
     expect(screen.getByText('Legende & Bedienung')).toBeInTheDocument();
-    expect(screen.getByText('Farben & Markierungen im Raster')).toBeInTheDocument();
-    expect(screen.getByText('Buchungsassistent')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Farben & Markierungen im Raster' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Buchungsassistent' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Alles klar' })).toBeInTheDocument();
   });
 });

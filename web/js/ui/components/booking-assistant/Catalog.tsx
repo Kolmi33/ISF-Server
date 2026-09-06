@@ -9,7 +9,7 @@ import { type CatalogCategory } from '../../../core/booking-assistant-types.ts';
 import { DeviceSubtitle } from './DeviceSubtitle.tsx';
 import { type CatalogEntry } from './useCatalog.ts';
 import { type CatalogNode } from './useCatalog.ts';
-import { SECTION_LABEL_CLASS } from './styles.ts';
+import { SECTION_LABEL_CLASS } from '../app/typography.ts';
 
 export function CatalogRow({
   device,

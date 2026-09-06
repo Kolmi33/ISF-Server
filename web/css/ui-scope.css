@@ -1,0 +1,132 @@
+/* =======================================================================================
+   UI SCOPE (web/css/ui-scope.css)
+   =======================================================================================
+
+   The application's shared design-system scope. Originally `.booking-assistant` — the
+   supplied TU Dortmund palette that came with the booking Assistant (Phase 14) — generalised
+   in Phase 15 so every migrated secondary window can opt into the same visual language by
+   putting `ui-scope` on its root element. See docs/UI_STYLE_GUIDE.md.
+
+   It does three things, and nothing outside this file does any of them:
+
+   1. PALETTE — sets the bare semantic token names (`--background`, `--primary`, …) that
+      web/css/tailwind.css's `@theme inline` block maps to `bg-card`, `text-muted-foreground`
+      and friends. Light + `[data-theme='dark']`, matching the app's existing theme toggle.
+   2. LOCAL RESET — the Preflight the app deliberately does NOT load globally (see the long
+      note in tailwind.css). Scoped here, so it can never reach an element that wasn't opted
+      in.
+   3. LEGACY ISOLATION — `all: revert-layer` on every descendant drops the unlayered app.css
+      rules while keeping the Tailwind `utilities` layer. That is what lets a migrated window
+      keep its old class names as inert query hooks.
+
+   Consequence worth remembering: a Base UI popover/tooltip portals out of the subtree, so its
+   positioner has to carry `ui-scope` itself — components/ui/popover.tsx and tooltip.tsx do.
+   ======================================================================================= */
+
+@layer base {
+  .ui-scope {
+    --background: hsl(0 0% 100%);
+    --foreground: hsl(84 18% 11%);
+    --card: var(--background);
+    --card-foreground: var(--foreground);
+    --popover: var(--background);
+    --popover-foreground: var(--foreground);
+    --primary: hsl(82 100% 30%);
+    --primary-deep: hsl(82 100% 24%);
+    --primary-foreground: white;
+    --brand-accent: hsl(34 94% 41%);
+    --brand-accent-soft: hsl(34 90% 94%);
+    --brand-accent-foreground: hsl(34 94% 32%);
+    --secondary: hsl(82 55% 92%);
+    --secondary-foreground: hsl(82 100% 22%);
+    --muted: hsl(82 22% 96%);
+    --muted-foreground: hsl(84 7% 42%);
+    --accent: hsl(82 24% 93%);
+    --accent-foreground: var(--foreground);
+    --destructive: hsl(3 68% 47%);
+    --border: hsl(82 16% 88%);
+    --input: hsl(82 16% 84%);
+    --ring: var(--primary);
+    --radius: 0.65rem;
+    --font-mono: 'JetBrains Mono Variable', monospace;
+    font-family: 'Inter Variable', sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--foreground);
+  }
+  [data-theme='dark'] .ui-scope {
+    --background: hsl(84 12% 11%);
+    --foreground: hsl(80 14% 92%);
+    --primary: hsl(82 62% 52%);
+    --primary-deep: var(--primary);
+    --primary-foreground: hsl(84 70% 8%);
+    --brand-accent: hsl(34 88% 58%);
+    --brand-accent-soft: hsl(34 40% 20%);
+    --brand-accent-foreground: hsl(34 88% 68%);
+    --secondary: hsl(82 32% 20%);
+    --secondary-foreground: hsl(82 62% 76%);
+    --muted: hsl(84 10% 17%);
+    --muted-foreground: hsl(84 8% 62%);
+    --accent: hsl(84 10% 19%);
+    --destructive: hsl(3 66% 56%);
+    --border: hsl(84 9% 22%);
+    --input: hsl(84 9% 27%);
+  }
+  .ui-scope *,
+  .ui-scope *::before,
+  .ui-scope *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+  }
+  .ui-scope :is(button, input, select, textarea) {
+    font: inherit;
+    color: inherit;
+    background: transparent;
+  }
+  .ui-scope button {
+    cursor: pointer;
+  }
+  .ui-scope :is(h1, h2, h3) {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  .ui-scope :is(ul, ol) {
+    list-style: none;
+  }
+  .ui-scope svg {
+    display: block;
+    vertical-align: middle;
+  }
+  .ui-scope .font-mono {
+    font-family: 'JetBrains Mono Variable', monospace;
+  }
+}
+
+/* Ignore legacy unlayered header/table/control rules here; retain Tailwind layers.
+   This is local isolation, not a global Preflight or a change to the existing app theme. */
+#modal .ui-scope :where(*),
+.ui-scope.ui-scope :where(*) {
+  all: revert-layer;
+}
+
+/* The dialog paints its own sheet (rounded-2xl, border, shadow), so `#modal`'s legacy chrome
+   gets out of the way. Width stays capped at the widest dialog size; narrower dialogs cap
+   themselves with their own `max-w-*` and centre inside. */
+#overlay:has(.ui-scope) {
+  padding: 16px;
+}
+#modal:has(> .ui-scope) {
+  width: min(1040px, 100%);
+  max-width: 1040px;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  /* Der Dialog deckelt sich selbst auf dieselbe Höhe und lässt seine Mitte schrumpfen —
+     hier darf nichts mehr scrollen, sonst wandert die Fußzeile unter den Fensterrand. */
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  border-radius: 16px;
+}

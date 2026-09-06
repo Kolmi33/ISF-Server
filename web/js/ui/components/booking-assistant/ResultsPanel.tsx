@@ -3,7 +3,7 @@ import { Inbox } from 'lucide-react';
 import { Badge } from './primitives.tsx';
 import { Button } from './primitives.tsx';
 import { ScrollArea } from './primitives.tsx';
-import { SECTION_LABEL_CLASS } from './styles.ts';
+import { SECTION_LABEL_CLASS } from '../app/typography.ts';
 import { ResultCard } from './ResultCard.tsx';
 import { type AssistantState } from './useAssistantState.ts';
 

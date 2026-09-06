@@ -1,5 +1,54 @@
 # PROGRESS — living project state
 
+## Phase 15 — application-wide visual unification (started 2026-09-07)
+
+**Goal.** Make every secondary window read as one designed application by deriving the visual
+system from the Buchungsassistent and applying it outward. Visual/structural only — no change
+to booking, filtering, statistics or API behaviour. The main booking grid is deliberately out
+of scope (`docs/UI_STYLE_GUIDE.md` §19).
+
+**Reference.** `docs/UI_STYLE_GUIDE.md` — extracted from the Assistant's real code, not invented.
+
+### How the migration works
+
+The Assistant's look is delivered by a CSS scope class, not by classes on individual elements:
+it carries the token palette, a local reset, and an `all: revert-layer` rule that neutralises
+the unlayered `app.css` inside it. That block was generalised from `.booking-assistant` to a
+shared **`.ui-scope`** (`web/css/ui-scope.css`). A window is "migrated" when its root carries
+`ui-scope`; from that moment its legacy class names are inert and Tailwind/shadcn utilities win.
+Legacy class names are therefore **kept as query hooks** where tests or other modules use them.
+
+### Backlog
+
+- [ ] P15.0 — style guide (`docs/UI_STYLE_GUIDE.md`) extracted from the Assistant
+- [ ] P15.1 — `.booking-assistant` scope generalised to `.ui-scope` (`web/css/ui-scope.css`)
+- [ ] P15.2 — shadcn primitives lifted out of the Assistant into `web/js/components/ui/`
+      (`app-button`, `badge`, `scroll-area`, `popover`, `tooltip`, `native-select`)
+- [ ] P15.3 — app dialog kit (`web/js/ui/components/app/`): `AppDialog`, `AppDialogHeader`,
+      `AppDialogBody`, `AppDialogFooter`, `SectionHeading`, `EmptyState`, `SearchField`,
+      `FormField`/`FieldLabel`, `StatTile`
+- [ ] P15.4 — Name prompt · Aktive Nutzer · Änderungsprotokoll · Legende
+- [ ] P15.5 — Einstellungen
+- [ ] P15.6 — Buchen (BookingForm) · Buchungsdetail
+- [ ] P15.7 — Meine Buchungen (summary, filters, runs, groups)
+- [ ] P15.8 — Alle Buchungen
+- [ ] P15.9 — Statistik (controls, overviews, drilldowns)
+- [ ] P15.10 — Verwalten · Ressourcenformular · Wartungsslots
+- [ ] P15.11 — Filterfenster (Ressourcen-, Bereichsfilter) · Kontextmenü
+- [ ] P15.12 — Bestätigungsdialog (`#confirm2`)
+
+### Audit — what was inconsistent before
+
+Every window except the Assistant rendered legacy `app.css` markup: `.formrow` (label left of
+control, 13px, `--app-muted`), `.btn`/`.btn.primary` (6px radius, blue `--app-accent`),
+`.mlist`/`.resultlist` (native scrollbars, 6px radius), `.hint`, `.tag`, `.mybk`, `.admrow`,
+`.statrow`, `.seg`, plus ~40 inline `style={{…}}` one-offs. Concretely: two accent colours
+(blue `--app-accent` vs. the Assistant's green `--primary`), three button heights, four border
+radii (4/6/8/10px vs. the scale in §6), inputs at 30px vs. 40px, `<h2>` at 16px vs. the 22px
+dialog title, no icon tile, no footer band, `<p class="hint">` instead of a real empty state,
+and dialog padding of 18/20px against the Assistant's 24/28px.
+
+
 ## Assistant workday slots and open end (2026-09-07)
 
 The booking Assistant now treats Monday through Friday as its only booking-day sequence. Weekend

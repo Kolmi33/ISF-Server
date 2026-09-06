@@ -11,12 +11,17 @@
 //
 // =======================================================================================
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
+import { UserRound } from 'lucide-react';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { store } from '../../store-instance.ts';
 import { updateUserChip } from '../user-chip.ts';
 import { dbg } from '../debug-panel.ts';
 import { presenceTick } from '../live-connection.ts';
+import { Button } from '../../components/ui/app-button.tsx';
+import { Input } from '../../components/ui/input.tsx';
+import { AppDialog, AppDialogBody, AppDialogFooter, AppDialogHeader } from './app/AppDialog.tsx';
+import { FormField } from './app/FormField.tsx';
 
 export interface AskUserNameModalProps {
   firstRun: boolean;
@@ -24,6 +29,8 @@ export interface AskUserNameModalProps {
 
 export function AskUserNameModal({ firstRun }: AskUserNameModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const titleId = useId();
+  const fieldId = useId();
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -47,31 +54,41 @@ export function AskUserNameModal({ firstRun }: AskUserNameModalProps) {
   };
 
   return (
-    <>
-      <h2>Wie heißt du?</h2>
-      <div className="formrow">
-        <label>Name</label>
-        <input
-          type="text"
-          ref={inputRef}
-          defaultValue={store.get('user')}
-          placeholder="Nachname"
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') save();
-          }}
-        />
-      </div>
-      <div className="modal-actions">
-        {!firstRun && (
-          <button className="btn" onClick={closeReactModal}>
-            Abbrechen
-          </button>
-        )}
-        <button className="btn primary" onClick={save}>
-          Speichern
-        </button>
-      </div>
-    </>
+    <AppDialog size="sm" labelledBy={titleId}>
+      <AppDialogHeader
+        icon={<UserRound className="size-6" />}
+        title="Wie heißt du?"
+        titleId={titleId}
+        subtitle="Unter diesem Namen erscheinen deine Buchungen im Plan."
+      />
+      <AppDialogBody>
+        <FormField label="Name" htmlFor={fieldId}>
+          <Input
+            id={fieldId}
+            type="text"
+            ref={inputRef}
+            defaultValue={store.get('user')}
+            placeholder="Nachname"
+            className="h-10 rounded-lg"
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') save();
+            }}
+          />
+        </FormField>
+      </AppDialogBody>
+      <AppDialogFooter>
+        <div className="ml-auto flex items-center gap-2">
+          {!firstRun && (
+            <Button variant="ghost" size="lg" onClick={closeReactModal}>
+              Abbrechen
+            </Button>
+          )}
+          <Button size="lg" onClick={save}>
+            Speichern
+          </Button>
+        </div>
+      </AppDialogFooter>
+    </AppDialog>
   );
 }
 
