@@ -166,7 +166,10 @@ export function alternativeCandidatesFor(
   entry: PlanEntry,
   candidates: AlternativeCandidate[],
 ): AlternativeCandidate[] {
-  return candidates.filter((candidate) => !entryContains(entry, candidate.entry.id));
+  return candidates.filter(
+    (candidate) =>
+      !entryContains(entry, candidate.entry.id) && !entryContains(candidate.entry, entry.id),
+  );
 }
 
 function GroupMembers({

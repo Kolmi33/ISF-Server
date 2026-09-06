@@ -135,7 +135,7 @@ describe('supplied assistant host integration', () => {
     fireEvent.change(input, { target: { value: 'Presse' } });
     fireEvent.click(screen.getByRole('checkbox', { name: /Echte Presse/ }));
     click('Alternativen für Echte Fräse auswählen');
-    expect(screen.getByText(/Diese Geräte werden mit Echte Fräse/)).toBeTruthy();
+    expect(screen.getByText(/Diese Elemente werden mit Echte Fräse/)).toBeTruthy();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Echte Presse' }));
     click('Als ODER gruppieren');
     expect(

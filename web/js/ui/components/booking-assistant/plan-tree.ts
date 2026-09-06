@@ -103,9 +103,17 @@ export function groupAlternatives(
   const selected = new Set(alternativeIds.filter((id) => id !== anchorId));
   const anchor = findEntry(plan, anchorId);
   if (!anchor || selected.size === 0) return plan;
-  const alternatives = flattenEntries(plan).filter(
+  const eligible = flattenEntries(plan).filter(
     (entry) =>
       selected.has(entry.id) && !entryContains(anchor, entry.id) && !entryContains(entry, anchorId),
+  );
+  /* If a caller supplies both a group and one of its descendants, the group wins. Moving both
+   * would duplicate the descendant beside its own parent. */
+  const alternatives = eligible.filter(
+    (entry) =>
+      !eligible.some(
+        (candidate) => candidate.id !== entry.id && entryContains(candidate, entry.id),
+      ),
   );
   if (alternatives.length === 0) return plan;
   const rest = alternatives.reduce(

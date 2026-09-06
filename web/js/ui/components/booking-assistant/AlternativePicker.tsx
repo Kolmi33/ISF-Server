@@ -8,10 +8,12 @@ import { Popover } from './primitives.tsx';
 import { PopoverContent } from './primitives.tsx';
 import { PopoverTrigger } from './primitives.tsx';
 import { useDevices } from './DeviceProvider.tsx';
+import { entryContains } from './plan-tree.ts';
 
 export interface AlternativeCandidate {
   entry: PlanEntry;
   position?: string;
+  depth?: number;
 }
 
 export function AlternativePicker({
@@ -27,7 +29,7 @@ export function AlternativePicker({
 }) {
   const devices = useDevices();
   const sourceName = entryName(entry, devices, position);
-  const selection = useAlternativeSelection(entry.id, onGroup);
+  const selection = useAlternativeSelection(entry.id, candidates, onGroup);
 
   return (
     <Popover open={selection.open} onOpenChange={selection.changeOpen}>
@@ -41,7 +43,7 @@ export function AlternativePicker({
           title={
             candidates.length > 0
               ? 'Alternativen auswählen (ODER)'
-              : 'Keine weitere Maschine verfügbar'
+              : 'Kein weiteres Element verfügbar'
           }
           onPointerDown={(event) => event.stopPropagation()}
           className="size-8 shrink-0 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary"
@@ -84,7 +86,7 @@ function AlternativeContent({
       <div className="border-b border-border px-4 py-3">
         <p className="text-sm font-semibold text-foreground">Alternativen auswählen</p>
         <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-          Diese Geräte werden mit {sourceName} als ODER-Gruppe verbunden.
+          Diese Elemente werden mit {sourceName} als ODER-Gruppe verbunden.
         </p>
       </div>
       <div className="max-h-64 space-y-1 overflow-y-auto p-2">
@@ -112,6 +114,7 @@ function AlternativeContent({
 
 function useAlternativeSelection(
   entryId: string,
+  candidates: AlternativeCandidate[],
   onGroup: (entryId: string, alternativeIds: string[]) => void,
 ) {
   const [open, setOpen] = React.useState(false);
@@ -121,15 +124,33 @@ function useAlternativeSelection(
     if (nextOpen) setSelectedIds([]);
   };
   const toggle = (id: string) =>
-    setSelectedIds((current) =>
-      current.includes(id) ? current.filter((candidateId) => candidateId !== id) : [...current, id],
-    );
+    setSelectedIds((current) => toggleSelection(current, id, candidates));
   const apply = () => {
     if (selectedIds.length === 0) return;
     setOpen(false);
     onGroup(entryId, selectedIds);
   };
   return { open, selectedIds, changeOpen, toggle, apply };
+}
+
+/** A group and one of its descendants represent overlapping plan content. Keep the most recent
+ * choice and remove any selected ancestor or descendant so applying the picker cannot duplicate
+ * a machine. */
+export function toggleSelection(
+  current: string[],
+  id: string,
+  candidates: AlternativeCandidate[],
+): string[] {
+  if (current.includes(id)) return current.filter((candidateId) => candidateId !== id);
+  const entry = candidates.find((candidate) => candidate.entry.id === id)?.entry;
+  if (!entry) return current;
+  return [
+    ...current.filter((candidateId) => {
+      const selected = candidates.find((candidate) => candidate.entry.id === candidateId)?.entry;
+      return selected && !entryContains(entry, selected.id) && !entryContains(selected, entry.id);
+    }),
+    id,
+  ];
 }
 
 function AlternativeRow({
@@ -149,13 +170,14 @@ function AlternativeRow({
     <Label
       htmlFor={id}
       className="flex cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 font-normal hover:bg-muted"
+      style={{ paddingLeft: `${10 + (candidate.depth ?? 0) * 12}px` }}
     >
       <Checkbox id={id} checked={checked} onCheckedChange={() => onToggle(candidate.entry.id)} />
       <span className="min-w-0">
         <span className="block truncate text-sm font-medium text-foreground">{name}</span>
         {candidate.entry.kind === 'group' && (
           <span className="block truncate text-xs text-muted-foreground">
-            {deviceNames(candidate.entry, devices).join(', ')}
+            Gruppe · {deviceNames(candidate.entry, devices).join(', ')}
           </span>
         )}
       </span>
@@ -165,7 +187,7 @@ function AlternativeRow({
 
 function entryName(entry: PlanEntry, devices: Record<string, Device>, position?: string): string {
   if (entry.kind === 'device') return devices[entry.deviceId]?.name ?? entry.deviceId;
-  return position ? `Bedarfsgruppe ${position}` : 'Bedarfsgruppe';
+  return position ? `Buchungsgruppe ${position}` : 'Buchungsgruppe';
 }
 
 function deviceNames(entry: PlanEntry, devices: Record<string, Device>): string[] {

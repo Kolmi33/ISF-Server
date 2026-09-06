@@ -9,7 +9,8 @@ import type { PlanEntry } from '../../../core/booking-assistant-types.ts';
 import type { DropZone } from './plan-drop.ts';
 import { DeviceProvider } from './DeviceProvider.tsx';
 import { alternativeCandidatesFor, PlanCard } from './PlanCards.tsx';
-import { planPositionLabels } from './PlanPanel.tsx';
+import { alternativeEntriesOf, planPositionLabels } from './PlanPanel.tsx';
+import { toggleSelection } from './AlternativePicker.tsx';
 
 /** Alle Geräte unter einem Eintrag, in Reihenfolge. */
 const devicesOf = (entry: PlanEntry) => deviceIdsOf(entry);
@@ -61,7 +62,15 @@ describe('supplied plan and criteria state', () => {
         { kind: 'device', id: 'second', deviceId: 'b' },
       ],
     };
-    const external: PlanEntry = { kind: 'device', id: 'external', deviceId: 'c' };
+    const external: PlanEntry = {
+      kind: 'group',
+      id: 'external-group',
+      requiredCount: 1,
+      members: [
+        { kind: 'device', id: 'third', deviceId: 'c' },
+        { kind: 'device', id: 'fourth', deviceId: 'd' },
+      ],
+    };
     expect(
       planPositionLabels([
         { kind: 'device', id: 'before', deviceId: 'a' },
@@ -79,6 +88,7 @@ describe('supplied plan and criteria state', () => {
               { id: 'a', name: 'A', code: 'A', lab: 'Halle' },
               { id: 'b', name: 'B', code: 'B', lab: 'Halle' },
               { id: 'c', name: 'C', code: 'C', lab: 'Halle' },
+              { id: 'd', name: 'D', code: 'D', lab: 'Halle' },
             ],
           },
         ]}
@@ -93,9 +103,8 @@ describe('supplied plan and criteria state', () => {
               onRequiredCountChange={vi.fn()}
               onGroupAlternatives={vi.fn()}
               alternativeCandidates={[
-                { entry: group.kind === 'group' ? group.members[0]! : group },
-                { entry: group.kind === 'group' ? group.members[1]! : group },
-                { entry: external, position: '05' },
+                ...alternativeEntriesOf(group, '03, 04'),
+                ...alternativeEntriesOf(external, '05'),
               ]}
             />
           </ul>
@@ -104,7 +113,7 @@ describe('supplied plan and criteria state', () => {
     );
     const position = screen.getByLabelText('Positionen 03, 04');
     const alternativeButton = screen.getByRole('button', {
-      name: 'Alternativen für Bedarfsgruppe 03, 04 auswählen',
+      name: 'Alternativen für Buchungsgruppe 03, 04 auswählen',
     });
     expect(position.nextElementSibling).toBe(alternativeButton);
     expect(alternativeButton.nextElementSibling).toBe(
@@ -113,11 +122,16 @@ describe('supplied plan and criteria state', () => {
     expect(screen.getAllByLabelText(/^Position/)).toHaveLength(1);
     expect(
       alternativeCandidatesFor(group.kind === 'group' ? group.members[0]! : group, [
-        { entry: group.kind === 'group' ? group.members[0]! : group },
-        { entry: group.kind === 'group' ? group.members[1]! : group },
-        { entry: external, position: '05' },
+        ...alternativeEntriesOf(group, '03, 04'),
+        ...alternativeEntriesOf(external, '05'),
       ]).map((candidate) => candidate.entry.id),
-    ).toEqual(['second', 'external']);
+    ).toEqual(['second', 'external-group', 'third', 'fourth']);
+    const allCandidates = [
+      ...alternativeEntriesOf(group, '03, 04'),
+      ...alternativeEntriesOf(external, '05'),
+    ];
+    expect(toggleSelection(['third'], 'external-group', allCandidates)).toEqual(['external-group']);
+    expect(toggleSelection(['external-group'], 'third', allCandidates)).toEqual(['third']);
   });
 
   it('groups several sibling alternatives through the explicit action', () => {
@@ -169,6 +183,33 @@ describe('supplied plan and criteria state', () => {
       requiredCount: 1,
       members: [expect.anything(), { id: 'b-entry' }, { id: 'c-entry' }, { id: 'e-entry' }],
     });
+  });
+
+  it('groups a complete booking group and ignores an overlapping member selection', () => {
+    const { result } = setup();
+    const anchor: PlanEntry = { kind: 'device', id: 'a-entry', deviceId: 'a' };
+    const group: PlanEntry = {
+      kind: 'group',
+      id: 'bc-group',
+      requiredCount: 1,
+      members: [
+        { kind: 'device', id: 'b-entry', deviceId: 'b' },
+        { kind: 'device', id: 'c-entry', deviceId: 'c' },
+      ],
+    };
+    const loose: PlanEntry = { kind: 'device', id: 'd-entry', deviceId: 'd' };
+    act(() => result.current.setPlan([anchor, group, loose]));
+    act(() => result.current.groupAlternatives(anchor.id, [group.id, 'b-entry']));
+    expect(result.current.plan).toHaveLength(2);
+    expect(result.current.plan[0]).toMatchObject({
+      kind: 'group',
+      members: [
+        { id: anchor.id },
+        { id: group.id, members: [{ id: 'b-entry' }, { id: 'c-entry' }] },
+      ],
+    });
+    expect(devicesOf(result.current.plan[0]!)).toEqual(['a', 'b', 'c']);
+    expect(result.current.plan[1]).toMatchObject({ id: loose.id });
   });
 
   it('groups two cards, edits the count, removes a member and collapses the leftover', () => {
