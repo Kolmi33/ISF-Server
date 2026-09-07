@@ -1,5 +1,18 @@
 # PROGRESS — living project state
 
+## Meine Buchungen scroll containment and group-card cleanup (2026-09-07)
+
+The bookings list now has a real preferred flex basis, so the shared Base UI viewport resolves
+to the visible list height instead of expanding to the full content height behind an
+`overflow-hidden` parent. Long lists expose a wider, higher-contrast scrollbar and remain
+scrollable while the header and footer stay fixed. On very short windows the optional KPI strip
+is hidden to preserve useful list space.
+
+Booking groups now use the Assistant's semantic green group-card treatment instead of a long
+per-group color rail. Their group heading stays visible while scrolling through a large group.
+Focused component coverage and real-browser checks cover the bounded scroll root, visible
+overflow, sticky heading, 520px-tall viewport, and responsive 520px width.
+
 ## Assistant footer alignment and hover cleanup (2026-09-07)
 
 The duration controls are centered in the flexible region between both vertical separators.

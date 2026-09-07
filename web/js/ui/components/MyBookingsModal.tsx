@@ -84,7 +84,7 @@ function nextInDaysText(days: number | null): string {
 function MyBookingsSummaryBar({ summary }: { summary: MyBookingsSummary }) {
   if (!summary.machineCount) return null;
   return (
-    <div className="mybk-summary flex shrink-0 flex-wrap gap-3">
+    <div className="mybk-summary flex shrink-0 flex-wrap gap-3 [@media(max-height:600px)]:hidden">
       <StatTile
         value={summary.machineCount}
         label={`Maschine${summary.machineCount === 1 ? '' : 'n'}`}
@@ -120,14 +120,13 @@ function RunList({ runs, hasAnyRuns, expandedKeys, onToggleExpand, onDeleteDates
     );
   }
   return (
-    <ScrollArea className="resultlist -mr-3 min-h-0 flex-1 pr-3">
+    <ScrollArea className="resultlist -mr-3 min-h-0 flex-[1_1_24rem] pr-3">
       <div className="flex flex-col gap-2">
         {groupRunsForDisplay(runs).map((item) => {
           if (item.kind === 'group') {
             return (
               <GroupCard
                 key={item.groupId}
-                groupId={item.groupId}
                 groupTitle={item.groupTitle}
                 runs={item.runs}
                 expandedKeys={expandedKeys}

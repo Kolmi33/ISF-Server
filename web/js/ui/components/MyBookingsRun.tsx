@@ -9,13 +9,11 @@
 //
 // =======================================================================================
 
-import type { CSSProperties } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
 import { formatDateLong, mondayOfDate, parseIsoDateString } from '../../../../shared/dates.ts';
 import { getMachineCategory } from '../../core/machines.ts';
 import { getBooking, findBookingGroup } from '../../core/bookings.ts';
-import { FAVORITES_GROUP_LABEL, nameColor } from '../grid.ts';
-import { isDarkTheme } from '../theme.ts';
+import { FAVORITES_GROUP_LABEL } from '../grid.ts';
 import { gotoDate, prependWeek, resetView } from '../grid-scroll.ts';
 import { closeReactModal } from '../modal.tsx';
 import { ChevronDown, ChevronRight, FolderOpen, MapPin, Trash2 } from 'lucide-react';
@@ -80,8 +78,8 @@ export function multiMachineGroup(run: LiveRun): { machineIds: Set<string> } | u
 
 /** A small icon marking a run as part of a real (multi-machine) booking group, right next to
  *  the machine name — replaces an earlier colored text pill (user request: indicate group
- *  membership with an icon). The group's own color-coded parent card (`GroupCard`) is what
- *  now carries the color; this icon is just the per-row "this belongs to that card" cue. */
+ *  membership with an icon). The enclosing `GroupCard` already provides the structural cue;
+ *  this icon makes the relationship visible on each row as well. */
 function GroupMemberIcon({ run }: { run: LiveRun }) {
   if (!multiMachineGroup(run)) return null;
   return (
@@ -301,14 +299,12 @@ export function groupRunsForDisplay(runs: readonly LiveRun[]): MyBookingsDisplay
 }
 
 export function GroupCard({
-  groupId,
   groupTitle,
   runs,
   expandedKeys,
   onToggleExpand,
   onDeleteDates,
 }: {
-  groupId: string;
   groupTitle: string | undefined;
   runs: readonly LiveRun[];
   expandedKeys: ReadonlySet<string>;
@@ -316,11 +312,8 @@ export function GroupCard({
   onDeleteDates: (machine: Machine, dates: readonly string[]) => void;
 }) {
   return (
-    <div
-      className="mybk-group overflow-hidden rounded-xl border border-border border-l-4 border-l-[var(--groupcolor)]"
-      style={{ '--groupcolor': nameColor(groupId, isDarkTheme()) } as CSSProperties}
-    >
-      <div className="mybk-group-head flex items-center gap-2 border-b border-border bg-[color-mix(in_srgb,var(--groupcolor)_18%,var(--muted))] px-3 py-2.5">
+    <div className="mybk-group rounded-xl border border-primary/45 bg-primary/[0.03]">
+      <div className="mybk-group-head sticky top-0 z-10 flex items-center gap-2 rounded-t-xl border-b border-primary/20 bg-secondary px-3 py-2.5">
         <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
         <b className="text-sm font-semibold text-foreground">{groupTitle || 'Buchungsgruppe'}</b>
         <span className="text-[11px] text-muted-foreground">— {runs.length} Maschinen</span>

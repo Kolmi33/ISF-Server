@@ -72,6 +72,16 @@ describe('MyBookingsModal', () => {
     expect(document.querySelector('.mybk .abdate')).not.toBeNull();
   });
 
+  // What: the results keep a real flex-basis so the shared ScrollArea viewport resolves to
+  // the visible list height instead of expanding to every booking and then being clipped by
+  // the dialog body (which also prevented its scrollbar from appearing).
+  // How: renders one result and checks the scrolling root carries the bounded preferred size.
+  it('bounds the booking list so its scroll area can overflow', () => {
+    window.S.data!.bookings = { m1: { [TODAY]: { name: 'anna' } } };
+    render(<MyBookingsModal />);
+    expect(document.querySelector('.resultlist')!.className).toContain('flex-[1_1_24rem]');
+  });
+
   // What: with no future bookings for the current user, the modal shows an explanatory
   // placeholder rather than an empty list.
   // How: renders with no bookings set up and checks the placeholder text appears.
@@ -97,6 +107,9 @@ describe('MyBookingsModal', () => {
       (el) => el.textContent,
     );
     expect(values).toEqual(['2', '0', '2', 'Heute']);
+    expect(document.querySelector('.mybk-summary')!.className).toContain(
+      '[@media(max-height:600px)]:hidden',
+    );
   });
 
   // What: with no bookings at all, the summary strip doesn't render at all — an empty
@@ -196,6 +209,9 @@ describe('MyBookingsModal', () => {
     expect(screen.getByText('Fräse')).toBeInTheDocument();
     expect(screen.getByText('Presse')).toBeInTheDocument();
     expect(card.querySelectorAll('.grpicon')).toHaveLength(2);
+    expect(card.className).toContain('border-primary/45');
+    expect(card.className).not.toContain('border-l-4');
+    expect(card.querySelector('.mybk-group-head')!.className).toContain('sticky');
     // The card's header already names the group once — its nested rows don't repeat it.
     expect(screen.queryByText(/Teil einer Buchungsgruppe/)).not.toBeInTheDocument();
   });

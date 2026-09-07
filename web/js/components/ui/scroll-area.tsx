@@ -10,8 +10,8 @@ export function ScrollArea({ children, className }: { children: ReactNode; class
       <ScrollPrimitive.Viewport className="h-full w-full rounded-[inherit] [scrollbar-gutter:stable] outline-none focus-visible:ring-2 focus-visible:ring-ring">
         {children}
       </ScrollPrimitive.Viewport>
-      <ScrollPrimitive.Scrollbar className="flex w-2 p-0.5">
-        <ScrollPrimitive.Thumb className="flex-1 rounded-full bg-border" />
+      <ScrollPrimitive.Scrollbar className="flex w-2.5 rounded-full bg-muted/50 p-0.5">
+        <ScrollPrimitive.Thumb className="flex-1 rounded-full bg-muted-foreground/35 transition-colors hover:bg-muted-foreground/55" />
       </ScrollPrimitive.Scrollbar>
     </ScrollPrimitive.Root>
   );
