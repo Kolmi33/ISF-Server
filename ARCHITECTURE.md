@@ -784,10 +784,13 @@ why `@dnd-kit/sortable` is gone: shuffling cards during the drag is precisely it
 group in turn — "either the big press, or both small ones", which a flat device list cannot
 say. Every entry, at any depth, carries its own id and is therefore draggable and droppable
 in its own right; there is no separate "member" concept and `PlanCard` renders its members
-through itself. The solver follows the same shape: `chooseAt` takes a group's `requiredCount`
-longest-lived members, each member resolved the same way. Greedy is exact because members'
-device sets are disjoint (`validatePlan`), so maximising each member's own run maximises the
-group's minimum.
+through itself. The solver follows the same shape but does not choose one locally best branch.
+Each device node produces one fixed candidate; an N-of-M node produces every combination of
+exactly `requiredCount` direct members and recursively takes the Cartesian product of nested
+candidate lists. Top-level entries are combined as AND requirements. Candidate machine IDs are
+sorted and deduplicated, and their precomputed workday availability masks are intersected. This
+means `A AND (B OR C)` yields both `A+B` and `A+C`, while two independent OR groups yield their
+complete Cartesian product. A candidate's machine set is immutable for every resulting run.
 
 Two rules carry the model. **Targets rank, they never compete** (`planTargeting.ts`): a card
 is the only drop target on its own height, and grouping vs. inserting before/after is
@@ -819,13 +822,17 @@ entries; it does not append those entries to the anchor's existing members. This
 result literally `machine ODER group` (or `group ODER group`) while keeping direct drag-and-drop
 onto a group available for the distinct "add this member" operation.
 
-The supplied inclusive duration represents calendar days. `core/booking-assistant-search`
-computes deterministic maximal windows with the same resolved machines available on
-every day (bookings, maintenance and machine weekday masks included). Excluded/off days
-break a window; no workday skipping or claims about holidays are introduced. Windows
-stay within the requested date range; unchecked future availability is never called open.
-Local Date objects cross into the existing ISO contract through their calendar components,
-then the established UTC date utilities enumerate exact reservation dates. Booking
+`core/booking-assistant-search` collects the tree's machines first and computes each machine's
+Monday-to-Friday availability mask once (bookings, maintenance/defects and recurring weekday
+restrictions included). `core/booking-assistant-candidates` then expands the tree recursively;
+impossible candidates are pruned as masks are intersected, and subtree results are cached.
+Every qualifying contiguous run of every fixed combination becomes one result. Finite runs retain
+their complete known range even when longer than the requested maximum; `maxWorkingDays` limits
+only how many leading workdays may be selected. An open-ended run stores only the selectable
+horizon because an infinite date list cannot be materialized. Ranking happens only after all
+candidates and runs have been evaluated. Local Date objects cross into the existing ISO contract
+through their calendar components, then the established UTC date utilities enumerate exact
+reservation dates. Booking
 rechecks the latest store snapshot and enters the existing confirmation/mutation flow,
 including its read-only, conflict and batch-size checks. Server weekend bridging is unchanged.
 

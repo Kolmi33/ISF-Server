@@ -59,14 +59,14 @@ export interface ResolvedDevice {
 
 export interface AvailabilityWindow {
   id: string;
-  /** Exakte angebotene Arbeitstage; Wochenenden sind nicht enthalten. */
+  /** Vollständiger bekannter freier Arbeitstagsbereich; Wochenenden sind nicht enthalten. */
   dates: string[];
   start: Date;
-  /** Letzter aktuell angebotener Arbeitstag, auch bei Open End. */
+  /** Letzter bekannter freier Arbeitstag; bei Open End der angebotene Buchungshorizont. */
   end: Date;
   /** Kein bekannter zukünftiger Konflikt auf einem Arbeitstag. */
   openEnded: boolean;
-  /** Länge des angebotenen Slots in Arbeitstagen, bereits auf das Suchmaximum begrenzt */
+  /** Länge des vollständigen bekannten freien Bereichs. */
   spanDays: number;
   /** Untere/obere Grenze der wählbaren Buchungslänge in diesem Fenster */
   minSelectableDays: number;

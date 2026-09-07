@@ -52,7 +52,9 @@ covered by an automated test.
   Local gate and browser evidence: `docs/ASSISTANT-UX-PLAN.md` (Docker/commit status tracked there).
 - [x] Build a device/group tree; drag-drop to group devices
 - [ ] Group "need N of M" (change need up/down, dissolve group, remove device) — group creation verified above, these per-group controls were not separately exercised
-- [x] Run assistant over a date range → allocates free machines respecting need/blocks (logic-tested; redundancy-confirm dialog before the search also confirmed working)
+- [x] Run assistant over a date range → emits every fixed ODER/N-of-M machine combination,
+  intersects bookings/maintenance/defects/weekday blocks, and keeps every qualifying free run
+  before ranking (logic-tested; redundancy-confirm dialog before the search also confirmed working)
 - [x] Weekend bridging: a booking Fri+Mon bridges the weekend where appropriate (logic-tested; confirmed live via `/api/state`)
 
 ## Reports & views

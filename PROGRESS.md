@@ -1,5 +1,25 @@
 # PROGRESS — living project state
 
+## Assistant search expands every ODER candidate (2026-09-07)
+
+The booking Assistant no longer resolves an ODER/N-of-M group to the longest-lived alternative
+for each possible start day. The recursive plan tree now emits every fixed machine combination:
+groups enumerate exactly `requiredCount` direct members, nested groups recursively contribute
+their candidate lists, and top-level AND entries form their Cartesian product. Machine IDs are
+canonically sorted and duplicate combinations are removed.
+
+Availability is prepared once per machine as a Monday-to-Friday boolean mask covering the search
+starts plus the minimum-duration lookahead. Candidate masks are intersected while the tree is
+expanded; empty and too-short candidates are pruned early, and subtree results are cached. Each
+remaining combination is scanned once for all contiguous free runs, so alternatives can never be
+swapped between days inside a result. Booking, maintenance/defects and recurring weekday locks all
+remain conflicts. Finite runs retain their complete known duration while `maxWorkingDays` only
+caps the selectable booking length; open-ended runs retain the finite selectable horizon.
+
+Focused tests cover `A AND (B OR C)`, two independent OR groups, nested group alternatives,
+2-of-3 requirements, fixed combinations across days, all runs, full finite ranges, workdays and
+the fresh-state booking check. The full quality gate passes with 1,024 tests.
+
 ## Assistant ODER action keeps groups atomic (2026-09-07)
 
 Using the explicit ODER action on a requirement group now treats that complete group as one

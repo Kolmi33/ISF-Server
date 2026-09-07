@@ -54,6 +54,23 @@ describe('backend/frontend assistant boundary', () => {
       dates: ['2026-10-23', '2026-10-26'],
     });
   });
+  it('shows a complete finite run while booking at most the configured maximum', () => {
+    const finite = {
+      ...data,
+      bookings: { 'real-id': { '2026-11-03': { name: 'Andere Person' } } },
+    };
+    const window = searchAssistant(finite, plan, range, 2, 3)[0]!;
+    expect(window.openEnded).toBe(false);
+    expect(window.end).toEqual(new Date(2026, 10, 2));
+    expect(window.spanDays).toBe(7);
+    expect(window.maxSelectableDays).toBe(3);
+    expect(window.selectedDays).toBe(3);
+    expect(assistantBooking(finite, window).dates).toEqual([
+      '2026-10-23',
+      '2026-10-26',
+      '2026-10-27',
+    ]);
+  });
   it('rechecks live bookings before confirmation instead of trusting a stale search', () => {
     const window = searchAssistant(data, plan, range, 1, 4)[0]!;
     const changed = {

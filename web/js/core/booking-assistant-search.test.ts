@@ -14,7 +14,12 @@ const group: PlanGroupEntry = {
   requiredCount: 1,
 };
 const data = (): BookingData => ({
-  machines: ['a', 'b', 'c'].map((id) => ({ id, name: id, group: 'Halle', days: '1111111' })),
+  machines: ['a', 'b', 'c', 'd'].map((id) => ({
+    id,
+    name: id,
+    group: 'Halle',
+    days: '1111111',
+  })),
   bookings: {},
 });
 const booked = { name: 'Andere Person', comment: '' };
@@ -110,6 +115,105 @@ describe('booking assistant workday scheduler', () => {
     ).toEqual([[{ deviceId: 'a', fromGroup: true }], [{ deviceId: 'b', fromGroup: true }]]);
   });
 
+  it('keeps every fixed alternative combination instead of choosing one per start day', () => {
+    const state = data();
+    state.bookings.a = { '2026-09-14': booked };
+    state.bookings.b = { '2026-09-11': booked };
+    state.bookings.c = { '2026-09-21': booked };
+    const plan: PlanEntry[] = [
+      member('a'),
+      {
+        ...group,
+        members: [member('b'), member('c')],
+      },
+    ];
+
+    expect(
+      searchBookingWindows(state, plan, from, from, 1, 7).map((window) => ({
+        devices: window.devices.map(({ deviceId }) => deviceId),
+        end: window.dates.at(-1),
+      })),
+    ).toEqual([
+      { devices: ['a', 'c'], end: '2026-09-11' },
+      { devices: ['a', 'b'], end: '2026-09-10' },
+    ]);
+  });
+
+  it('builds cartesian products across groups and combinations for requiredCount', () => {
+    const either = (id: string, ids: string[]): PlanGroupEntry => ({
+      kind: 'group',
+      id,
+      requiredCount: 1,
+      members: ids.map(member),
+    });
+    const combinations = (plan: PlanEntry[]) =>
+      searchBookingWindows(data(), plan, from, from, 1, 3).map((window) =>
+        window.devices.map(({ deviceId }) => deviceId),
+      );
+
+    expect(combinations([either('left', ['a', 'b']), either('right', ['c', 'd'])])).toEqual([
+      ['a', 'c'],
+      ['a', 'd'],
+      ['b', 'c'],
+      ['b', 'd'],
+    ]);
+    expect(
+      combinations([member('a'), { ...either('two-of-three', ['b', 'c', 'd']), requiredCount: 2 }]),
+    ).toEqual([
+      ['a', 'b', 'c'],
+      ['a', 'b', 'd'],
+      ['a', 'c', 'd'],
+    ]);
+  });
+
+  it('recursively treats a nested AND group as one OR alternative', () => {
+    const plan: PlanEntry[] = [
+      member('a'),
+      {
+        kind: 'group',
+        id: 'outer',
+        requiredCount: 1,
+        members: [
+          member('b'),
+          {
+            kind: 'group',
+            id: 'inner',
+            requiredCount: 2,
+            members: [member('c'), member('d')],
+          },
+        ],
+      },
+    ];
+
+    expect(
+      searchBookingWindows(data(), plan, from, from, 1, 3).map((window) =>
+        window.devices.map(({ deviceId }) => deviceId),
+      ),
+    ).toEqual([
+      ['a', 'b'],
+      ['a', 'c', 'd'],
+    ]);
+  });
+
+  it('keeps a complete finite run while limiting only its selectable booking length', () => {
+    const state = data();
+    state.bookings.a = { '2026-09-18': booked };
+
+    const window = searchBookingWindows(state, [device], from, from, 3, 4)[0]!;
+    expect(window.dates).toEqual([
+      '2026-09-07',
+      '2026-09-08',
+      '2026-09-09',
+      '2026-09-10',
+      '2026-09-11',
+      '2026-09-14',
+      '2026-09-15',
+      '2026-09-16',
+      '2026-09-17',
+    ]);
+    expect(window.maxDays).toBe(4);
+  });
+
   it('resolves N-of-M together with mandatory devices for their whole finite window', () => {
     const state = data();
     state.machines[0]!.maint = [{ type: 'wartung', from: '2026-09-10' }];
@@ -121,8 +225,8 @@ describe('booking assistant workday scheduler', () => {
     expect(window.openEnded).toBe(false);
     expect(window.dates).toEqual(['2026-09-07', '2026-09-08', '2026-09-09']);
     expect(window.devices).toEqual([
-      { deviceId: 'b', fromGroup: true },
       { deviceId: 'a', fromGroup: true },
+      { deviceId: 'b', fromGroup: true },
       { deviceId: 'c', fromGroup: false },
     ]);
     for (const resolved of window.devices)
@@ -139,6 +243,7 @@ describe('booking assistant workday scheduler', () => {
       windows.map((window) => [window.openEnded, window.dates[0], window.devices[0]!.deviceId]),
     ).toEqual([
       [true, '2026-09-08', 'b'],
+      [true, '2026-09-11', 'a'],
       [false, from, 'a'],
     ]);
   });
@@ -148,7 +253,8 @@ describe('booking assistant workday scheduler', () => {
     state.bookings.a = { '2026-09-30': booked };
     let window = searchBookingWindows(state, [device], from, from, 2, 5)[0]!;
     expect(window.openEnded).toBe(false);
-    expect(window.dates).toHaveLength(5);
+    expect(window.dates).toHaveLength(17);
+    expect(window.maxDays).toBe(5);
 
     state.bookings.a = {};
     state.machines[0]!.maint = [{ type: 'defekt', from: '2026-09-30' }];
@@ -168,13 +274,24 @@ describe('booking assistant workday scheduler', () => {
         members: [member('c'), { ...group, id: 'inner', requiredCount: 2 }],
       },
     ];
-    expect(searchBookingWindows(state, plan, from, to, 1, 5)[0]!.devices).toEqual([
-      { deviceId: 'c', fromGroup: true },
+    expect(
+      searchBookingWindows(state, plan, from, to, 1, 5).map((window) => window.devices),
+    ).toEqual([
+      [
+        { deviceId: 'a', fromGroup: true },
+        { deviceId: 'b', fromGroup: true },
+      ],
+      [{ deviceId: 'c', fromGroup: true }],
     ]);
     state.machines[2]!.maint = [{ type: 'wartung', from: '2026-09-09' }];
-    expect(searchBookingWindows(state, plan, from, to, 1, 5)[0]!.devices).toEqual([
-      { deviceId: 'a', fromGroup: true },
-      { deviceId: 'b', fromGroup: true },
+    expect(
+      searchBookingWindows(state, plan, from, to, 1, 5).map((window) => window.devices),
+    ).toEqual([
+      [
+        { deviceId: 'a', fromGroup: true },
+        { deviceId: 'b', fromGroup: true },
+      ],
+      [{ deviceId: 'c', fromGroup: true }],
     ]);
     expect(() =>
       searchBookingWindows(

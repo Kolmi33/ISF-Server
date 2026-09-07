@@ -12,24 +12,32 @@ import {
   isMachineAvailableOnWeekday,
   isMachineBlockedOnDate,
 } from './machines.ts';
+import { buildPlanCandidates } from './booking-assistant-candidates.ts';
+import type { AvailabilitySet, Candidate } from './booking-assistant-candidates.ts';
 import type { PlanEntry, ResolvedDevice } from './booking-assistant-types.ts';
 
+export type { AvailabilitySet, Candidate } from './booking-assistant-candidates.ts';
+
 export interface BookingWindow {
-  /** Der einmal angebotene Buchungszeitraum, bereits auf `maxDays` begrenzt. */
+  /** Der vollständige bekannte freie Buchungszeitraum. */
   dates: string[];
   devices: ResolvedDevice[];
   /** Kein bekannter zukünftiger Konflikt auf einem Arbeitstag. */
   openEnded: boolean;
   minDays: number;
+  /** Höchstens so viele Arbeitstage dürfen aus diesem Zeitraum gebucht werden. */
   maxDays: number;
 }
 
 /** Availability on one concrete day. Search callers only pass Monday through Friday. */
 export function availableForBooking(data: BookingData, id: string, day: string): boolean {
-  const machine = data.machines.find((m) => m.id === id);
+  const machine = data.machines.find((candidate) => candidate.id === id);
+  return !!machine && machineAvailableForBooking(data, machine, day);
+}
+
+function machineAvailableForBooking(data: BookingData, machine: Machine, day: string): boolean {
   return (
-    !!machine &&
-    !getBooking(data.bookings, id, day) &&
+    !getBooking(data.bookings, machine.id, day) &&
     !isMachineBlockedOnDate(machine, day) &&
     isMachineAvailableOnWeekday(machine, day)
   );
@@ -38,12 +46,6 @@ export function availableForBooking(data: BookingData, id: string, day: string):
 function nextWorkday(day: string): string {
   let date = addDays(parseIsoDateString(day), 1);
   while (isWeekend(date)) date = addDays(date, 1);
-  return formatDateAsIsoString(date);
-}
-
-function previousWorkday(day: string): string {
-  let date = addDays(parseIsoDateString(day), -1);
-  while (isWeekend(date)) date = addDays(date, -1);
   return formatDateAsIsoString(date);
 }
 
@@ -101,45 +103,6 @@ function nextBlockedWorkday(data: BookingData, id: string, start: string): strin
   ].reduce<string | null>(earlierBoundary, null);
 }
 
-interface Choice {
-  /** Erster blockierter Arbeitstag; `null` ist nach aktuellem Stand Open End. */
-  blockedOn: string | null;
-  devices: ResolvedDevice[];
-}
-
-/** Choose the longest-lived alternatives, retaining exactly those devices for the whole row.
- *
- *  Recurses through nested requirement groups: a group takes the `requiredCount` longest-lived
- *  of its members, each member having been resolved the same way. Greedy is exact here because
- *  the members' device sets are disjoint (`validatePlan`), so taking the longest-lived ones
- *  maximises the minimum — no member's choice can improve another's. */
-function chooseAt(data: BookingData, entry: PlanEntry, start: string): Choice {
-  if (entry.kind === 'device')
-    return {
-      blockedOn: nextBlockedWorkday(data, entry.deviceId, start),
-      devices: [{ deviceId: entry.deviceId, fromGroup: false }],
-    };
-  const chosen = entry.members
-    .map((member) => chooseAt(data, member, start))
-    .sort((a, b) => {
-      if (a.blockedOn === null) return b.blockedOn === null ? 0 : -1;
-      if (b.blockedOn === null) return 1;
-      return b.blockedOn.localeCompare(a.blockedOn);
-    })
-    .slice(0, entry.requiredCount);
-  return {
-    blockedOn: chosen.reduce<string | null>(
-      (boundary, choice) => earlierBoundary(boundary, choice.blockedOn),
-      null,
-    ),
-    /* Alles, was über eine Gruppe hereinkommt, ist stellvertretend gewählt — auch aus einer
-       Untergruppe. */
-    devices: chosen.flatMap((choice) =>
-      choice.devices.map((device) => ({ ...device, fromGroup: true })),
-    ),
-  };
-}
-
 function validatePlan(plan: PlanEntry[]): void {
   const ids = plan.flatMap(deviceIdsOf);
   if (!ids.length || new Set(ids).size !== ids.length)
@@ -163,55 +126,155 @@ function validatePlan(plan: PlanEntry[]): void {
 const deviceIdsOf = (entry: PlanEntry): string[] =>
   entry.kind === 'group' ? entry.members.flatMap(deviceIdsOf) : [entry.deviceId];
 
-function offeredWorkdays(start: string, blockedOn: string | null, limit: number): string[] {
-  const dates: string[] = [];
-  let day = start;
-  while (dates.length < limit && day !== blockedOn) {
-    dates.push(day);
-    day = nextWorkday(day);
-  }
-  return dates;
-}
-
 function validateSearch(from: string, to: string, minDays: number, maxDays: number): void {
   if (!from || !to || from > to) throw new Error('Bitte einen gültigen Zeitraum wählen.');
   if (!Number.isInteger(minDays) || !Number.isInteger(maxDays) || minDays < 1 || maxDays < minDays)
     throw new Error('Bitte gültige Mindest- und Höchstdauer eingeben.');
 }
 
-interface CandidateWindow {
-  window: BookingWindow;
-  rawEnd: string | null;
+/** Include enough workdays after the latest allowed start to test the minimum duration once. */
+function evaluationWorkdays(starts: string[], minDays: number): string[] {
+  const days = [...starts];
+  while (days.length < starts.length + minDays - 1) days.push(nextWorkday(days.at(-1)!));
+  return days;
 }
 
-function candidateWindow(
+interface IndexedRun {
+  dates: string[];
+  reachesEvaluationEnd: boolean;
+}
+
+function freeRuns(
+  availability: AvailabilitySet,
+  days: string[],
+  minDays: number,
+  lastStartIndex: number,
+): IndexedRun[] {
+  const runs: IndexedRun[] = [];
+  let start = -1;
+  const finish = (end: number): void => {
+    if (start >= 0 && start <= lastStartIndex && end - start >= minDays)
+      runs.push({ dates: days.slice(start, end), reachesEvaluationEnd: end === days.length });
+    start = -1;
+  };
+  for (let index = 0; index < availability.length; index++) {
+    if (availability[index]) {
+      if (start < 0) start = index;
+    } else finish(index);
+  }
+  finish(availability.length);
+  return runs;
+}
+
+function groupedDeviceIds(plan: PlanEntry[]): Set<string> {
+  const grouped = new Set<string>();
+  const visit = (entry: PlanEntry, insideGroup: boolean): void => {
+    if (entry.kind === 'device') {
+      if (insideGroup) grouped.add(entry.deviceId);
+      return;
+    }
+    for (const member of entry.members) visit(member, true);
+  };
+  for (const entry of plan) visit(entry, false);
+  return grouped;
+}
+
+/** Extend the trailing evaluated run to its first known conflict, or enough days to book it. */
+function extendRun(
+  data: BookingData,
+  machineIds: string[],
+  dates: string[],
+  maxDays: number,
+  boundaryCache: Map<string, string | null>,
+): { dates: string[]; openEnded: boolean } {
+  let day = nextWorkday(dates.at(-1)!);
+  const boundary = machineIds.reduce<string | null>((earliest, machineId) => {
+    let blockedOn = boundaryCache.get(machineId);
+    if (blockedOn === undefined) {
+      blockedOn = nextBlockedWorkday(data, machineId, day);
+      boundaryCache.set(machineId, blockedOn);
+    }
+    return earlierBoundary(earliest, blockedOn);
+  }, null);
+  const extended = [...dates];
+  if (boundary === null) {
+    extended.splice(maxDays);
+    while (extended.length < maxDays) {
+      extended.push(day);
+      day = nextWorkday(day);
+    }
+    return { dates: extended, openEnded: true };
+  }
+  while (day !== boundary) {
+    extended.push(day);
+    day = nextWorkday(day);
+  }
+  return { dates: extended, openEnded: false };
+}
+
+function machineAvailability(
+  data: BookingData,
+  machineIds: string[],
+  days: string[],
+): Map<string, AvailabilitySet> {
+  const machinesById = new Map(data.machines.map((machine) => [machine.id, machine]));
+  return new Map(
+    machineIds.map((machineId) => {
+      const machine = machinesById.get(machineId);
+      return [
+        machineId,
+        days.map((day) => !!machine && machineAvailableForBooking(data, machine, day)),
+      ];
+    }),
+  );
+}
+
+function windowsForCandidates(
   data: BookingData,
   plan: PlanEntry[],
-  start: string,
+  candidates: Candidate[],
+  days: string[],
+  lastStartIndex: number,
   minDays: number,
   maxDays: number,
-): CandidateWindow | null {
-  const choices = plan.map((entry) => chooseAt(data, entry, start));
-  const blockedOn = choices.reduce<string | null>(
-    (boundary, choice) => earlierBoundary(boundary, choice.blockedOn),
-    null,
-  );
-  const dates = offeredWorkdays(start, blockedOn, maxDays);
-  if (dates.length < minDays) return null;
-  return {
-    rawEnd: blockedOn === null ? null : previousWorkday(blockedOn),
-    window: {
-      dates,
-      devices: choices.flatMap((choice) => choice.devices),
-      openEnded: blockedOn === null,
-      minDays,
-      maxDays: dates.length,
-    },
-  };
+): BookingWindow[] {
+  const grouped = groupedDeviceIds(plan);
+  const boundaryCache = new Map<string, string | null>();
+  const windows: BookingWindow[] = [];
+  for (const candidate of candidates)
+    for (const run of freeRuns(candidate.availability, days, minDays, lastStartIndex)) {
+      const resolved = run.reachesEvaluationEnd
+        ? extendRun(data, candidate.machineIds, run.dates, maxDays, boundaryCache)
+        : { dates: run.dates, openEnded: false };
+      if (resolved.dates.length < minDays) continue;
+      windows.push({
+        dates: resolved.dates,
+        devices: candidate.machineIds.map<ResolvedDevice>((deviceId) => ({
+          deviceId,
+          fromGroup: grouped.has(deviceId),
+        })),
+        openEnded: resolved.openEnded,
+        minDays,
+        maxDays: Math.min(maxDays, resolved.dates.length),
+      });
+    }
+  return windows;
 }
 
-/** Each non-dominated free run produces one result. Its raw end suppresses shorter variants of
- * the same run; only the offered dates are capped to the requested maximum duration. */
+function rankWindows(windows: BookingWindow[]): BookingWindow[] {
+  return windows.sort(
+    (a, b) =>
+      Number(b.openEnded) - Number(a.openEnded) ||
+      b.dates.length - a.dates.length ||
+      a.dates[0]!.localeCompare(b.dates[0]!) ||
+      a.devices
+        .map(({ deviceId }) => deviceId)
+        .join('\u0000')
+        .localeCompare(b.devices.map(({ deviceId }) => deviceId).join('\u0000')),
+  );
+}
+
+/** Expand the plan once, then return every qualifying free run of every fixed combination. */
 export function searchBookingWindows(
   data: BookingData,
   plan: PlanEntry[],
@@ -224,23 +287,18 @@ export function searchBookingWindows(
   validateSearch(from, to, minDays, maxDays);
   const starts = getWeekdaysInRange(from, to);
   if (!starts.length) throw new Error('Der gewählte Zeitraum enthält keine Arbeitstage.');
-  const windows: BookingWindow[] = [];
-  let lastRawEnd: string | undefined;
-  let foundOpenRun = false;
-  for (const start of starts) {
-    if (foundOpenRun) break;
-    const candidate = candidateWindow(data, plan, start, minDays, maxDays);
-    if (!candidate) continue;
-    const { rawEnd, window } = candidate;
-    if (rawEnd !== null && lastRawEnd && rawEnd <= lastRawEnd) continue;
-    if (rawEnd === null) foundOpenRun = true;
-    else lastRawEnd = rawEnd;
-    windows.push(window);
-  }
-  return windows.sort(
-    (a, b) =>
-      Number(b.openEnded) - Number(a.openEnded) ||
-      b.dates.length - a.dates.length ||
-      a.dates[0]!.localeCompare(b.dates[0]!),
+  const days = evaluationWorkdays(starts, minDays);
+  const machineIds = [...new Set(plan.flatMap(deviceIdsOf))];
+  const availabilityByMachine = machineAvailability(data, machineIds, days);
+  const lastStartIndex = starts.length - 1;
+  const candidates = buildPlanCandidates(
+    plan,
+    availabilityByMachine,
+    days.length,
+    minDays,
+    lastStartIndex,
+  );
+  return rankWindows(
+    windowsForCandidates(data, plan, candidates, days, lastStartIndex, minDays, maxDays),
   );
 }
