@@ -8,6 +8,7 @@ import { formatDate } from './model.ts';
 import { formatDateLong } from './model.ts';
 import { NumberInput } from './NumberField.tsx';
 import { LABEL_CLASS } from '../app/typography.ts';
+import { DeviceSubtitle } from './DeviceSubtitle.tsx';
 
 export function ResultCard({
   window,
@@ -101,14 +102,16 @@ function ResultDevices({ devices }: { devices: AvailabilityWindow['devices'] }) 
             key={`${resolved.deviceId}-${index}`}
             title={resolved.fromGroup ? 'aus einer Bedarfsgruppe gewählt' : undefined}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium',
+              'inline-flex min-w-0 items-center rounded-xl px-3 py-2',
               resolved.fromGroup
                 ? 'bg-brand-soft text-brand-foreground'
                 : 'bg-secondary text-secondary-foreground',
             )}
           >
-            {device.name}
-            <span className="font-mono text-[10px] opacity-65">{device.code}</span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium">{device.name}</span>
+              <DeviceSubtitle device={device} />
+            </span>
           </span>
         );
       })}

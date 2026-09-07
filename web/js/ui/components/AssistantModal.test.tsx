@@ -156,6 +156,7 @@ describe('supplied assistant host integration', () => {
     change('Max. Tage', '4');
     search();
     expect(screen.getByText('durchgehend frei', { exact: true })).toBeTruthy();
+    expect(screen.getByText('Alte Halle · Nur mit Einweisung')).toBeTruthy();
     expect(screen.getByText(/2–4 Arbeitstage wählbar/)).toBeTruthy();
     const input = screen.getByRole('textbox', { name: 'Buchungstage' });
     expect((input as HTMLInputElement).value).toBe('4');

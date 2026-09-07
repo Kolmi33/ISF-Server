@@ -1,5 +1,13 @@
 # PROGRESS — living project state
 
+## Assistant result labels include machine details (2026-09-07)
+
+Resolved machines in each search result now use the same two-line identity shown in the catalog
+and selected-plan cards: machine name followed by its area and optional machine info. The former
+technical-ID suffix has been removed from these labels. Direct and ODER-resolved machines retain
+their existing neutral/brand color distinction. Integration coverage verifies the shared subtitle
+survives the transition from selection to results.
+
 ## Assistant search expands every ODER candidate (2026-09-07)
 
 The booking Assistant no longer resolves an ODER/N-of-M group to the longest-lived alternative
