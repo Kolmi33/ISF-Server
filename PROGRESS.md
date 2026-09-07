@@ -1,5 +1,12 @@
 # PROGRESS — living project state
 
+## Assistant footer alignment and hover cleanup (2026-09-07)
+
+The duration controls are centered in the flexible region between both vertical separators.
+The former full-block hover surfaces were removed from the duration and action regions while the
+calendar range trigger keeps its interactive hover treatment. The individual controls and buttons
+retain their own hover and focus feedback.
+
 ## Assistant result labels include machine details (2026-09-07)
 
 Resolved machines in each search result now use the same two-line identity shown in the catalog

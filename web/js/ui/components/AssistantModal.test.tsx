@@ -83,6 +83,19 @@ const change = (name: string, value: string) => {
 };
 
 describe('supplied assistant host integration', () => {
+  it('centers duration controls without adding hover shells around them or the actions', () => {
+    const durationShell = screen.getByRole('textbox', { name: 'Min. Tage' }).parentElement
+      ?.parentElement?.parentElement;
+    expect(durationShell?.className).not.toContain('hover:');
+    expect(durationShell?.parentElement?.className).toContain('flex-1');
+    expect(durationShell?.parentElement?.className).toContain('justify-center');
+    expect(
+      screen.getByRole('button', { name: 'Abbrechen' }).parentElement?.className,
+    ).not.toContain('hover:');
+    expect(screen.getByRole('button', { name: /Zeitraum/ }).className).toContain(
+      'hover:border-border',
+    );
+  });
   it('uses live catalog in all cards; favorite and category checkboxes share selection', () => {
     expect(screen.getByText('Laborgeräte reservieren')).toBeTruthy();
     // Untertitel: erst der Bereich, dann die Info-Notiz aus der Maschinenverwaltung.

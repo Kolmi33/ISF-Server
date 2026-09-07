@@ -4,7 +4,6 @@ import { Button } from './primitives.tsx';
 import { Separator } from './primitives.tsx';
 import { NumberField } from './NumberField.tsx';
 import { FOOTER_SHELL } from './styles.ts';
-import { FOOTER_SHELL_IDLE } from './styles.ts';
 import { DateRangeField } from './DateRangeField.tsx';
 import { type AssistantState } from './useAssistantState.ts';
 
@@ -17,11 +16,13 @@ export function AssistantFooter({ state }: { state: AssistantState }) {
 
       <Separator orientation="vertical" className="hidden h-[68px] sm:block" />
 
-      <DurationFields state={state} />
+      <div className="flex min-w-0 flex-1 justify-center">
+        <DurationFields state={state} />
+      </div>
 
-      <Separator orientation="vertical" className="ml-auto hidden h-[68px] sm:block" />
+      <Separator orientation="vertical" className="hidden h-[68px] sm:block" />
 
-      <div className={cn('flex items-center gap-2 px-3', FOOTER_SHELL, FOOTER_SHELL_IDLE)}>
+      <div className="flex h-[68px] shrink-0 items-center gap-2 px-3">
         <Button variant="ghost" size="lg" onClick={onCancel}>
           Abbrechen
         </Button>
@@ -41,7 +42,7 @@ function DurationFields({ state }: { state: AssistantState }) {
       className={cn(
         'relative flex items-center gap-4 px-3',
         FOOTER_SHELL,
-        limitHint ? 'border-destructive/50 bg-background' : FOOTER_SHELL_IDLE,
+        limitHint ? 'border-destructive/50 bg-background' : 'border-transparent',
       )}
     >
       <NumberField
