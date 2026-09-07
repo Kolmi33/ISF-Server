@@ -92,9 +92,10 @@ export function addMember(plan: PlanEntry[], targetId: string, moving: PlanEntry
   });
 }
 
-/** Groups an entry with selected cards from anywhere in the plan. The anchor keeps its place;
- * selected alternatives leave their former groups. Ancestors and descendants of the anchor are
- * ignored because grouping those would duplicate or circularly contain the same entry. */
+/** Groups an entry with selected cards from anywhere in the plan. The anchor keeps its place and
+ * remains one complete alternative even when it is itself a group; selected alternatives leave
+ * their former groups. Ancestors and descendants of the anchor are ignored because grouping those
+ * would duplicate or circularly contain the same entry. */
 export function groupAlternatives(
   plan: PlanEntry[],
   anchorId: string,
@@ -122,15 +123,12 @@ export function groupAlternatives(
   );
   const currentAnchor = findEntry(rest, anchorId);
   if (!currentAnchor) return plan;
-  const grouped: PlanGroupEntry =
-    currentAnchor.kind === 'group'
-      ? { ...currentAnchor, members: [...currentAnchor.members, ...alternatives] }
-      : {
-          kind: 'group',
-          id: createEntryId(),
-          members: [currentAnchor, ...alternatives],
-          requiredCount: 1,
-        };
+  const grouped: PlanGroupEntry = {
+    kind: 'group',
+    id: createEntryId(),
+    members: [currentAnchor, ...alternatives],
+    requiredCount: 1,
+  };
   return normalizePlan(replaceEntry(rest, anchorId, grouped));
 }
 

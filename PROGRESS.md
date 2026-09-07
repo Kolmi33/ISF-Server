@@ -1,5 +1,19 @@
 # PROGRESS — living project state
 
+## Assistant ODER action keeps groups atomic (2026-09-07)
+
+Using the explicit ODER action on a requirement group now treats that complete group as one
+alternative. Selecting a loose machine produces `machine ODER group` in a new outer requirement
+group; it no longer inserts the machine among the existing group's members or changes that
+group's requirement count. The same rule applies when the selected alternative is another group.
+Drag-and-drop onto a group deliberately retains its direct "add member" behavior.
+
+Regression coverage exercises a nested-card action followed by a group-anchor action and asserts
+that the original group identity, members, and requirement remain intact. The full quality gate
+passes with 1,019 tests. A live browser run grouped two machines, used that group's ODER action
+with a third machine, and rendered an outer “1 von 2 Möglichkeiten” group containing the unchanged
+two-machine group and the separate machine. The browser console remained clean.
+
 ## Phase 15 — application-wide visual unification (2026-09-07, DONE)
 
 **Goal.** Make every secondary window read as one designed application by deriving the visual

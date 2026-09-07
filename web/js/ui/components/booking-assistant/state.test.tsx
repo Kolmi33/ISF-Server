@@ -144,7 +144,7 @@ describe('supplied plan and criteria state', () => {
     expect(devicesOf(result.current.plan[0]!)).toEqual(['b', 'a', 'c']);
   });
 
-  it('applies the alternative action to nested cards and existing groups', () => {
+  it('applies the alternative action to nested cards and keeps group anchors intact', () => {
     const { result } = setup();
     const outer: PlanEntry = {
       kind: 'group',
@@ -179,9 +179,16 @@ describe('supplied plan and criteria state', () => {
     act(() => result.current.groupAlternatives('outer', ['e-entry']));
     expect(result.current.plan).toHaveLength(1);
     expect(result.current.plan[0]).toMatchObject({
-      id: 'outer',
+      kind: 'group',
       requiredCount: 1,
-      members: [expect.anything(), { id: 'b-entry' }, { id: 'c-entry' }, { id: 'e-entry' }],
+      members: [
+        {
+          id: 'outer',
+          requiredCount: 1,
+          members: [expect.anything(), { id: 'b-entry' }, { id: 'c-entry' }],
+        },
+        { id: 'e-entry' },
+      ],
     });
   });
 

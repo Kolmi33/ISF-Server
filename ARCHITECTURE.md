@@ -813,6 +813,12 @@ group's required count, and a *group* dropped onto a group becomes its member ra
 dissolving into it — that one rule is where nesting comes from. Nothing can be dropped into
 itself or into one of its own members (`entryContains`), which is what keeps the tree a tree.
 
+The explicit ODER action treats its anchor as an atomic alternative. For a group anchor it
+creates a new outer requirement group containing the unchanged anchor group and the selected
+entries; it does not append those entries to the anchor's existing members. This makes the
+result literally `machine ODER group` (or `group ODER group`) while keeping direct drag-and-drop
+onto a group available for the distinct "add this member" operation.
+
 The supplied inclusive duration represents calendar days. `core/booking-assistant-search`
 computes deterministic maximal windows with the same resolved machines available on
 every day (bookings, maintenance and machine weekday masks included). Excluded/off days
