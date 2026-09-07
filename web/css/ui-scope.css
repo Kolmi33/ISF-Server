@@ -130,3 +130,18 @@
   background: transparent;
   border-radius: 16px;
 }
+
+/* Same idea for the three floating shells that are static markup in index.html: once their
+   React content opts into `ui-scope`, the inner element paints the popover surface and the
+   legacy container chrome gets out of the way. */
+#machDrop:has(> .ui-scope),
+#groupDrop:has(> .ui-scope),
+#ctxMenu:has(> .ui-scope) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+}

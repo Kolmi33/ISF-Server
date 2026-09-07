@@ -12,47 +12,40 @@
 //
 // =======================================================================================
 
+import { BarChart3, CalendarRange, Star, UserRound } from 'lucide-react';
 import type { CategoryDashboard } from '../views/stats.ts';
 import { Icon } from './Icon.tsx';
-
-/** One KPI tile: a big bold value over a small muted label — the same "number-first" tile
- *  language `MyBookingsModal.tsx`'s own summary strip uses, kept as a separate (near-identical)
- *  set of classes here since the two features are otherwise unrelated. */
-function StatKpi({ icon, value, label }: { icon: string; value: string; label: string }) {
-  return (
-    <div className="stat-kpi">
-      <Icon name={icon} />
-      {/* min-width: 0 lets the label's own ellipsis (app.css) actually truncate instead of
-          forcing the tile wider — real machine names run much longer than the "Fräse"-style
-          fixtures, e.g. "1.003 - PC POOL 13 (Remote) (Simulation) SSD" as a "Meistgenutzt"
-          label. `title` carries the untruncated text as a hover tooltip. */}
-      <div style={{ minWidth: 0 }}>
-        <div className="stat-kpi-value">{value}</div>
-        <div className="stat-kpi-label" title={label}>
-          {label}
-        </div>
-      </div>
-    </div>
-  );
-}
+import { StatTile } from './app/StatTile.tsx';
+import { StatCard, StackedStatBar } from './StatsDrilldown.tsx';
 
 /** The four-tile KPI row: range length, aggregate utilisation, distinct active bookers, and
- *  the single most-utilised machine. */
+ *  the single most-utilised machine. Uses the same `StatTile` "Meine Buchungen" does, so a
+ *  headline number reads identically wherever it appears. */
 function StatKpiRow({ dashboard, totalDays }: { dashboard: CategoryDashboard; totalDays: number }) {
   return (
-    <div className="stat-kpis">
-      <StatKpi icon="cal" value={String(totalDays)} label="Werktage" />
-      <StatKpi icon="chart" value={`${dashboard.usedPercent}%`} label="Ø Auslastung" />
-      <StatKpi icon="user" value={String(dashboard.activePersonCount)} label="Aktive Personen" />
-      <StatKpi
-        icon="star"
+    <div className="stat-kpis flex shrink-0 flex-wrap gap-3">
+      <StatTile
+        value={String(totalDays)}
+        label="Werktage"
+        icon={<CalendarRange className="size-3.5 shrink-0" />}
+      />
+      <StatTile
+        value={`${dashboard.usedPercent}%`}
+        label="Ø Auslastung"
+        icon={<BarChart3 className="size-3.5 shrink-0" />}
+      />
+      <StatTile
+        value={String(dashboard.activePersonCount)}
+        label="Aktive Personen"
+        icon={<UserRound className="size-3.5 shrink-0" />}
+      />
+      <StatTile
         value={dashboard.topMachine ? `${dashboard.topMachine.percent}%` : '—'}
-        label={
-          // Combined into one string rather than showing the bare machine name as its own text
-          // node — a name like "Fräse" also appears as its own row in the list below, and a
-          // second exact-text match for it here would make that row ambiguous to find by name.
-          dashboard.topMachine ? `Meistgenutzt: ${dashboard.topMachine.name}` : 'Meistgenutzt'
-        }
+        icon={<Star className="size-3.5 shrink-0" />}
+        // Combined into one string rather than showing the bare machine name as its own text
+        // node — a name like "Fräse" also appears as its own row in the list below, and a
+        // second exact-text match for it here would make that row ambiguous to find by name.
+        label={dashboard.topMachine ? `Meistgenutzt: ${dashboard.topMachine.name}` : 'Meistgenutzt'}
       />
     </div>
   );
@@ -68,45 +61,51 @@ function StatChart({ dashboard }: { dashboard: CategoryDashboard }) {
   const maxCount = Math.max(1, ...chart.map((bucket) => bucket.count));
   return (
     <div>
-      <div className="stat-chart">
+      <div className="stat-chart flex h-20 items-end gap-[3px] px-0.5">
         {chart.map((bucket, index) => (
           <div
             key={index}
-            className="stat-chart-bar"
+            className="stat-chart-bar min-w-1 flex-1 rounded-t-sm bg-[var(--stat-fill,var(--primary))] opacity-80 transition-opacity hover:opacity-100"
             title={`${bucket.label}: ${bucket.count} Buchung${bucket.count === 1 ? '' : 'en'}`}
             style={{ height: `${Math.max(4, Math.round((bucket.count / maxCount) * 100))}%` }}
           />
         ))}
       </div>
-      <div className="hint stat-chart-caption">
-        {chart[0]!.label} – {chart[chart.length - 1]!.label}
+      <div className="stat-chart-caption mt-1 flex justify-between px-0.5 text-[11px] tabular-nums text-muted-foreground">
+        <span>{chart[0]!.label}</span>
+        <span>{chart[chart.length - 1]!.label}</span>
       </div>
     </div>
   );
 }
 
-/** The aggregate used/maintenance/idle bar (a bigger sibling of `StackedStatBar` in
- *  `StatsDrilldown.tsx`, which sizes one machine row's own share — this one sizes the whole
+/** The aggregate used/maintenance/idle bar (a bigger sibling of `StackedStatBar`'s per-row use
+ *  in `StatsDrilldown.tsx`, which sizes one machine row's own share — this one sizes the whole
  *  category) plus a legend row naming each segment and its percentage, mirroring the reference
  *  dashboard's segmented-bar-with-legend cards. */
 function StatUtilizationBar({ dashboard }: { dashboard: CategoryDashboard }) {
   const idlePercent = Math.max(0, 100 - dashboard.usedPercent - dashboard.blockedPercent);
   return (
     <div>
-      <div className="statbar stacked stat-bar-big">
-        <div className="seg-used" style={{ width: `${dashboard.usedPercent}%` }} />
-        <div className="seg-maint" style={{ width: `${dashboard.blockedPercent}%` }} />
-        <div className="seg-idle" style={{ width: `${idlePercent}%` }} />
+      <div className="flex">
+        <StackedStatBar
+          big
+          usedPercent={dashboard.usedPercent}
+          blockedPercent={dashboard.blockedPercent}
+        />
       </div>
-      <div className="stat-legend">
-        <span className="stat-legend-item">
-          <span className="stat-legend-dot seg-used" /> Verwendet {dashboard.usedPercent}%
+      <div className="stat-legend mt-2 flex flex-wrap gap-4 text-[11px] text-muted-foreground">
+        <span className="stat-legend-item flex items-center gap-1.5">
+          <span className="stat-legend-dot seg-used size-2 rounded-full bg-[var(--stat-fill,var(--primary))]" />{' '}
+          Verwendet {dashboard.usedPercent}%
         </span>
-        <span className="stat-legend-item">
-          <span className="stat-legend-dot seg-maint" /> Wartung {dashboard.blockedPercent}%
+        <span className="stat-legend-item flex items-center gap-1.5">
+          <span className="stat-legend-dot seg-maint size-2 rounded-full bg-[var(--warn)]" />{' '}
+          Wartung {dashboard.blockedPercent}%
         </span>
-        <span className="stat-legend-item">
-          <span className="stat-legend-dot seg-idle" /> Frei {idlePercent}%
+        <span className="stat-legend-item flex items-center gap-1.5">
+          <span className="stat-legend-dot seg-idle size-2 rounded-full bg-border" /> Frei{' '}
+          {idlePercent}%
         </span>
       </div>
     </div>
@@ -120,11 +119,10 @@ interface CategoryDashboardCardProps {
   categoryIcon: string;
 }
 
-/** The whole dashboard section for the active category: KPI tiles, then a white card (the
- *  reference dashboard's own "widget" look) holding the day-by-day chart and the aggregate
- *  utilisation bar. Wrapped by the caller in the same `stat-theme-<category>` class the
- *  existing overview/drilldown already use, so `--stat-fill` (this category's own accent)
- *  colors the chart bars and the "used" segment consistently across old and new content alike. */
+/** The whole dashboard section for the active category: KPI tiles, then a card holding the
+ *  day-by-day chart and the aggregate utilisation bar. Wrapped by the caller in the same
+ *  `stat-theme-<category>` class the overview/drilldown use, so `--stat-fill` (this category's
+ *  own accent) colors the chart bars and the "used" segment consistently. */
 export function CategoryDashboardCard({
   dashboard,
   totalDays,
@@ -134,14 +132,16 @@ export function CategoryDashboardCard({
   return (
     <>
       <StatKpiRow dashboard={dashboard} totalDays={totalDays} />
-      <div className="stat-card">
-        <div className="stat-card-head">
-          <Icon name={categoryIcon} />
-          <b>{categoryLabel}</b>
+      <StatCard className="shrink-0">
+        <div className="stat-card-head flex items-center gap-2 text-sm">
+          <span className="inline-flex text-[var(--stat-fill,var(--primary))] [&_svg]:size-4">
+            <Icon name={categoryIcon} />
+          </span>
+          <b className="font-semibold text-foreground">{categoryLabel}</b>
         </div>
         <StatChart dashboard={dashboard} />
         <StatUtilizationBar dashboard={dashboard} />
-      </div>
+      </StatCard>
     </>
   );
 }

@@ -148,7 +148,7 @@ describe('MachineFormModal — new machine', () => {
       target: { value: 'X' },
     });
     act(() => {
-      screen.getByRole('button', { name: '＋ Wartung/Defekt hinzufügen' }).click();
+      screen.getByRole('button', { name: 'Wartung/Defekt hinzufügen' }).click();
     });
     const dateInputs = document.querySelectorAll('#modal input[type="date"]');
     fireEvent.change(dateInputs[0]!, { target: { value: '2021-02-01' } });

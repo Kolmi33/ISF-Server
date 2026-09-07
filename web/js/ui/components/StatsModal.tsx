@@ -14,7 +14,8 @@
 //
 // =======================================================================================
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import { BarChart3 } from 'lucide-react';
 import type { MachineCategory } from '../../../../shared/types.ts';
 import { todayAsIsoDateString } from '../../../../shared/dates.ts';
 import { orderedMachines } from '../grid.ts';
@@ -31,7 +32,8 @@ import {
 } from '../views/stats.ts';
 import { toast } from '../toast.ts';
 import { openReactModal, closeReactModal } from '../modal.tsx';
-import { Icon } from './Icon.tsx';
+import { Button } from '../../components/ui/app-button.tsx';
+import { AppDialog, AppDialogBody, AppDialogFooter, AppDialogHeader } from './app/AppDialog.tsx';
 import {
   StatsRangeRow,
   CategoryTabs,
@@ -240,55 +242,61 @@ interface StatsModalProps {
 
 export function StatsModal({ presetPerson }: StatsModalProps) {
   const s = useStatsState(presetPerson);
+  const titleId = useId();
   return (
-    <>
-      <h2>
-        <Icon name="chart" /> Statistik
-      </h2>
-      <StatsRangeRow
-        from={s.from}
-        to={s.to}
-        onFromChange={s.onFromChange}
-        onToChange={s.onToChange}
+    <AppDialog size="xl" labelledBy={titleId}>
+      <AppDialogHeader
+        icon={<BarChart3 className="size-6" />}
+        title="Statistik"
+        titleId={titleId}
+        subtitle="Auslastung von Ressourcen und Personen im gewählten Zeitraum"
       />
-      {s.mode === 'm' && (
-        <CategoryTabs activeCategory={s.activeCategory} onCategoryChange={s.onCategoryChange} />
-      )}
-      <StatsBreadcrumb
-        segments={breadcrumbSegments(s.mode, s.activeCategory, s.machineRow, s.person)}
-      />
-      <StatsFilterRow
-        filterQuery={s.filterQuery}
-        onFilterChange={s.onFilterChange}
-        showBack={!!(s.machineRow || s.person)}
-        onBack={s.onBack}
-      />
-      <div id="stOut">
-        <StatsBody
-          mode={s.mode}
-          agg={s.agg}
-          dashboard={computeCategoryDashboard(
-            s.agg.machRows,
-            store.get('data')!.bookings,
-            s.agg.days,
-            s.activeCategory,
-          )}
-          machineRow={s.machineRow}
-          person={s.person}
-          filterQuery={s.filterQuery}
-          activeCategory={s.activeCategory}
-          closedKeys={s.closedKeys}
-          onToggleFold={s.onToggleFold}
-          onSelectMachine={s.onSelectMachine}
-          onSelectPerson={s.onSelectPerson}
+      <AppDialogBody className="max-h-[78vh]">
+        <StatsRangeRow
+          from={s.from}
+          to={s.to}
+          onFromChange={s.onFromChange}
+          onToChange={s.onToChange}
         />
-      </div>
-      <div className="modal-actions">
-        <button className="btn" onClick={closeReactModal}>
+        {s.mode === 'm' && (
+          <CategoryTabs activeCategory={s.activeCategory} onCategoryChange={s.onCategoryChange} />
+        )}
+        <StatsBreadcrumb
+          segments={breadcrumbSegments(s.mode, s.activeCategory, s.machineRow, s.person)}
+        />
+        <StatsFilterRow
+          filterQuery={s.filterQuery}
+          onFilterChange={s.onFilterChange}
+          showBack={!!(s.machineRow || s.person)}
+          onBack={s.onBack}
+        />
+        <div id="stOut" className="flex min-h-0 flex-1 flex-col">
+          <StatsBody
+            mode={s.mode}
+            agg={s.agg}
+            dashboard={computeCategoryDashboard(
+              s.agg.machRows,
+              store.get('data')!.bookings,
+              s.agg.days,
+              s.activeCategory,
+            )}
+            machineRow={s.machineRow}
+            person={s.person}
+            filterQuery={s.filterQuery}
+            activeCategory={s.activeCategory}
+            closedKeys={s.closedKeys}
+            onToggleFold={s.onToggleFold}
+            onSelectMachine={s.onSelectMachine}
+            onSelectPerson={s.onSelectPerson}
+          />
+        </div>
+      </AppDialogBody>
+      <AppDialogFooter>
+        <Button size="lg" className="ml-auto" onClick={closeReactModal}>
           Schließen
-        </button>
-      </div>
-    </>
+        </Button>
+      </AppDialogFooter>
+    </AppDialog>
   );
 }
 

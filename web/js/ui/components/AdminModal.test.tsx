@@ -117,10 +117,10 @@ describe('AdminModal', () => {
   // component, with edit passing the specific machine's id and add passing null (new machine).
   // How: clicks "add" and checks openMachineForm(null), then clicks the first row's "edit"
   // and checks openMachineForm('m1').
-  it('"＋ Maschine hinzufügen" and "Bearbeiten" route to the machine form', () => {
+  it('"Maschine hinzufügen" and "Bearbeiten" route to the machine form', () => {
     act(() => openAdmin());
     act(() => {
-      screen.getByRole('button', { name: '＋ Maschine hinzufügen' }).click();
+      screen.getByRole('button', { name: 'Maschine hinzufügen' }).click();
     });
     expect(openMachineForm).toHaveBeenCalledWith(null);
     act(() => {

@@ -145,9 +145,9 @@ describe('StatsModal — dashboard summary', () => {
   // machine category where "Ø Auslastung" and "Meistgenutzt" are numerically identical).
   function tileValue(label: string): string | null {
     return screen
-      .getByText(label, { selector: '.stat-kpi-label' })
-      .closest('.stat-kpi')!
-      .querySelector('.stat-kpi-value')!.textContent;
+      .getByText(label, { selector: '[data-slot="stat-label"] > span' })
+      .closest('[data-slot="stat-tile"]')!
+      .querySelector('[data-slot="stat-value"]')!.textContent;
   }
 
   // What: the KPI tile row shows the range's weekday count, the category's aggregate
@@ -201,7 +201,7 @@ describe('StatsModal — Ressourcen drilldown', () => {
     expect(screen.getByText('Am meisten belegt von', { exact: false })).toBeInTheDocument();
     expect(screen.getByText('anna')).toBeInTheDocument();
     act(() => {
-      screen.getByRole('button', { name: '← Übersicht' }).click();
+      screen.getByRole('button', { name: 'Übersicht' }).click();
     });
     expect(screen.queryByText('Am meisten belegt von', { exact: false })).not.toBeInTheDocument();
     expect(screen.getByText('Fräse')).toBeInTheDocument();
@@ -239,7 +239,7 @@ describe('StatsModal — Personen mode', () => {
   it('lists everyone with a booking in range; clicking a row drills into their machines', () => {
     act(() => openStats('anna'));
     act(() => {
-      screen.getByRole('button', { name: '← Übersicht' }).click();
+      screen.getByRole('button', { name: 'Übersicht' }).click();
     });
     expect(screen.getByText('anna')).toBeInTheDocument();
     expect(screen.getByText('bob')).toBeInTheDocument();

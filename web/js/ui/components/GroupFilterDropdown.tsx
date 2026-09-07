@@ -8,10 +8,49 @@
 //
 // =======================================================================================
 
-import { useEffect, useReducer } from 'react';
+import { useEffect, useId, useReducer } from 'react';
 import { saveFilters } from './MachineFilterDropdown.tsx';
 import { useToolbarDropdown } from '../toolbar-dropdown.ts';
 import { store } from '../../store-instance.ts';
+import { Checkbox } from '../../components/ui/checkbox.tsx';
+import { ScrollArea } from '../../components/ui/scroll-area.tsx';
+import { Separator } from '../../components/ui/separator.tsx';
+import { SectionHeading } from './app/SectionHeading.tsx';
+
+/** One selectable row, matching the Assistant's own catalogue row (docs/UI_STYLE_GUIDE.md §12). */
+function GroupRow({
+  label,
+  checked,
+  strong,
+  onToggle,
+}: {
+  label: string;
+  checked: boolean;
+  strong?: boolean;
+  onToggle: (checked: boolean) => void;
+}) {
+  const id = useId();
+  return (
+    <label
+      htmlFor={id}
+      className={`flex cursor-pointer select-none items-center gap-3 rounded-lg border px-3 py-2 text-sm transition-colors ${
+        checked ? 'border-primary/45 bg-primary/[0.08]' : 'border-transparent hover:bg-muted'
+      }`}
+    >
+      <Checkbox
+        id={id}
+        checked={checked}
+        onCheckedChange={(next) => onToggle(next)}
+        className="size-[18px] rounded-[5px]"
+      />
+      <span
+        className={`min-w-0 truncate ${strong ? 'font-semibold text-foreground' : 'text-foreground'}`}
+      >
+        {label}
+      </span>
+    </label>
+  );
+}
 
 /** Lists the distinct group names across every machine, in first-seen order. */
 function groupList(): string[] {
@@ -90,26 +129,27 @@ export function GroupFilterDropdown() {
 
   const groups = groupList();
   return (
-    <>
-      <label>
-        <input
-          type="checkbox"
-          checked={store.get('groupsSel').size === 0}
-          onChange={handleAllChange}
-        />{' '}
-        <b>Alle Bereiche</b>
-      </label>
-      <hr style={{ border: 'none', borderTop: '1px solid var(--app-border)', margin: '4px 0' }} />
-      {groups.map((group) => (
-        <label key={group}>
-          <input
-            type="checkbox"
-            checked={store.get('groupsSel').has(group)}
-            onChange={(event) => handleGroupChange(group, event.target.checked)}
-          />{' '}
-          {group}
-        </label>
-      ))}
-    </>
+    <div className="ui-scope w-[16rem] max-w-[calc(100vw-24px)] rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+      <SectionHeading label="Bereiche" className="px-1.5 pb-2 pt-1" />
+      <GroupRow
+        label="Alle Bereiche"
+        strong
+        checked={store.get('groupsSel').size === 0}
+        onToggle={handleAllChange}
+      />
+      <Separator className="my-1.5" />
+      <ScrollArea className="-mr-2 max-h-72 pr-2">
+        <div className="flex flex-col gap-0.5">
+          {groups.map((group) => (
+            <GroupRow
+              key={group}
+              label={group}
+              checked={store.get('groupsSel').has(group)}
+              onToggle={(checked) => handleGroupChange(group, checked)}
+            />
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
   );
 }

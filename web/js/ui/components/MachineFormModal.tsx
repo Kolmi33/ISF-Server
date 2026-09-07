@@ -16,7 +16,8 @@
 //
 // =======================================================================================
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { Wrench } from 'lucide-react';
 import type { Machine } from '../../../../shared/types.ts';
 import { groupsByCategory } from '../../core/machines.ts';
 import { saveMachine, deleteMachine } from '../../core/machines.ts';
@@ -34,6 +35,9 @@ import { store } from '../../store-instance.ts';
 import { machById } from '../machine-lookup.ts';
 import { fillGroupSel } from './GroupFilterDropdown.tsx';
 import { openAdmin } from './AdminModal.tsx';
+import { Button } from '../../components/ui/app-button.tsx';
+import { ScrollArea } from '../../components/ui/scroll-area.tsx';
+import { AppDialog, AppDialogBody, AppDialogFooter, AppDialogHeader } from './app/AppDialog.tsx';
 
 interface SaveMachineFormInput {
   machineId: string | null;
@@ -95,40 +99,53 @@ export function MachineFormModal({ machineId }: MachineFormModalProps) {
     ...new Set(machines.map((m) => m.redu).filter((redu): redu is string => !!redu)),
   ].sort();
 
+  const titleId = useId();
+
   function patch(next: Partial<MachineFormState>): void {
     setState((prev) => ({ ...prev, ...next }));
   }
 
   return (
-    <>
-      <h2>{machineId ? 'Ressource bearbeiten' : 'Neue Ressource'}</h2>
-      <MachineFormFields
-        state={state}
-        onChange={patch}
-        groupOptions={groupOptions}
-        reduOptions={reduOptions}
+    <AppDialog size="md" labelledBy={titleId}>
+      <AppDialogHeader
+        icon={<Wrench className="size-6" />}
+        title={machineId ? 'Ressource bearbeiten' : 'Neue Ressource'}
+        titleId={titleId}
+        subtitle={machine ? machine.name : 'Maschine oder Messtechnik anlegen'}
       />
-      <MaintenanceSlotEditor slots={state.maint} onChange={(maint) => patch({ maint })} />
-      <div className="modal-actions">
+      <AppDialogBody className="max-h-[70vh] gap-0 p-0">
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="flex flex-col gap-4 px-6 py-5 sm:px-7">
+            <MachineFormFields
+              state={state}
+              onChange={patch}
+              groupOptions={groupOptions}
+              reduOptions={reduOptions}
+            />
+            <MaintenanceSlotEditor slots={state.maint} onChange={(maint) => patch({ maint })} />
+          </div>
+        </ScrollArea>
+      </AppDialogBody>
+      <AppDialogFooter>
         {machineId && machine && (
-          <>
-            <button
-              className="btn danger"
-              onClick={() => void deleteMachineForm(machineId, machine)}
-            >
-              Löschen
-            </button>
-            <span className="spacer" />
-          </>
+          <Button
+            variant="destructive"
+            size="lg"
+            onClick={() => void deleteMachineForm(machineId, machine)}
+          >
+            Löschen
+          </Button>
         )}
-        <button className="btn" onClick={() => openAdmin()}>
-          Zurück
-        </button>
-        <button className="btn primary" onClick={() => void saveMachineForm({ machineId, state })}>
-          Speichern
-        </button>
-      </div>
-    </>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="ghost" size="lg" onClick={() => openAdmin()}>
+            Zurück
+          </Button>
+          <Button size="lg" onClick={() => void saveMachineForm({ machineId, state })}>
+            Speichern
+          </Button>
+        </div>
+      </AppDialogFooter>
+    </AppDialog>
   );
 }
 

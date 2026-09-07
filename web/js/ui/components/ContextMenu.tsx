@@ -17,6 +17,7 @@
 //
 // =======================================================================================
 import { useEffect, useLayoutEffect, useState } from 'react';
+import { CalendarPlus, Trash2 } from 'lucide-react';
 import { formatDateLong } from '../../../../shared/dates.ts';
 import { getBooking } from '../../core/bookings.ts';
 import { selection, clearSelection } from '../grid-interaction.ts';
@@ -26,6 +27,8 @@ import { deleteSelectedCells } from '../../core/bookings.ts';
 import { escapeHtml } from '../escape-html.ts';
 import type { Cell } from '../selection.ts';
 import { store } from '../../store-instance.ts';
+import { Button } from '../../components/ui/app-button.tsx';
+import { Separator } from '../../components/ui/separator.tsx';
 
 interface MenuInfo {
   x: number;
@@ -127,42 +130,43 @@ function useContextMenuInfo(): MenuInfo | null {
 
 function ContextMenuContent({ info }: { info: MenuInfo }) {
   return (
-    <>
-      <div style={{ padding: '4px 10px', fontSize: '12px', color: 'var(--app-muted)' }}>
+    <div className="ui-scope flex w-[15rem] max-w-[calc(100vw-24px)] flex-col gap-0.5 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg">
+      <div className="px-2 py-1.5 text-[11px] tabular-nums text-muted-foreground">
         {info.machineIds.length} Maschine(n) · {formatDateLong(info.from)}
         {info.from !== info.to ? ' – ' + formatDateLong(info.to) : ''}
       </div>
-      <button
+      <Separator className="mb-1" />
+      <Button
+        variant="ghost"
+        className="w-full justify-start"
         onClick={() => {
           hideCtx();
           openBookingForm(info.machineIds, info.from, info.to);
         }}
       >
-        <svg className="ic" aria-hidden="true">
-          <use href="#i-cal" />
-        </svg>{' '}
-        Buchen…
-      </button>
+        <CalendarPlus className="size-4" /> Buchen…
+      </Button>
       {info.bookedCells.length > 0 && (
-        <button
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-destructive hover:bg-destructive/10 hover:text-destructive"
           title={`betroffen: ${info.names.join(', ')}`}
           onClick={() => void handleDelete(info)}
         >
-          <svg className="ic" aria-hidden="true">
-            <use href="#i-trash" />
-          </svg>{' '}
-          {info.bookedCells.length} Buchung(en) löschen
-        </button>
+          <Trash2 className="size-4" /> {info.bookedCells.length} Buchung(en) löschen
+        </Button>
       )}
-      <button
+      <Button
+        variant="ghost"
+        className="w-full justify-start text-muted-foreground"
         onClick={() => {
           hideCtx();
           clearSelection();
         }}
       >
         Abbrechen
-      </button>
-    </>
+      </Button>
+    </div>
   );
 }
 

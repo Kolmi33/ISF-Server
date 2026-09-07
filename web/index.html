@@ -172,13 +172,18 @@
 <div id="overlay"><div id="modal" role="dialog" aria-modal="true" tabindex="-1"></div></div>
 <button id="modalReopen" title="Assistent wieder aufklappen" aria-label="Assistent wieder aufklappen"><svg class="ic" aria-hidden="true"><use href="#i-next"/></svg><span>Assistent</span></button>
 <div id="asTip" role="status" aria-live="polite"></div>
-<div id="confirm2" role="dialog" aria-modal="true">
-  <div class="cbox">
-    <h3 id="cfTitle"></h3>
-    <div id="cfBody" style="font-size:13px"></div>
-    <div class="modal-actions">
-      <button class="btn" id="cfNo">Abbrechen</button>
-      <button class="btn dangerfill" id="cfYes">Löschen</button>
+<!-- Der Bestätigungsdialog trägt `ui-scope` (web/css/ui-scope.css): Rahmen, Typografie und
+     Knöpfe kommen damit aus demselben System wie jeder migrierte Dialog. Die Klassen der
+     beiden Knöpfe setzt confirm.ts, weil sie je nach Frage destruktiv oder neutral sind. -->
+<div id="confirm2" class="ui-scope" role="dialog" aria-modal="true">
+  <div class="cbox w-full max-w-[480px] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+    <div class="flex flex-col gap-2 px-6 py-5">
+      <h3 id="cfTitle" class="text-[22px] font-semibold leading-tight tracking-tight text-foreground"></h3>
+      <div id="cfBody" class="text-sm leading-relaxed text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground"></div>
+    </div>
+    <div class="modal-actions flex items-center justify-end gap-2 border-t border-border bg-muted/50 px-6 py-4">
+      <button type="button" id="cfNo">Abbrechen</button>
+      <button type="button" id="cfYes">Löschen</button>
     </div>
   </div>
 </div>

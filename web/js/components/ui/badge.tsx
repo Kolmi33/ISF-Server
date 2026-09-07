@@ -7,7 +7,7 @@ export function Badge({
   className,
   variant = 'secondary',
   ...props
-}: ComponentProps<'span'> & { variant?: 'secondary' | 'brand' | 'outline' }) {
+}: ComponentProps<'span'> & { variant?: 'secondary' | 'brand' | 'outline' | 'destructive' }) {
   return (
     <span
       data-slot="badge"
@@ -17,6 +17,7 @@ export function Badge({
         variant === 'secondary' && 'bg-secondary text-secondary-foreground',
         variant === 'brand' && 'bg-brand-soft text-brand-foreground',
         variant === 'outline' && 'border border-border text-muted-foreground',
+        variant === 'destructive' && 'bg-destructive/10 text-destructive',
         className,
       )}
     />

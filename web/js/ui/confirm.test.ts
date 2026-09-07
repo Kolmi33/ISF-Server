@@ -24,14 +24,14 @@ describe('askConfirm', () => {
   // What: with no options given, the dialog opens with German default text, a danger-styled
   // confirm button, and keyboard focus starting on the safer "Abbrechen" (cancel) button.
   // How: calls askConfirm({}) against the stub dialog markup and checks the open class, the
-  // default title/button texts, the danger button class, and document.activeElement.
+  // default title/button texts, the destructive button styling, and document.activeElement.
   it('shows the dialog with defaults when no options are given, and focuses "Abbrechen"', () => {
     void askConfirm({});
     expect(box().classList.contains('open')).toBe(true);
     expect(document.getElementById('cfTitle')!.textContent).toBe('Wirklich löschen?');
     expect(document.getElementById('cfYes')!.textContent).toBe('Löschen');
     expect(document.getElementById('cfNo')!.textContent).toBe('Abbrechen');
-    expect(document.getElementById('cfYes')!.className).toBe('btn dangerfill');
+    expect(document.getElementById('cfYes')!.className).toContain('bg-destructive/10');
     expect(document.activeElement).toBe(document.getElementById('cfNo'));
   });
 
@@ -57,7 +57,7 @@ describe('askConfirm', () => {
   // How: calls askConfirm with danger:false and checks the confirm button's class name.
   it('renders the confirm button as neutral "primary" when danger is explicitly false', () => {
     void askConfirm({ danger: false });
-    expect(document.getElementById('cfYes')!.className).toBe('btn primary');
+    expect(document.getElementById('cfYes')!.className).toContain('bg-primary-deep');
   });
 
   // What: clicking the confirm ("Ja") button resolves the promise true, closes the dialog,

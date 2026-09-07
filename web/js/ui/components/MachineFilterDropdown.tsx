@@ -14,13 +14,20 @@
 //
 // =======================================================================================
 
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useId, useReducer, useRef, useState } from 'react';
+import { ChevronDown, Trash2 } from 'lucide-react';
+import { cn } from 'cn';
 import type { MachineCategory } from '../../../../shared/types.ts';
 import { CATEGORIES } from '../../core/machines.ts';
 import { orderedMachines } from '../grid.ts';
 import { buildMachineFilterRows, type MachineFilterRow } from '../machine-filter.ts';
 import { useToolbarDropdown } from '../toolbar-dropdown.ts';
 import { Icon } from './Icon.tsx';
+import { Button } from '../../components/ui/app-button.tsx';
+import { Checkbox } from '../../components/ui/checkbox.tsx';
+import { ScrollArea } from '../../components/ui/scroll-area.tsx';
+import { SearchField } from './app/SearchField.tsx';
+import { SECTION_LABEL_CLASS } from './app/typography.ts';
 import { store } from '../../store-instance.ts';
 
 /** Persists the machine AND group filter selections — shared by `GroupFilterDropdown.tsx`
@@ -123,22 +130,65 @@ function CategoryShownToggle({
 }) {
   return (
     <div
-      className="seg fill"
-      style={{ marginBottom: 4 }}
+      className="seg flex shrink-0 gap-1 rounded-lg border border-border bg-muted/50 p-1"
       role="group"
       aria-label="Kategorie in der Liste zeigen"
     >
       {CATEGORIES.map(({ id, label, icon }) => (
         <button
           key={id}
-          className={shownCategories.has(id) ? 'on' : ''}
+          type="button"
           aria-pressed={shownCategories.has(id)}
+          className={cn(
+            'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+            shownCategories.has(id)
+              ? 'bg-card text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
           onClick={() => onToggle(id)}
         >
-          <Icon name={icon} /> {label}
+          <span className="inline-flex [&_svg]:size-4">
+            <Icon name={icon} />
+          </span>
+          {label}
         </button>
       ))}
     </div>
+  );
+}
+
+/** A fold header — the category level (`cathead`) or the department level (`grpsub`). */
+function FoldRow({
+  label,
+  open,
+  strong,
+  onToggle,
+  className,
+}: {
+  label: string;
+  open: boolean;
+  strong?: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      onClick={onToggle}
+      className={cn(
+        'flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        className,
+      )}
+    >
+      <ChevronDown
+        className={cn(
+          'tarr size-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
+          !open && '-rotate-90',
+        )}
+      />
+      <span className={cn(SECTION_LABEL_CLASS, strong && 'text-foreground')}>{label}</span>
+    </button>
   );
 }
 
@@ -153,28 +203,43 @@ function MachineFilterRowView({
   onToggleOpen: (key: string) => void;
   onToggleMachine: (machineId: string, isChecked: boolean) => void;
 }) {
+  const id = useId();
   if (row.kind === 'category') {
     return (
-      <div className="grp cathead click" onClick={() => onToggleOpen(row.key)}>
-        <span className="tarr">{row.open ? '▾' : '▸'}</span> {row.label}
-      </div>
+      <FoldRow
+        className="grp cathead click mt-2 first:mt-0"
+        label={row.label}
+        open={row.open}
+        strong
+        onToggle={() => onToggleOpen(row.key)}
+      />
     );
   }
   if (row.kind === 'group') {
     return (
-      <div className="grp grpsub click" onClick={() => onToggleOpen(row.key)}>
-        <span className="tarr">{row.open ? '▾' : '▸'}</span> {row.label}
-      </div>
+      <FoldRow
+        className="grp grpsub click ml-2"
+        label={row.label}
+        open={row.open}
+        onToggle={() => onToggleOpen(row.key)}
+      />
     );
   }
   return (
-    <label>
-      <input
-        type="checkbox"
+    <label
+      htmlFor={id}
+      className={cn(
+        'ml-4 flex cursor-pointer select-none items-center gap-3 rounded-lg border px-3 py-1.5 text-sm transition-colors',
+        checked ? 'border-primary/45 bg-primary/[0.08]' : 'border-transparent hover:bg-muted',
+      )}
+    >
+      <Checkbox
+        id={id}
         checked={checked}
-        onChange={(event) => onToggleMachine(row.machine.id, event.target.checked)}
-      />{' '}
-      {row.machine.name}
+        onCheckedChange={(next) => onToggleMachine(row.machine.id, next)}
+        className="size-[18px] rounded-[5px]"
+      />
+      <span className="min-w-0 truncate text-foreground">{row.machine.name}</span>
     </label>
   );
 }
@@ -210,54 +275,52 @@ function MachineFilterBody({
   onToggleMachine: (machineId: string, isChecked: boolean) => void;
   onClear: () => void;
 }) {
+  const selectedCount = store.get('machSel').size;
   return (
-    <>
+    <div className="ui-scope flex w-[22rem] max-w-[calc(100vw-24px)] flex-col gap-3 rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg">
       <CategoryShownToggle
         shownCategories={state.shownCategories}
         onToggle={state.toggleShownCategory}
       />
-      <input
+      <SearchField
         ref={state.searchInputRef}
-        type="text"
         placeholder="Ressource suchen…"
-        style={{ width: '100%', marginBottom: 6 }}
-        autoComplete="off"
+        aria-label="Ressource suchen"
         value={state.searchQuery}
         onChange={(event) => state.setSearchQuery(event.target.value)}
       />
-      <div
-        style={{
-          display: 'flex',
-          gap: 8,
-          marginBottom: 6,
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
+      <div className="flex items-center gap-2">
         {/* Only shown once something's actually selected (user request) — with nothing
             selected there's nothing to count, and "alle sichtbar" sat here disconnected from
             the clear button next to it since there was nothing yet to clear. */}
-        {store.get('machSel').size > 0 && (
-          <span className="hint" style={{ margin: 0 }}>
-            {store.get('machSel').size} ausgewählt
+        {selectedCount > 0 && (
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            {selectedCount} ausgewählt
           </span>
         )}
-        <button className="btn small clearbtn" style={{ marginLeft: 'auto' }} onClick={onClear}>
-          <Icon name="trash" /> Filter löschen
-        </button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="clearbtn ml-auto text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          onClick={onClear}
+        >
+          <Trash2 className="size-3.5" /> Filter löschen
+        </Button>
       </div>
-      <div className="mlist" style={{ maxHeight: 300 }}>
-        {rows.map((row) => (
-          <MachineFilterRowView
-            key={row.kind === 'machine' ? row.machine.id : row.key}
-            row={row}
-            checked={row.kind === 'machine' && store.get('machSel').has(row.machine.id)}
-            onToggleOpen={state.toggleOpenKey}
-            onToggleMachine={onToggleMachine}
-          />
-        ))}
-      </div>
-    </>
+      <ScrollArea className="mlist -mr-2 max-h-80 min-h-0 pr-2">
+        <div className="flex flex-col gap-0.5">
+          {rows.map((row) => (
+            <MachineFilterRowView
+              key={row.kind === 'machine' ? row.machine.id : row.key}
+              row={row}
+              checked={row.kind === 'machine' && store.get('machSel').has(row.machine.id)}
+              onToggleOpen={state.toggleOpenKey}
+              onToggleMachine={onToggleMachine}
+            />
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
   );
 }
 

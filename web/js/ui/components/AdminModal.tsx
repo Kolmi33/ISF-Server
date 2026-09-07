@@ -14,7 +14,8 @@
 //
 // =======================================================================================
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { ArrowDown, ArrowUp, FileClock, Plus, Wrench } from 'lucide-react';
 import type { RefObject } from 'react';
 import type { Machine } from '../../../../shared/types.ts';
 import { moveMachine } from '../../core/machines.ts';
@@ -24,7 +25,14 @@ import { filterAdminMachines, type AdminSort } from '../views/admin.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
 import { openLog } from './LogModal.tsx';
 import { openMachineForm } from './MachineFormModal.tsx';
-import { Icon } from './Icon.tsx';
+import { Badge } from '../../components/ui/badge.tsx';
+import { Button } from '../../components/ui/app-button.tsx';
+import { NativeSelect } from '../../components/ui/native-select.tsx';
+import { ScrollArea } from '../../components/ui/scroll-area.tsx';
+import { AppDialog, AppDialogBody, AppDialogFooter, AppDialogHeader } from './app/AppDialog.tsx';
+import { EmptyState } from './app/EmptyState.tsx';
+import { FormField } from './app/FormField.tsx';
+import { SearchField } from './app/SearchField.tsx';
 import { store } from '../../store-instance.ts';
 import { toast } from '../toast.ts';
 
@@ -40,10 +48,14 @@ function StatusBadge({ machine }: { machine: Machine }) {
   const kind = maintenanceKind(machine);
   const slotCount = getMaintenanceSlots(machine).length;
   return (
-    <span className={`tag ${kind || 'wartung'}`} title={statusRangeText(machine)}>
+    <Badge
+      variant={kind === 'defekt' ? 'destructive' : 'brand'}
+      className={`tag ${kind || 'wartung'}`}
+      title={statusRangeText(machine)}
+    >
       {kind === 'defekt' ? 'defekt' : 'Wartung'}
       {slotCount > 1 ? ` ×${slotCount}` : ''}
-    </span>
+    </Badge>
   );
 }
 
@@ -56,32 +68,46 @@ interface AdminRowProps {
 
 function AdminRow({ machine, manual, onEdit, onMove }: AdminRowProps) {
   return (
-    <div className="admrow">
-      <span className="nm" title={machine.name}>
-        {machine.name}{' '}
-        <span className="hint" style={{ margin: 0 }}>
-          ({machine.group})
+    <div className="admrow flex items-center gap-3 rounded-lg border border-transparent px-3 py-2 transition-colors hover:bg-muted">
+      <span className="nm min-w-0 flex-1" title={machine.name}>
+        <span className="flex flex-wrap items-center gap-1.5">
+          <span className="truncate text-sm font-medium text-foreground">{machine.name}</span>
+          <span className="text-[11px] text-muted-foreground">({machine.group})</span>
+          <StatusBadge machine={machine} />
+          {machine.days && machine.days !== '1111111' && (
+            <span className="text-[11px] text-muted-foreground" title="verfügbare Wochentage">
+              · {daysMaskText(machine)}
+            </span>
+          )}
         </span>
-        <StatusBadge machine={machine} />
-        {machine.days && machine.days !== '1111111' && (
-          <span className="hint" style={{ margin: 0 }} title="verfügbare Wochentage">
-            · {daysMaskText(machine)}
-          </span>
-        )}
       </span>
       {manual && (
         <>
-          <button className="btn small" title="nach oben" onClick={() => onMove(machine.id, -1)}>
-            ↑
-          </button>
-          <button className="btn small" title="nach unten" onClick={() => onMove(machine.id, 1)}>
-            ↓
-          </button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+            title="nach oben"
+            aria-label="nach oben"
+            onClick={() => onMove(machine.id, -1)}
+          >
+            <ArrowUp className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+            title="nach unten"
+            aria-label="nach unten"
+            onClick={() => onMove(machine.id, 1)}
+          >
+            <ArrowDown className="size-4" />
+          </Button>
         </>
       )}
-      <button className="btn small" onClick={() => onEdit(machine.id)}>
+      <Button variant="outline" size="sm" onClick={() => onEdit(machine.id)}>
         Bearbeiten
-      </button>
+      </Button>
     </div>
   );
 }
@@ -103,35 +129,72 @@ function AdminControls({
   onSortChange,
   searchRef,
 }: AdminControlsProps) {
+  const searchId = useId();
+  const sortId = useId();
   return (
-    <>
-      <div className="formrow">
-        <button className="btn primary" onClick={() => openMachineForm(null)}>
-          ＋ Maschine hinzufügen
-        </button>
-        <button className="btn" onClick={openLog}>
-          <Icon name="doc" /> Änderungsprotokoll
-        </button>
+    <div className="flex shrink-0 flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button onClick={() => openMachineForm(null)}>
+          <Plus className="size-4" /> Maschine hinzufügen
+        </Button>
+        <Button variant="outline" onClick={openLog}>
+          <FileClock className="size-4" /> Änderungsprotokoll
+        </Button>
       </div>
-      <div className="formrow">
-        <input
-          ref={searchRef}
-          type="text"
-          placeholder="Maschine suchen…"
-          style={{ flex: 1 }}
-          value={search}
-          onChange={(event) => onSearchChange(event.target.value)}
-        />
-        <label style={{ minWidth: 'auto' }}>Sortieren</label>
-        <select value={sort} onChange={(event) => onSortChange(event.target.value as AdminSort)}>
-          {SORT_OPTIONS.map(({ value, label }) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[2fr_1fr]">
+        <FormField label="Suchen" htmlFor={searchId}>
+          <SearchField
+            id={searchId}
+            ref={searchRef}
+            placeholder="Maschine suchen…"
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+          />
+        </FormField>
+        <FormField label="Sortieren" htmlFor={sortId}>
+          <NativeSelect
+            id={sortId}
+            value={sort}
+            onChange={(event) => onSortChange(event.target.value as AdminSort)}
+          >
+            {SORT_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
       </div>
-    </>
+    </div>
+  );
+}
+
+/** The machine list, or its empty state. Split out of `AdminModal` purely to stay under the
+ *  function-length budget. */
+function AdminList({
+  rows,
+  manual,
+  onMove,
+}: {
+  rows: readonly Machine[];
+  manual: boolean;
+  onMove: (machineId: string, direction: -1 | 1) => void;
+}) {
+  if (!rows.length) return <EmptyState>Keine Maschine gefunden.</EmptyState>;
+  return (
+    <ScrollArea className="mlist -mr-3 min-h-0 flex-1 pr-3">
+      <div className="flex flex-col gap-0.5">
+        {rows.map((machine) => (
+          <AdminRow
+            key={machine.id}
+            machine={machine}
+            manual={manual}
+            onEdit={(machineId) => openMachineForm(machineId)}
+            onMove={onMove}
+          />
+        ))}
+      </div>
+    </ScrollArea>
   );
 }
 
@@ -142,6 +205,7 @@ export function AdminModal() {
   const [search, setSearch] = useState('');
   const [, forceRerender] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
+  const titleId = useId();
 
   useEffect(() => {
     searchRef.current?.focus();
@@ -164,40 +228,35 @@ export function AdminModal() {
   }
 
   const rows = filterAdminMachines(store.get('data')!.machines, sort, search);
+  const onMove = (machineId: string, direction: -1 | 1) => void move(machineId, direction);
 
   return (
-    <>
-      <h2>
-        <Icon name="wrench" /> Verwalten
-      </h2>
-      <AdminControls
-        search={search}
-        onSearchChange={setSearch}
-        sort={sort}
-        onSortChange={changeSort}
-        searchRef={searchRef}
+    <AppDialog size="lg" labelledBy={titleId}>
+      <AppDialogHeader
+        icon={<Wrench className="size-6" />}
+        title="Verwalten"
+        titleId={titleId}
+        subtitle="Ressourcen anlegen, bearbeiten und ordnen"
       />
-      <div className="mlist" style={{ maxHeight: 380 }}>
-        {rows.length ? (
-          rows.map((machine) => (
-            <AdminRow
-              key={machine.id}
-              machine={machine}
-              manual={sort === 'manual'}
-              onEdit={(machineId) => openMachineForm(machineId)}
-              onMove={(machineId, direction) => void move(machineId, direction)}
-            />
-          ))
-        ) : (
-          <p className="hint">Keine Maschine gefunden.</p>
-        )}
-      </div>
-      <div className="modal-actions">
-        <button className="btn" onClick={closeReactModal}>
+      <AppDialogBody className="max-h-[72vh]">
+        <AdminControls
+          search={search}
+          onSearchChange={setSearch}
+          sort={sort}
+          onSortChange={changeSort}
+          searchRef={searchRef}
+        />
+        <AdminList rows={rows} manual={sort === 'manual'} onMove={onMove} />
+      </AppDialogBody>
+      <AppDialogFooter>
+        <span className="text-[11px] tabular-nums text-muted-foreground">
+          {rows.length} Ressource{rows.length === 1 ? '' : 'n'}
+        </span>
+        <Button size="lg" className="ml-auto" onClick={closeReactModal}>
           Schließen
-        </button>
-      </div>
-    </>
+        </Button>
+      </AppDialogFooter>
+    </AppDialog>
   );
 }
 

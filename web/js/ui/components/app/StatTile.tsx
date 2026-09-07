@@ -35,10 +35,11 @@ export function StatTile({
       </span>
       <span
         data-slot="stat-label"
-        className="flex items-center gap-1.5 truncate text-[11px] text-muted-foreground"
+        className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground"
+        title={typeof label === 'string' ? label : undefined}
       >
         {icon}
-        {label}
+        <span className="truncate">{label}</span>
       </span>
     </div>
   );

@@ -131,7 +131,9 @@ describe('MachineFilterDropdown', () => {
   // category header remains, with notify never called.
   it('the category-shown toggle hides a whole category section without calling notify', () => {
     openDropdown();
-    act(() => fireEvent.click(screen.getByRole('button', { name: /Messtechnik/ })));
+    // The pressed filter narrows to the segmented toggle: the category fold header below
+    // is a button carrying the same label now, but it is aria-expanded, not aria-pressed.
+    act(() => fireEvent.click(screen.getByRole('button', { name: /Messtechnik/, pressed: true })));
     expect(document.querySelectorAll('.mlist .cathead')).toHaveLength(1); // only "Maschinen" left
     expect(notifySpy).not.toHaveBeenCalled();
   });
