@@ -822,3 +822,58 @@ Local Date objects cross into the existing ISO contract through their calendar c
 then the established UTC date utilities enumerate exact reservation dates. Booking
 rechecks the latest store snapshot and enters the existing confirmation/mutation flow,
 including its read-only, conflict and batch-size checks. Server weekend bridging is unchanged.
+
+## 20. Phase 15 — one visual system across every secondary window _(IMPLEMENTED 2026-09-07)_
+
+Phase 14 gave the booking Assistant a complete look of its own: a token palette, a local
+reset, and — the part that actually made it possible — an isolation rule that let Tailwind
+utilities win inside it while the unlayered `app.css` kept styling everything else. That
+whole mechanism lived on one class, `.booking-assistant`, and so did the design.
+
+Phase 15 makes the class shared (`.ui-scope`, `web/css/ui-scope.css`) and derives the rest of
+the application's dialogs from what the Assistant already does. The design itself is not new
+and was not invented here; it is written down in `docs/UI_STYLE_GUIDE.md`, read out of the
+Assistant's code, and that document is normative for secondary UI. The main booking grid is
+deliberately excluded — it is a dense workspace with its own density requirements.
+
+**How a window joins the system.** Its root element carries `ui-scope`. From that moment the
+window is inside the palette and the reset, and `app.css` no longer reaches it. Practically
+this means a migrated window's old class names go inert, so they can stay on the elements as
+query hooks for the tests that use them — which is why this phase changed a lot of markup and
+very few tests.
+
+**Two things the isolation had to learn.** `all: revert-layer` only wins on specificity, and
+`app.css` is unlayered:
+
+- Class-level collisions. `.mlist .grp.cathead:not(:first-child)` is five class components
+  and beat the original two-class isolation rule. The scope class is now repeated seven
+  times, which clears every selector in `app.css` regardless of the container.
+- Id-level collisions. No amount of class repetition beats `#modal h2` or `#confirm2 .cbox`.
+  Those rules styled the *insides* of containers whose contents are now fully migrated, so
+  they were deleted from `app.css` — the containers' own rules (position, backdrop, the
+  `.open` toggle) stay. This is the general shape of the burn-down: as a window migrates, the
+  `app.css` rules that reached into it go away with it.
+
+**Shell overrides.** `#modal`, `#overlay` and the three static floating shells (`#machDrop`,
+`#groupDrop`, `#ctxMenu`) hand their chrome over to a `ui-scope` child — the dialog or popover
+paints its own surface, so there is exactly one place that decides what a dialog looks like.
+
+**Primitives.** Everything the Assistant had grown privately moved into the shared shadcn
+location `web/js/components/ui/` (`app-button`, `badge`, `scroll-area`, `popover`, `tooltip`,
+`label`, `native-select`), and the application-level composites live in
+`web/js/ui/components/app/` (`AppDialog` and its parts, `SectionHeading`, `EmptyState`,
+`SearchField`, `FormField`, `StatTile`). The Assistant consumes exactly the same set.
+
+**One deliberate deviation from "use the shadcn primitive".** `NativeSelect` is a real
+`<select>` wearing `Input`'s treatment rather than a listbox: the app's selects carry
+`<optgroup>`s built from live data and are driven by keyboard and by `selectOptions` in tests,
+and a listbox would change interaction behaviour a visual refactor is not allowed to change.
+
+**Colour that is data, not chrome, stays.** Statistik's per-category accent (`--stat-fill`)
+and the Legende's grid dots quote the grid's own palette on purpose. Custom properties are
+unaffected by `all: revert-layer`, so they survive inside the scope.
+
+`npm run ui:shots` (`scripts/ui-shots.mjs`) is the verification tool this phase needed and
+the reason several layout defects were caught: it opens each window in a real browser at a
+given size and theme and screenshots it. It is strictly read-only — the dev server proxies
+`/api` to the real backend.

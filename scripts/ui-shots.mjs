@@ -1,45 +1,119 @@
-// TEMPORARY dev driver (Phase 15 visual verification) — opens each secondary window in a real
-// browser and screenshots it. Not part of any gate; delete when the phase is done.
+// ui-shots.mjs — open every secondary window in a real browser and screenshot it. The
+// companion to ui-smoke.mjs: that one proves a page loads clean, this one shows what each
+// dialog actually looks like, which is the only way to check a visual refactor (Phase 15,
+// docs/UI_STYLE_GUIDE.md). Dev-only (Playwright is a devDependency, ARCHITECTURE §18); not
+// part of `verify` — it needs a running Vite dev server.
 //
-//   node scripts/ui-shots.mjs <base-url> <out-dir> [name...]
+//   npm run ui:shots -- <base-url> <out-dir> [name...] [--width N] [--height N] [--theme dark]
+//
+// Same Windows + git-bash path-rewriting gotcha as ui-smoke.mjs — wrap the docker call in
+// `sh -c "..."` so MSYS doesn't rewrite the POSIX out-dir argument.
 /* global localStorage, document */
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 
-const OPENERS = {
-  assistant: '#btnAssist',
-  settings: '#btnSettings',
-  help: '#btnHelp',
-  mybookings: '#btnMine',
-  allbookings: '#btnAll',
-  stats: '#btnStats',
-  admin: '#btnAdmin',
+/** Each scene: how to reach it from the loaded grid.
+ *
+ *  READ-ONLY, WITHOUT EXCEPTION. The dev server proxies /api to the real backend, so a scene
+ *  that clicks a confirm/delete/save button writes to live data — one earlier version of this
+ *  file did exactly that and removed a booking. Every scene here may only open things; the
+ *  confirm dialog is reached through the machine form's delete (which asks first) and is left
+ *  unanswered. */
+const SCENES = {
+  assistant: (p) => p.click('#btnAssist'),
+  settings: (p) => p.click('#btnSettings'),
+  help: (p) => p.click('#btnHelp'),
+  mybookings: (p) => p.click('#btnMine'),
+  allbookings: (p) => p.click('#btnAll'),
+  stats: (p) => p.click('#btnStats'),
+  admin: (p) => p.click('#btnAdmin'),
+  machinefilter: (p) => p.click('#machBtn'),
+  groupfilter: (p) => p.click('#groupBtn'),
+  async machineform(p) {
+    await p.click('#btnAdmin');
+    await p.waitForTimeout(600);
+    await p.click('#modal button:has-text("Bearbeiten")');
+  },
+  async statsdrilldown(p) {
+    await p.click('#btnStats');
+    await p.waitForTimeout(900);
+    await p.click('#stOut .statrow.click');
+  },
+  async bookingform(p) {
+    await p.dblclick('#grid td.cell.free');
+  },
+  async bookingdetail(p) {
+    await p.dblclick('#grid td.cell.booked');
+  },
+  /** The machine form's "Löschen" only opens the confirm dialog; nothing is answered here. */
+  async confirm(p) {
+    await p.click('#btnAdmin');
+    await p.waitForTimeout(600);
+    await p.click('#modal button:has-text("Bearbeiten")');
+    await p.waitForTimeout(600);
+    await p.click('#modal button:has-text("Löschen")');
+  },
+  /** The menu opens on the mouseup that ends a drag — the same gesture a user makes. */
+  async ctxmenu(p) {
+    const cells = p.locator('#grid td.cell.free');
+    const from = await cells.nth(0).boundingBox();
+    const to = await cells.nth(2).boundingBox();
+    await p.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await p.mouse.down();
+    await p.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+    await p.mouse.up();
+  },
+  async emptybookings(p) {
+    await p.evaluate(() => localStorage.setItem('mb_user', 'Niemand Ohne Buchung'));
+    await p.reload({ waitUntil: 'networkidle' });
+    await p.waitForSelector('#grid tbody tr');
+    await p.click('#btnMine');
+  },
 };
 
 async function main() {
-  const [url, outDir, ...only] = process.argv.slice(2);
+  const argv = process.argv.slice(2);
+  const flagIndex = argv.findIndex((a) => a.startsWith('--'));
+  const positional = flagIndex >= 0 ? argv.slice(0, flagIndex) : argv;
+  const flag = (name, fallback) => {
+    const i = argv.indexOf(name);
+    return i >= 0 ? Number(argv[i + 1]) : fallback;
+  };
+  const width = flag('--width', 1400);
+  const height = flag('--height', 950);
+  const themeIndex = argv.indexOf('--theme');
+  const theme = themeIndex >= 0 ? argv[themeIndex + 1] : 'light';
+  const [url, outDir, ...rest] = positional;
   mkdirSync(outDir, { recursive: true });
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1400, height: 950 } });
+  const page = await browser.newPage({ viewport: { width, height } });
   const errors = [];
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 
   await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.evaluate(() => localStorage.setItem('mb_user', 'Kolmanovskyi'));
+  await page.evaluate((t) => {
+    localStorage.setItem('mb_user', 'Kolmanovskyi');
+    localStorage.setItem('mb_theme', t);
+  }, theme);
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForSelector('#grid tbody tr', { timeout: 15000 });
 
-  const names = only.length ? only : Object.keys(OPENERS);
+  const names = rest.length ? rest : Object.keys(SCENES);
   for (const name of names) {
-    await page.evaluate(() => document.getElementById('overlay')?.classList.remove('open'));
-    await page.click(OPENERS[name]);
-    await page.waitForTimeout(700);
+    await page.evaluate(() => {
+      document.getElementById('overlay')?.classList.remove('open');
+      document.getElementById('confirm2')?.classList.remove('open');
+      document.getElementById('machDrop')?.classList.remove('open');
+      document.getElementById('groupDrop')?.classList.remove('open');
+    });
+    await SCENES[name](page);
+    await page.waitForTimeout(800);
     await page.screenshot({ path: `${outDir}/${name}.png` });
     await page.keyboard.press('Escape').catch(() => {});
-    await page.waitForTimeout(150);
+    await page.waitForTimeout(200);
   }
-  console.log(JSON.stringify({ outDir, names, errors }, null, 2));
+  console.log(JSON.stringify({ outDir, width, height, theme, names, errors }, null, 2));
   await browser.close();
 }
 

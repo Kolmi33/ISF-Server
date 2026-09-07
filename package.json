@@ -23,6 +23,7 @@
     "format:check": "prettier --check .",
     "deadcode": "knip",
     "ui:smoke": "node scripts/ui-smoke.mjs",
+    "ui:shots": "node scripts/ui-shots.mjs",
     "verify": "npm run format:check && npm run check && npm run lint && npm run deadcode && npm run test:cov"
   },
   "dependencies": {

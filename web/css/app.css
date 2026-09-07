@@ -73,12 +73,8 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--app-accent-light
 #machDrop.open{display:block}
 /* Taller rows (user request: too tight to comfortably click, especially for long device
    names like the Fire-III pyrometer or the Keyence Highspeed camera) */
-#machDrop label{display:block;padding:8px 6px;cursor:pointer;border-radius:4px;font-size:13px}
-#machDrop label:hover{background:var(--hover)}
-#machDrop .grp{font-weight:700;margin-top:6px;color:var(--app-muted);font-size:12px}
 /* The popover's own border/shadow already provides structural containment (user request) —
    the inner scrollable list doesn't need a second nested border around it too. */
-#machDrop .mlist{border:none;padding:0}
 .chip{background:var(--app-accent-light);color:var(--app-accent);border:1px solid var(--app-accent);border-radius:12px;padding:2px 8px;font-size:12px;cursor:pointer;white-space:nowrap}
 .chip:hover{filter:brightness(.95)}
 #groupWrap{position:relative;display:inline-flex;align-items:center}
@@ -92,8 +88,6 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--app-accent-light
 #groupWrap.filtered #groupClearBtn{border-top-left-radius:0;border-bottom-left-radius:0;border-left:none}
 #groupDrop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:8px;z-index:50;min-width:230px;max-height:320px;overflow:auto}
 #groupDrop.open{display:block}
-#groupDrop label{display:block;padding:4px 6px;cursor:pointer;border-radius:4px;font-size:13px}
-#groupDrop label:hover{background:var(--hover)}
 td.cell.booked.dim{opacity:.28;filter:grayscale(.8)}
 
 /* ---------- Grid ---------- */
@@ -274,8 +268,6 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 /* Eigener Bestätigungsdialog für destruktive Aktionen (statt native confirm()) */
 #confirm2{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:250;align-items:center;justify-content:center;padding:16px}
 #confirm2.open{display:flex}
-#confirm2 .cbox{background:var(--app-panel);border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.35);max-width:460px;width:100%;padding:16px 18px}
-#confirm2 h3{margin:0 0 8px;font-size:15px}
 .btn.dangerfill{background:var(--danger);border-color:var(--danger);color:#fff}
 /* Untergeordnete Listenköpfe (Bereichs-/Gruppen-Überschriften wie "Alte Halle") — deutlich
    dunklerer Kontrast als eine Datenzeile, damit sie beim Scannen sofort als Gliederung
@@ -285,8 +277,6 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .statgrp{font-weight:700;padding:6px 8px;font-size:12px;color:var(--app-text);
   background:var(--headbg);border-bottom:2px solid var(--app-border);border-radius:4px;margin-top:2px}
 #ctxMenu{position:fixed;z-index:150;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);padding:6px;display:none;min-width:200px}
-#ctxMenu button{display:block;width:100%;text-align:left;border:none;background:none;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--app-text)}
-#ctxMenu button:hover{background:var(--hover)}
 .machinfo{color:var(--app-muted);cursor:pointer}
 /* ---------- Assistent: kartenbasiertes Dashboard-Layout ---------- */
 /* Moderner SaaS-Dashboard-Look (user request): ein helles Grau als Seitenhintergrund, jeder
@@ -309,8 +299,8 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .assist-shell{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0;overflow:hidden}
 .assist-header{display:block;position:relative;flex:0 0 auto;padding:24px 64px 16px 24px}
 .assist-header-close{position:absolute;right:20px;top:20px}
-/* #modal h2{margin:0 0 12px;font-size:16px} outranks a bare .assist-header h2 (ID beats
-   class regardless of source order) — scope through #modal itself to actually win. */
+/* Scoped through #modal to outrank the (since removed) generic #modal h2 rule. Dead code:
+   nothing has carried .assist-shell since the Assistant became React (Phase 14). */
 #modal:has(.assist-shell) .assist-header h2{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
 .assist-subtitle{margin:4px 0 0;font-size:14px;color:var(--app-muted)}
 .assist-body{flex:1;min-height:0;overflow:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:16px}
@@ -470,7 +460,6 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 #overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;z-index:100;align-items:flex-start;justify-content:center;padding:40px 12px;overflow:auto}
 #overlay.open{display:flex}
 #modal{background:var(--app-panel);border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.25);max-width:640px;width:100%;padding:18px 20px;max-height:85vh;overflow:auto}
-#modal h2{margin:0 0 12px;font-size:16px}
 /* Booking detail modal: title + top-right close "×" share one row (user request — frees the
    bottom action row for just the two destructive actions, no separate "Schließen" needed there). */
 .bkdetail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
@@ -585,7 +574,6 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 /* ---------- Statistik dashboard (StatsDashboard.tsx) ---------- */
 /* Light-grey modal ground behind the white cards below, matching the Assistant's own
    card-on-grey treatment (app.css, "#modal:has(.assist-shell)"). */
-#modal:has(.stat-card){background:var(--app-bg)}
 /* The KPI tile row: icon + big bold value over a small muted label, four across. Same visual
    language as MyBookingsModal's own summary strip (.mybk-stat), kept as separate classes since
    the two features are otherwise unrelated. */

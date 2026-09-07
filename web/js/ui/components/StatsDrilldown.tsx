@@ -129,7 +129,7 @@ export function MachineDrilldown({ row, totalDays }: { row: StatsMachineRow; tot
   const people = [...row.persons.values()].sort((a, b) => b.days - a.days);
   const maxDays = people.length ? people[0]!.days : 1;
   return (
-    <StatCard className="flex-1">
+    <StatCard className="min-h-[16rem] flex-1">
       <p className="text-sm text-muted-foreground">
         <b className="font-semibold text-foreground">{row.machine.name}</b> ({row.machine.group}) —
         belegt an <b className="font-semibold text-foreground">{row.bookedWorkdayCount}</b> von{' '}
@@ -172,7 +172,7 @@ export function PersonDrilldown({ person }: { person: StatsPerson }) {
   const machineEntries = [...person.machines.entries()].sort((a, b) => b[1] - a[1]);
   const maxDays = machineEntries.length ? machineEntries[0]![1] : 1;
   return (
-    <StatCard className="flex-1">
+    <StatCard className="min-h-[16rem] flex-1">
       <p className="text-sm text-muted-foreground">
         <b className="font-semibold text-foreground">{person.name}</b> —{' '}
         <b className="font-semibold text-foreground">{person.days}</b> gebuchte Maschinentage auf{' '}

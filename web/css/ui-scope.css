@@ -49,12 +49,16 @@
     --ring: var(--primary);
     --radius: 0.65rem;
     --font-mono: 'JetBrains Mono Variable', monospace;
+    /* Native controls the app still uses on purpose — the date inputs, the `NativeSelect`
+       dropdown, scrollbars — paint themselves from this, not from the tokens above. */
+    color-scheme: light;
     font-family: 'Inter Variable', sans-serif;
     font-size: 16px;
     line-height: 1.5;
     color: var(--foreground);
   }
   [data-theme='dark'] .ui-scope {
+    color-scheme: dark;
     --background: hsl(84 12% 11%);
     --foreground: hsl(80 14% 92%);
     --primary: hsl(82 62% 52%);
@@ -105,9 +109,16 @@
 }
 
 /* Ignore legacy unlayered header/table/control rules here; retain Tailwind layers.
-   This is local isolation, not a global Preflight or a change to the existing app theme. */
-#modal .ui-scope :where(*),
-.ui-scope.ui-scope :where(*) {
+   This is local isolation, not a global Preflight or a change to the existing app theme.
+
+   The scope class is repeated on purpose. app.css is unlayered, so only specificity separates
+   it from this rule — and a migrated window deliberately KEEPS its old class names as query
+   hooks, which means app.css selectors like `.mlist .grp.cathead:not(:first-child)` (five
+   class-level components) can still match inside the scope. Seven repetitions puts this
+   safely past app.css's strongest selector, whatever container the scope happens to sit in;
+   the earlier `#modal .ui-scope` form only covered elements inside the modal and let the
+   toolbar popovers keep their legacy fills. */
+.ui-scope.ui-scope.ui-scope.ui-scope.ui-scope.ui-scope.ui-scope :where(*) {
   all: revert-layer;
 }
 

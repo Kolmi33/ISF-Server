@@ -251,7 +251,7 @@ export function StatsModal({ presetPerson }: StatsModalProps) {
         titleId={titleId}
         subtitle="Auslastung von Ressourcen und Personen im gewählten Zeitraum"
       />
-      <AppDialogBody className="max-h-[78vh]">
+      <AppDialogBody className="max-h-[78vh] overflow-y-auto">
         <StatsRangeRow
           from={s.from}
           to={s.to}

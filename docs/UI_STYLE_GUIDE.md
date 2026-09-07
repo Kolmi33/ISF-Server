@@ -2,7 +2,7 @@
 
 **Status:** normative for every _secondary_ window (dialogs, filter popovers, management
 screens). The main booking grid is explicitly out of scope — it is a dense primary
-workspace with its own requirements (see §19).
+workspace with its own requirements (see §20).
 
 This guide is **not** an invented design system. Every rule below was read out of the
 Buchungsassistent's actual implementation (`web/js/ui/components/booking-assistant/`,
@@ -42,6 +42,7 @@ It does three things that nothing else in the app does:
 | Palette           | Sets `--background`/`--foreground`/`--primary`/… on the scope root. Tailwind's `@theme inline` block (`web/css/tailwind.css`) maps these to `bg-card`, `text-muted-foreground`, … |
 | Local reset       | `box-sizing`, zeroed margin/padding, `border: 0 solid`, `font: inherit` on `button`/`input`, unstyled `h1–h3`/`ul` — the Preflight the app deliberately does **not** load globally |
 | Legacy isolation  | `all: revert-layer` on every descendant, which drops the unlayered `app.css` rules and lets the Tailwind `utilities` layer through                                 |
+| Native controls   | `color-scheme: light`/`dark`, so the date inputs, `NativeSelect` dropdowns and scrollbars follow the theme                                                        |
 
 **Consequences you must know:**
 
@@ -54,7 +55,22 @@ It does three things that nothing else in the app does:
   must carry `ui-scope` itself. The shared `PopoverContent`/`TooltipContent` already do this.
 - `#modal`/`#overlay` chrome is overridden for `.ui-scope` children: transparent background,
   no padding, `border-radius: 16px`, `overflow: hidden`, `max-height: calc(100dvh - 32px)`,
-  and `#overlay` padding drops to 16px. The dialog paints its own surface.
+  and `#overlay` padding drops to 16px. The same applies to the three static floating shells
+  (`#machDrop`, `#groupDrop`, `#ctxMenu`). The dialog or popover paints its own surface.
+
+**The isolation only wins on specificity — know both failure modes.** `app.css` is unlayered,
+so nothing but specificity separates it from the scope's `revert-layer` rule:
+
+1. **Class-level selectors.** The scope class is repeated seven times in that rule, which
+   clears `app.css`'s strongest (`.mlist .grp.cathead:not(:first-child)`, five components).
+   Do not reduce the repetition.
+2. **Id-level selectors.** No number of classes beats `#modal h2` or `#confirm2 .cbox`. Rules
+   like these style the *insides* of a container, so when the container's contents migrate,
+   **delete them from `app.css`** — keep only the container's own position/backdrop/toggle
+   rules. That deletion is part of migrating a window, not a separate cleanup.
+
+If a migrated window still looks like the old app somewhere, check for an id-carrying
+`app.css` rule before touching anything else.
 
 ---
 
@@ -345,7 +361,20 @@ with an explicit height and hide below `sm`. Dashed borders mean "drop target" o
 
 ---
 
-## 19. Out of scope
+## 19. Verifying a migration
+
+`npm run ui:shots` (`scripts/ui-shots.mjs`) opens each window in a real browser and
+screenshots it; `--width`/`--height`/`--theme dark` cover the states worth checking. A visual
+refactor cannot be verified by a passing gate — every layout defect found in Phase 15 (the
+overlapping Statistik cards, the stretched KPI tile, the legacy fills the isolation was still
+losing to) was invisible to the tests and obvious in a screenshot.
+
+It is **read-only, without exception**: the dev server proxies `/api` to the real backend, so
+a scene that clicks a delete or save button writes to live data.
+
+---
+
+## 20. Out of scope
 
 The main booking grid (`web/js/ui/components/Grid*.tsx`, `web/js/ui/grid*.ts` and their
 `app.css` rules) is a dense data workspace. It legitimately runs at a different density and

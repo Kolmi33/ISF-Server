@@ -102,7 +102,7 @@ export function ResourcesOverview({
         categoryLabel={categoryLabel}
         categoryIcon={categoryIcon}
       />
-      <StatCard className="flex-1">
+      <StatCard className="min-h-[16rem] flex-1">
         <div className="stat-card-head text-sm">
           <b className="font-semibold text-foreground">{categoryLabel} im Detail</b>
         </div>
@@ -137,7 +137,7 @@ interface PersonsOverviewProps {
 export function PersonsOverview({ persons, onSelectPerson }: PersonsOverviewProps) {
   const maxDays = persons.length ? persons[0]!.days : 1;
   return (
-    <StatCard className="flex-1">
+    <StatCard className="min-h-[16rem] flex-1">
       <p className="text-[11px] leading-relaxed text-muted-foreground">
         {persons.length} Person{persons.length === 1 ? '' : 'en'} mit Buchungen im Zeitraum — Zeile
         anklicken für die Maschinen-Aufschlüsselung

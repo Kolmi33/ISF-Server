@@ -1,11 +1,11 @@
 # PROGRESS — living project state
 
-## Phase 15 — application-wide visual unification (started 2026-09-07)
+## Phase 15 — application-wide visual unification (2026-09-07, DONE)
 
 **Goal.** Make every secondary window read as one designed application by deriving the visual
 system from the Buchungsassistent and applying it outward. Visual/structural only — no change
 to booking, filtering, statistics or API behaviour. The main booking grid is deliberately out
-of scope (`docs/UI_STYLE_GUIDE.md` §19).
+of scope (`docs/UI_STYLE_GUIDE.md` §20).
 
 **Reference.** `docs/UI_STYLE_GUIDE.md` — extracted from the Assistant's real code, not invented.
 
@@ -20,22 +20,69 @@ Legacy class names are therefore **kept as query hooks** where tests or other mo
 
 ### Backlog
 
-- [ ] P15.0 — style guide (`docs/UI_STYLE_GUIDE.md`) extracted from the Assistant
-- [ ] P15.1 — `.booking-assistant` scope generalised to `.ui-scope` (`web/css/ui-scope.css`)
-- [ ] P15.2 — shadcn primitives lifted out of the Assistant into `web/js/components/ui/`
+- [x] P15.0 — style guide (`docs/UI_STYLE_GUIDE.md`) extracted from the Assistant
+- [x] P15.1 — `.booking-assistant` scope generalised to `.ui-scope` (`web/css/ui-scope.css`)
+- [x] P15.2 — shadcn primitives lifted out of the Assistant into `web/js/components/ui/`
       (`app-button`, `badge`, `scroll-area`, `popover`, `tooltip`, `native-select`)
-- [ ] P15.3 — app dialog kit (`web/js/ui/components/app/`): `AppDialog`, `AppDialogHeader`,
+- [x] P15.3 — app dialog kit (`web/js/ui/components/app/`): `AppDialog`, `AppDialogHeader`,
       `AppDialogBody`, `AppDialogFooter`, `SectionHeading`, `EmptyState`, `SearchField`,
       `FormField`/`FieldLabel`, `StatTile`
-- [ ] P15.4 — Name prompt · Aktive Nutzer · Änderungsprotokoll · Legende
-- [ ] P15.5 — Einstellungen
-- [ ] P15.6 — Buchen (BookingForm) · Buchungsdetail
-- [ ] P15.7 — Meine Buchungen (summary, filters, runs, groups)
-- [ ] P15.8 — Alle Buchungen
-- [ ] P15.9 — Statistik (controls, overviews, drilldowns)
-- [ ] P15.10 — Verwalten · Ressourcenformular · Wartungsslots
-- [ ] P15.11 — Filterfenster (Ressourcen-, Bereichsfilter) · Kontextmenü
-- [ ] P15.12 — Bestätigungsdialog (`#confirm2`)
+- [x] P15.4 — Name prompt · Aktive Nutzer · Änderungsprotokoll · Legende
+- [x] P15.5 — Einstellungen
+- [x] P15.6 — Buchen (BookingForm) · Buchungsdetail
+- [x] P15.7 — Meine Buchungen (summary, filters, runs, groups)
+- [x] P15.8 — Alle Buchungen
+- [x] P15.9 — Statistik (controls, overviews, drilldowns)
+- [x] P15.10 — Verwalten · Ressourcenformular · Wartungsslots
+- [x] P15.11 — Filterfenster (Ressourcen-, Bereichsfilter) · Kontextmenü
+- [x] P15.12 — Bestätigungsdialog (`#confirm2`)
+- [x] P15.13 — visual verification pass (light/dark, 1400px/520px, empty + long content)
+
+### Result
+
+Every secondary window listed above now renders inside `AppDialog`: a tinted icon tile and a
+22px title, labels above their controls, one control height per role, `ScrollArea` lists of
+bordered cards, real empty states, and the muted footer band carrying the count plus one
+primary action. Behaviour, copy and storage keys are unchanged throughout; where a test keyed
+off something the design system genuinely replaces (the `▸` expand chip, the `dangerfill`
+class, `.mybk-stat-value`, `.stat-kpi-label`) it now keys off the accessible name or a shared
+`data-slot`. The gate is green at 1,019 tests.
+
+Two deliberate exceptions, both because the colour encodes data rather than chrome: Statistik
+keeps its per-category accent (`--stat-fill`), and the Legende keeps the grid's own dot
+colours. Custom properties survive `all: revert-layer`, so both still read the values app.css
+sets.
+
+### Found and fixed while verifying in the browser
+
+- **The isolation rule lost on specificity.** `all: revert-layer` only wins by specificity and
+  `app.css` is unlayered, so `.mlist .grp.cathead:not(:first-child)` (five class components)
+  beat the original two-class scope selector and legacy fills were still showing in the
+  filter popover. The scope class is now repeated seven times.
+- **Id-level rules can never be out-specified.** `#modal h2` was making every `SectionHeading`
+  16px, and `#confirm2 .cbox` was still adding its own 10px card padding. Those rules styled
+  the insides of containers that are now fully migrated, so they were deleted from `app.css`
+  (twelve rules across `#modal`, `#confirm2`, `#machDrop`, `#groupDrop`, `#ctxMenu`); the
+  containers' own position/backdrop/toggle rules stay.
+- **Statistik's dashboard card overlapped the list below it** — both were shrinkable flex
+  children. The dashboard now holds its height, the list grows, and it has a 16rem floor so a
+  short or narrow window scrolls the body instead of squeezing the list to nothing.
+- **A long "Meistgenutzt: …" label stretched its KPI tile** instead of truncating.
+- **Native controls ignored the theme.** `.ui-scope` now sets `color-scheme`, so the date
+  inputs and `NativeSelect` dropdowns follow light/dark.
+
+### Verification
+
+`npm run ui:shots` (new, `scripts/ui-shots.mjs` — the companion to `ui:smoke`) opens each
+window in a real browser and screenshots it, at a given viewport and theme. Checked: all
+thirteen windows plus the context menu and both filter popovers, at 1400×950 and 520×900, in
+light and dark, with empty / normal / long-content data. Console clean in every run.
+
+**It is strictly read-only, and that rule is load-bearing:** the dev server proxies `/api` to
+the real backend, and an earlier version of the driver clicked through a delete-confirm and
+removed a live booking (Monforts RNC200, 2026-09-07, group `g_mtpkqr44jqme`; not restored —
+the user chose to leave it). Scenes may only open things; the confirm dialog is reached via
+the machine form's delete and left unanswered.
 
 ### Audit — what was inconsistent before
 
