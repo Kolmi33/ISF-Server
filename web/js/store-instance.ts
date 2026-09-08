@@ -23,6 +23,12 @@ function jsonSet(key: string, defaultJson: string): Set<string> {
   return new Set<string>(JSON.parse(localStorage.getItem(key) || defaultJson));
 }
 
+/** The reference board uses an exclusive Maschinen/Messtechnik tab, not two fold toggles. */
+function selectedGridCategory(): Set<string> {
+  const stored = jsonSet('mb_cats', '["maschine"]');
+  return new Set([stored.has('maschine') ? 'maschine' : 'messtechnik']);
+}
+
 /**
  * Hydrates the initial `AppState` object from localStorage and the current wall clock time.
  */
@@ -36,7 +42,7 @@ function hydrateState(): AppState {
     extraWeeks: 0,
     machSel: jsonSet('mb_machsel', '[]'),
     groupsSel: jsonSet('mb_groupssel', '[]'),
-    cats: jsonSet('mb_cats', '["maschine","messtechnik"]'),
+    cats: selectedGridCategory(),
     collapsed: jsonSet('mb_collapsed', '[]'),
     person: localStorage.getItem('mb_person') || '',
     personOnly: localStorage.getItem('mb_persononly') === 'on',

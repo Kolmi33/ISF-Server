@@ -24,7 +24,7 @@ describe('store-instance', () => {
     expect(store.state.extraWeeks).toBe(0);
     expect(store.state.machSel).toEqual(new Set());
     expect(store.state.groupsSel).toEqual(new Set());
-    expect(store.state.cats).toEqual(new Set(['maschine', 'messtechnik']));
+    expect(store.state.cats).toEqual(new Set(['maschine']));
     expect(store.state.collapsed).toEqual(new Set());
     expect(store.state.person).toBe('');
     expect(store.state.personOnly).toBe(false);
@@ -57,6 +57,12 @@ describe('store-instance', () => {
     expect(store.state.person).toBe('Bob');
     expect(store.state.personOnly).toBe(true);
     expect(store.state.favs).toEqual(new Set(['m3']));
+  });
+
+  it('normalizes the legacy multi-category preference to one selected tab', async () => {
+    localStorage.setItem('mb_cats', JSON.stringify(['maschine', 'messtechnik']));
+    const { store } = await import('./store-instance.ts');
+    expect(store.state.cats).toEqual(new Set(['maschine']));
   });
 
   // What: the personOnly flag only reads as true for the exact stored string "on" — any other

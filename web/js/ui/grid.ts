@@ -262,25 +262,16 @@ export function computeBookingBlocks(
 }
 
 /**
- * Runs `computeBookingBlocks` once per displayed week across a full grid row sequence —
- * including category/group HEADER rows, given a `nameAt` that always returns `null`. Header
- * rows must stay in the list rather than being filtered out first: a category or group header
- * sitting between two machine rows genuinely breaks their visual adjacency (the same way a
- * differently-booked row does), so two machines in different groups must never merge just
- * because they'd be "adjacent" once headers are stripped out. A machine hidden by an active
- * filter, by contrast, correctly closes the gap — `buildGridRows` simply omits its row
- * entirely, no header takes its place, so its neighbors truly are adjacent and are free to
- * merge.
+ * Computes booking segments for the currently displayed rows and weeks. Every resource row is
+ * deliberately evaluated on its own: even if adjacent devices share owner and range, each device
+ * keeps a separate readable and clickable horizontal bar, matching the occupancy-board model.
  *
  * `weeks` are passed and combined separately (not one flat day list) since
  * `computeBookingBlocks` merges purely by array adjacency: a run must never bridge the visual
  * gap column between two weeks, so each week's own days need their own separate pass.
  *
- * The one shared recipe both `Grid.tsx`'s full render AND `cell-patch.ts`'s targeted DOM
- * patch (after a booking write/delete/undo) use to compute a cell's segment — the merge/
- * "only the block's one center cell shows the name" logic must stay correct after EVERY write
- * path, not just a full re-render, or an undo (etc.) can leave a merged block's name back in
- * every cell instead of just its center.
+ * This is the one shared recipe used by both the full React render and targeted live DOM patches,
+ * so horizontal joins and the single centered owner label remain identical after every write path.
  */
 export function computeVisibleBookingBlocks(
   weeks: readonly (readonly string[])[],
@@ -299,7 +290,11 @@ export function computeVisibleBookingBlocks(
   );
   const combined = new Map<string, BookingBlockSegment>();
   for (const week of weeks) {
-    for (const [key, segment] of computeBookingBlocks(week, rows)) combined.set(key, segment);
+    // One independent horizontal bar per resource row, matching the supplied occupancy model.
+    // Adjacent devices with the same owner/range must remain independently readable/clickable.
+    for (const row of rows) {
+      for (const [key, segment] of computeBookingBlocks(week, [row])) combined.set(key, segment);
+    }
   }
   return combined;
 }
@@ -400,7 +395,7 @@ export function maintenanceKindToday(machine: Machine, today: string): string | 
   return slot ? slot.type : null;
 }
 
-/** Discriminator union of all row types rendered in the table body. */
+/** Discriminator union retained for the grid body's legacy category-row DOM compatibility. */
 export type GridRow =
   | { kind: 'category'; category: MachineCategory; collapsed: boolean }
   | {
@@ -458,33 +453,10 @@ function isHiddenByFilter(
 }
 
 /**
- * State machine cursor tracking category and group boundaries during row assembly.
+ * State machine cursor tracking group boundaries during row assembly.
  */
 class GridRowsCursor {
-  category: MachineCategory | null = null;
   group: string | null = null;
-  isCategoryClosed = false;
-
-  /**
-   * Evaluates category boundaries, emitting a category header when entering a new category.
-   */
-  enterCategory(
-    machine: Machine,
-    isFavoritesGroup: boolean,
-    openCategories: ReadonlySet<string>,
-    isMachineFilterActive: boolean,
-    rows: GridRow[],
-  ): boolean {
-    const category = getMachineCategory(machine);
-    if (!isFavoritesGroup && category !== this.category) {
-      this.category = category;
-      this.group = null;
-      const isOpen = openCategories.has(category);
-      this.isCategoryClosed = !isOpen && !isMachineFilterActive;
-      rows.push({ kind: 'category', category, collapsed: !isOpen });
-    }
-    return isFavoritesGroup || !this.isCategoryClosed;
-  }
 
   /**
    * Evaluates group boundaries, emitting a group header when entering a new department group.
@@ -522,6 +494,7 @@ export function buildGridRows(
     (options.visibleMachineIds !== null && options.visibleMachineIds !== undefined);
   const orderedList = orderedMachines(machines, favoriteIds);
   const visibleOrderedList = orderedList.filter((machine) => {
+    if (!openCategories.has(getMachineCategory(machine))) return false;
     const group = displayGroup(machine, favoriteIds);
     return !isHiddenByFilter(machine, group === FAVORITES_GROUP_LABEL, options);
   });
@@ -533,15 +506,6 @@ export function buildGridRows(
   for (const machine of visibleOrderedList) {
     const group = displayGroup(machine, favoriteIds);
     const isFavoritesGroup = group === FAVORITES_GROUP_LABEL;
-    const categoryIsOpen = cursor.enterCategory(
-      machine,
-      isFavoritesGroup,
-      openCategories,
-      isMachineFilterActive,
-      rows,
-    );
-    if (!categoryIsOpen) continue;
-
     cursor.enterGroup(group, isFavoritesGroup, machineCountByGroup, collapsedGroups, rows);
     if (collapsedGroups.has(group) && !isMachineFilterActive) continue;
 

@@ -258,11 +258,9 @@ describe('buildGridRows', () => {
   const machineRows = (rows: GridRow[]): string[] =>
     rows.filter((r) => r.kind === 'machine').map((r) => r.machine.id);
 
-  // What: the grid emits one category header and one group header the first time each new
-  // category/group is encountered, then machine rows for each machine under it.
-  // How: builds three machines across two groups/categories, opens both categories, and
-  // checks the exact sequence of row kinds plus the machine order.
-  it('emits one category header and one group header per new category/group', () => {
+  // The segmented category switch is the only category-level UI, so the body starts directly
+  // with group and machine rows and never repeats a redundant category row.
+  it('emits group and machine rows without redundant category rows', () => {
     const a = machine({ id: 'a', group: 'G1' });
     const b = machine({ id: 'b', group: 'G1' });
     const c = machine({ id: 'c', group: 'G2', cat: 'messtechnik' });
@@ -270,15 +268,7 @@ describe('buildGridRows', () => {
       ...noFilter,
       openCategories: new Set(['maschine', 'messtechnik']),
     });
-    expect(rows.map((r) => r.kind)).toEqual([
-      'category',
-      'group',
-      'machine',
-      'machine',
-      'category',
-      'group',
-      'machine',
-    ]);
+    expect(rows.map((r) => r.kind)).toEqual(['group', 'machine', 'machine', 'group', 'machine']);
     expect(machineRows(rows)).toEqual(['a', 'b', 'c']);
   });
 
@@ -294,14 +284,11 @@ describe('buildGridRows', () => {
     expect(groupRow).toMatchObject({ machineCount: 2 });
   });
 
-  // What: a closed category hides everything beneath it (its groups and machines), but its
-  // own header row still renders (marked collapsed) so it can be reopened.
-  // How: builds one machine with its category closed and checks the result is just the single
-  // collapsed category header row, nothing else.
-  it('a closed category hides its group headers and machine rows, but the category header stays', () => {
+  // A category not selected in the segmented switch contributes no body rows.
+  it('a category not selected by the segmented switch is hidden completely', () => {
     const a = machine({ id: 'a', group: 'G1' });
     const rows = buildGridRows([a], { ...noFilter, openCategories: new Set() }); // maschine not open
-    expect(rows).toEqual([{ kind: 'category', category: 'maschine', collapsed: true }]);
+    expect(rows).toEqual([]);
   });
 
   // What: a collapsed group (its category open, but the group itself folded) hides its
@@ -315,8 +302,8 @@ describe('buildGridRows', () => {
       openCategories: new Set(['maschine']),
       collapsedGroups: new Set(['G1']),
     });
-    expect(rows.map((r) => r.kind)).toEqual(['category', 'group']);
-    expect(rows[1]).toMatchObject({ collapsed: true });
+    expect(rows.map((r) => r.kind)).toEqual(['group']);
+    expect(rows[0]).toMatchObject({ collapsed: true });
   });
 
   // What: the group filter (selectedGroups) hides non-matching machines entirely — EXCEPT a
@@ -341,7 +328,7 @@ describe('buildGridRows', () => {
   // group — if a machine is explicitly selected, it shows even when its containers are folded.
   // How: closes the category, collapses the group, but explicitly selects the one machine in
   // it, and checks it still appears.
-  it('an active machine filter overrides both a closed category and a collapsed group', () => {
+  it('an active machine filter does not override the selected category tab', () => {
     const a = machine({ id: 'a', group: 'G1' });
     const rows = buildGridRows([a], {
       ...noFilter,
@@ -349,7 +336,7 @@ describe('buildGridRows', () => {
       collapsedGroups: new Set(['G1']), // group collapsed
       selectedMachineIds: new Set(['a']), // but explicitly filtered in
     });
-    expect(machineRows(rows)).toEqual(['a']);
+    expect(machineRows(rows)).toEqual([]);
   });
 
   // What: conversely, a machine filter that excludes a machine hides it even when its
@@ -384,7 +371,7 @@ describe('buildGridRows', () => {
       group: FAVORITES_GROUP_LABEL,
       isFavoritesGroup: true,
     });
-    expect(rows.map((r) => r.kind)).toEqual(['group', 'machine', 'category', 'group', 'machine']);
+    expect(rows.map((r) => r.kind)).toEqual(['group', 'machine', 'group', 'machine']);
   });
 });
 

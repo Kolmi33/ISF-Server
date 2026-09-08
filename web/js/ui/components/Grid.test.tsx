@@ -154,13 +154,10 @@ describe('Grid', () => {
     expect(kwHeader!.textContent).toContain('KW 1');
   });
 
-  // What: both category rows (one per category present) and group rows (one per group)
-  // render as their own distinct table rows.
-  // How: renders (two categories, at least one group) and checks each expected row exists.
-  it('renders a category header row and a group header row', () => {
+  // Categories live exclusively in the segmented switch; the body begins with group rows.
+  it('renders group rows without redundant category header rows', () => {
     const { container } = renderGridIntoTable();
-    expect(container.querySelector('tr[data-catgroup="maschine"]')).not.toBeNull();
-    expect(container.querySelector('tr[data-catgroup="messtechnik"]')).not.toBeNull();
+    expect(container.querySelector('tr[data-catgroup]')).toBeNull();
     expect(container.querySelector('tr[data-group="Halle 1"]')).not.toBeNull();
   });
 
@@ -178,21 +175,14 @@ describe('Grid', () => {
     expect(cell.getAttribute('title')).toContain('Projekt X');
   });
 
-  // What: the "mine" accent is set as inline style (not a CSS class), since only inline style
-  // is guaranteed to win over the cascade — this proves the wiring end-to-end, not just the
-  // pure mineAccentLayers function in isolation. A lone 1-day "mine" booking is its own outer
-  // boundary on every side, so all four --mine-* layers should carry a real accent value.
-  // How: renders the fixture's "m-mine" cell and reads its inline --mine-* custom properties.
-  it('sets the "mine" accent as an inline style on every edge of an isolated booking', () => {
+  // Semantic booking surfaces are class-driven, so live patches cannot leave stale person colours.
+  it('uses the mine class without inline booking colours', () => {
     const { container } = renderGridIntoTable();
     const cell = container.querySelector<HTMLElement>(
       `td[data-machine-id="m-mine"][data-date="${TODAY}"]`,
     )!;
-    for (const side of ['top', 'bottom', 'left', 'right']) {
-      const value = cell.style.getPropertyValue(`--mine-${side}`);
-      expect(value).not.toBe('');
-      expect(value).not.toContain('transparent');
-    }
+    expect(cell.className).toContain('mine');
+    expect(cell.getAttribute('style')).toBeNull();
   });
 
   // What: a cell booked by someone else than the current user shows "booked" but never "mine".
@@ -237,14 +227,10 @@ describe('Grid', () => {
     expect(wed.className).not.toContain('merge-right');
   });
 
-  // What: two machine rows that sit genuinely adjacent in the rendered table (same group, no
-  // header row between them — the fixture's "m-mine" and "m-other", both in "Halle 1") and
-  // are booked by the same person for the exact same days merge vertically too, into one 2D
-  // block: the seam between the two rows drops, and only the block's one geometric center
-  // cell — not each row's own middle day — prints the name.
-  // How: books both machines solid across the same three days under 'carla' and checks the
-  // merge-up/merge-down classes on both rows plus which single cell shows the name.
-  it('merges two adjacent machine rows into one 2D block, naming only its center cell', () => {
+  // What: each resource remains its own horizontal occupancy lane, matching the supplied model.
+  // How: books adjacent machines for the same dates and checks that both retain a separate bar
+  // and label instead of collapsing into one tall block.
+  it('keeps identical bookings on adjacent machines as separate resource bars', () => {
     const days = { '2021-01-04': { name: 'carla' }, '2021-01-05': { name: 'carla' } };
     window.S.data!.bookings['m-mine'] = days;
     window.S.data!.bookings['m-other'] = days;
@@ -252,18 +238,13 @@ describe('Grid', () => {
     const cellFor = (machineId: string, date: string) =>
       container.querySelector(`td[data-machine-id="${machineId}"][data-date="${date}"]`)!;
 
-    // Row 0 (m-mine) is the block's top edge: merges down into m-other, not up.
-    expect(cellFor('m-mine', '2021-01-04').className).toContain('merge-down');
+    expect(cellFor('m-mine', '2021-01-04').className).not.toContain('merge-down');
     expect(cellFor('m-mine', '2021-01-04').className).not.toContain('merge-up');
-    // Row 1 (m-other) is the block's bottom edge: merges up into m-mine, not down.
-    expect(cellFor('m-other', '2021-01-04').className).toContain('merge-up');
+    expect(cellFor('m-other', '2021-01-04').className).not.toContain('merge-up');
     expect(cellFor('m-other', '2021-01-04').className).not.toContain('merge-down');
 
-    // A 2-row × 2-day block centers on row 0 (floor((1-0)/2)), day 0 (floor((1-0)/2)) —
-    // m-mine's own first day is the one cell that shows the name; every other cell (including
-    // m-other's own same day) stays blank.
     expect(cellFor('m-mine', '2021-01-04').textContent).toBe('carla');
-    expect(cellFor('m-other', '2021-01-04').textContent).toBe('');
+    expect(cellFor('m-other', '2021-01-04').textContent).toBe('carla');
     expect(cellFor('m-mine', '2021-01-05').textContent).toBe('');
     expect(cellFor('m-other', '2021-01-05').textContent).toBe('');
   });
@@ -349,43 +330,27 @@ describe('Grid', () => {
     expect(container.querySelector('span.nextfree.back[data-nb="m-favorite"]')).not.toBeNull();
   });
 
-  // What: clicking a category toggle button (rendered by Grid itself) toggles that category
-  // after the debounce delay — the same debounced toggle behavior tested at the category-fold
-  // module level, exercised here through the actual rendered button.
-  // How: clicks the category button, checks it's still shown right away (debounced), then
-  // advances past the delay and checks it's hidden.
-  it('a single click on a category button toggles it off after the debounce delay', () => {
-    vi.useFakeTimers();
+  // The reference uses an exclusive segmented control: selecting one category immediately
+  // replaces the other and persists the selection.
+  it('selects exactly one category from the segmented control', () => {
     const { container } = renderGridIntoTable();
-    const button = container.querySelector(
-      'button.catbtn[data-cat="maschine"]',
-    ) as HTMLButtonElement;
+    const button = container.querySelector<HTMLButtonElement>(
+      'button.catbtn[data-cat="messtechnik"]',
+    )!;
     button.click();
-    expect(window.S.cats.has('maschine')).toBe(true); // not yet — debounced
-    vi.advanceTimersByTime(220);
-    expect(window.S.cats.has('maschine')).toBe(false);
-    vi.useRealTimers();
+    expect(window.S.cats).toEqual(new Set(['messtechnik']));
+    expect(JSON.parse(localStorage.getItem('mb_cats')!)).toEqual(['messtechnik']);
   });
 
-  // What: double-clicking the same category button cancels the pending single-click toggle
-  // and instead expands every group in that category — the same distinct double-click
-  // behavior tested at the module level, here through the real rendered button.
-  // How: pre-collapses a group, single-clicks then double-clicks the category button,
-  // advances well past the debounce window, and checks the category is still shown (pending
-  // toggle canceled) while the group expanded.
-  it('a double click cancels the pending single-click toggle and expands every group in the category', () => {
-    vi.useFakeTimers();
-    window.S.collapsed = new Set(['Halle 1']);
+  it('marks only the selected category button as pressed', () => {
+    window.S.cats = new Set(['maschine']);
     const { container } = renderGridIntoTable();
-    const button = container.querySelector(
-      'button.catbtn[data-cat="maschine"]',
-    ) as HTMLButtonElement;
-    button.click(); // would toggle "maschine" off in 220ms
-    button.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-    vi.advanceTimersByTime(300);
-    expect(window.S.cats.has('maschine')).toBe(true); // the pending single-click toggle never fired
-    expect(window.S.collapsed.has('Halle 1')).toBe(false); // its group got expanded
-    vi.useRealTimers();
+    expect(container.querySelector('[data-cat="maschine"]')?.getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(container.querySelector('[data-cat="messtechnik"]')?.getAttribute('aria-pressed')).toBe(
+      'false',
+    );
   });
 
   // What: rendering the grid writes back which machines/dates it actually rendered into

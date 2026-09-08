@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { AppState, Machine } from '../../../shared/types.ts';
 import { store } from '../store-instance.ts';
 import {
+  selectCategory,
   toggleCategory,
   toggleAllGroupsInCategory,
   categoryTap,
@@ -54,6 +55,15 @@ describe('toggleCategory', () => {
     window.S.cats = new Set(['messtechnik']);
     toggleCategory('maschine');
     expect([...window.S.cats].sort()).toEqual(['maschine', 'messtechnik']);
+  });
+});
+
+describe('selectCategory', () => {
+  it('selects exactly one category, persists it, and refreshes the grid', () => {
+    selectCategory('messtechnik');
+    expect(window.S.cats).toEqual(new Set(['messtechnik']));
+    expect(JSON.parse(localStorage.getItem('mb_cats')!)).toEqual(['messtechnik']);
+    expect(notifySpy).toHaveBeenCalledTimes(1);
   });
 });
 

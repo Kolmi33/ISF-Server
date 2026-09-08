@@ -41,9 +41,9 @@ import {
 } from '../grid.ts';
 import { daysPerWeek, syncJumpControls, ensureOverflow } from '../grid-scroll.ts';
 import { CATEGORIES } from '../../core/machines.ts';
-import { categoryTap, categoryTapCancel, toggleAllGroupsInCategory } from '../category-fold.ts';
+import { selectCategory } from '../category-fold.ts';
 import { paintSelection } from '../grid-interaction.ts';
-import { Icon } from './Icon.tsx';
+import { Button } from '../../components/ui/app-button.tsx';
 import { GridBodyRow } from './GridBody.tsx';
 import { store } from '../../store-instance.ts';
 import { registerGridRenderTrigger, triggerGridRender } from '../grid-render-bridge.ts';
@@ -51,28 +51,26 @@ import { hasGridFilters, matchingGridMachineIds } from '../grid-filters.ts';
 
 function CategoryToggleButtons() {
   return (
-    <div className="catseg" role="group" aria-label="Kategorien ein-/ausklappen">
-      {CATEGORIES.map(({ id, label, icon }) => {
+    <div className="catseg" role="group" aria-label="Gerätekategorie">
+      {CATEGORIES.map(({ id, label }) => {
         const isOpen = store.get('cats').has(id);
         return (
-          <button
+          <Button
             key={id}
+            type="button"
+            variant="ghost"
+            size="sm"
             className={`catbtn ${isOpen ? 'on' : ''}`}
             data-cat={id}
-            title={`${label} ${isOpen ? 'einklappen' : 'aufklappen'} · Doppelklick: alle Bereiche auf-/zuklappen`}
+            title={`${label} anzeigen`}
             aria-pressed={isOpen}
             onClick={(event) => {
               event.stopPropagation();
-              categoryTap(id);
-            }}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-              categoryTapCancel();
-              toggleAllGroupsInCategory(id);
+              selectCategory(id);
             }}
           >
-            <Icon name={icon} /> <span className="lbl">{label}</span>
-          </button>
+            <span className="lbl">{label}</span>
+          </Button>
         );
       })}
     </div>

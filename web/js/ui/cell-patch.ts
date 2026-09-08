@@ -29,7 +29,6 @@
 
 import {
   isMine,
-  nameColor,
   cellClass,
   classifyCell,
   classifyDot,
@@ -39,7 +38,6 @@ import {
   mineAccentLayers,
   type BookingBlockSegment,
 } from './grid.ts';
-import { isDarkTheme } from './theme.ts';
 import { getBooking } from '../core/bookings.ts';
 import { maintText } from './machine-text.ts';
 import {
@@ -153,10 +151,16 @@ export function refreshCell(
       mergeUp: segment.continuesUp,
       mergeDown: segment.continuesDown,
     });
-    el.style.backgroundColor = nameColor(booking!.name, isDarkTheme());
-    applyMineAccent(el, mine, segment);
+    el.style.backgroundColor = '';
+    applyMineAccent(el, false, segment);
     el.title = booking!.name + (booking!.note ? ' — ' + booking!.note : '');
-    el.textContent = segment.showName ? booking!.name : '';
+    el.replaceChildren();
+    if (segment.showName) {
+      const label = document.createElement('span');
+      label.className = 'booking-label';
+      label.textContent = booking!.name;
+      el.append(label);
+    }
   } else if (state === 'unavail') {
     el.className = cellClass('unavail', { today: isToday, weekend });
     el.style.backgroundColor = '';

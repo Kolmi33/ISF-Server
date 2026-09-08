@@ -9,7 +9,7 @@
 //
 // =======================================================================================
 
-import { Fragment, type CSSProperties } from 'react';
+import { Fragment } from 'react';
 import type { Booking, Machine } from '../../../../shared/types.ts';
 import {
   isMachineAvailableOnWeekday,
@@ -26,15 +26,12 @@ import {
   classifyDot,
   isMine,
   maintenanceKindToday,
-  mineAccentLayers,
-  nameColor,
   type BookingBlockSegment,
   type GridRow,
 } from '../grid.ts';
 import { Icon } from './Icon.tsx';
 import { store } from '../../store-instance.ts';
 import { nextFreePtr, prevFreeBefore } from '../favorite-jump.ts';
-import { isDarkTheme } from '../theme.ts';
 
 const CATEGORY_LABELS: Record<string, string> = {
   maschine: 'Maschinen',
@@ -137,14 +134,6 @@ function BookedCell({
 }: CellAttrs & { segment: BookingBlockSegment }) {
   const booking = getBooking(store.get('data')!.bookings, machine.id, isoDate)!;
   const mine = isMine(store.get('user'), booking.name);
-  // The "mine" accent is set here as inline style, not via a CSS class: only an element's own
-  // inline style is guaranteed to win over every class-based rule, which a plain CSS-cascade
-  // approach turned out not to be in practice (see app.css's comment on td.cell). `mine` is
-  // still passed into cellClass below as a semantic marker (e.g. for non-visual/test hooks).
-  const style: Record<string, string> = {
-    backgroundColor: nameColor(booking.name, isDarkTheme()),
-  };
-  if (mine) Object.assign(style, mineAccentLayers(segment));
   return (
     <td
       className={`${cellClass('booked', {
@@ -159,11 +148,10 @@ function BookedCell({
       role="gridcell"
       data-machine-id={machine.id}
       data-date={isoDate}
-      style={style as CSSProperties}
       aria-label={`${machine.name}, ${dateLabel}, belegt von ${booking.name}`}
       title={bookedCellTitle(booking)}
     >
-      {segment.showName ? booking.name : ''}
+      {segment.showName ? <span className="booking-label">{booking.name}</span> : ''}
     </td>
   );
 }

@@ -1,6 +1,22 @@
 # Main screen, filters and consolidated bookings — implementation plan
 
-Status: completed and deployed (2026-09-08)
+Status: completed and production-verified (2026-09-09)
+
+## Visual finalization checklist
+
+- [x] Preserve the verified grouped-booking/backend implementation in a checkpoint commit.
+- [x] Re-audit the latest screenshot, `UI-Handbuch.md`, `occupancy-model_1.ts` and supplied React code.
+- [x] Apply the exact warm-neutral/brand-green design tokens and Inter typography.
+- [x] Match the reference shell, two-row toolbar, category corner, header heights, 300px label column,
+  116px workday columns, 40px rows, scrollbar and legend proportions.
+- [x] Replace per-person rainbow occupancy colors with semantic bars: own green, foreign neutral,
+  maintenance/block orange; keep one separate rounded bar per resource row.
+- [x] Use the existing shadcn-style Button, Checkbox, Popover/ScrollArea and tooltip primitives where
+  the migrated React surfaces need interactive controls, without replacing backend behavior.
+- [x] Add/update visual-semantic and interaction regression tests.
+- [x] Run the complete quality gate and both production builds.
+- [x] Deploy with the existing Docker Compose workflow and verify the live desktop/narrow layouts,
+  filter, booking modes, menus, grid behavior and health endpoint.
 
 ## Reference and system findings
 
@@ -100,12 +116,13 @@ Status: completed and deployed (2026-09-08)
 
 ## Completion record
 
-- Quality gate: Prettier, TypeScript, ESLint and Knip passed; 77 test files and 1,027 tests passed.
-  Coverage: 97.93% statements and 92.64% branches.
+- Quality gate: Prettier, TypeScript, ESLint and Knip passed; 77 test files and 1,029 tests passed.
+  Coverage: 97.83% statements and 92.59% branches.
 - Production builds: Vite frontend and TypeScript server builds passed in the existing Docker image.
 - Backup: `/data/backups/buchungen_2026-09-08_pre_main_revamp.db` (1,892,352 bytes).
 - Deployment: existing `docker compose up -d --build` workflow; container health is `healthy` and
   `/api/health` reports `{ ok: true, rev: 32 }` at final verification.
-- Browser verification: production grid, responsive 1298 × 773 layout, filter panel, consolidated
-  Meine/Alle dialog, owner filter, foreign read-only actions, overflow menu and final category tabs
-  were inspected against live state without mutating booking data.
+- Browser verification: production grid at 1400 × 800, desktop Chrome at 1296 × 770 and responsive
+  640 × 800; filter panel, consolidated Meine/Alle dialog, three-action booking menu, owner filter,
+  foreign read-only actions, overflow menu and exclusive category tabs were inspected against live
+  state without mutating booking data. The headless desktop and narrow runs reported no console errors.
