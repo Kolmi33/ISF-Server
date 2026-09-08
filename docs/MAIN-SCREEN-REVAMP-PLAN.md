@@ -126,3 +126,13 @@ Status: completed and production-verified (2026-09-09)
   640 × 800; filter panel, consolidated Meine/Alle dialog, three-action booking menu, owner filter,
   foreign read-only actions, overflow menu and exclusive category tabs were inspected against live
   state without mutating booking data. The headless desktop and narrow runs reported no console errors.
+
+## Follow-up: full-width layout and device controls (2026-09-09)
+
+- [x] Remove the 1,400 px content cap so the occupancy board uses the full available viewport width.
+- [x] Increase desktop device labels to 16 px while retaining a readable 15 px mobile fallback.
+- [x] Match the supplied segmented category control: 40 px container, two equal columns, 34 px
+  buttons, neutral track and white active surface.
+- [x] Run formatting, type checks and production frontend/backend builds.
+- [x] Rebuild the existing Docker deployment and verify the healthy backend endpoint and both category
+  control states in the browser.

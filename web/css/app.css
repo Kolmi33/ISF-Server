@@ -728,7 +728,8 @@ body{
   background:var(--app-bg);
 }
 #toolbar,#activeFilters,#gridWrap,#gridLegend{
-  width:min(100%,1400px);
+  width:100%;
+  max-width:none;
   margin-inline:auto;
 }
 #toolbar{
@@ -814,8 +815,20 @@ thead th.machcol{
 }
 thead th.kwhead{left:var(--machw);background:var(--app-panel)}
 thead th.gap{min-width:8px;background:var(--app-bg)}
-.catseg{width:100%;gap:3px;padding:3px;border-radius:12px;background:var(--hover)}
+.catseg{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:center;
+  width:100%;
+  height:40px;
+  gap:3px;
+  padding:3px;
+  border-radius:12px;
+  background:var(--hover);
+}
 .catseg .catbtn{
+  width:100%;
+  height:34px;
   min-height:34px;
   padding:6px 10px;
   border:0;
@@ -854,8 +867,8 @@ td.machcol{
   height:40px;
   padding:4px 32px 4px 20px;
   background:var(--app-panel);
-  font-size:15px;
-  font-weight:500;
+  font-size:16px;
+  font-weight:400;
 }
 td.cell{
   min-width:116px;
@@ -910,6 +923,7 @@ td.cell.blocked{
   #toolbar h1{display:none}
   #gridLegend{border-radius:0;gap:10px;flex-wrap:wrap}
   thead th.machcol,td.machcol{min-width:150px;max-width:150px}
+  td.machcol{font-size:15px}
 }
 @media (min-width:701px) and (max-width:1000px){
   #toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto}
