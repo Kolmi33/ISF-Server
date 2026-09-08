@@ -419,6 +419,8 @@ export interface BuildGridRowsOptions {
   openCategories: ReadonlySet<string>;
   collapsedGroups: ReadonlySet<string>;
   favoriteIds: ReadonlySet<string>;
+  /** Facet-filter result. `null` means inactive; an empty Set intentionally means no rows. */
+  visibleMachineIds?: ReadonlySet<string> | null;
 }
 
 /**
@@ -442,9 +444,13 @@ function countMachinesByGroup(
 function isHiddenByFilter(
   machine: Machine,
   isFavoritesGroup: boolean,
-  options: Pick<BuildGridRowsOptions, 'selectedGroups' | 'selectedMachineIds'>,
+  options: Pick<
+    BuildGridRowsOptions,
+    'selectedGroups' | 'selectedMachineIds' | 'visibleMachineIds'
+  >,
 ): boolean {
   const { selectedGroups, selectedMachineIds } = options;
+  if (options.visibleMachineIds && !options.visibleMachineIds.has(machine.id)) return true;
   if (selectedGroups.size > 0 && !isFavoritesGroup && !selectedGroups.has(machine.group)) {
     return true;
   }
@@ -511,18 +517,22 @@ export function buildGridRows(
   options: BuildGridRowsOptions,
 ): GridRow[] {
   const { openCategories, collapsedGroups, favoriteIds, selectedMachineIds } = options;
-  const isMachineFilterActive = selectedMachineIds.size > 0;
+  const isMachineFilterActive =
+    selectedMachineIds.size > 0 ||
+    (options.visibleMachineIds !== null && options.visibleMachineIds !== undefined);
   const orderedList = orderedMachines(machines, favoriteIds);
-  const machineCountByGroup = countMachinesByGroup(orderedList, favoriteIds);
+  const visibleOrderedList = orderedList.filter((machine) => {
+    const group = displayGroup(machine, favoriteIds);
+    return !isHiddenByFilter(machine, group === FAVORITES_GROUP_LABEL, options);
+  });
+  const machineCountByGroup = countMachinesByGroup(visibleOrderedList, favoriteIds);
 
   const rows: GridRow[] = [];
   const cursor = new GridRowsCursor();
 
-  for (const machine of orderedList) {
+  for (const machine of visibleOrderedList) {
     const group = displayGroup(machine, favoriteIds);
     const isFavoritesGroup = group === FAVORITES_GROUP_LABEL;
-    if (isHiddenByFilter(machine, isFavoritesGroup, options)) continue;
-
     const categoryIsOpen = cursor.enterCategory(
       machine,
       isFavoritesGroup,

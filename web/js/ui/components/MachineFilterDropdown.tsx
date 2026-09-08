@@ -36,6 +36,10 @@ import { store } from '../../store-instance.ts';
 export function saveFilters(): void {
   localStorage.setItem('mb_machsel', JSON.stringify([...store.get('machSel')]));
   localStorage.setItem('mb_groupssel', JSON.stringify([...store.get('groupsSel')]));
+  localStorage.setItem('mb_grid_query', store.get('gridQuery'));
+  localStorage.setItem('mb_grid_available', store.get('gridAvailableOnly') ? 'on' : 'off');
+  localStorage.setItem('mb_grid_operational', store.get('gridOperationalOnly') ? 'on' : 'off');
+  localStorage.setItem('mb_grid_favorites', store.get('gridFavoritesOnly') ? 'on' : 'off');
 }
 
 /** Refreshes the toolbar button's label/highlight from the current machine selection, plus
@@ -46,16 +50,23 @@ export function saveFilters(): void {
  *  into the same box as the button once it's shown (user request: "Beim Filter muss das 'x'
  *  Teil des Kastens sein" — see app.css). */
 export function updateMachBtn(): void {
+  const count = [
+    store.get('machSel').size > 0,
+    store.get('groupsSel').size > 0,
+    !!store.get('gridQuery').trim(),
+    store.get('gridAvailableOnly'),
+    store.get('gridOperationalOnly'),
+    store.get('gridFavoritesOnly'),
+  ].filter(Boolean).length;
   const button = document.getElementById('machBtn');
   if (button) {
-    const count = store.get('machSel').size;
     button.innerHTML =
       '<svg class="ic" aria-hidden="true"><use href="#i-search"/></svg> ' +
-      (count ? `${count} gewählt ▾` : 'Filtern ▾');
+      (count ? `Filtern (${count}) ▾` : 'Filtern ▾');
     button.style.background = count ? 'var(--accent-light)' : '';
   }
   const clearButton = document.getElementById('machClearBtn');
-  const isFiltered = store.get('machSel').size > 0;
+  const isFiltered = count > 0;
   if (clearButton) clearButton.style.display = isFiltered ? '' : 'none';
   document.getElementById('machWrap')?.classList.toggle('filtered', isFiltered);
 }
@@ -69,6 +80,11 @@ export function updateMachBtn(): void {
  *  `#machDrop`), so there's no mounted popover left to desync from this external clear. */
 export function clearMachineFilter(): void {
   store.get('machSel').clear();
+  store.get('groupsSel').clear();
+  store.state.gridQuery = '';
+  store.state.gridAvailableOnly = false;
+  store.state.gridOperationalOnly = false;
+  store.state.gridFavoritesOnly = false;
   saveFilters();
   updateMachBtn();
   store.notify();
@@ -81,14 +97,14 @@ function useMachineFilterState(isOpen: boolean) {
   const [openKeys, setOpenKeys] = useState<Set<string>>(DEFAULT_OPEN_KEYS);
   const [shownCategories, setShownCategories] =
     useState<ReadonlySet<MachineCategory>>(DEFAULT_SHOWN);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(store.get('gridQuery'));
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setOpenKeys(new Set(['fav']));
     setShownCategories(new Set(['maschine', 'messtechnik']));
-    setSearchQuery('');
+    setSearchQuery(store.get('gridQuery'));
     searchInputRef.current?.focus();
   }, [isOpen]);
 
@@ -142,7 +158,7 @@ function CategoryShownToggle({
           className={cn(
             'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
             shownCategories.has(id)
-              ? 'bg-card text-foreground shadow-sm'
+              ? 'bg-card text-foreground'
               : 'text-muted-foreground hover:text-foreground',
           )}
           onClick={() => onToggle(id)}
@@ -264,20 +280,109 @@ function useMachineSelectionActions(bumpTick: () => void) {
   return { handleMachineToggle, handleClear };
 }
 
+function commitFacet(partial: Parameters<typeof store.set>[0], rerender: () => void): void {
+  store.set(partial);
+  saveFilters();
+  updateMachBtn();
+  rerender();
+}
+
+function LocationFacets({ rerender }: { rerender: () => void }) {
+  const data = store.get('data')!;
+  const groups = data.groups || [...new Set(data.machines.map((machine) => machine.group))];
+  const toggle = (group: string, checked: boolean) => {
+    if (checked) store.get('groupsSel').add(group);
+    else store.get('groupsSel').delete(group);
+    commitFacet({}, rerender);
+  };
+  return (
+    <fieldset className="grid gap-2 rounded-lg border border-border p-3">
+      <legend className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Bereiche
+      </legend>
+      <div className="grid max-h-28 grid-cols-2 gap-x-3 gap-y-2 overflow-y-auto text-sm">
+        {groups.map((group) => (
+          <label key={group} className="flex min-w-0 cursor-pointer items-center gap-2">
+            <Checkbox
+              checked={store.get('groupsSel').has(group)}
+              onCheckedChange={(checked) => toggle(group, checked)}
+            />
+            <span className="truncate">{group}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function BooleanFacets({ rerender }: { rerender: () => void }) {
+  const facets = [
+    ['gridAvailableOnly', 'Im sichtbaren Zeitraum frei'],
+    ['gridOperationalOnly', 'Nur betriebsbereite Geräte'],
+    ['gridFavoritesOnly', 'Nur Favoriten'],
+  ] as const;
+  return (
+    <div className="grid gap-1 rounded-lg border border-border p-2">
+      {facets.map(([key, label]) => {
+        const active = store.get(key);
+        return (
+          <button
+            key={key}
+            type="button"
+            role="switch"
+            aria-checked={active}
+            className="flex items-center justify-between rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
+            onClick={() => commitFacet({ [key]: !active }, rerender)}
+          >
+            {label}
+            <span
+              className={`relative h-5 w-9 rounded-full transition-colors ${active ? 'bg-primary' : 'bg-muted-foreground/25'}`}
+            >
+              <span
+                className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${active ? 'translate-x-[18px]' : 'translate-x-0.5'}`}
+              />
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SelectionSummary({ count, onClear }: { count: number; onClear: () => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      {count > 0 && (
+        <span className="text-[11px] tabular-nums text-muted-foreground">{count} ausgewählt</span>
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="clearbtn ml-auto text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+        onClick={onClear}
+      >
+        <Trash2 className="size-3.5" /> Filter löschen
+      </Button>
+    </div>
+  );
+}
+
 function MachineFilterBody({
   state,
   rows,
   onToggleMachine,
   onClear,
+  rerender,
 }: {
   state: ReturnType<typeof useMachineFilterState>;
   rows: MachineFilterRow[];
   onToggleMachine: (machineId: string, isChecked: boolean) => void;
   onClear: () => void;
+  rerender: () => void;
 }) {
   const selectedCount = store.get('machSel').size;
   return (
-    <div className="ui-scope flex w-[22rem] max-w-[calc(100vw-24px)] flex-col gap-3 rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-lg">
+    <div className="ui-scope flex w-[22rem] max-w-[calc(100vw-24px)] flex-col gap-3 rounded-xl border border-border bg-popover p-3 text-popover-foreground">
       <CategoryShownToggle
         shownCategories={state.shownCategories}
         onToggle={state.toggleShownCategory}
@@ -287,26 +392,15 @@ function MachineFilterBody({
         placeholder="Ressource suchen…"
         aria-label="Ressource suchen"
         value={state.searchQuery}
-        onChange={(event) => state.setSearchQuery(event.target.value)}
+        onChange={(event) => {
+          const value = event.target.value;
+          state.setSearchQuery(value);
+          commitFacet({ gridQuery: value }, rerender);
+        }}
       />
-      <div className="flex items-center gap-2">
-        {/* Only shown once something's actually selected (user request) — with nothing
-            selected there's nothing to count, and "alle sichtbar" sat here disconnected from
-            the clear button next to it since there was nothing yet to clear. */}
-        {selectedCount > 0 && (
-          <span className="text-[11px] tabular-nums text-muted-foreground">
-            {selectedCount} ausgewählt
-          </span>
-        )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="clearbtn ml-auto text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          onClick={onClear}
-        >
-          <Trash2 className="size-3.5" /> Filter löschen
-        </Button>
-      </div>
+      <LocationFacets rerender={rerender} />
+      <BooleanFacets rerender={rerender} />
+      <SelectionSummary count={selectedCount} onClear={onClear} />
       <ScrollArea className="mlist -mr-2 max-h-80 min-h-0 pr-2">
         <div className="flex flex-col gap-0.5">
           {rows.map((row) => (
@@ -328,7 +422,8 @@ function MachineFilterBody({
 export function MachineFilterDropdown() {
   const { isOpen } = useToolbarDropdown('machDrop', 'machBtn');
   const state = useMachineFilterState(isOpen);
-  const [, bumpTick] = useReducer((n: number) => n + 1, 0);
+  const [, bump] = useReducer((n: number) => n + 1, 0);
+  const bumpTick = () => bump();
   const { handleMachineToggle, handleClear } = useMachineSelectionActions(bumpTick);
   if (!isOpen) return null;
 
@@ -345,6 +440,7 @@ export function MachineFilterDropdown() {
       rows={rows}
       onToggleMachine={handleMachineToggle}
       onClear={handleClear}
+      rerender={bumpTick}
     />
   );
 }

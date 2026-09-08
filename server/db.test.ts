@@ -15,13 +15,13 @@ function tmp(): string {
 
 describe('openDb', () => {
   // What: opening a fresh DB applies the full schema and seeds the default meta values
-  // (revision 0, schema_version 1).
+  // (revision 0, schema_version 2).
   // How: opens an in-memory DB and checks both meta values and that the newer optional
   // columns (redu/days/maint) exist on the machines table.
   it('creates the schema and seeds default meta', () => {
     const db = openDb(':memory:');
     expect(getMeta(db, 'revision')).toBe('0');
-    expect(getMeta(db, 'schema_version')).toBe('1');
+    expect(getMeta(db, 'schema_version')).toBe('2');
     const cols = (db.prepare('PRAGMA table_info(machines)').all() as { name: string }[]).map(
       (c) => c.name,
     );
@@ -45,6 +45,44 @@ describe('openDb', () => {
       );
       expect(cols).toEqual(expect.arrayContaining(['redu', 'days', 'maint']));
       db.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('migrates legacy workday runs and their weekend bridges into stable groups', () => {
+    const dir = tmp();
+    const path = join(dir, 'groups-v1.db');
+    try {
+      const initial = openDb(path);
+      initial.prepare('INSERT INTO machines(id,name) VALUES(?,?)').run('m1', 'M1');
+      initial
+        .prepare('INSERT INTO bookings(mid,day,name,gid) VALUES(?,?,?,?)')
+        .run('m1', '2021-01-08', 'Alice', null); // Friday
+      initial
+        .prepare('INSERT INTO bookings(mid,day,name,gid) VALUES(?,?,?,?)')
+        .run('m1', '2021-01-09', 'Alice', ''); // weekend bridge
+      initial
+        .prepare('INSERT INTO bookings(mid,day,name,gid) VALUES(?,?,?,?)')
+        .run('m1', '2021-01-11', 'Alice', null); // next workday, same run
+      initial
+        .prepare('INSERT INTO bookings(mid,day,name,gid) VALUES(?,?,?,?)')
+        .run('m1', '2021-01-13', 'Alice', null); // gap, separate run
+      setMeta(initial, 'schema_version', '1');
+      initial.close();
+
+      const migrated = openDb(path);
+      const rows = migrated.prepare('SELECT gid FROM bookings ORDER BY day').all() as unknown as {
+        gid: string;
+      }[];
+      expect(rows.every((row) => row.gid.startsWith('g_legacy_'))).toBe(true);
+      expect(rows[0]!.gid).toBe(rows[1]!.gid);
+      expect(rows[1]!.gid).toBe(rows[2]!.gid);
+      expect(rows[3]!.gid).not.toBe(rows[2]!.gid);
+      expect(new Set(rows.map((row) => row.gid)).size).toBe(2);
+      expect(getMeta(migrated, 'schema_version')).toBe('2');
+      expect(getMeta(migrated, 'revision')).toBe('1');
+      migrated.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -107,6 +145,8 @@ describe('importFromJson', () => {
       };
       expect(a.cat).toBe('messtechnik');
       expect(JSON.parse(a.maint)).toEqual([{ type: 'wartung' }]);
+      const booking = db.prepare('SELECT gid FROM bookings').get() as { gid: string };
+      expect(booking.gid).toMatch(/^g_legacy_/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

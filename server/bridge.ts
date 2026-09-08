@@ -14,17 +14,22 @@
 // 3. Database Backfill Utility: One-time backfill runner for database migration scripts (`backfillBridges`).
 //
 // =======================================================================================
-import type { Db } from './db.js';
+import { ensureBookingGroupIds, type Db } from './db.js';
 import { parseIsoDateString, formatDateAsIsoString, addDays } from '../shared/dates.js';
 
-/** Minimal booking map structure required for bridge evaluation: machineId -> day -> { name }. */
-export type BookingMap = Record<string, Record<string, { name: string }>>;
+/** Minimal booking map structure required for bridge evaluation. */
+export type BookingMap = Record<
+  string,
+  Record<string, { name: string; gid: string; gtitle?: string }>
+>;
 
 /** Represents a weekend bridge cell to be inserted. */
 export interface Bridge {
   machineId: string;
   day: string;
   name: string;
+  gid: string;
+  gtitle?: string;
 }
 
 const FRIDAY_WEEKDAY_NUMBER = 5;
@@ -39,16 +44,29 @@ export function missingBridges(bookings: BookingMap): Bridge[] {
     for (const bookedDay of Object.keys(machineBookings)) {
       const fridayDate = parseIsoDateString(bookedDay);
       if (fridayDate.getUTCDay() !== FRIDAY_WEEKDAY_NUMBER) continue;
-      const name = machineBookings[bookedDay]!.name;
+      const fridayBooking = machineBookings[bookedDay]!;
+      const name = fridayBooking.name;
       const saturdayIsoDate = formatDateAsIsoString(addDays(fridayDate, 1));
       const sundayIsoDate = formatDateAsIsoString(addDays(fridayDate, 2));
       const mondayIsoDate = formatDateAsIsoString(addDays(fridayDate, 3));
       if (machineBookings[mondayIsoDate]) {
         if (!machineBookings[saturdayIsoDate]) {
-          missing.push({ machineId, day: saturdayIsoDate, name });
+          missing.push({
+            machineId,
+            day: saturdayIsoDate,
+            name,
+            gid: fridayBooking.gid,
+            ...(fridayBooking.gtitle ? { gtitle: fridayBooking.gtitle } : {}),
+          });
         }
         if (!machineBookings[sundayIsoDate]) {
-          missing.push({ machineId, day: sundayIsoDate, name });
+          missing.push({
+            machineId,
+            day: sundayIsoDate,
+            name,
+            gid: fridayBooking.gid,
+            ...(fridayBooking.gtitle ? { gtitle: fridayBooking.gtitle } : {}),
+          });
         }
       }
     }
@@ -60,15 +78,25 @@ export function missingBridges(bookings: BookingMap): Bridge[] {
  * Loads current bookings for the given machine IDs from SQLite into a BookingMap.
  */
 function bookingsFor(db: Db, machineIds: readonly string[]): BookingMap {
-  const selectBookingsForMachine = db.prepare('SELECT day, name FROM bookings WHERE mid=?');
+  const selectBookingsForMachine = db.prepare(
+    'SELECT day, name, gid, gtitle FROM bookings WHERE mid=?',
+  );
   const bookingsByMachine: BookingMap = {};
   for (const machineId of machineIds) {
     const rows = selectBookingsForMachine.all(machineId) as unknown as {
       day: string;
       name: string;
+      gid: string;
+      gtitle: string | null;
     }[];
-    const bookingsByDay: Record<string, { name: string }> = {};
-    for (const row of rows) bookingsByDay[row.day] = { name: row.name };
+    const bookingsByDay: Record<string, { name: string; gid: string; gtitle?: string }> = {};
+    for (const row of rows) {
+      bookingsByDay[row.day] = {
+        name: row.name,
+        gid: row.gid,
+        ...(row.gtitle ? { gtitle: row.gtitle } : {}),
+      };
+    }
     bookingsByMachine[machineId] = bookingsByDay;
   }
   return bookingsByMachine;
@@ -80,12 +108,22 @@ function bookingsFor(db: Db, machineIds: readonly string[]): BookingMap {
  */
 export function maintainBridges(db: Db, machineIds: readonly string[], ts: string): Bridge[] {
   if (!machineIds.length) return [];
+  ensureBookingGroupIds(db);
   const missing = missingBridges(bookingsFor(db, machineIds));
   if (!missing.length) return [];
   const insertBridge = db.prepare(
-    'INSERT INTO bookings(mid,day,name,ts) VALUES(?,?,?,?) ON CONFLICT(mid,day) DO NOTHING',
+    'INSERT INTO bookings(mid,day,name,ts,gid,gtitle) VALUES(?,?,?,?,?,?) ON CONFLICT(mid,day) DO NOTHING',
   );
-  for (const bridge of missing) insertBridge.run(bridge.machineId, bridge.day, bridge.name, ts);
+  for (const bridge of missing) {
+    insertBridge.run(
+      bridge.machineId,
+      bridge.day,
+      bridge.name,
+      ts,
+      bridge.gid,
+      bridge.gtitle ?? null,
+    );
+  }
   return missing;
 }
 
@@ -93,6 +131,7 @@ export function maintainBridges(db: Db, machineIds: readonly string[], ts: strin
  * Executes a full database scan and inserts all missing weekend bridges in a single transaction.
  */
 export function backfillBridges(db: Db): number {
+  ensureBookingGroupIds(db);
   const allMachineIds = (
     db.prepare('SELECT DISTINCT mid FROM bookings').all() as unknown as { mid: string }[]
   ).map((row) => row.mid);
@@ -100,11 +139,20 @@ export function backfillBridges(db: Db): number {
   if (!missing.length) return 0;
   const ts = new Date().toISOString();
   const insertBridge = db.prepare(
-    'INSERT INTO bookings(mid,day,name,ts) VALUES(?,?,?,?) ON CONFLICT(mid,day) DO NOTHING',
+    'INSERT INTO bookings(mid,day,name,ts,gid,gtitle) VALUES(?,?,?,?,?,?) ON CONFLICT(mid,day) DO NOTHING',
   );
   db.exec('BEGIN');
   try {
-    for (const bridge of missing) insertBridge.run(bridge.machineId, bridge.day, bridge.name, ts);
+    for (const bridge of missing) {
+      insertBridge.run(
+        bridge.machineId,
+        bridge.day,
+        bridge.name,
+        ts,
+        bridge.gid,
+        bridge.gtitle ?? null,
+      );
+    }
     db.exec('COMMIT');
   } catch (error) {
     try {

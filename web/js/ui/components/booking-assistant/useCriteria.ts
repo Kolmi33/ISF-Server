@@ -4,10 +4,14 @@ import { countWorkdays } from './model.ts';
 import { rangeLengthOf } from './model.ts';
 import { type LimitEdge } from './NumberField.tsx';
 
-export function useCriteria(initialRange: DateRange) {
+export function useCriteria(initialRange: DateRange, initialDuration?: number) {
+  const initialRangeLength = rangeLengthOf(initialRange);
+  const initialDays = Math.max(1, Math.min(initialDuration ?? 1, initialRangeLength));
   const [range, setRange] = React.useState(initialRange);
-  const [minDays, setMinDays] = React.useState(1);
-  const [maxDays, setMaxDays] = React.useState(() => rangeLengthOf(initialRange));
+  const [minDays, setMinDays] = React.useState(initialDays);
+  const [maxDays, setMaxDays] = React.useState(() =>
+    initialDuration === undefined ? initialRangeLength : initialDays,
+  );
   const [limitHint, setLimitHint] = React.useState<{ seq: number; message: string } | null>(null);
   const rangeLength = rangeLengthOf(range);
   const limitSeq = React.useRef(0);

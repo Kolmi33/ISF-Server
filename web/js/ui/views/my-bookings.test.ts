@@ -4,6 +4,8 @@ import {
   computeMyRuns,
   filterMyRuns,
   computeMyBookingsSummary,
+  computeMyBookingCampaigns,
+  filterMyBookingCampaigns,
   type BookingRun,
 } from './my-bookings.ts';
 
@@ -124,6 +126,85 @@ describe('computeMyRuns', () => {
     const run = computeMyRuns([m1], { m1: { '2021-01-04': bk('anna') } }, 'anna', today)[0]!;
     expect(run.groupId).toBeUndefined();
     expect(run.groupTitle).toBeUndefined();
+  });
+});
+
+describe('computeMyBookingCampaigns', () => {
+  it('uses backend groups as campaigns and keeps only the named user', () => {
+    const machines = [m1, { ...m2, cat: 'messtechnik' }];
+    const bookings: Bookings = {
+      m1: {
+        '2021-01-05': { name: 'Anna', gid: 'g1', gtitle: 'Projekt X', ts: '2021-01-01' },
+      },
+      m2: {
+        '2021-01-05': { name: 'anna', gid: 'g1', gtitle: 'Projekt X' },
+        '2021-01-06': { name: 'bob', gid: 'g1' },
+      },
+    };
+    const campaigns = computeMyBookingCampaigns(machines, bookings, 'anna', today);
+    expect(campaigns).toHaveLength(1);
+    expect(campaigns[0]).toMatchObject({
+      id: 'g1',
+      groupId: 'g1',
+      title: 'Projekt X',
+      status: 'geplant',
+      dates: ['2021-01-05'],
+      createdAt: '2021-01-01',
+    });
+    expect(campaigns[0]!.machines.map((machine) => machine.id)).toEqual(['m1', 'm2']);
+    expect(campaigns[0]!.cells).toHaveLength(2);
+  });
+
+  it('splits ungrouped bookings by workday gaps and derives all statuses', () => {
+    const bookings: Bookings = {
+      m1: {
+        '2020-12-30': { name: 'anna', note: 'past' },
+        '2021-01-04': { name: 'anna', note: 'active' },
+        '2021-01-06': { name: 'anna', note: 'future' },
+        '2021-01-09': { name: 'anna', note: 'weekend bridge' },
+      },
+    };
+    const campaigns = computeMyBookingCampaigns([m1], bookings, 'anna', today);
+    expect(campaigns.map((campaign) => campaign.status)).toEqual([
+      'aktiv',
+      'geplant',
+      'abgeschlossen',
+    ]);
+    expect(campaigns.flatMap((campaign) => campaign.dates)).not.toContain('2021-01-09');
+  });
+
+  it('derives maintenance conflicts from the real machine schedule', () => {
+    const maintained = {
+      ...m1,
+      maint: [{ type: 'wartung', from: '2021-01-05', until: '2021-01-07' }],
+    };
+    const bookings: Bookings = { m1: { '2021-01-06': { name: 'anna' } } };
+    expect(
+      computeMyBookingCampaigns([maintained], bookings, 'anna', today)[0]!.maintenance,
+    ).toMatchObject({
+      machine: maintained,
+      date: '2021-01-06',
+      type: 'wartung',
+    });
+  });
+
+  it('filters by status and searches IDs, titles, notes, resources, and areas', () => {
+    const campaigns = computeMyBookingCampaigns(
+      [{ ...m1, name: 'Haas', group: 'Labor' }],
+      { m1: { '2021-01-06': { name: 'anna', gid: 'P-42', gtitle: 'Laser', note: 'Titan' } } },
+      'anna',
+      today,
+    );
+    expect(filterMyBookingCampaigns(campaigns, 'geplant', 'P-42')).toHaveLength(1);
+    expect(filterMyBookingCampaigns(campaigns, 'alle', 'laser')).toHaveLength(1);
+    expect(filterMyBookingCampaigns(campaigns, 'alle', 'titan')).toHaveLength(1);
+    expect(filterMyBookingCampaigns(campaigns, 'alle', 'haas')).toHaveLength(1);
+    expect(filterMyBookingCampaigns(campaigns, 'alle', 'labor')).toHaveLength(1);
+    expect(filterMyBookingCampaigns(campaigns, 'aktiv', '')).toEqual([]);
+  });
+
+  it('returns an empty list without a current identity', () => {
+    expect(computeMyBookingCampaigns([m1], { m1: { [today]: bk('anna') } }, '', today)).toEqual([]);
   });
 });
 

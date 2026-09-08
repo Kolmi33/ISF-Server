@@ -76,7 +76,6 @@
   border-radius: 12px;
   background: var(--app-panel);
   color: var(--app-text);
-  box-shadow: 0 12px 36px #0003;
   max-height: var(--available-height);
   max-width: calc(100vw - 24px);
   overflow: auto;

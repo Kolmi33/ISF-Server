@@ -30,6 +30,7 @@ import { NativeSelect } from '../../components/ui/native-select.tsx';
 import { ScrollArea } from '../../components/ui/scroll-area.tsx';
 import { AppDialog, AppDialogBody, AppDialogFooter, AppDialogHeader } from './app/AppDialog.tsx';
 import { SectionHeading } from './app/SectionHeading.tsx';
+import { applyGridlineWidth, applyGridlineWidthHeader } from '../grid-style-settings.ts';
 
 /** Name + explanation on the left, the control on the right. `htmlFor` makes the whole text
  *  block the control's label, which is what keeps a checkbox row clickable across its width. */
@@ -159,15 +160,6 @@ function readGridlineWidth(storageKey: string): number {
 /** Applies the data-grid (td) gridline width both live (the CSS variable) and persisted
  *  (`localStorage`) — the one function both `GridLinesRow`'s live slider and `app.ts`'s
  *  boot-time restore call, so the two can never drift out of sync on what "applying" means. */
-export function applyGridlineWidth(px: number): void {
-  document.documentElement.style.setProperty('--gridline-width', `${px}px`);
-}
-
-/** Same as {@link applyGridlineWidth}, for the header (th) rows' own independent width. */
-export function applyGridlineWidthHeader(px: number): void {
-  document.documentElement.style.setProperty('--gridline-width-header', `${px}px`);
-}
-
 /** One gridline-thickness slider row, parameterized by which region it controls — used twice
  *  below (data grid vs. header) so the two stay in lockstep on every behavior except which
  *  storage key/CSS variable they touch. */

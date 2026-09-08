@@ -44,7 +44,7 @@ export function daysPerWeek(): number {
  *  window (drops a week off the far side) instead of growing it, keeping the DOM small and
  *  every render fast. A drag in progress is exempt, so the anchor cell never scrolls out
  *  from under an in-progress selection. */
-const MAX_GROWN_WEEKS = 12;
+const MAX_GROWN_WEEKS = 6;
 
 /** The hard ceiling on total extra weeks — reachable only by someone scrolling relentlessly
  *  or an automated test; growth (and `ensureOverflow`'s own growth loop) simply stops here. */

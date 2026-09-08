@@ -4,8 +4,8 @@ import { screen, act, fireEvent, within } from '@testing-library/react';
 import { addDays, format, startOfDay } from 'date-fns';
 import { getWeekdaysInRange } from '../../../../shared/dates.ts';
 import { store } from '../../store-instance.ts';
-import { openAssistant } from './AssistantModal.tsx';
-import { closeReactModal } from '../modal.tsx';
+import { AssistantModal, openAssistant } from './AssistantModal.tsx';
+import { closeReactModal, openReactModal } from '../modal.tsx';
 import { openBookingForm } from './BookingForm.tsx';
 import { gotoDate } from '../grid-scroll.ts';
 
@@ -83,6 +83,28 @@ const change = (name: string, value: string) => {
 };
 
 describe('supplied assistant host integration', () => {
+  it('starts a repeated booking with the same devices and workday duration next Monday', () => {
+    act(() => closeReactModal());
+    act(() =>
+      openReactModal(<AssistantModal preset={{ machineIds: ['a', 'b'], workdays: 2 }} />, {
+        sticky: true,
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Echte Fräse entfernen' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Echte Presse entfernen' })).toBeTruthy();
+    expect((screen.getByRole('textbox', { name: 'Min. Tage' }) as HTMLInputElement).value).toBe(
+      '2',
+    );
+    expect((screen.getByRole('textbox', { name: 'Max. Tage' }) as HTMLInputElement).value).toBe(
+      '2',
+    );
+    const tomorrow = addDays(today, 1);
+    const monday = addDays(tomorrow, (8 - tomorrow.getDay()) % 7);
+    expect(screen.getByRole('button', { name: /Zeitraum/ }).textContent).toContain(
+      format(monday, 'dd.MM.yyyy'),
+    );
+  });
+
   it('centers duration controls without adding hover shells around them or the actions', () => {
     const durationShell = screen.getByRole('textbox', { name: 'Min. Tage' }).parentElement
       ?.parentElement?.parentElement;

@@ -8,12 +8,13 @@ function mem(): Db {
   db.prepare('INSERT INTO machines(id,name,grp,sort) VALUES(?,?,?,0)').run('m1', 'M', 'A');
   return db;
 }
-function book(db: Db, machineId: string, day: string, name: string): void {
-  db.prepare('INSERT INTO bookings(mid,day,name,ts) VALUES(?,?,?,?)').run(
+function book(db: Db, machineId: string, day: string, name: string, gid = 'g1'): void {
+  db.prepare('INSERT INTO bookings(mid,day,name,ts,gid) VALUES(?,?,?,?,?)').run(
     machineId,
     day,
     name,
     't0',
+    gid,
   );
 }
 const days = (db: Db, machineId: string): Record<string, string> => {
@@ -30,7 +31,7 @@ const days = (db: Db, machineId: string): Record<string, string> => {
 
 describe('missingBridges (pure)', () => {
   const map = (mb: Record<string, string>): BookingMap => ({
-    m1: Object.fromEntries(Object.entries(mb).map(([d, name]) => [d, { name }])),
+    m1: Object.fromEntries(Object.entries(mb).map(([d, name]) => [d, { name, gid: 'g1' }])),
   });
 
   // What: a booked Friday with the following Monday also booked bridges BOTH weekend days,
@@ -39,8 +40,8 @@ describe('missingBridges (pure)', () => {
   // both weekend days are proposed with the Friday's name.
   it('bridges Sat+Sun of a Fri→Mon span with the Friday name', () => {
     expect(missingBridges(map({ '2021-01-08': 'Alice', '2021-01-11': 'Bob' }))).toEqual([
-      { machineId: 'm1', day: '2021-01-09', name: 'Alice' }, // Sat carries Friday's (Alice) name
-      { machineId: 'm1', day: '2021-01-10', name: 'Alice' },
+      { machineId: 'm1', day: '2021-01-09', name: 'Alice', gid: 'g1' },
+      { machineId: 'm1', day: '2021-01-10', name: 'Alice', gid: 'g1' },
     ]);
   });
 
@@ -57,7 +58,7 @@ describe('missingBridges (pure)', () => {
     const r = missingBridges(
       map({ '2021-01-08': 'Alice', '2021-01-09': 'Alice', '2021-01-11': 'Bob' }),
     );
-    expect(r).toEqual([{ machineId: 'm1', day: '2021-01-10', name: 'Alice' }]);
+    expect(r).toEqual([{ machineId: 'm1', day: '2021-01-10', name: 'Alice', gid: 'g1' }]);
   });
 
   // What: a booked Monday with no booked Friday before it isn't a span either, and a machine
@@ -80,10 +81,17 @@ describe('maintainBridges (in-DB)', () => {
     book(db, 'm1', '2021-01-10', 'KEEP'); // Sun already taken by someone
     book(db, 'm1', '2021-01-11', 'Bob'); // Mon
     const added = maintainBridges(db, ['m1'], 'ts1');
-    expect(added).toEqual([{ machineId: 'm1', day: '2021-01-09', name: 'Alice' }]); // only Sat
+    expect(added).toEqual([{ machineId: 'm1', day: '2021-01-09', name: 'Alice', gid: 'g1' }]); // only Sat
     const d = days(db, 'm1');
     expect(d['2021-01-09']).toBe('Alice');
     expect(d['2021-01-10']).toBe('KEEP'); // untouched
+    expect(
+      (
+        db.prepare('SELECT gid FROM bookings WHERE mid=? AND day=?').get('m1', '2021-01-09') as {
+          gid: string;
+        }
+      ).gid,
+    ).toBe('g1');
   });
 
   // What: an empty machineIds list, or a machine list with nothing to bridge, both correctly

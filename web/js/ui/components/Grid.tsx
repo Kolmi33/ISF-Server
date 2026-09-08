@@ -47,6 +47,7 @@ import { Icon } from './Icon.tsx';
 import { GridBodyRow } from './GridBody.tsx';
 import { store } from '../../store-instance.ts';
 import { registerGridRenderTrigger, triggerGridRender } from '../grid-render-bridge.ts';
+import { hasGridFilters, matchingGridMachineIds } from '../grid-filters.ts';
 
 function CategoryToggleButtons() {
   return (
@@ -146,9 +147,23 @@ function computeGridViewModel(): GridViewModel {
     store.get('visD').map((isoDate) => [isoDate, formatDateLong(isoDate)]),
   );
 
+  const criteria = {
+    query: store.get('gridQuery'),
+    groups: store.get('groupsSel'),
+    machineIds: store.get('machSel'),
+    availableOnly: store.get('gridAvailableOnly'),
+    operationalOnly: store.get('gridOperationalOnly'),
+    favoritesOnly: store.get('gridFavoritesOnly'),
+    favoriteIds: store.get('favs'),
+  };
+  const visibleMachineIds = hasGridFilters(criteria)
+    ? matchingGridMachineIds(store.get('data')!, store.get('visD'), criteria)
+    : null;
+
   const rows = buildGridRows(store.get('data')!.machines, {
-    selectedGroups: store.get('groupsSel'),
-    selectedMachineIds: store.get('machSel'),
+    selectedGroups: new Set(),
+    selectedMachineIds: new Set(),
+    visibleMachineIds,
     openCategories: store.get('cats'),
     collapsedGroups: store.get('collapsed'),
     favoriteIds: store.get('favs'),
@@ -183,6 +198,7 @@ function gridRowKey(row: GridRow, index: number): string {
 export function Grid() {
   const [, forceRerender] = useState(0);
   const theadRef = useRef<HTMLTableSectionElement>(null);
+  const lastHeaderHeightRef = useRef<number | null>(null);
 
   useEffect(() => {
     registerGridRenderTrigger(() => forceRerender((tick) => tick + 1));
@@ -193,14 +209,16 @@ export function Grid() {
 
   useEffect(() => {
     if (theadRef.current) {
-      document.documentElement.style.setProperty(
-        '--theadh',
-        `${theadRef.current.offsetHeight || 47}px`,
-      );
+      const headerHeight = theadRef.current.offsetHeight || 47;
+      if (lastHeaderHeightRef.current !== headerHeight) {
+        lastHeaderHeightRef.current = headerHeight;
+        document.documentElement.style.setProperty('--theadh', `${headerHeight}px`);
+      }
     }
     paintSelection();
     syncJumpControls();
-    requestAnimationFrame(ensureOverflow);
+    const overflowFrame = requestAnimationFrame(ensureOverflow);
+    return () => cancelAnimationFrame(overflowFrame);
   });
 
   if (!store.get('data')) return null; // nothing to render before the initial load completes

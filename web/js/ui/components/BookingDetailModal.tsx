@@ -240,7 +240,7 @@ export function BookingDetailModal({ machine, date, booking }: BookingDetailModa
           </Button>
         }
       />
-      <AppDialogBody>
+      <AppDialogBody className="overflow-y-auto [scrollbar-gutter:stable]">
         <BookingFacts machine={machine} date={date} booking={booking} />
         <SeriesOrGroupHint
           booking={booking}

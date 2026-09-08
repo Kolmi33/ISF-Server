@@ -147,6 +147,12 @@ export interface AppState {
   person: string;
   /** Filter: when true, hides all rows not booked by the selected person. */
   personOnly: boolean;
+  /** Main grid free-text resource/location filter. */
+  gridQuery: string;
+  /** Main grid facets. */
+  gridAvailableOnly: boolean;
+  gridOperationalOnly: boolean;
+  gridFavoritesOnly: boolean;
   /** Set of favorite machine IDs pinned for quick navigation. */
   favs: Set<string>;
   /** IDs of currently visible machine rows in top-to-bottom rendering order. */

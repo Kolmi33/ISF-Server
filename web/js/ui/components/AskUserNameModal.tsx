@@ -61,7 +61,7 @@ export function AskUserNameModal({ firstRun }: AskUserNameModalProps) {
         titleId={titleId}
         subtitle="Unter diesem Namen erscheinen deine Buchungen im Plan."
       />
-      <AppDialogBody>
+      <AppDialogBody className="overflow-y-auto [scrollbar-gutter:stable]">
         <FormField label="Name" htmlFor={fieldId}>
           <Input
             id={fieldId}

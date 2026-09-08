@@ -13,7 +13,7 @@
 //
 // =======================================================================================
 
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { MapPin, Table2, UserRound } from 'lucide-react';
 import {
@@ -252,8 +252,9 @@ export function AllBookingsModal() {
     setFilter((prev) => ({ ...prev, ...patch }));
   }
 
-  const groupOptions = groupsByCategory(store.get('data')!.machines);
-  const rows = filterAllRuns(runsAll, filter);
+  const machines = store.get('data')!.machines;
+  const groupOptions = useMemo(() => groupsByCategory(machines), [machines]);
+  const rows = useMemo(() => filterAllRuns(runsAll, filter), [runsAll, filter]);
 
   return (
     <AppDialog size="lg" labelledBy={titleId}>

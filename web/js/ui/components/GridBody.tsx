@@ -11,9 +11,9 @@
 
 import { Fragment, type CSSProperties } from 'react';
 import type { Booking, Machine } from '../../../../shared/types.ts';
-import { isWeekend, parseIsoDateString } from '../../../../shared/dates.ts';
 import {
   isMachineAvailableOnWeekday,
+  isMachineAvailableOnWeekdayIndex,
   hasAnyMaintenanceSlot,
   isMachineBlockedOnDate,
   getMaintenanceSlotAtDate,
@@ -141,11 +141,13 @@ function BookedCell({
   // inline style is guaranteed to win over every class-based rule, which a plain CSS-cascade
   // approach turned out not to be in practice (see app.css's comment on td.cell). `mine` is
   // still passed into cellClass below as a semantic marker (e.g. for non-visual/test hooks).
-  const style: Record<string, string> = { background: nameColor(booking.name, isDarkTheme()) };
+  const style: Record<string, string> = {
+    backgroundColor: nameColor(booking.name, isDarkTheme()),
+  };
   if (mine) Object.assign(style, mineAccentLayers(segment));
   return (
     <td
-      className={cellClass('booked', {
+      className={`${cellClass('booked', {
         mine,
         today: isToday,
         weekend,
@@ -153,7 +155,7 @@ function BookedCell({
         mergeRight: segment.continuesRight,
         mergeUp: segment.continuesUp,
         mergeDown: segment.continuesDown,
-      })}
+      })}${store.get('personOnly') && !mine ? ' dim' : ''}`}
       role="gridcell"
       data-machine-id={machine.id}
       data-date={isoDate}
@@ -175,14 +177,20 @@ function GridCell({
   today,
   dateLabel,
   segment,
-}: Omit<CellAttrs, 'isToday' | 'weekend'> & { today: string; segment: BookingBlockSegment }) {
+  weekdayIndex,
+  weekend,
+}: Omit<CellAttrs, 'isToday' | 'weekend'> & {
+  today: string;
+  segment: BookingBlockSegment;
+  weekdayIndex: number;
+  weekend: boolean;
+}) {
   const isToday = isoDate === today;
-  const weekend = isWeekend(parseIsoDateString(isoDate));
   const booking = getBooking(store.get('data')!.bookings, machine.id, isoDate);
   const state = classifyCell(
     isMachineBlockedOnDate(machine, isoDate),
     booking,
-    isMachineAvailableOnWeekday(machine, isoDate),
+    isMachineAvailableOnWeekdayIndex(machine, weekdayIndex),
   );
   const cellProps = { machine, isoDate, isToday, weekend, dateLabel };
 
@@ -322,13 +330,15 @@ function MachineRow({
       {weeks.map((week, weekIndex) => (
         <Fragment key={week[0]}>
           {weekIndex > 0 && <td className="gap" aria-hidden="true" />}
-          {week.map((isoDate) => (
+          {week.map((isoDate, weekdayIndex) => (
             <GridCell
               machine={machine}
               isoDate={isoDate}
               today={today}
               dateLabel={dateLabels.get(isoDate)!}
               segment={bookingBlocks.get(`${machine.id}|${isoDate}`)!}
+              weekdayIndex={weekdayIndex}
+              weekend={weekdayIndex >= 5}
               key={isoDate}
             />
           ))}

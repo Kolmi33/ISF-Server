@@ -1,5 +1,64 @@
 # PROGRESS — living project state
 
+## Universal booking groups (2026-09-08, DONE)
+
+Every booking is now a booking group, including one device on one day. The browser reducer and
+authoritative server mutation path generate a `gid` unconditionally; all cells/devices in one
+operation share it. REST batch writes can also append devices to an explicit `groupId`, while
+single-cell updates retain their existing membership. Weekend bridge cells inherit the Friday
+booking's group and title.
+
+Schema version 2 migrates legacy ungrouped rows into the same consecutive-workday runs users saw
+before, including their weekend bridges. It deliberately does not guess cross-device relationships
+that were never persisted. JSON imports are normalized too. A pre-migration production backup is
+stored as `buchungen_2026-09-08_pre_group_migration.db`.
+
+Focused coverage passes (91 tests); the full gate passes with 1,022 tests across 76 files. A cloned
+production DB migrated 12,309 rows to 1,484 legacy groups with no lost cells. Production deployment
+is healthy at revision 31 with 12,621 cells, 1,492 groups and zero ungrouped cells. Temporary
+production writes verified both shared batch creation and adding a second device to an existing
+one-device group; every test row was removed afterward. Desktop/mobile Playwright checks completed
+without browser errors.
+
+## Meine Buchungen action menu and typography (2026-09-08, DONE)
+
+Campaign typography now follows the supplied component values on the application's Inter Variable
+font: 15px/500 titles, 13px metadata and 11px/600 labels, with technical dates/IDs retaining the
+template's monospace treatment. The overflow menu now contains exactly “Bearbeiten”, “Buchung
+wiederholen” and the separated destructive “Stornieren” action.
+
+Editing routes into the real main plan. Repeating opens the existing Assistant with the campaign's
+real machine IDs, the same minimum/maximum workday duration and a range beginning next Monday.
+The full quality gate passes with 1,018 tests; production Playwright verification confirmed all
+three menu entries and a correctly prefilled 11-device, 9-workday repeat without browser errors.
+
+## Meine Buchungen visual follow-up (2026-09-08, DONE)
+
+The modal now explicitly uses the application's Inter Variable default font, omits the top-level
+maintenance banner, labels the fixed two-column resource split as “Maschinen” and “Messtechnik”,
+and uses “Buchungsgruppe oder Gerät” as the search placeholder. Named groups no longer repeat
+their title as a detail note or expose their technical `gid`; unnamed groups retain their ID for
+identification. The three-dot action menu no longer creates a full-screen click target and stays
+visible without dismissing the dialog; outside click and Escape remain supported.
+
+The complete quality gate passes. A post-deployment Playwright check against the
+production container verified all requested details and both action entries without console or
+page errors.
+
+## Meine Buchungen backend integration (2026-09-08, DONE)
+
+The supplied campaign-style “Meine Buchungen” UI is connected to the application's real booking
+matrix, live store/SSE updates, current-name identity, machine catalog, maintenance data and
+authoritative mutation path. It now provides derived active/planned/completed campaign cards,
+search and status filtering, expandable device details, plan navigation, Assistant entry, a
+read-only-aware confirmed cancellation flow, mutation feedback and polished empty/filter states.
+
+Focused booking coverage and the complete quality gate pass. The Vite and
+server production builds pass; the existing Docker Compose deployment is healthy at revision 15.
+Playwright verified populated/empty desktop and mobile views plus light/dark themes without browser
+errors. The implementation checklist, verification evidence and backend capability audit live in
+`docs/MY-BOOKINGS-INTEGRATION-PLAN.md`.
+
 ## Meine Buchungen scroll containment and group-card cleanup (2026-09-07)
 
 The bookings list now has a real preferred flex basis, so the shared Base UI viewport resolves

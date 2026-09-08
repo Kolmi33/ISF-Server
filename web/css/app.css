@@ -9,6 +9,18 @@ html,body{margin:0;padding:0;height:100%}
    font-sans}) cascade app-wide instead; font-size/line-height stay app.css's own. */
 body{font-size:14px;line-height:1.4;background:var(--app-bg);color:var(--app-text);display:flex;flex-direction:column}
 
+/* Keep every user-scrollable screen visibly discoverable, including systems that normally
+   hide overlay scrollbars until scrolling starts. These are structural scrollbars, not the
+   grey drop shadows removed from surfaces. */
+:where(#gridWrap,#overlay,#modal,#machDrop,#groupDrop,.range-popup,.conflictbox,[data-slot="scroll-area"],[data-slot="dialog-body"],[data-slot="confirm-body"]){
+  scrollbar-width:thin;scrollbar-color:var(--app-muted) transparent}
+:where(#gridWrap,#overlay,#modal,#machDrop,#groupDrop,.range-popup,.conflictbox,[data-slot="scroll-area"],[data-slot="dialog-body"],[data-slot="confirm-body"])::-webkit-scrollbar{
+  width:10px;height:10px}
+:where(#gridWrap,#overlay,#modal,#machDrop,#groupDrop,.range-popup,.conflictbox,[data-slot="scroll-area"],[data-slot="dialog-body"],[data-slot="confirm-body"])::-webkit-scrollbar-track{
+  background:var(--app-border)}
+:where(#gridWrap,#overlay,#modal,#machDrop,#groupDrop,.range-popup,.conflictbox,[data-slot="scroll-area"],[data-slot="dialog-body"],[data-slot="confirm-body"])::-webkit-scrollbar-thumb{
+  background:var(--app-muted);border:2px solid transparent;border-radius:999px;background-clip:padding-box}
+
 /* ---------- Toolbar ---------- */
 header{background:var(--app-panel);border-bottom:1px solid var(--app-border);padding:6px 12px 4px;display:grid;grid-template-columns:max-content 1fr max-content;row-gap:6px;column-gap:12px;align-items:center;position:sticky;top:0;z-index:30}
 .l1{grid-column:1;grid-row:1;display:flex;gap:8px;align-items:center;justify-content:flex-start}
@@ -69,11 +81,11 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--app-accent-light
    (no gap, no shared border) rather than nesting a real button inside a button. */
 #machWrap.filtered #machBtn{border-top-right-radius:0;border-bottom-right-radius:0;border-right:none}
 #machWrap.filtered #machClearBtn{border-top-left-radius:0;border-bottom-left-radius:0;border-left:none}
-#machDrop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:8px;z-index:60;min-width:320px}
+#machDrop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;padding:8px;z-index:60;min-width:320px}
 #machDrop.open{display:block}
 /* Taller rows (user request: too tight to comfortably click, especially for long device
    names like the Fire-III pyrometer or the Keyence Highspeed camera) */
-/* The popover's own border/shadow already provides structural containment (user request) —
+/* The popover's own border provides structural containment —
    the inner scrollable list doesn't need a second nested border around it too. */
 .chip{background:var(--app-accent-light);color:var(--app-accent);border:1px solid var(--app-accent);border-radius:12px;padding:2px 8px;font-size:12px;cursor:pointer;white-space:nowrap}
 .chip:hover{filter:brightness(.95)}
@@ -86,9 +98,68 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--app-accent-light
 /* Same box-merging treatment as #machWrap above. */
 #groupWrap.filtered #groupBtn{border-top-right-radius:0;border-bottom-right-radius:0;border-right:none}
 #groupWrap.filtered #groupClearBtn{border-top-left-radius:0;border-bottom-left-radius:0;border-left:none}
-#groupDrop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.15);padding:8px;z-index:50;min-width:230px;max-height:320px;overflow:auto}
+#groupDrop{display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;padding:8px;z-index:50;min-width:230px;max-height:320px;overflow:auto}
 #groupDrop.open{display:block}
 td.cell.booked.dim{opacity:.28;filter:grayscale(.8)}
+
+/* 2026 occupancy-board shell: visual structure follows UI-Handbuch without changing the
+   table's interaction contract. */
+body{padding:12px;font-family:"Inter Variable",Inter,"Segoe UI",sans-serif}
+#toolbar{position:relative;top:auto;border:1px solid var(--app-border);border-radius:16px 16px 0 0;padding:12px 20px 10px;row-gap:12px}
+#toolbar h1{padding-left:0;font-size:22px;font-weight:600;letter-spacing:-.02em}
+#toolbar .l1,#toolbar .l2,#toolbar .r1,#toolbar .r2{gap:8px}
+#toolbar .r2{display:flex;min-width:0;align-items:center}
+.btn{min-height:34px;border-radius:10px;padding:7px 12px;font-size:14px}
+.btn.small{min-height:34px;padding:7px 10px}
+#btnPrev,#btnNext{width:34px;padding:4px;font-size:22px;line-height:1}
+#jumpMonth,#jumpYear{border-color:transparent;background:transparent;font-size:14px}
+#jumpMonth{width:105px;padding-right:2px}
+#jumpYear{padding-left:0!important}
+#lastRef{display:none}
+#userChip{border-color:var(--app-border);background:var(--app-panel);color:var(--app-text)}
+#gridWrap{border:1px solid var(--app-border);border-top:0}
+#gridLegend{align-items:center;gap:22px;border:1px solid var(--app-border);border-top:0;border-radius:0 0 16px 16px;background:var(--app-panel);padding:9px 20px;color:var(--app-muted);font-size:12px}
+.legend-swatch{display:inline-block;width:20px;height:12px;margin-right:7px;border:1px solid var(--app-border);border-radius:999px;vertical-align:-2px;background:var(--cellbg)}
+.legend-swatch.own{border-color:var(--app-accent);background:var(--app-accent-light)}
+.legend-swatch.blocked{border-color:#e7a24a;background:var(--blocked1)}
+.legend-hint{margin-left:auto}
+.mine-toggle{display:flex;align-items:center;gap:8px;color:var(--app-muted);white-space:nowrap;cursor:pointer}
+.mine-toggle input{appearance:none;width:36px;height:20px;margin:0;border-radius:999px;background:var(--app-border);position:relative;transition:background .15s}
+.mine-toggle input:after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0003;transition:transform .15s}
+.mine-toggle input:checked{background:var(--app-accent)}
+.mine-toggle input:checked:after{transform:translateX(16px)}
+.more-wrap{position:relative}
+.more-button{border-color:transparent;background:transparent;letter-spacing:1px}
+.toolbar-more{display:none;position:absolute;top:calc(100% + 6px);right:0;z-index:80;min-width:190px;padding:6px;border:1px solid var(--app-border);border-radius:12px;background:var(--app-panel);box-shadow:0 8px 25px #0002}
+.toolbar-more.open{display:grid}
+.toolbar-more button{display:flex;align-items:center;gap:9px;border:0;border-radius:8px;background:transparent;padding:9px 10px;color:var(--app-text);font:inherit;text-align:left;cursor:pointer}
+.toolbar-more button:hover{background:var(--hover)}
+.active-filter-bar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;border-inline:1px solid var(--app-border);background:var(--app-panel);padding:8px 20px;color:var(--app-muted);font-size:12px}
+.active-filter-bar button{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--app-border);border-radius:999px;background:var(--app-accent-light);padding:4px 9px;color:var(--app-accent);font:inherit;cursor:pointer}
+.active-filter-bar button svg{width:13px;height:13px}
+.active-filter-bar .clear-all{margin-left:auto;border-color:transparent;background:transparent;color:var(--app-muted)}
+thead th{min-width:116px;padding:7px 6px}
+td.cell{min-width:116px;height:40px}
+td.machcol{height:40px;padding-left:20px;font-size:15px;font-weight:500}
+tr.grouprow td{height:40px;padding-left:20px;font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.catseg{padding:3px;border-radius:12px;background:var(--hover)}
+.catseg .catbtn{min-height:34px;border-color:transparent;border-radius:9px;background:transparent;font-size:14px}
+.catseg .catbtn.on,.catseg .catbtn.on:hover{border-color:transparent;background:var(--app-panel);color:var(--app-text);box-shadow:0 1px 3px #0001}
+#grid .catseg .catbtn.on,#grid .catseg .catbtn.on:hover{border-color:transparent;background:var(--app-panel);color:var(--app-text);box-shadow:0 1px 3px #0001}
+
+@media (max-width:700px){
+  body{padding:0}
+  #toolbar{border-radius:0;padding:10px}
+  #toolbar h1{font-size:18px}
+  #toolbar .l1{flex-wrap:wrap}
+  #gridLegend{border-radius:0;gap:10px;flex-wrap:wrap}
+  .legend-hint{display:none}
+}
+@media (min-width:701px) and (max-width:1000px){
+  #toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto}
+  #toolbar .l1,#toolbar .l2{grid-column:1;min-width:0}
+  #toolbar .r1,#toolbar .r2{grid-column:2;justify-self:end}
+}
 
 /* ---------- Grid ---------- */
 #gridWrap{flex:1;overflow:auto;position:relative}
@@ -248,10 +319,10 @@ td.cell.kfocus{outline:2px solid var(--focus);outline-offset:-2px}
 .favstar.fav, tbody tr:hover .favstar{opacity:1}
 .favstar:hover{transform:scale(1.25);display:inline-block}
 /* Zeilen-Hover: Zeile unter dem Cursor hervorheben (hilft beim Verfolgen über viele Spalten) */
-tbody tr:not(.grouprow):hover td.cell{filter:brightness(.95)}
+tbody tr:not(.grouprow):hover td.cell:not(.blocked){background-image:linear-gradient(#0000000d,#0000000d)}
 tbody tr:not(.grouprow):hover td.machcol{background:var(--hover)}
 /* Im Dark Mode aufhellen statt abdunkeln, sonst unsichtbar */
-html[data-theme="dark"] tbody tr:not(.grouprow):hover td.cell{filter:brightness(1.35)}
+html[data-theme="dark"] tbody tr:not(.grouprow):hover td.cell:not(.blocked){background-image:linear-gradient(#ffffff1f,#ffffff1f)}
 /* Sprung-Knöpfe erst beim Überfahren der Zeile zeigen (weniger visuelles Rauschen) */
 .nextfree{opacity:0;transition:opacity .12s}
 tbody tr:hover .nextfree, .nextfree.back{opacity:1}
@@ -276,7 +347,7 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
    Selektor-Spezifität gewinnt automatisch. */
 .statgrp{font-weight:700;padding:6px 8px;font-size:12px;color:var(--app-text);
   background:var(--headbg);border-bottom:2px solid var(--app-border);border-radius:4px;margin-top:2px}
-#ctxMenu{position:fixed;z-index:150;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);padding:6px;display:none;min-width:200px}
+#ctxMenu{position:fixed;z-index:150;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;padding:6px;display:none;min-width:200px}
 .machinfo{color:var(--app-muted);cursor:pointer}
 /* ---------- Assistent: kartenbasiertes Dashboard-Layout ---------- */
 /* Moderner SaaS-Dashboard-Look (user request): ein helles Grau als Seitenhintergrund, jeder
@@ -355,9 +426,9 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .assist-group-heading{display:flex;align-items:center;gap:2px}
 .assist-help-trigger{color:var(--app-muted)}
 .assist-help-positioner{z-index:150}
-.assist-help-popup{max-width:300px;background:var(--app-text);color:var(--app-panel);padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.4;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.assist-help-popup{max-width:300px;background:var(--app-text);color:var(--app-panel);padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.4}
 .assist-group-menu-trigger{color:var(--app-muted)}
-.assist-group-menu-popup{z-index:150;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.2);padding:4px;min-width:220px}
+.assist-group-menu-popup{z-index:150;background:var(--app-panel);border:1px solid var(--app-border);border-radius:8px;padding:4px;min-width:220px}
 .assist-group-menu-item{padding:7px 10px;border-radius:6px;font-size:13px;cursor:pointer;color:var(--app-text)}
 .assist-group-menu-item[data-highlighted]{background:var(--hover)}
 @media(min-width:860px){
@@ -448,18 +519,18 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
   color:inherit;transition:opacity .12s}
 .aspill:hover .aspill-rm{opacity:.7}
 .aspill-rm:hover{opacity:1}
-#modalReopen{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:90;display:none;flex-direction:column;align-items:center;gap:3px;background:var(--app-accent);color:#fff;border:none;border-radius:0 12px 12px 0;padding:12px 8px;box-shadow:0 4px 18px rgba(0,0,0,.28);cursor:pointer;font-size:11px;font-weight:600;letter-spacing:.02em}
+#modalReopen{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:90;display:none;flex-direction:column;align-items:center;gap:3px;background:var(--app-accent);color:#fff;border:none;border-radius:0 12px 12px 0;padding:12px 8px;cursor:pointer;font-size:11px;font-weight:600;letter-spacing:.02em}
 #modalReopen.show{display:flex}
 #modalReopen .ic{width:18px;height:18px;stroke:#fff}
 #modalReopen span{writing-mode:vertical-rl}
-#asTip{position:fixed;z-index:300;display:none;max-width:220px;background:var(--app-text);color:var(--app-panel);padding:6px 9px;border-radius:7px;font-size:12px;line-height:1.35;box-shadow:0 4px 16px rgba(0,0,0,.3);pointer-events:none}
+#asTip{position:fixed;z-index:300;display:none;max-width:220px;background:var(--app-text);color:var(--app-panel);padding:6px 9px;border-radius:7px;font-size:12px;line-height:1.35;pointer-events:none}
 #asTip.show{display:block}
 #asTip::after{content:"";position:absolute;left:var(--tipx,20px);bottom:-5px;border:5px solid transparent;border-top-color:var(--app-text);border-bottom:0}
 
 /* ---------- Modal ---------- */
 #overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;z-index:100;align-items:flex-start;justify-content:center;padding:40px 12px;overflow:auto}
 #overlay.open{display:flex}
-#modal{background:var(--app-panel);border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.25);max-width:640px;width:100%;padding:18px 20px;max-height:85vh;overflow:auto}
+#modal{background:var(--app-panel);border-radius:10px;max-width:640px;width:100%;padding:18px 20px;max-height:85vh;overflow:auto}
 /* Booking detail modal: title + top-right close "×" share one row (user request — frees the
    bottom action row for just the two destructive actions, no separate "Schließen" needed there). */
 .bkdetail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
@@ -483,12 +554,11 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .mlist label:hover{background:var(--hover)}
 .mlist .grp{font-weight:700;margin-top:6px;color:var(--app-muted);font-size:12px}
 .resultlist{max-height:300px;overflow:auto}
-/* Each "Passende Termine" result gets its own standalone white card with a subtle shadow,
-   separating it from the modal's grey backdrop instead of being a flat list row sharing borders
-   with its neighbors (user request). */
+/* Each "Passende Termine" result gets its own bordered card, separating it from the modal
+   backdrop without adding a grey drop shadow. */
 .resultlist .res{display:flex;justify-content:space-between;align-items:center;gap:8px;
   padding:10px 12px;margin:8px 4px;background:var(--app-panel);border:1px solid var(--app-border);
-  border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  border-radius:10px}
 .mybk{display:flex;justify-content:space-between;align-items:flex-start;padding:8px;border-bottom:1px solid var(--app-border);gap:8px}
 .mybk .abmach{font-size:14px;line-height:1.35}
 .mybk .abdate{font-size:13px;line-height:1.5;margin:1px 0}
@@ -591,7 +661,7 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 /* The dashboard card itself: a white card on the grey modal ground (user request: match a
    reference card-based dashboard's structure/colour profile). */
 .stat-card{background:var(--app-panel);border:1px solid var(--app-border);border-radius:10px;
-  padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  padding:14px;margin-bottom:10px}
 .stat-card-head{display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:10px}
 .stat-card-head .ic{color:var(--stat-fill,var(--app-accent))}
 /* Day-by-day booking chart: one bar per bucket (bucketDailyCounts already caps the bar count
@@ -624,7 +694,7 @@ tbody tr:hover .nextfree, .nextfree.back{opacity:1}
 .tag.wartung{background:var(--warnbg);color:var(--warn)}
 
 /* ---------- Debug-Panel ---------- */
-#dbgPanel{position:fixed;top:92px;right:8px;width:340px;max-height:70vh;background:var(--app-panel);border:1px solid var(--app-border);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.25);z-index:90;display:none;flex-direction:column;font-size:11px}
+#dbgPanel{position:fixed;top:92px;right:8px;width:340px;max-height:70vh;background:var(--app-panel);border:1px solid var(--app-border);border-radius:10px;z-index:90;display:none;flex-direction:column;font-size:11px}
 #dbgPanel.open{display:flex}
 #dbgHead{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--app-border);font-weight:700;font-size:12px}
 #dbgList{overflow:auto;padding:4px 8px;font-family:Consolas,Menlo,monospace}

@@ -63,7 +63,7 @@ function DurationFields({ state }: { state: AssistantState }) {
         <span
           key={limitHint.seq}
           role="alert"
-          className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-destructive/45 bg-card px-3 py-1.5 text-xs font-medium text-destructive shadow-lg animate-in fade-in slide-in-from-bottom-1"
+          className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-destructive/45 bg-card px-3 py-1.5 text-xs font-medium text-destructive animate-in fade-in slide-in-from-bottom-1"
         >
           {limitHint.message}
         </span>

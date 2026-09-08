@@ -201,15 +201,19 @@ describe('bookCells — conflicts', () => {
 });
 
 describe('bookCells — apply', () => {
-  // What: booking one machine on one day with no title writes a plain cell, no group id.
-  // How: books a single free cell with a note and checks the written booking's exact shape
-  // (name/note/ts) plus the undo record for it.
-  it('books a single free cell without a group id', () => {
+  // What: even one machine on one day is represented as a one-member booking group.
+  // How: books a single free cell and checks its generated gid plus the remaining metadata.
+  it('books a single free cell as a booking group', () => {
     const d = data([M()]);
     const res = bookCells(d, ['m1'], ['2021-01-04'], opts({ note: 'hi' }));
     expect(res.count).toBe(1);
     expect(res.undo).toEqual([{ machineId: 'm1', date: '2021-01-04', prev: null }]);
-    expect(d.bookings.m1!['2021-01-04']).toEqual({ name: 'Alice', note: 'hi', ts: TS });
+    expect(d.bookings.m1!['2021-01-04']).toEqual({
+      name: 'Alice',
+      note: 'hi',
+      ts: TS,
+      gid: 'g_fixed',
+    });
   });
 
   // What: booking more than one day forms a group (shared gid), but with no title given the
@@ -224,9 +228,9 @@ describe('bookCells — apply', () => {
     expect(d.bookings.m1!['2021-01-04']!.gtitle).toBeUndefined();
   });
 
-  // What: an explicit title forces a group even for a single cell, and the title is stored as gtitle.
-  // How: books exactly one day with a title and checks the cell got both a gid and that gtitle.
-  it('carries the title as gtitle when a single cell is titled (title forces a group)', () => {
+  // What: an explicit title is stored as the group's display title.
+  // How: books exactly one day with a title and checks the cell got both gid and gtitle.
+  it('carries the title as gtitle when a single-cell group is titled', () => {
     const d = data([M()]);
     bookCells(d, ['m1'], ['2021-01-04'], opts({ title: 'Projekt X' }));
     expect(d.bookings.m1!['2021-01-04']!.gid).toBe('g_fixed');

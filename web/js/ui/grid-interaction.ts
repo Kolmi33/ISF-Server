@@ -61,35 +61,65 @@ function findCellElement(machineId: string, date: string): HTMLElement | null {
 /**
  * Updates visual selection classes (`.sel` and `.kfocus`) on DOM cells.
  */
-export function paintSelection(): void {
-  document.querySelectorAll('td.cell.sel').forEach((el) => {
+const paintedSelection = new Map<string, HTMLElement>();
+let paintedFocus: { key: string; element: HTMLElement } | null = null;
+
+function cellKey(cell: Cell): string {
+  return `${cell.machineId}\u0000${cell.date}`;
+}
+
+function paintSelectedCells(cells: readonly Cell[]): void {
+  const nextPainted = new Map<string, HTMLElement>();
+  for (const cell of cells) {
+    const key = cellKey(cell);
+    const cached = paintedSelection.get(key);
+    const el = cached?.isConnected ? cached : findCellElement(cell.machineId, cell.date);
+    if (el) {
+      if (!el.classList.contains('sel')) el.classList.add('sel');
+      if (el.getAttribute('aria-selected') !== 'true') el.setAttribute('aria-selected', 'true');
+      nextPainted.set(key, el);
+    }
+  }
+  for (const [key, el] of paintedSelection) {
+    if (nextPainted.has(key) || !el.isConnected) continue;
     el.classList.remove('sel');
     el.removeAttribute('aria-selected');
-  });
-  document.querySelectorAll('td.cell.kfocus').forEach((el) => {
-    el.classList.remove('kfocus');
-    el.removeAttribute('tabindex');
-  });
+  }
+  paintedSelection.clear();
+  for (const [key, el] of nextPainted) paintedSelection.set(key, el);
+}
+
+function paintFocusedCell(focus: Cell | null): void {
+  const nextFocusKey = focus ? cellKey(focus) : null;
+  if (paintedFocus && (paintedFocus.key !== nextFocusKey || !paintedFocus.element.isConnected)) {
+    if (paintedFocus.element.isConnected) {
+      paintedFocus.element.classList.remove('kfocus');
+      paintedFocus.element.removeAttribute('tabindex');
+    }
+    paintedFocus = null;
+  }
+  if (focus) {
+    const selectedElement = paintedSelection.get(nextFocusKey!);
+    const el = selectedElement?.isConnected
+      ? selectedElement
+      : findCellElement(focus.machineId, focus.date);
+    if (el) {
+      if (!el.classList.contains('kfocus')) el.classList.add('kfocus');
+      if (el.getAttribute('tabindex') !== '0') el.setAttribute('tabindex', '0');
+      paintedFocus = { key: nextFocusKey!, element: el };
+    }
+  }
+}
+
+export function paintSelection(): void {
   selection.cells = computeSelCells(
     selection.anchor,
     selection.focus,
     store.get('visM'),
     store.get('visD'),
   );
-  for (const cell of selection.cells) {
-    const el = findCellElement(cell.machineId, cell.date);
-    if (el) {
-      el.classList.add('sel');
-      el.setAttribute('aria-selected', 'true');
-    }
-  }
-  if (selection.focus) {
-    const el = findCellElement(selection.focus.machineId, selection.focus.date);
-    if (el) {
-      el.classList.add('kfocus');
-      el.setAttribute('tabindex', '0');
-    }
-  }
+  paintSelectedCells(selection.cells);
+  paintFocusedCell(selection.focus);
 }
 
 /**

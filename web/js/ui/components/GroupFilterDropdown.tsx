@@ -129,7 +129,7 @@ export function GroupFilterDropdown() {
 
   const groups = groupList();
   return (
-    <div className="ui-scope w-[16rem] max-w-[calc(100vw-24px)] rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+    <div className="ui-scope w-[16rem] max-w-[calc(100vw-24px)] rounded-xl border border-border bg-popover p-2 text-popover-foreground">
       <SectionHeading label="Bereiche" className="px-1.5 pb-2 pt-1" />
       <GroupRow
         label="Alle Bereiche"

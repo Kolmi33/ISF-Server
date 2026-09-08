@@ -37,6 +37,9 @@
     --brand-accent: hsl(34 94% 41%);
     --brand-accent-soft: hsl(34 90% 94%);
     --brand-accent-foreground: hsl(34 94% 32%);
+    --sensor: hsl(205 62% 44%);
+    --sensor-soft: hsl(205 68% 94%);
+    --sensor-foreground: hsl(205 62% 30%);
     --secondary: hsl(82 55% 92%);
     --secondary-foreground: hsl(82 100% 22%);
     --muted: hsl(82 22% 96%);
@@ -67,6 +70,9 @@
     --brand-accent: hsl(34 88% 58%);
     --brand-accent-soft: hsl(34 40% 20%);
     --brand-accent-foreground: hsl(34 88% 68%);
+    --sensor: hsl(205 60% 60%);
+    --sensor-soft: hsl(205 38% 21%);
+    --sensor-foreground: hsl(205 70% 74%);
     --secondary: hsl(82 32% 20%);
     --secondary-foreground: hsl(82 62% 76%);
     --muted: hsl(84 10% 17%);
@@ -122,7 +128,42 @@
   all: revert-layer;
 }
 
-/* The dialog paints its own sheet (rounded-2xl, border, shadow), so `#modal`'s legacy chrome
+/* The shared scroll surfaces stay discoverable on platforms that otherwise hide overlay
+   scrollbars until the user has already started scrolling. */
+.ui-scope :where([data-slot='scroll-area'], [data-slot='dialog-body'], [data-slot='confirm-body']) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted-foreground) transparent;
+}
+.ui-scope
+  :where(
+    [data-slot='scroll-area'],
+    [data-slot='dialog-body'],
+    [data-slot='confirm-body']
+  )::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.ui-scope
+  :where(
+    [data-slot='scroll-area'],
+    [data-slot='dialog-body'],
+    [data-slot='confirm-body']
+  )::-webkit-scrollbar-track {
+  background: var(--muted);
+}
+.ui-scope
+  :where(
+    [data-slot='scroll-area'],
+    [data-slot='dialog-body'],
+    [data-slot='confirm-body']
+  )::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+/* The dialog paints its own sheet (rounded-2xl and border), so `#modal`'s legacy chrome
    gets out of the way. Width stays capped at the widest dialog size; narrower dialogs cap
    themselves with their own `max-w-*` and centre inside. */
 #overlay:has(.ui-scope) {
@@ -140,6 +181,11 @@
   border: 0;
   background: transparent;
   border-radius: 16px;
+}
+
+#modal:has(> .ui-scope .mybookings) {
+  width: min(1120px, 100%);
+  max-width: 1120px;
 }
 
 /* Same idea for the three floating shells that are static markup in index.html: once their

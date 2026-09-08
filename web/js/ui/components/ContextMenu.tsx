@@ -130,7 +130,7 @@ function useContextMenuInfo(): MenuInfo | null {
 
 function ContextMenuContent({ info }: { info: MenuInfo }) {
   return (
-    <div className="ui-scope flex w-[15rem] max-w-[calc(100vw-24px)] flex-col gap-0.5 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg">
+    <div className="ui-scope flex w-[15rem] max-w-[calc(100vw-24px)] flex-col gap-0.5 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground">
       <div className="px-2 py-1.5 text-[11px] tabular-nums text-muted-foreground">
         {info.machineIds.length} Maschine(n) · {formatDateLong(info.from)}
         {info.from !== info.to ? ' – ' + formatDateLong(info.to) : ''}

@@ -64,11 +64,16 @@ function findCellElement(machineId: string, date: string): HTMLElement | null {
  *  cell's showName/merge/mine styling always agrees with what a full re-render would produce.
  *  Computed once per `patchCells` call (not once per cell) and shared across every entry it
  *  touches, so patching several cells from one mutation doesn't redo this work per cell. */
-function currentVisibleSegments(): Map<string, BookingBlockSegment> {
+function currentVisibleSegments(
+  entries: readonly { machineId: string; date: string }[],
+): Map<string, BookingBlockSegment> {
   const data = store.get('data')!;
   const columnsPerWeek = daysPerWeek();
   const weekCount = store.get('weeks') + store.get('extraWeeks');
   const weeks = visibleWeeks(store.get('startMonday'), weekCount, columnsPerWeek);
+  const affectedDates = new Set(entries.map((entry) => entry.date));
+  const affectedWeeks = weeks.filter((week) => week.some((date) => affectedDates.has(date)));
+  if (!affectedWeeks.length) return new Map();
   const rows = buildGridRows(data.machines, {
     selectedGroups: store.get('groupsSel'),
     selectedMachineIds: store.get('machSel'),
@@ -76,7 +81,7 @@ function currentVisibleSegments(): Map<string, BookingBlockSegment> {
     collapsedGroups: store.get('collapsed'),
     favoriteIds: store.get('favs'),
   });
-  return computeVisibleBookingBlocks(weeks, rows, data.bookings);
+  return computeVisibleBookingBlocks(affectedWeeks, rows, data.bookings);
 }
 
 const MINE_ACCENT_PROPS = ['--mine-top', '--mine-bottom', '--mine-left', '--mine-right'] as const;
@@ -132,7 +137,7 @@ export function refreshCell(
   );
   if (state === 'blocked') {
     el.className = cellClass('blocked', { today: isToday, weekend });
-    el.style.background = '';
+    el.style.backgroundColor = '';
     applyMineAccent(el, false, NO_SEGMENT);
     el.title = maintText(getMaintenanceSlotAtDate(machine, date));
     el.textContent = booking?.name ?? '';
@@ -148,19 +153,19 @@ export function refreshCell(
       mergeUp: segment.continuesUp,
       mergeDown: segment.continuesDown,
     });
-    el.style.background = nameColor(booking!.name, isDarkTheme());
+    el.style.backgroundColor = nameColor(booking!.name, isDarkTheme());
     applyMineAccent(el, mine, segment);
     el.title = booking!.name + (booking!.note ? ' — ' + booking!.note : '');
     el.textContent = segment.showName ? booking!.name : '';
   } else if (state === 'unavail') {
     el.className = cellClass('unavail', { today: isToday, weekend });
-    el.style.background = '';
+    el.style.backgroundColor = '';
     applyMineAccent(el, false, NO_SEGMENT);
     el.title = 'an diesem Wochentag nicht verfügbar';
     el.textContent = '';
   } else {
     el.className = cellClass('free', { today: isToday, weekend });
-    el.style.background = '';
+    el.style.backgroundColor = '';
     applyMineAccent(el, false, NO_SEGMENT);
     el.title = '';
     el.textContent = '';
@@ -202,7 +207,7 @@ export function refreshDot(machineId: string): void {
  *  patching several cells from one mutation — the common case for a multi-day/multi-machine
  *  write, delete, or undo — doesn't redo that computation once per cell. */
 export function patchCells(entries: readonly { machineId: string; date: string }[]): void {
-  const segments = currentVisibleSegments();
+  const segments = currentVisibleSegments(entries);
   const machineIds = new Set<string>();
   for (const entry of entries) {
     refreshCell(entry.machineId, entry.date, segments);

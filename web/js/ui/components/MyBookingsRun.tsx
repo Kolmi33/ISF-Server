@@ -1,341 +1,399 @@
 // =======================================================================================
-// MY BOOKINGS RUN + GROUP CARD (web/js/ui/components/MyBookingsRun.tsx)
-// =======================================================================================
-//
-// One run's own card (`RunHead`/`RunCardBody`/`DayList`) and the "parent card" wrapping every
-// run that shares the same real (multi-machine) booking group (`GroupCard`/
-// `groupRunsForDisplay`) — split out of `MyBookingsModal.tsx` purely to stay under the
-// file-length budget; conceptually still one modal.
-//
+// MY BOOKING CAMPAIGN CARD (web/js/ui/components/MyBookingsRun.tsx)
 // =======================================================================================
 
-import type { Machine } from '../../../../shared/types.ts';
-import { formatDateLong, mondayOfDate, parseIsoDateString } from '../../../../shared/dates.ts';
+import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  CalendarDays,
+  ChevronDown,
+  Eye,
+  MoreHorizontal,
+  Pencil,
+  Repeat2,
+  Trash2,
+} from 'lucide-react';
+import { cn } from 'cn';
+import { formatDateShort, parseIsoDateString } from '../../../../shared/dates.ts';
 import { getMachineCategory } from '../../core/machines.ts';
-import { getBooking, findBookingGroup } from '../../core/bookings.ts';
-import { FAVORITES_GROUP_LABEL } from '../grid.ts';
-import { gotoDate, prependWeek, resetView } from '../grid-scroll.ts';
-import { closeReactModal } from '../modal.tsx';
-import { ChevronDown, ChevronRight, FolderOpen, MapPin, Trash2 } from 'lucide-react';
-import { Badge } from '../../components/ui/badge.tsx';
+import type { MyBookingCampaign, MyBookingStatus } from '../views/my-bookings.ts';
 import { Button } from '../../components/ui/app-button.tsx';
-import { store } from '../../store-instance.ts';
 
-/** One run's live state: its frozen machine + full date list, and which of those dates are
- *  still actually booked under the current user's name right now. `ts`/`groupId`/`groupTitle`
- *  pass straight through from the frozen `BookingRun` unchanged — a run's group membership and
- *  earliest-booked timestamp don't change as its individual days get deleted. */
-export interface LiveRun {
-  machine: Machine;
-  allDates: readonly string[];
-  liveDates: string[];
-  ts: string;
-  groupId?: string;
-  groupTitle?: string;
+const STATUS_META: Record<MyBookingStatus, { label: string; dot: string }> = {
+  aktiv: { label: 'Aktiv', dot: 'bg-primary' },
+  geplant: { label: 'Geplant', dot: 'bg-sensor' },
+  abgeschlossen: { label: 'Abgeschlossen', dot: 'bg-muted-foreground/45' },
+};
+
+function dateLabel(date: string, year = true): string {
+  const parsed = parseIsoDateString(date);
+  if (!year) return formatDateShort(parsed);
+  return parsed.toLocaleDateString('de-DE', {
+    timeZone: 'UTC',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
 }
 
-export function runKey(run: LiveRun): string {
-  return run.machine.id + '|' + run.allDates[0];
+function rangeLabel(campaign: MyBookingCampaign): string {
+  const first = campaign.dates[0]!;
+  const last = campaign.dates[campaign.dates.length - 1]!;
+  if (first === last) return dateLabel(first);
+  const sameYear = first.slice(0, 4) === last.slice(0, 4);
+  return `${dateLabel(first, !sameYear)} – ${dateLabel(last)}`;
 }
 
-/** A day's optional note, as the small trailing hint legacy shows next to its date. */
-function DayNote({ machine, date }: { machine: Machine; date: string }) {
-  const note = getBooking(store.get('data')!.bookings, machine.id, date)?.note;
-  return note ? <span className="text-muted-foreground"> ({note})</span> : null;
+function plural(count: number, singular: string, pluralForm: string): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`;
 }
 
-/** Jumps to a run's first live day in the grid: expands its category/group first (a
- *  folded-away target wouldn't be visible otherwise), then scrolls there. */
-function gotoRun(run: LiveRun): void {
-  const targetDate = run.liveDates[0]!;
-  closeReactModal();
-  const cats = store.get('cats');
-  cats.add(getMachineCategory(run.machine));
-  localStorage.setItem('mb_cats', JSON.stringify([...cats]));
-  const collapsed = store.get('collapsed');
-  collapsed.delete(run.machine.group);
-  if (store.get('favs').has(run.machine.id)) collapsed.delete(FAVORITES_GROUP_LABEL);
-  localStorage.setItem('mb_collapsed', JSON.stringify([...collapsed]));
-  // Silent, like resetView below — one notify covers this write plus resetView's own field
-  // reset, matching the original's single window.notify() after both.
-  store.state.startMonday = mondayOfDate(parseIsoDateString(targetDate));
-  resetView();
-  store.notify();
-  prependWeek();
-  gotoDate(targetDate);
+interface DeviceChipProps {
+  campaign: MyBookingCampaign;
+  machineId: string;
+  highlight: string;
 }
 
-/** This run's booking group, but only when it actually spans more than one machine — looked up
- *  live (current bookings, not the frozen run). A group of exactly one machine (a titled
- *  single-machine booking) isn't treated as a "real" group by any caller below: it's visually
- *  indistinguishable from a plain run anyway, so neither the group icon, the hint, nor the
- *  parent card would say/show anything useful. */
-export function multiMachineGroup(run: LiveRun): { machineIds: Set<string> } | undefined {
-  if (!run.groupId) return undefined;
-  const group = findBookingGroup(store.get('data')!.bookings, run.groupId);
-  return group.machineIds.size > 1 ? group : undefined;
-}
-
-/** A small icon marking a run as part of a real (multi-machine) booking group, right next to
- *  the machine name — replaces an earlier colored text pill (user request: indicate group
- *  membership with an icon). The enclosing `GroupCard` already provides the structural cue;
- *  this icon makes the relationship visible on each row as well. */
-function GroupMemberIcon({ run }: { run: LiveRun }) {
-  if (!multiMachineGroup(run)) return null;
+function DeviceChip({ campaign, machineId, highlight }: DeviceChipProps) {
+  const machine = campaign.machines.find((candidate) => candidate.id === machineId)!;
+  const matches =
+    !!highlight &&
+    [machine.name, machine.group, machine.id].some((text) =>
+      text.toLowerCase().includes(highlight),
+    );
+  const isMachine = getMachineCategory(machine) === 'maschine';
   return (
-    <span className="grpicon inline-flex text-muted-foreground" title="Teil einer Buchungsgruppe">
-      <FolderOpen className="size-3.5" />
+    <span
+      className={cn(
+        'inline-flex items-center rounded-lg px-2.5 py-1 text-[11px] font-semibold leading-none',
+        isMachine
+          ? 'bg-secondary text-secondary-foreground'
+          : 'bg-sensor-soft text-sensor-foreground',
+        matches && 'ring-2 ring-brand/60 ring-offset-1 ring-offset-background',
+      )}
+      title={`${machine.name} · ${machine.group}`}
+    >
+      {machine.name}
     </span>
   );
 }
 
-/** Shows "Teil einer Buchungsgruppe" when this run belongs to a real (multi-machine) booking
- *  group — same as `BookingDetailModal.tsx`'s own `SeriesOrGroupHint` this mirrors. Only shown
- *  for a run rendered on its own (`GroupCard` already names the group once, in its own header,
- *  for every member nested inside it — repeating this per member would be redundant there). */
-function GroupHint({ run }: { run: LiveRun }) {
-  const group = multiMachineGroup(run);
-  if (!group) return null;
+interface DeviceSectionProps {
+  campaign: MyBookingCampaign;
+  category: 'maschine' | 'messtechnik';
+  title: string;
+  highlight: string;
+}
+
+function DeviceSection({ campaign, category, title, highlight }: DeviceSectionProps) {
+  const machineIds = campaign.machines
+    .filter((machine) => getMachineCategory(machine) === category)
+    .map((machine) => machine.id);
+  if (!machineIds.length) return null;
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-      <FolderOpen className="size-3.5 shrink-0" /> Teil einer Buchungsgruppe
-      {run.groupTitle ? (
-        <>
-          : <b className="font-semibold text-foreground">{run.groupTitle}</b>
-        </>
-      ) : null}{' '}
-      — {group.machineIds.size} Maschinen
-    </div>
+    <section>
+      <h4 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {title}
+      </h4>
+      <div className="mt-2.5 flex flex-wrap gap-1.5">
+        {machineIds.map((machineId) => (
+          <DeviceChip
+            key={machineId}
+            campaign={campaign}
+            machineId={machineId}
+            highlight={highlight}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
-/** The `.abmach`/`.abdate` card body — copied from AllBookingsModal's `AllBookingsRow` layout
- *  for a consistent look between the two "list of runs" modals: bold machine name + group hint
- *  on top, the date range (with the day-count tag folded in) below, plus the group hint when
- *  this run is part of one. Split out of `RunHead` purely to stay under the function-length
- *  budget. The third `.abdate`-style "who booked it" line All Bookings has is skipped here —
- *  every run in this modal is already known to be the current user's own, so naming them again
- *  would be redundant; the day-level note (`DayNote`) takes that line's place for a
- *  single-day run instead. The expand chip lives in `RunHead`'s own horizontal actions row
- *  now, not here — see that component's comment for why. `showGroupHint` is false for a run
- *  rendered nested inside its own `GroupCard` — that card's header already names the group. */
-function RunCardBody({
-  run,
-  isSeries,
-  showGroupHint,
-}: {
-  run: LiveRun;
-  isSeries: boolean;
-  showGroupHint: boolean;
-}) {
+interface CampaignActionsProps {
+  campaign: MyBookingCampaign;
+  pending: boolean;
+  readOnly: boolean;
+  owned: boolean;
+  onGoto: () => void;
+  onRepeat: () => void;
+  onCancel: () => void;
+}
+
+function CampaignActionMenu(props: CampaignActionsProps & { close: () => void }) {
+  const { campaign, pending, readOnly, owned, onGoto, onRepeat, onCancel, close } = props;
+  const cancellationDisabled = readOnly || !owned || campaign.status === 'abgeschlossen' || pending;
   return (
-    <div className="min-w-0 flex-1">
-      <div className="abmach flex flex-wrap items-center gap-1.5">
-        <b className="text-sm font-semibold text-foreground">{run.machine.name}</b>
-        <GroupMemberIcon run={run} />
-        <span className="text-[11px] text-muted-foreground">· {run.machine.group}</span>
-      </div>
-      <div className="abdate mt-0.5 flex flex-wrap items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
-        {isSeries ? (
-          <>
-            {formatDateLong(run.liveDates[0]!)} –{' '}
-            {formatDateLong(run.liveDates[run.liveDates.length - 1]!)}{' '}
-            <Badge>{run.liveDates.length} Tage</Badge>
-          </>
+    <>
+      <button
+        type="button"
+        role="menuitem"
+        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={() => {
+          close();
+          onGoto();
+        }}
+      >
+        {owned ? (
+          <Pencil className="size-4 text-muted-foreground" />
         ) : (
-          <>
-            {formatDateLong(run.liveDates[0]!)}
-            <DayNote machine={run.machine} date={run.liveDates[0]!} />
-          </>
-        )}
-      </div>
-      {showGroupHint && <GroupHint run={run} />}
-    </div>
+          <Eye className="size-4 text-muted-foreground" />
+        )}{' '}
+        {owned ? 'Bearbeiten' : 'Ansehen'}
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={readOnly}
+        onClick={() => {
+          close();
+          onRepeat();
+        }}
+      >
+        <Repeat2 className="size-4 text-muted-foreground" />
+        {owned ? 'Buchung wiederholen' : 'Als Vorlage verwenden'}
+      </button>
+      {owned && <div className="my-1 h-px bg-border" />}
+      {owned && (
+        <button
+          type="button"
+          role="menuitem"
+          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={cancellationDisabled}
+          onClick={() => {
+            close();
+            onCancel();
+          }}
+        >
+          <Trash2 className="size-4" /> {pending ? 'Wird storniert …' : 'Stornieren'}
+        </button>
+      )}
+    </>
   );
 }
 
-export interface RunRowProps {
-  run: LiveRun;
-  isExpanded: boolean;
-  onToggleExpand: () => void;
-  onDeleteDates: (dates: readonly string[]) => void;
-  /** False when nested inside a `GroupCard` — that card's own header already names the group,
-   *  so the run's own `GroupHint` line would just repeat it. */
-  showGroupHint?: boolean;
+function useCampaignActionMenu() {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target))
+        setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
+  const toggleMenu = (event: MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPosition({
+      top: Math.max(12, Math.min(window.innerHeight - 132, rect.bottom + 8)),
+      left: Math.max(12, Math.min(window.innerWidth - 220, rect.right - 208)),
+    });
+    setOpen((current) => !current);
+  };
+  return { open, setOpen, position, triggerRef, menuRef, toggleMenu };
 }
 
-export function RunHead({
-  run,
-  isExpanded,
-  onToggleExpand,
-  onDeleteDates,
-  showGroupHint = true,
-}: RunRowProps) {
-  const isSeries = run.liveDates.length > 1;
-
-  async function handleDeleteClick(): Promise<void> {
-    if (isSeries) {
-      const confirmed = await window.askConfirm({
-        title: 'Ganze Serie löschen?',
-        body: `Deine Serie auf <b>${run.machine.name}</b>:<br>${formatDateLong(run.liveDates[0]!)} – ${formatDateLong(run.liveDates[run.liveDates.length - 1]!)} (${run.liveDates.length} Tage)`,
-        yes: `${run.liveDates.length} Tage löschen`,
-      });
-      if (!confirmed) return;
-    }
-    onDeleteDates(run.liveDates);
-  }
-
-  // The action icons sit in one horizontal row on the right (user request — they used to
-  // stack vertically), all sharing one standardized circular icon-button shape/border.
-  const deleteLabel = isSeries ? 'Serie löschen' : 'Löschen';
+function CampaignActions({
+  campaign,
+  pending,
+  readOnly,
+  owned,
+  onGoto,
+  onRepeat,
+  onCancel,
+}: CampaignActionsProps) {
+  const { open, setOpen, position, triggerRef, menuRef, toggleMenu } = useCampaignActionMenu();
   return (
-    <div className="mybk flex items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors hover:border-primary/40">
-      <RunCardBody run={run} isSeries={isSeries} showGroupHint={showGroupHint} />
-      <div className="mybk-actions flex shrink-0 items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="Im Plan anzeigen (dorthin springen)"
-          aria-label="Im Plan anzeigen"
-          onClick={() => gotoRun(run)}
-        >
-          <MapPin className="size-4" />
-        </Button>
-        {isSeries && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
-            title={`Tage ${isExpanded ? 'einklappen' : 'ausklappen'}`}
-            aria-label={isExpanded ? 'Tage einklappen' : 'Tage ausklappen'}
-            onClick={onToggleExpand}
+    <>
+      <Button
+        ref={triggerRef}
+        variant="ghost"
+        size="icon"
+        className="size-8 rounded-lg"
+        aria-label={`Aktionen für ${campaign.title}`}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        disabled={pending}
+        onClick={toggleMenu}
+      >
+        <MoreHorizontal className="size-4" />
+      </Button>
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            data-slot="popover-content"
+            data-open=""
+            aria-label={`Aktionen für ${campaign.title}`}
+            className="ui-scope fixed z-[170] min-w-52 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-md"
+            style={position}
           >
-            {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-          </Button>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          title={deleteLabel}
-          aria-label={deleteLabel}
-          onClick={() => void handleDeleteClick()}
-        >
-          <Trash2 className="size-4" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-export function DayList({
-  run,
-  onDeleteOneDay,
-}: {
-  run: LiveRun;
-  onDeleteOneDay: (date: string) => void;
-}) {
-  return (
-    <div className="daylist ml-6 mt-1 flex flex-col gap-1 border-l-2 border-border pl-3">
-      {run.liveDates.map((date) => (
-        <div
-          className="mybk flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted"
-          key={date}
-        >
-          <div className="abdate min-w-0 flex-1 text-[11px] tabular-nums text-muted-foreground">
-            {formatDateLong(date)}
-            <DayNote machine={run.machine} date={date} />
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => onDeleteOneDay(date)}
-          >
-            Löschen
-          </Button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** One item `RunList` renders: either a standalone run, or a whole real (multi-machine)
- *  booking group's runs bundled into one `GroupCard` — "Experiment Setup" style (user
- *  request): a single larger card naming the group, with its member machines as nested line
- *  items inside it, instead of a flat list of independently-carded rows for each member. */
-export type MyBookingsDisplayItem =
-  | { kind: 'single'; run: LiveRun }
-  | { kind: 'group'; groupId: string; groupTitle: string | undefined; runs: LiveRun[] };
-
-/**
- * Groups `runs` (already filtered/sorted — grouping only ever combines whatever the filter
- * left behind, never reaches past it) into display items: every run sharing the same real
- * multi-machine group id is bundled into one `GroupCard`, in the position of its first
- * occurrence in the list; every other run stays standalone. A group with only one of its
- * members surviving the current filter renders as a standalone run instead (matching
- * `multiMachineGroup`'s own "not a real group" rule) — a lone survivor gains nothing from
- * being wrapped in its own one-item card.
- */
-export function groupRunsForDisplay(runs: readonly LiveRun[]): MyBookingsDisplayItem[] {
-  const alreadyCarded = new Set<string>();
-  const items: MyBookingsDisplayItem[] = [];
-  for (const run of runs) {
-    if (!run.groupId || !multiMachineGroup(run)) {
-      items.push({ kind: 'single', run });
-      continue;
-    }
-    if (alreadyCarded.has(run.groupId)) continue; // this group's card was already emitted
-    const members = runs.filter((candidate) => candidate.groupId === run.groupId);
-    if (members.length < 2) {
-      items.push({ kind: 'single', run }); // only one member survived the current filter
-      continue;
-    }
-    alreadyCarded.add(run.groupId);
-    items.push({ kind: 'group', groupId: run.groupId, groupTitle: run.groupTitle, runs: members });
-  }
-  return items;
-}
-
-export function GroupCard({
-  groupTitle,
-  runs,
-  expandedKeys,
-  onToggleExpand,
-  onDeleteDates,
-}: {
-  groupTitle: string | undefined;
-  runs: readonly LiveRun[];
-  expandedKeys: ReadonlySet<string>;
-  onToggleExpand: (key: string) => void;
-  onDeleteDates: (machine: Machine, dates: readonly string[]) => void;
-}) {
-  return (
-    <div className="mybk-group rounded-xl border border-primary/45 bg-primary/[0.03]">
-      <div className="mybk-group-head sticky top-0 z-10 flex items-center gap-2 rounded-t-xl border-b border-primary/20 bg-secondary px-3 py-2.5">
-        <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
-        <b className="text-sm font-semibold text-foreground">{groupTitle || 'Buchungsgruppe'}</b>
-        <span className="text-[11px] text-muted-foreground">— {runs.length} Maschinen</span>
-      </div>
-      {runs.map((run) => {
-        const key = runKey(run);
-        const isExpanded = expandedKeys.has(key);
-        return (
-          <div key={key} className="mybk-group-item p-2">
-            <RunHead
-              run={run}
-              isExpanded={isExpanded}
-              onToggleExpand={() => onToggleExpand(key)}
-              onDeleteDates={(dates) => onDeleteDates(run.machine, dates)}
-              showGroupHint={false}
+            <CampaignActionMenu
+              {...{ campaign, pending, readOnly, owned, onGoto, onRepeat, onCancel }}
+              close={() => setOpen(false)}
             />
-            {run.liveDates.length > 1 && isExpanded && (
-              <DayList run={run} onDeleteOneDay={(date) => onDeleteDates(run.machine, [date])} />
-            )}
-          </div>
-        );
-      })}
+          </div>,
+          document.getElementById('modal') || document.body,
+        )}
+    </>
+  );
+}
+
+interface MyBookingCampaignCardProps {
+  campaign: MyBookingCampaign;
+  expanded: boolean;
+  highlight: string;
+  pending: boolean;
+  readOnly: boolean;
+  owned?: boolean;
+  showOwner?: boolean;
+  onToggle: () => void;
+  onGoto: () => void;
+  onRepeat: () => void;
+  onCancel: () => void;
+}
+
+function CampaignHeading({ campaign, expanded, panelId, onToggle }: CampaignHeadingProps) {
+  const machineCount = campaign.machines.filter(
+    (machine) => getMachineCategory(machine) === 'maschine',
+  ).length;
+  const sensorCount = campaign.machines.length - machineCount;
+  const showTechnicalId = campaign.groupId && campaign.title === 'Buchungsgruppe';
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={expanded}
+      aria-controls={panelId}
+      className="group flex min-w-[17rem] flex-1 items-start gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors group-hover:bg-muted group-hover:text-foreground">
+        <ChevronDown
+          className={cn('size-4 transition-transform duration-200', !expanded && '-rotate-90')}
+        />
+      </span>
+      <span className="min-w-0">
+        <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+          <span className="text-[15px] font-medium text-foreground">{campaign.title}</span>
+          {showTechnicalId && (
+            <span className="font-mono text-[13px] tracking-tight text-muted-foreground/75">
+              {campaign.id}
+            </span>
+          )}
+        </span>
+        <span className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground">
+          <CalendarDays className="size-3.5 shrink-0" />
+          <span className="font-mono tabular-nums">{rangeLabel(campaign)}</span>
+          <span>· {plural(campaign.dates.length, 'Tag', 'Tage')}</span>
+          <span>· {plural(machineCount, 'Maschine', 'Maschinen')}</span>
+          <span>· {plural(sensorCount, 'Sensor', 'Sensoren')}</span>
+        </span>
+      </span>
+    </button>
+  );
+}
+
+interface CampaignHeadingProps {
+  campaign: MyBookingCampaign;
+  expanded: boolean;
+  panelId: string;
+  onToggle: () => void;
+}
+
+function StatusAndActions(props: MyBookingCampaignCardProps) {
+  const {
+    campaign,
+    pending,
+    readOnly,
+    owned = true,
+    showOwner,
+    onGoto,
+    onRepeat,
+    onCancel,
+  } = props;
+  const status = STATUS_META[campaign.status];
+  return (
+    <div className="ml-auto flex shrink-0 items-center gap-2">
+      {showOwner && (
+        <span
+          className="max-w-40 truncate rounded-lg bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground"
+          title={campaign.owner}
+        >
+          {owned ? 'ich' : campaign.owner}
+        </span>
+      )}
+      <span className="inline-flex w-fit items-center gap-2 rounded-lg border border-border px-2.5 py-1 text-[11px] font-semibold leading-none text-muted-foreground">
+        <span className={cn('size-1.5 rounded-full', status.dot)} aria-hidden="true" />
+        {status.label}
+      </span>
+      <CampaignActions {...{ campaign, pending, readOnly, owned, onGoto, onRepeat, onCancel }} />
     </div>
+  );
+}
+
+function CampaignDetails({ campaign, panelId, highlight }: CampaignDetailsProps) {
+  return (
+    <div
+      id={panelId}
+      className="grid grid-cols-2 gap-x-10 gap-y-5 border-t border-border px-4 py-4 sm:pl-[3.25rem]"
+    >
+      <DeviceSection
+        campaign={campaign}
+        category="maschine"
+        title="Maschinen"
+        highlight={highlight}
+      />
+      <DeviceSection
+        campaign={campaign}
+        category="messtechnik"
+        title="Messtechnik"
+        highlight={highlight}
+      />
+      {campaign.note && campaign.note.trim() !== campaign.title.trim() && (
+        <p className="text-[13px] text-muted-foreground sm:col-span-2">{campaign.note}</p>
+      )}
+    </div>
+  );
+}
+
+interface CampaignDetailsProps {
+  campaign: MyBookingCampaign;
+  panelId: string;
+  highlight: string;
+}
+
+export function MyBookingCampaignCard(props: MyBookingCampaignCardProps) {
+  const panelId = useId();
+  return (
+    <li className="rounded-xl border border-border bg-background">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 sm:px-4">
+        <CampaignHeading
+          campaign={props.campaign}
+          expanded={props.expanded}
+          panelId={panelId}
+          onToggle={props.onToggle}
+        />
+        <StatusAndActions {...props} />
+      </div>
+      {props.expanded && (
+        <CampaignDetails campaign={props.campaign} panelId={panelId} highlight={props.highlight} />
+      )}
+    </li>
   );
 }

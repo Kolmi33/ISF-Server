@@ -71,10 +71,7 @@ export function TooltipContent({
         <TooltipPrimitive.Popup
           id={id}
           role="tooltip"
-          className={cn(
-            'rounded-md bg-foreground px-3 py-2 text-xs text-background shadow-md',
-            className,
-          )}
+          className={cn('rounded-md bg-foreground px-3 py-2 text-xs text-background', className)}
         >
           {children}
         </TooltipPrimitive.Popup>

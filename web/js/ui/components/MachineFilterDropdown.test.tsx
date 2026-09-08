@@ -30,6 +30,10 @@ beforeEach(() => {
     favs: new Set(),
     machSel: new Set(),
     groupsSel: new Set(),
+    gridQuery: '',
+    gridAvailableOnly: false,
+    gridOperationalOnly: false,
+    gridFavoritesOnly: false,
   } as unknown as Partial<AppState>);
   window.S = store.state;
   notifySpy.mockClear();
@@ -89,7 +93,7 @@ describe('MachineFilterDropdown', () => {
     expect(window.S.machSel.has('m1')).toBe(true);
     expect(JSON.parse(localStorage.getItem('mb_machsel')!)).toEqual(['m1']);
     expect(notifySpy).toHaveBeenCalled();
-    expect(document.getElementById('machBtn')!.textContent).toContain('1 gewählt');
+    expect(document.getElementById('machBtn')!.textContent).toContain('Filtern (1)');
   });
 
   // What: the "Filter löschen" (clear filter) button empties the selection and resets the
@@ -156,7 +160,7 @@ describe('MachineFilterDropdown', () => {
   // between separate open sessions.
   // How: opens, unfolds a category, types a search query, closes, re-opens, and checks the
   // search box is empty again and the previously-unfolded group is folded again.
-  it('re-opening resets fold state, category-shown toggles, and the search box', () => {
+  it('re-opening resets fold state while preserving the active grid search', () => {
     openDropdown();
     act(() => fireEvent.click(catHeader()));
     fireEvent.change(screen.getByPlaceholderText('Ressource suchen…'), {
@@ -164,7 +168,9 @@ describe('MachineFilterDropdown', () => {
     });
     act(() => fireEvent.click(document.getElementById('machBtn')!)); // close
     openDropdown(); // re-open
-    expect((screen.getByPlaceholderText('Ressource suchen…') as HTMLInputElement).value).toBe('');
+    expect((screen.getByPlaceholderText('Ressource suchen…') as HTMLInputElement).value).toBe(
+      'Presse',
+    );
     expect(screen.queryByText('Fräse')).not.toBeInTheDocument(); // "Halle 1" folded again
   });
 
@@ -199,7 +205,7 @@ describe('updateMachBtn', () => {
     window.S.machSel = new Set(['m1', 'm2']);
     updateMachBtn();
     const button = document.getElementById('machBtn')!;
-    expect(button.textContent).toContain('2 gewählt');
+    expect(button.textContent).toContain('Filtern (1)');
     expect(button.style.background).toBe('var(--accent-light)');
   });
 

@@ -13,8 +13,8 @@ const deviceEntryOf = (plan: PlanEntry[], deviceId: string): PlanEntry | undefin
 const flatten = (entry: PlanEntry): PlanEntry[] =>
   entry.kind === 'group' ? [entry, ...entry.members.flatMap(flatten)] : [entry];
 
-export function usePlan() {
-  const [plan, setPlan] = React.useState<PlanEntry[]>([]);
+export function usePlan(initialPlan: PlanEntry[] = []) {
+  const [plan, setPlan] = React.useState<PlanEntry[]>(() => initialPlan);
 
   /** Das Häkchen im Katalog: aus dem Plan nehmen, wo immer das Gerät steckt, sonst hinten an. */
   const toggleDevice = (deviceId: string) =>

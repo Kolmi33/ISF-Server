@@ -25,17 +25,17 @@ import {
 
 describe('canStillGrowWindow', () => {
   // What: the auto-grow-window feature can still add more weeks while under its cap.
-  // How: checks a fresh window (0) and one just below the cap (11) both allow growth.
+  // How: checks a fresh window (0) and one just below the cap (5) both allow growth.
   it('allows growth under the cap', () => {
     expect(canStillGrowWindow(0, false)).toBe(true);
-    expect(canStillGrowWindow(11, false)).toBe(true);
+    expect(canStillGrowWindow(5, false)).toBe(true);
   });
   // What: at the cap, growth normally stops — UNLESS a drag (e.g. a marquee selection) is in
   // progress, in which case it's allowed anyway so the grid doesn't cut off mid-drag.
-  // How: checks the cap value (12) refuses growth without a drag, but allows it with one.
+  // How: checks the cap value (6) refuses growth without a drag, but allows it with one.
   it('stops growth at the cap unless a drag is in progress', () => {
-    expect(canStillGrowWindow(12, false)).toBe(false);
-    expect(canStillGrowWindow(12, true)).toBe(true);
+    expect(canStillGrowWindow(6, false)).toBe(false);
+    expect(canStillGrowWindow(6, true)).toBe(true);
   });
 });
 
@@ -291,13 +291,13 @@ describe('handleGridWrapScroll (via a real scroll event)', () => {
   // How: sets extraWeeks to the cap, scrolls near the right edge, and checks extraWeeks stayed
   // the same while startMonday advanced by 7 days.
   it('shifts the window forward instead of growing once past the week-window cap', () => {
-    window.S.extraWeeks = 12; // at MAX_GROWN_WEEKS
+    window.S.extraWeeks = 6; // at MAX_GROWN_WEEKS
     const wrap = document.getElementById('gridWrap')!;
     Object.defineProperty(wrap, 'scrollWidth', { value: 1000, configurable: true });
     Object.defineProperty(wrap, 'clientWidth', { value: 800, configurable: true });
     wrap.scrollLeft = 900;
     fireScroll();
-    expect(window.S.extraWeeks).toBe(12); // unchanged — shifted, not grown
+    expect(window.S.extraWeeks).toBe(6); // unchanged — shifted, not grown
     expect(window.S.startMonday.toISOString().slice(0, 10)).toBe('2021-01-11'); // +7 days
   });
 

@@ -128,10 +128,10 @@ function PlanCardBody({
   return (
     <div
       className={cn(
-        'rounded-xl border transition-[box-shadow,border-color,opacity] duration-150',
+        'rounded-xl border transition-[border-color,opacity] duration-150',
         isGroup ? 'border-primary/45 bg-primary/[0.05]' : 'border-border bg-background',
         depth === 0 && !isGroup && 'bg-muted/40',
-        preview && 'border-primary/60 bg-card shadow-lg',
+        preview && 'border-primary/60 bg-card',
       )}
     >
       <div className={cn('flex items-center gap-3 px-3', isGroup ? 'py-2.5' : 'py-0')}>

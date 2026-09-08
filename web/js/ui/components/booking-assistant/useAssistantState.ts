@@ -22,6 +22,10 @@ export interface BuchungsAssistentProps {
   ) => AvailabilityWindow[];
   onShowCalendar: (window: AvailabilityWindow) => void;
   initialRange?: DateRange;
+  /** Optional real-device selection, used when an existing booking is repeated. */
+  initialPlan?: PlanEntry[];
+  /** Optional fixed initial duration for a repeated booking. */
+  initialDuration?: number;
   /** frühester buchbarer Tag; Default: heute */
   today?: Date;
   onCancel?: () => void;
@@ -34,9 +38,9 @@ export function useAssistantState(props: BuchungsAssistentProps) {
     initialRange = { from: startOfDay(new Date()), to: addDays(startOfDay(new Date()), 6) },
     today = startOfDay(new Date()),
   } = props;
-  const planState = usePlan();
+  const planState = usePlan(props.initialPlan);
   const catalogState = useCatalog(catalog);
-  const criteria = useCriteria(initialRange);
+  const criteria = useCriteria(initialRange, props.initialDuration);
   const drag = usePlanDrag(planState.plan, planState.setPlan);
   const [view, setView] = React.useState<'select' | 'results'>('select');
   const [results, setResults] = React.useState<AvailabilityWindow[]>([]);

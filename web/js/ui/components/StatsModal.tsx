@@ -14,7 +14,7 @@
 //
 // =======================================================================================
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { BarChart3 } from 'lucide-react';
 import type { MachineCategory } from '../../../../shared/types.ts';
 import { todayAsIsoDateString } from '../../../../shared/dates.ts';
@@ -191,13 +191,21 @@ function StatsBody({
   onSelectPerson,
 }: StatsBodyProps) {
   const totalDays = agg.days.length;
+  const resourceRows = useMemo(
+    () => buildResourceRows(agg.machRows, { filterQuery, activeCategory, closedKeys }),
+    [agg.machRows, filterQuery, activeCategory, closedKeys],
+  );
+  const personRows = useMemo(
+    () => buildPersonRows(agg.persons, filterQuery),
+    [agg.persons, filterQuery],
+  );
   if (mode === 'm' && machineRow)
     return <MachineDrilldown row={machineRow} totalDays={totalDays} />;
   if (mode === 'p' && person) return <PersonDrilldown person={person} />;
   if (mode === 'm') {
     return (
       <ResourcesOverview
-        rows={buildResourceRows(agg.machRows, { filterQuery, activeCategory, closedKeys })}
+        rows={resourceRows}
         totalDays={totalDays}
         activeCategory={activeCategory}
         dashboard={dashboard}
@@ -208,12 +216,7 @@ function StatsBody({
       />
     );
   }
-  return (
-    <PersonsOverview
-      persons={buildPersonRows(agg.persons, filterQuery)}
-      onSelectPerson={onSelectPerson}
-    />
-  );
+  return <PersonsOverview persons={personRows} onSelectPerson={onSelectPerson} />;
 }
 
 /** The breadcrumb trail's own segments for the current mode/selection — "Statistik" plus
@@ -243,6 +246,11 @@ interface StatsModalProps {
 export function StatsModal({ presetPerson }: StatsModalProps) {
   const s = useStatsState(presetPerson);
   const titleId = useId();
+  const bookings = store.get('data')!.bookings;
+  const dashboard = useMemo(
+    () => computeCategoryDashboard(s.agg.machRows, bookings, s.agg.days, s.activeCategory),
+    [s.agg, bookings, s.activeCategory],
+  );
   return (
     <AppDialog size="xl" labelledBy={titleId}>
       <AppDialogHeader
@@ -274,12 +282,7 @@ export function StatsModal({ presetPerson }: StatsModalProps) {
           <StatsBody
             mode={s.mode}
             agg={s.agg}
-            dashboard={computeCategoryDashboard(
-              s.agg.machRows,
-              store.get('data')!.bookings,
-              s.agg.days,
-              s.activeCategory,
-            )}
+            dashboard={dashboard}
             machineRow={s.machineRow}
             person={s.person}
             filterQuery={s.filterQuery}

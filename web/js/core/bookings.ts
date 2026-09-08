@@ -65,13 +65,13 @@ export interface BookOptions {
   name: string;
   /** Optional cell note. */
   note: string;
-  /** Optional booking group title (e.g. project name). Non-empty forces group creation. */
+  /** Optional display title for the booking group (e.g. project name). */
   title: string;
   /** If true, successfully books all free days while skipping conflicting ones instead of aborting. */
   skipConflicts: boolean;
   /** Injected ISO timestamp stamped onto each created cell. */
   ts: string;
-  /** Factory producing unique group IDs when booking multiple cells or a titled group. */
+  /** Factory producing the unique ID shared by every cell in this booking operation. */
   newGid: () => string;
 }
 
@@ -257,22 +257,20 @@ function writeMachineCells(
  */
 function buildBookingCellFactory(
   options: Pick<BookOptions, 'name' | 'note' | 'ts'>,
-  groupId: string | null,
+  groupId: string,
   groupTitle: string,
 ): () => Booking {
   return () => {
-    const cell: Booking = { name: options.name, ts: options.ts };
+    const cell: Booking = { name: options.name, ts: options.ts, gid: groupId };
     if (options.note) cell.note = options.note;
-    if (groupId) {
-      cell.gid = groupId;
-      if (groupTitle) cell.gtitle = groupTitle;
-    }
+    if (groupTitle) cell.gtitle = groupTitle;
     return cell;
   };
 }
 
 /**
- * Applies bookings across multiple machines and dates in memory, generating group IDs when applicable.
+ * Applies bookings across multiple machines and dates in memory. Every operation is a booking
+ * group, including a single device on a single day.
  */
 function applyBooking(
   freshServerData: BookingData,
@@ -280,8 +278,7 @@ function applyBooking(
   dates: readonly string[],
   options: BookOptions,
 ): { count: number; undo: CellUndo[] } {
-  const isGroup = machineIds.length > 1 || dates.length > 1 || !!options.title;
-  const groupId = isGroup ? options.newGid() : null;
+  const groupId = options.newGid();
   const buildCell = buildBookingCellFactory(options, groupId, options.title);
 
   const undo: CellUndo[] = [];

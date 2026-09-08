@@ -19,6 +19,7 @@ import type { Db } from './db.js';
 import { bumpRev, setMeta } from './db.js';
 import { maintainBridges } from './bridge.js';
 import { bookingOut, blockReason, isDayAvailable } from './model.js';
+import { createBookingGroupId } from './booking-groups.js';
 import type {
   BookingRow,
   CellDelta,
@@ -206,6 +207,15 @@ interface BookingStatements {
   deleteBooking: Stmt;
 }
 
+/** Resolves group membership without allowing a partial update to detach an existing cell. */
+function bookingGroupId(
+  value: unknown,
+  existing: BookingRow | undefined,
+  fallback: string,
+): string {
+  return clip(value, 40)?.trim() || existing?.gid || fallback;
+}
+
 /**
  * Applies a single cell modification (insert/update or delete) with conflict checks.
  */
@@ -215,6 +225,7 @@ function writeCell(
   statements: BookingStatements,
   changes: MutateChange[],
   conflicts: MutateConflict[],
+  operationGroupId: string,
 ): void {
   const existingBooking = statements.findExistingBooking.get(cell.machineId, cell.day) as
     BookingRow | undefined;
@@ -242,7 +253,7 @@ function writeCell(
       name,
       note: clip(cell.val.note, 500),
       ts: clip(cell.val.ts, 40) || new Date().toISOString(),
-      gid: clip(cell.val.gid, 40),
+      gid: bookingGroupId(cell.val.gid, existingBooking, operationGroupId),
       gtitle: clip(cell.val.gtitle, 200),
     };
     statements.upsertBooking.run(
@@ -278,7 +289,13 @@ function addWeekendBridges(db: Db, changes: MutateChange[]): void {
     changes.push({
       machineId: bridge.machineId,
       day: bridge.day,
-      val: bookingOut({ name: bridge.name, ts: null, note: null, gid: null, gtitle: null }),
+      val: bookingOut({
+        name: bridge.name,
+        ts: null,
+        note: null,
+        gid: bridge.gid,
+        gtitle: bridge.gtitle ?? null,
+      }),
     });
   }
 }
@@ -304,6 +321,7 @@ function applyCells(
   if (validationError) return { error: validationError };
   const changes: MutateChange[] = [];
   const conflicts: MutateConflict[] = [];
+  const operationGroupId = createBookingGroupId();
   let applied = 0;
   db.exec('BEGIN');
   try {
@@ -315,7 +333,14 @@ function applyCells(
       deleteBooking: db.prepare('DELETE FROM bookings WHERE mid=? AND day=?'),
     };
     for (const cell of cells) {
-      writeCell(cell, machineById.get(cell.machineId)!, statements, changes, conflicts);
+      writeCell(
+        cell,
+        machineById.get(cell.machineId)!,
+        statements,
+        changes,
+        conflicts,
+        operationGroupId,
+      );
     }
     applied = changes.length;
     if (bridge) addWeekendBridges(db, changes);

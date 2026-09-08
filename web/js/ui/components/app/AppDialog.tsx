@@ -48,7 +48,7 @@ export function AppDialog({
           aria-modal="true"
           aria-labelledby={labelledBy}
           className={cn(
-            'relative flex max-h-[calc(100dvh_-_32px)] w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl',
+            'relative flex max-h-[calc(100dvh_-_32px)] w-full flex-col overflow-hidden rounded-2xl border border-border bg-card',
             DIALOG_WIDTH[size],
             className,
           )}
@@ -104,6 +104,7 @@ export function AppDialogBody({
 }) {
   return (
     <div
+      data-slot="dialog-body"
       className={cn(
         'flex min-h-0 flex-1 flex-col gap-4 border-t border-border px-6 py-5 sm:px-7',
         className,

@@ -47,7 +47,9 @@ describe('putBooking', () => {
     const broadcast = vi.fn();
     const res = putBooking(db, 'm1', '2026-01-05', { name: 'Anna' }, noHeaders, broadcast);
     expect(res.status).toBe(201);
-    expect((res.body as { data: { name: string } }).data.name).toBe('Anna');
+    const data = (res.body as { data: { name: string; gid: string } }).data;
+    expect(data.name).toBe('Anna');
+    expect(data.gid).toMatch(/^g_[a-f0-9]{32}$/);
     expect(res.headers?.ETag).toBeDefined();
     expect(broadcast).toHaveBeenCalledWith('update', expect.anything());
   });
@@ -208,6 +210,29 @@ describe('batchBook', () => {
     );
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ data: { applied: 2, conflicts: [] } });
+    const groups = db.prepare('SELECT DISTINCT gid FROM bookings').all() as { gid: string }[];
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.gid).toMatch(/^g_[a-f0-9]{32}$/);
+  });
+
+  it('adds all batch cells to an explicitly supplied booking group', () => {
+    const db = mem();
+    const res = batchBook(
+      db,
+      {
+        groupId: 'g_existing',
+        groupTitle: 'Projekt X',
+        cells: [
+          { machineId: 'm1', date: '2026-01-05', name: 'Anna' },
+          { machineId: 'm2', date: '2026-01-06', name: 'Anna' },
+        ],
+      },
+      vi.fn(),
+    );
+    expect(res.status).toBe(200);
+    expect(db.prepare('SELECT DISTINCT gid,gtitle FROM bookings').all()).toEqual([
+      { gid: 'g_existing', gtitle: 'Projekt X' },
+    ]);
   });
 
   // What: a batch where SOME cells conflict (but the request itself is well-formed) returns

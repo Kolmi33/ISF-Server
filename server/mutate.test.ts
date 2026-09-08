@@ -173,6 +173,42 @@ describe('applyMutate — cells', () => {
     expect(bk(db, 'm1', '2021-01-04')!.ts).toBe('2020-12-31T09:00:00Z');
   });
 
+  it('creates one shared group for all ungrouped cells in a booking operation', () => {
+    const db = mem();
+    addMachine(db, 'm1');
+    addMachine(db, 'm2');
+    applyMutate(
+      db,
+      {
+        cells: [
+          { machineId: 'm1', day: '2021-01-04', val: { name: 'Alice' } },
+          { machineId: 'm2', day: '2021-01-04', val: { name: 'Alice' } },
+        ],
+      },
+      vi.fn(),
+      false,
+    );
+    const first = bk(db, 'm1', '2021-01-04')!;
+    const second = bk(db, 'm2', '2021-01-04')!;
+    expect(first.gid).toMatch(/^g_[a-f0-9]{32}$/);
+    expect(second.gid).toBe(first.gid);
+  });
+
+  it('preserves an existing group when an update omits gid', () => {
+    const db = mem();
+    addMachine(db, 'm1');
+    db.prepare('INSERT INTO bookings(mid,day,name,gid) VALUES(?,?,?,?)').run(
+      'm1',
+      '2021-01-04',
+      'Alice',
+      'g_existing',
+    );
+    applyMutate(db, {
+      cells: [{ machineId: 'm1', day: '2021-01-04', val: { name: 'Alice', note: 'new' } }],
+    });
+    expect(bk(db, 'm1', '2021-01-04')!.gid).toBe('g_existing');
+  });
+
   // What: booking a cell already taken by someone else is refused — the "never overwrite a
   // foreign booking" rule — reported as a conflict naming who has it, with the cell left
   // exactly as it was.

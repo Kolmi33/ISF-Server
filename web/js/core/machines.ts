@@ -212,11 +212,21 @@ export function hasAnyMaintenanceSlot(machine: Machine): boolean {
  * If no mask is configured, the machine is assumed to operate 7 days a week.
  */
 export function isMachineAvailableOnWeekday(machine: Machine, isoDate: string): boolean {
+  return isMachineAvailableOnWeekdayIndex(
+    machine,
+    mondayFirstWeekdayIndex(parseIsoDateString(isoDate)),
+  );
+}
+
+/** Index-based counterpart for renderers that already know the Monday-first column index. */
+export function isMachineAvailableOnWeekdayIndex(
+  machine: Machine,
+  mondayFirstIndex: number,
+): boolean {
   if (!machine.days || machine.days.length !== 7) {
     return true;
   }
-  const weekdayIndex = mondayFirstWeekdayIndex(parseIsoDateString(isoDate));
-  return machine.days.charAt(weekdayIndex) !== '0';
+  return machine.days.charAt(mondayFirstIndex) !== '0';
 }
 
 /**

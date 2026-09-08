@@ -1,286 +1,412 @@
-// =======================================================================================
-// MY BOOKINGS MODAL COMPONENT (web/js/ui/components/MyBookingsModal.tsx)
-// =======================================================================================
-//
-// The "My bookings" modal: every future run booked under the current user's name, with a
-// per-run/per-day delete and a "show only my machines" filter shortcut.
-//
-// Key Principles:
-// - STRUCTURE FROZEN, DAYS LIVE: the run STRUCTURE is frozen at open (`computeMyRuns` runs
-//   once via `useState`'s lazy initializer), but each run's *live* days are re-filtered
-//   against the current bookings on every render — so a delete just makes a day disappear
-//   from its run, without recomputing the grouping from scratch.
-//
-// =======================================================================================
-
-import { useId, useState } from 'react';
-import { ClipboardList } from 'lucide-react';
-import type { Machine } from '../../../../shared/types.ts';
-import { todayAsIsoDateString } from '../../../../shared/dates.ts';
-import { groupsByCategory } from '../../core/machines.ts';
-import { deleteOwnCells } from '../../core/bookings.ts';
-import { orderedMachines } from '../grid.ts';
-import { getBooking } from '../../core/bookings.ts';
+import { useEffect, useId, useReducer, useState } from 'react';
+import { Inbox, Plus, Search } from 'lucide-react';
+import type { BookingData } from '../../../../shared/types.ts';
 import {
-  computeMyRuns,
-  filterMyRuns,
-  computeMyBookingsSummary,
-  type BookingRun,
-  type MyBookingsFilter,
-  type MyBookingsSummary,
-} from '../views/my-bookings.ts';
-import { closeReactModal, openReactModal } from '../modal.tsx';
-import { offerUndo } from '../toast.ts';
+  mondayOfDate,
+  parseIsoDateString,
+  todayAsIsoDateString,
+} from '../../../../shared/dates.ts';
+import { deleteOwnCells, type CellUndo } from '../../core/bookings.ts';
+import { getMachineCategory } from '../../core/machines.ts';
 import { Button } from '../../components/ui/app-button.tsx';
+import { Input } from '../../components/ui/input.tsx';
 import { ScrollArea } from '../../components/ui/scroll-area.tsx';
-import { AppDialog, AppDialogBody, AppDialogFooter, AppDialogHeader } from './app/AppDialog.tsx';
-import { EmptyState } from './app/EmptyState.tsx';
-import { StatTile } from './app/StatTile.tsx';
-import { MyBookingsFilters, MachineFilterButton } from './MyBookingsFilters.tsx';
-import {
-  RunHead,
-  DayList,
-  GroupCard,
-  groupRunsForDisplay,
-  runKey,
-  type LiveRun,
-} from './MyBookingsRun.tsx';
-import { askUserName } from './AskUserNameModal.tsx';
 import { store } from '../../store-instance.ts';
+import { clearSelection } from '../grid-interaction.ts';
+import { gotoDate, prependWeek, resetView } from '../grid-scroll.ts';
+import { closeReactModal, openReactModal } from '../modal.tsx';
+import { offerUndo, toast } from '../toast.ts';
+import { saveFilters, updateMachBtn } from './MachineFilterDropdown.tsx';
+import { askUserName } from './AskUserNameModal.tsx';
+import { AssistantModal } from './AssistantModal.tsx';
+import { AppDialog } from './app/AppDialog.tsx';
+import { MyBookingCampaignCard } from './MyBookingsRun.tsx';
+import { BookingStatusTabs, type BookingFilterId } from './BookingStatusTabs.tsx';
+import {
+  computeBookingCampaigns,
+  computeMyBookingCampaigns,
+  filterMyBookingCampaigns,
+  type MyBookingCampaign,
+} from '../views/my-bookings.ts';
 
-function liveRunsFrom(frozenRuns: readonly BookingRun[]): LiveRun[] {
-  const lowercaseUser = store.get('user').toLowerCase();
-  const bookings = store.get('data')!.bookings;
-  return frozenRuns
-    .map((run) => ({
-      machine: run.machine,
-      allDates: run.dates,
-      liveDates: run.dates.filter(
-        (date) => getBooking(bookings, run.machine.id, date)?.name.toLowerCase() === lowercaseUser,
-      ),
-      ts: run.ts,
-      groupId: run.groupId,
-      groupTitle: run.groupTitle,
-    }))
-    .filter((run) => run.liveDates.length > 0);
+function useStoreUpdates(): void {
+  const [, rerender] = useReducer((count: number) => count + 1, 0);
+  useEffect(() => store.subscribe(() => rerender()), []);
 }
 
-/** "in N Tagen" → "Heute"/"Morgen" for the two near cases, matching how a person would
- *  actually say it rather than the technically-correct-but-stilted "in 0/1 Tagen". */
-function nextInDaysText(days: number | null): string {
-  if (days === null) return '—';
-  if (days === 0) return 'Heute';
-  if (days === 1) return 'Morgen';
-  return `in ${days} Tagen`;
+function groupedCells(campaign: MyBookingCampaign, today: string) {
+  const byMachine = new Map<string, string[]>();
+  for (const cell of campaign.cells) {
+    if (cell.date < today) continue;
+    const dates = byMachine.get(cell.machineId) || [];
+    dates.push(cell.date);
+    byMachine.set(cell.machineId, dates);
+  }
+  return byMachine;
 }
 
-/** The dashboard-style KPI summary strip at the top of "My Bookings" (user request: "eine
- *  management summary auf der neuen Card -> z.B. Anzahl gebuchter Maschinen, Anzahl
- *  Buchungsgruppen, nächste Buchung in X Tagen") — always reflects every one of the user's
- *  bookings, not the filter row's currently-narrowed view (same "shortcut to the full set"
- *  reasoning as `myMachineIds` below). Hidden entirely with no bookings at all: an empty
- *  dashboard of zeroes would just be noise above the "no bookings" placeholder.
- */
-function MyBookingsSummaryBar({ summary }: { summary: MyBookingsSummary }) {
-  if (!summary.machineCount) return null;
+function deleteCampaignCells(
+  data: BookingData,
+  campaign: MyBookingCampaign,
+  user: string,
+  today: string,
+) {
+  let deletedCount = 0;
+  const undo: CellUndo[] = [];
+  for (const [machineId, dates] of groupedCells(campaign, today)) {
+    const result = deleteOwnCells(data, machineId, user, dates);
+    deletedCount += result.deletedCount;
+    undo.push(...result.undo);
+  }
+  return { deletedCount, undo, abort: deletedCount === 0 };
+}
+
+function gotoCampaign(campaign: MyBookingCampaign): void {
+  const firstDate = campaign.dates[0]!;
+  closeReactModal();
+  store.state.machSel = new Set(campaign.machines.map((machine) => machine.id));
+  for (const machine of campaign.machines) {
+    store.get('cats').add(getMachineCategory(machine));
+    store.get('collapsed').delete(machine.group);
+  }
+  saveFilters();
+  updateMachBtn();
+  store.state.startMonday = mondayOfDate(parseIsoDateString(firstDate));
+  resetView();
+  store.notify();
+  prependWeek();
+  clearSelection();
+  gotoDate(firstDate);
+}
+
+function openNewBooking(): void {
+  openReactModal(<AssistantModal />, { sticky: true });
+}
+
+function repeatBooking(campaign: MyBookingCampaign): void {
+  openReactModal(
+    <AssistantModal
+      preset={{
+        machineIds: campaign.machines.map((machine) => machine.id),
+        workdays: campaign.dates.length,
+      }}
+    />,
+    { sticky: true },
+  );
+}
+
+function EmptyBookings({ narrowed, query, onReset }: EmptyBookingsProps) {
   return (
-    <div className="mybk-summary flex shrink-0 flex-wrap gap-3 [@media(max-height:600px)]:hidden">
-      <StatTile
-        value={summary.machineCount}
-        label={`Maschine${summary.machineCount === 1 ? '' : 'n'}`}
-      />
-      <StatTile
-        value={summary.groupCount}
-        label={`Buchungsgruppe${summary.groupCount === 1 ? '' : 'n'}`}
-      />
-      <StatTile value={summary.totalDays} label="Gebuchte Tage" />
-      <StatTile value={nextInDaysText(summary.nextInDays)} label="Nächster Termin" />
+    <div className="mt-1 flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-background py-16 text-center">
+      <Inbox className="size-7 text-muted-foreground/60" />
+      <p className="max-w-[34ch] text-sm text-muted-foreground">
+        {query
+          ? `Keine Buchung und kein Gerät passt zu „${query}“.`
+          : narrowed
+            ? 'In diesem Status liegt gerade nichts.'
+            : 'Unter deinem Namen wurden noch keine Buchungen gefunden.'}
+      </p>
+      <Button variant="outline" size="sm" onClick={narrowed ? onReset : openNewBooking}>
+        {narrowed ? 'Filter zurücksetzen' : 'Neue Buchung'}
+      </Button>
     </div>
   );
 }
 
-interface RunListProps {
-  runs: readonly LiveRun[];
-  /** Whether any run exists at all before the filter row narrows the list — picks which of
-   *  the two empty-state messages applies (no bookings at all vs. filtered down to nothing). */
-  hasAnyRuns: boolean;
-  expandedKeys: ReadonlySet<string>;
-  onToggleExpand: (key: string) => void;
-  onDeleteDates: (machine: Machine, dates: readonly string[]) => void;
+interface EmptyBookingsProps {
+  narrowed: boolean;
+  query: string;
+  onReset: () => void;
 }
 
-function RunList({ runs, hasAnyRuns, expandedKeys, onToggleExpand, onDeleteDates }: RunListProps) {
-  if (!runs.length) {
-    return (
-      <EmptyState>
-        {hasAnyRuns
-          ? 'Keine Buchungen für diese Filter gefunden.'
-          : 'Keine zukünftigen Buchungen unter deinem Namen gefunden.'}
-      </EmptyState>
-    );
-  }
+function deviceMatches(campaign: MyBookingCampaign, query: string): boolean {
+  const needle = query.trim().toLowerCase();
   return (
-    <ScrollArea className="resultlist -mr-3 min-h-0 flex-[1_1_24rem] pr-3">
-      <div className="flex flex-col gap-2">
-        {groupRunsForDisplay(runs).map((item) => {
-          if (item.kind === 'group') {
-            return (
-              <GroupCard
-                key={item.groupId}
-                groupTitle={item.groupTitle}
-                runs={item.runs}
-                expandedKeys={expandedKeys}
-                onToggleExpand={onToggleExpand}
-                onDeleteDates={onDeleteDates}
-              />
-            );
-          }
-          const { run } = item;
-          const key = runKey(run);
-          const isExpanded = expandedKeys.has(key);
-          return (
-            <div key={key}>
-              <RunHead
-                run={run}
-                isExpanded={isExpanded}
-                onToggleExpand={() => onToggleExpand(key)}
-                onDeleteDates={(dates) => onDeleteDates(run.machine, dates)}
-              />
-              {run.liveDates.length > 1 && isExpanded && (
-                <DayList run={run} onDeleteOneDay={(date) => onDeleteDates(run.machine, [date])} />
-              )}
-            </div>
-          );
-        })}
-      </div>
+    !!needle &&
+    campaign.machines.some((machine) =>
+      [machine.name, machine.group, machine.id].some((text) => text.toLowerCase().includes(needle)),
+    )
+  );
+}
+
+function CampaignList({
+  campaigns,
+  query,
+  expanded,
+  pending,
+  showOwner,
+  onToggle,
+  onCancel,
+}: ListProps) {
+  const user = store.get('user').trim().toLowerCase();
+  return (
+    <ScrollArea className="-mr-3 min-h-0 flex-[1_1_24rem] pr-3">
+      <ul className="flex flex-col gap-2.5">
+        {campaigns.map((campaign) => (
+          <MyBookingCampaignCard
+            key={campaign.id}
+            campaign={campaign}
+            expanded={expanded.has(campaign.id) || deviceMatches(campaign, query)}
+            highlight={query.trim().toLowerCase()}
+            pending={pending === campaign.id}
+            readOnly={store.get('readOnly')}
+            owned={campaign.owner.trim().toLowerCase() === user}
+            showOwner={showOwner}
+            onToggle={() => onToggle(campaign.id)}
+            onGoto={() => gotoCampaign(campaign)}
+            onRepeat={() => repeatBooking(campaign)}
+            onCancel={() => onCancel(campaign)}
+          />
+        ))}
+      </ul>
     </ScrollArea>
   );
 }
 
-/** The filter row's state, its persisted sort key, and the fully-derived data it produces from
- *  the live runs (the filtered/sorted list, the "only my machines" shortcut's full unfiltered
- *  id set, and the Bereich select's group options) — split out of `MyBookingsModal` purely to
- *  stay under the function-length budget. */
-function useMyBookingsFilter(liveRuns: readonly LiveRun[]) {
-  const [filter, setFilter] = useState<MyBookingsFilter>(() => ({
-    mach: '',
-    group: '',
-    from: '',
-    to: '',
-    sort: localStorage.getItem('mb_mysort') || 'termin',
-  }));
-
-  function updateFilter(patch: Partial<MyBookingsFilter>): void {
-    if (patch.sort) localStorage.setItem('mb_mysort', patch.sort);
-    setFilter((prev) => ({ ...prev, ...patch }));
-  }
-
-  return {
-    filter,
-    updateFilter,
-    // The "only my machines" shortcut always reflects every one of the user's own machines,
-    // regardless of the filter row above — it's a shortcut to the full set, not the filtered view.
-    myMachineIds: [...new Set(liveRuns.map((run) => run.machine.id))],
-    groupOptions: groupsByCategory(store.get('data')!.machines),
-    runs: filterMyRuns(
-      liveRuns.map((run) => ({ ...run, dates: run.liveDates })),
-      filter,
-    ),
-  };
+interface ListProps {
+  campaigns: readonly MyBookingCampaign[];
+  query: string;
+  expanded: ReadonlySet<string>;
+  pending: string | null;
+  showOwner: boolean;
+  onToggle: (id: string) => void;
+  onCancel: (campaign: MyBookingCampaign) => void;
 }
 
-/** The two things the run list can do to a run — expand it, and delete some of its days.
- *  Split out of `MyBookingsModal` purely to stay under the function-length budget. */
-function useMyBookingsRunActions() {
-  const [expandedKeys, setExpandedKeys] = useState<ReadonlySet<string>>(new Set());
-  const [, forceRerender] = useState(0);
-
-  function toggleExpanded(key: string): void {
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+function useExpandedCampaigns() {
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (id: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
-  }
-
-  async function deleteDates(machine: Machine, dates: readonly string[]): Promise<void> {
-    const user = store.get('user');
-    const result = await window.mutate(
-      (fresh) => deleteOwnCells(fresh, machine.id, user, dates),
-      `Gelöscht: ${user} auf ${machine.name}, ${dates.length} Tag(e)`,
-    );
-    if (result && !result.abort) {
-      forceRerender((tick) => tick + 1); // re-filter the live dates against the now-changed data
-      offerUndo(`${result.deletedCount} Buchung(en) gelöscht.`, result.undo, 'Löschen');
-    }
-  }
-
-  return {
-    expandedKeys,
-    toggleExpanded,
-    onDeleteDates: (machine: Machine, dates: readonly string[]) => void deleteDates(machine, dates),
-  };
+  return { expanded, setExpanded, toggle };
 }
 
-export function MyBookingsModal() {
-  const [frozenRuns] = useState<readonly BookingRun[]>(() =>
-    computeMyRuns(
-      orderedMachines(store.get('data')!.machines, store.get('favs')),
-      store.get('data')!.bookings,
-      store.get('user'),
-      todayAsIsoDateString(),
-    ),
-  );
-  const { expandedKeys, toggleExpanded, onDeleteDates } = useMyBookingsRunActions();
-  const liveRuns = liveRunsFrom(frozenRuns);
-  const { filter, updateFilter, myMachineIds, groupOptions, runs } = useMyBookingsFilter(liveRuns);
-  const titleId = useId();
+function useCampaignCancellation(today: string) {
+  const [pending, setPending] = useState<string | null>(null);
+  async function cancel(campaign: MyBookingCampaign): Promise<void> {
+    if (pending) return;
+    const count = campaign.cells.filter((cell) => cell.date >= today).length;
+    const confirmed = await window.askConfirm({
+      title: 'Buchung stornieren?',
+      body: `<b>${campaign.title}</b><br>${count} gebuchte${count === 1 ? 'r Tag' : ' Tage'} ab heute werden gelöscht.`,
+      yes: 'Buchung stornieren',
+    });
+    if (!confirmed) return;
+    setPending(campaign.id);
+    try {
+      const result = await window.mutate(
+        (fresh) => deleteCampaignCells(fresh, campaign, store.get('user'), today),
+        `Storniert: ${store.get('user')} · ${campaign.title}`,
+      );
+      if (result && !result.abort)
+        offerUndo(`${result.deletedCount} Buchung(en) storniert.`, result.undo, 'Stornieren');
+      else if (result?.abort) toast('Die Buchung war bereits geändert oder storniert.');
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Serverfehler';
+      toast(`Stornieren fehlgeschlagen: ${reason}`, undefined, 6000);
+    } finally {
+      setPending(null);
+    }
+  }
+  return { pending, cancel };
+}
 
+type BookingsMode = 'mine' | 'all';
+
+function ModalHeader({
+  titleId,
+  mode,
+  onModeChange,
+}: {
+  titleId: string;
+  mode: BookingsMode;
+  onModeChange: (mode: BookingsMode) => void;
+}) {
   return (
-    <AppDialog size="lg" labelledBy={titleId} className="mybookings">
-      <AppDialogHeader
-        icon={<ClipboardList className="size-6" />}
-        title="Meine Buchungen"
+    <header className="flex shrink-0 flex-wrap items-center gap-4 px-6 py-5 sm:px-7">
+      <div className="min-w-0 flex-1">
+        <h1
+          id={titleId}
+          className="text-[22px] font-semibold leading-tight tracking-tight text-foreground"
+        >
+          {mode === 'mine' ? 'Meine Buchungen' : 'Alle Buchungen'}
+        </h1>
+        <div
+          className="mt-2 inline-flex rounded-lg bg-muted p-1"
+          role="group"
+          aria-label="Buchungsansicht"
+        >
+          {(['mine', 'all'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={mode === value}
+              onClick={() => onModeChange(value)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${mode === value ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              {value === 'mine' ? 'Meine' : 'Alle'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <Button size="lg" onClick={openNewBooking} disabled={store.get('readOnly')}>
+        <Plus className="size-4" /> Neue Buchung
+      </Button>
+    </header>
+  );
+}
+
+interface BookingsBodyProps {
+  campaigns: readonly MyBookingCampaign[];
+  visible: readonly MyBookingCampaign[];
+  filter: BookingFilterId;
+  query: string;
+  expanded: ReadonlySet<string>;
+  pending: string | null;
+  mode: BookingsMode;
+  owner: string;
+  owners: readonly string[];
+  setFilter: (value: BookingFilterId) => void;
+  setQuery: (value: string) => void;
+  setOwner: (value: string) => void;
+  reset: () => void;
+  toggle: (id: string) => void;
+  cancel: (campaign: MyBookingCampaign) => Promise<void>;
+}
+
+function BookingsBody(props: BookingsBodyProps) {
+  const { campaigns, visible, filter, query, expanded, pending, mode, owner, owners } = props;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-4 border-t border-border bg-muted/30 px-6 pb-6 pt-5 sm:px-7">
+      <div className="flex shrink-0 flex-wrap items-center gap-3">
+        <BookingStatusTabs value={filter} campaigns={campaigns} onChange={props.setFilter} />
+        {mode === 'all' && (
+          <select
+            className="h-10 rounded-lg border border-border bg-background px-3 text-sm"
+            aria-label="Buchungen nach Person filtern"
+            value={owner}
+            onChange={(event) => props.setOwner(event.target.value)}
+          >
+            <option value="">Alle Personen ({campaigns.length})</option>
+            {owners.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        )}
+        <div className="relative ml-auto w-full sm:w-[19rem]">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => props.setQuery(event.target.value)}
+            placeholder="Buchungsgruppe oder Gerät"
+            aria-label="Buchungsgruppe oder Gerät suchen"
+            className="h-10 pl-10"
+          />
+        </div>
+      </div>
+      {(filter !== 'alle' || query.trim()) && visible.length > 0 && (
+        <p className="shrink-0 px-1 text-[13px] text-muted-foreground">
+          {visible.length} von {campaigns.length} Buchungen
+        </p>
+      )}
+      {visible.length ? (
+        <CampaignList
+          campaigns={visible}
+          query={query}
+          expanded={expanded}
+          pending={pending}
+          showOwner={mode === 'all'}
+          onToggle={props.toggle}
+          onCancel={(item) => void props.cancel(item)}
+        />
+      ) : (
+        <EmptyBookings
+          narrowed={filter !== 'alle' || !!query.trim()}
+          query={query}
+          onReset={props.reset}
+        />
+      )}
+    </div>
+  );
+}
+
+export function MyBookingsModal({ initialMode = 'mine' }: { initialMode?: BookingsMode } = {}) {
+  useStoreUpdates();
+  const titleId = useId();
+  const [filter, setFilter] = useState<BookingFilterId>('alle');
+  const [query, setQuery] = useState('');
+  const [mode, setMode] = useState<BookingsMode>(initialMode);
+  const [owner, setOwner] = useState('');
+  const { expanded, toggle } = useExpandedCampaigns();
+  const today = todayAsIsoDateString();
+  const data = store.get('data')!;
+  const allCampaigns = computeBookingCampaigns(data.machines, data.bookings, today);
+  const campaigns =
+    mode === 'mine'
+      ? computeMyBookingCampaigns(data.machines, data.bookings, store.get('user'), today)
+      : allCampaigns;
+  const owners = [...new Set(allCampaigns.map((campaign) => campaign.owner))].sort((a, b) =>
+    a.localeCompare(b, 'de'),
+  );
+  const visible = filterMyBookingCampaigns(campaigns, filter, query).filter(
+    (campaign) => !owner || campaign.owner === owner,
+  );
+  const { pending, cancel } = useCampaignCancellation(today);
+  const reset = () => {
+    setFilter('alle');
+    setQuery('');
+    setOwner('');
+  };
+  const bodyProps = {
+    campaigns,
+    visible,
+    filter,
+    query,
+    expanded,
+    pending,
+    mode,
+    owner,
+    owners,
+    setFilter,
+    setQuery,
+    setOwner,
+    reset,
+    toggle,
+    cancel,
+  };
+  return (
+    <AppDialog size="xl" labelledBy={titleId} className="mybookings max-w-[1120px] font-sans">
+      <ModalHeader
         titleId={titleId}
-        subtitle="Alle Reservierungen unter deinem Namen ab heute"
+        mode={mode}
+        onModeChange={(next) => {
+          setMode(next);
+          setOwner('');
+        }}
       />
-      <AppDialogBody className="max-h-[72vh]">
-        <MyBookingsSummaryBar
-          summary={computeMyBookingsSummary(
-            liveRuns,
-            store.get('data')!.bookings,
-            todayAsIsoDateString(),
-          )}
-        />
-        <MyBookingsFilters filter={filter} groupOptions={groupOptions} onChange={updateFilter} />
-        <MachineFilterButton machineIds={myMachineIds} />
-        <RunList
-          runs={runs}
-          hasAnyRuns={liveRuns.length > 0}
-          expandedKeys={expandedKeys}
-          onToggleExpand={toggleExpanded}
-          onDeleteDates={onDeleteDates}
-        />
-      </AppDialogBody>
-      <AppDialogFooter>
-        <span className="text-[11px] tabular-nums text-muted-foreground">
-          {runs.length} Eintr{runs.length === 1 ? 'ag' : 'äge'}
-        </span>
-        <Button size="lg" className="ml-auto" onClick={closeReactModal}>
-          Schließen
-        </Button>
-      </AppDialogFooter>
+      <BookingsBody {...bodyProps} />
     </AppDialog>
   );
 }
 
-/** Opens "My bookings" — prompts for a name first if none is set yet (a user with no name
- *  browsing straight to this would otherwise see an empty list that isn't really "theirs"). */
 export function openMyBookings(): void {
   if (!store.get('user')) {
     askUserName(false);
     return;
   }
   openReactModal(<MyBookingsModal />);
+}
+
+export function openBookings(initialMode: BookingsMode = 'mine'): void {
+  if (!store.get('user')) {
+    askUserName(false);
+    return;
+  }
+  openReactModal(<MyBookingsModal initialMode={initialMode} />);
 }

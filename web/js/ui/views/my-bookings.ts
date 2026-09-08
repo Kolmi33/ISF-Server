@@ -8,10 +8,9 @@
 //
 // =======================================================================================
 
-import type { Machine, Bookings } from '../../../../shared/types.ts';
+import type { Booking, Machine, Bookings, MaintSlot } from '../../../../shared/types.ts';
 import { parseIsoDateString, isWeekend, nextWeekday } from '../../../../shared/dates.ts';
 import { matchesGroupFilter } from '../../core/machines.ts';
-import { findBookingGroup } from '../../core/bookings.ts';
 
 /** A run of consecutive workdays the user has booked on one machine (a bookable "series"). */
 export interface BookingRun {
@@ -55,11 +54,14 @@ export function computeMyRuns(
       )
       .sort();
     // The earliest creation timestamp among a run's days (empty string if none have one).
-    const earliestTimestamp = (runDates: string[]): string =>
-      runDates
-        .map((date) => machineBookings[date]!.ts || '')
-        .filter(Boolean)
-        .sort()[0] || '';
+    const earliestTimestamp = (runDates: string[]): string => {
+      let earliest = '';
+      for (const date of runDates) {
+        const timestamp = machineBookings[date]!.ts || '';
+        if (timestamp && (!earliest || timestamp < earliest)) earliest = timestamp;
+      }
+      return earliest;
+    };
     const pushRun = (runDates: string[]): void => {
       if (!runDates.length) return;
       const firstBooking = machineBookings[runDates[0]!]!;
@@ -180,11 +182,25 @@ export function computeMyBookingsSummary(
   today: string,
 ): MyBookingsSummary {
   const machineIds = new Set(runs.map((run) => run.machine.id));
-  const groupIds = new Set(
-    runs
-      .filter((run) => run.groupId && findBookingGroup(bookings, run.groupId).machineIds.size > 1)
-      .map((run) => run.groupId!),
-  );
+  const relevantGroupIds = new Set(runs.flatMap((run) => (run.groupId ? [run.groupId] : [])));
+  const machinesByGroup = new Map<string, Set<string>>();
+  if (relevantGroupIds.size) {
+    for (const [machineId, machineBookings] of Object.entries(bookings)) {
+      for (const booking of Object.values(machineBookings)) {
+        const groupId = booking.gid;
+        if (!groupId || !relevantGroupIds.has(groupId)) continue;
+        let groupMachines = machinesByGroup.get(groupId);
+        if (!groupMachines) {
+          groupMachines = new Set<string>();
+          machinesByGroup.set(groupId, groupMachines);
+        }
+        groupMachines.add(machineId);
+      }
+    }
+  }
+  const groupCount = [...relevantGroupIds].filter(
+    (groupId) => (machinesByGroup.get(groupId)?.size ?? 0) > 1,
+  ).length;
   const allLiveDates = runs.flatMap((run) => run.liveDates);
   const soonest = allLiveDates.length ? allLiveDates.reduce((a, b) => (a < b ? a : b)) : null;
   const msPerDay = 24 * 60 * 60 * 1000;
@@ -195,8 +211,241 @@ export function computeMyBookingsSummary(
     : null;
   return {
     machineCount: machineIds.size,
-    groupCount: groupIds.size,
+    groupCount,
     totalDays: allLiveDates.length,
     nextInDays,
   };
+}
+
+export type MyBookingStatus = 'aktiv' | 'geplant' | 'abgeschlossen';
+
+export interface MyBookingCell {
+  machineId: string;
+  date: string;
+}
+
+/** A real booking group, or one consecutive ungrouped machine run, presented as a campaign. */
+export interface MyBookingCampaign {
+  id: string;
+  title: string;
+  status: MyBookingStatus;
+  dates: string[];
+  cells: MyBookingCell[];
+  machines: Machine[];
+  createdAt: string;
+  note?: string;
+  groupId?: string;
+  /** Booking owner as stored by the backend. */
+  owner: string;
+  maintenance?: { machine: Machine; date: string; type: string };
+}
+
+interface CampaignSeed {
+  id: string;
+  title: string;
+  cells: MyBookingCell[];
+  machines: Machine[];
+  bookings: Booking[];
+  groupId?: string;
+  owner: string;
+}
+
+function campaignStatus(dates: readonly string[], today: string): MyBookingStatus {
+  const first = dates[0]!;
+  const last = dates[dates.length - 1]!;
+  if (last < today) return 'abgeschlossen';
+  if (first > today) return 'geplant';
+  return 'aktiv';
+}
+
+function slotCovers(slot: MaintSlot, date: string): boolean {
+  return (!slot.from || slot.from <= date) && (!slot.until || slot.until >= date);
+}
+
+function maintenanceConflict(seed: CampaignSeed) {
+  for (const machine of seed.machines) {
+    const machineDates = seed.cells
+      .filter((cell) => cell.machineId === machine.id)
+      .map((cell) => cell.date);
+    for (const slot of machine.maint || []) {
+      const date = machineDates.find((candidate) => slotCovers(slot, candidate));
+      if (date) return { machine, date, type: slot.type || 'Wartung' };
+    }
+  }
+  return undefined;
+}
+
+function finishCampaign(seed: CampaignSeed, today: string): MyBookingCampaign {
+  const dates = [...new Set(seed.cells.map((cell) => cell.date))].sort();
+  const timestamps = seed.bookings
+    .map((booking) => booking.ts || '')
+    .filter(Boolean)
+    .sort();
+  const notes = seed.bookings.map((booking) => booking.note?.trim()).filter(Boolean) as string[];
+  const result: MyBookingCampaign = {
+    id: seed.id,
+    title: seed.title,
+    status: campaignStatus(dates, today),
+    dates,
+    cells: seed.cells.sort((a, b) => a.date.localeCompare(b.date)),
+    machines: seed.machines,
+    createdAt: timestamps[0] || '',
+    owner: seed.owner,
+  };
+  if (notes[0]) result.note = notes[0];
+  if (seed.groupId) result.groupId = seed.groupId;
+  const maintenance = maintenanceConflict(seed);
+  if (maintenance) result.maintenance = maintenance;
+  return result;
+}
+
+function splitUngroupedRuns(entries: { date: string; booking: Booking }[]) {
+  const runs: { date: string; booking: Booking }[][] = [];
+  for (const entry of entries) {
+    const current = runs[runs.length - 1];
+    if (current && nextWeekday(current[current.length - 1]!.date) === entry.date)
+      current.push(entry);
+    else runs.push([entry]);
+  }
+  return runs;
+}
+
+function ungroupedSeeds(machine: Machine, bookings: Bookings, user?: string): CampaignSeed[] {
+  const entries = Object.entries(bookings[machine.id] || {})
+    .filter(
+      ([date, booking]) =>
+        !booking.gid &&
+        !isWeekend(parseIsoDateString(date)) &&
+        (!user || booking.name.toLowerCase() === user),
+    )
+    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+    .map(([date, booking]) => ({ date, booking }));
+  const byOwner = new Map<string, typeof entries>();
+  for (const entry of entries) {
+    const key = entry.booking.name.toLowerCase();
+    byOwner.set(key, [...(byOwner.get(key) || []), entry]);
+  }
+  return [...byOwner.values()].flatMap((ownerEntries) =>
+    splitUngroupedRuns(ownerEntries).map((run) => ({
+      id: `${machine.id}:${run[0]!.date}:${run[0]!.booking.name.toLowerCase()}`,
+      title: run[0]!.booking.note?.trim() || machine.name,
+      owner: run[0]!.booking.name,
+      cells: run.map(({ date }) => ({ machineId: machine.id, date })),
+      machines: [machine],
+      bookings: run.map(({ booking }) => booking),
+    })),
+  );
+}
+
+function groupedBooking(date: string, booking: Booking, user?: string): boolean {
+  return (
+    !!booking.gid &&
+    !isWeekend(parseIsoDateString(date)) &&
+    (!user || booking.name.toLowerCase() === user)
+  );
+}
+
+function addGroupedBooking(
+  seeds: Map<string, CampaignSeed>,
+  machine: Machine,
+  date: string,
+  booking: Booking,
+): void {
+  const groupId = booking.gid!;
+  const seedKey = `${groupId}\u0000${booking.name.toLowerCase()}`;
+  let seed = seeds.get(seedKey);
+  if (!seed) {
+    seed = {
+      id: groupId,
+      groupId,
+      title: booking.gtitle?.trim() || booking.note?.trim() || 'Buchungsgruppe',
+      owner: booking.name,
+      cells: [],
+      machines: [],
+      bookings: [],
+    };
+    seeds.set(seedKey, seed);
+  }
+  seed.cells.push({ machineId: machine.id, date });
+  seed.bookings.push(booking);
+  if (booking.gtitle?.trim()) seed.title = booking.gtitle.trim();
+  if (!seed.machines.some((candidate) => candidate.id === machine.id)) seed.machines.push(machine);
+}
+
+function groupedSeeds(
+  machines: readonly Machine[],
+  bookings: Bookings,
+  user?: string,
+): CampaignSeed[] {
+  const machineById = new Map(machines.map((machine) => [machine.id, machine]));
+  const seeds = new Map<string, CampaignSeed>();
+  for (const [machineId, machineBookings] of Object.entries(bookings)) {
+    const machine = machineById.get(machineId);
+    if (!machine) continue;
+    for (const [date, booking] of Object.entries(machineBookings)) {
+      if (groupedBooking(date, booking, user)) addGroupedBooking(seeds, machine, date, booking);
+    }
+  }
+  return [...seeds.values()];
+}
+
+function compareCampaigns(a: MyBookingCampaign, b: MyBookingCampaign): number {
+  const rank: Record<MyBookingStatus, number> = { aktiv: 0, geplant: 1, abgeschlossen: 2 };
+  const statusDifference = rank[a.status] - rank[b.status];
+  if (statusDifference) return statusDifference;
+  return a.status === 'abgeschlossen'
+    ? b.dates[b.dates.length - 1]!.localeCompare(a.dates[a.dates.length - 1]!)
+    : a.dates[0]!.localeCompare(b.dates[0]!);
+}
+
+/** Derives the supplied campaign-style overview entirely from authoritative booking state. */
+export function computeMyBookingCampaigns(
+  machines: readonly Machine[],
+  bookings: Bookings,
+  user: string,
+  today: string,
+): MyBookingCampaign[] {
+  const lowercaseUser = user.trim().toLowerCase();
+  if (!lowercaseUser) return [];
+  const seeds = [
+    ...groupedSeeds(machines, bookings, lowercaseUser),
+    ...machines.flatMap((machine) => ungroupedSeeds(machine, bookings, lowercaseUser)),
+  ];
+  return seeds.map((seed) => finishCampaign(seed, today)).sort(compareCampaigns);
+}
+
+/** Derives the same campaign cards for every owner. Groups remain the authoritative backend
+ * booking groups; the ungrouped branch is only a compatibility fallback for legacy data. */
+export function computeBookingCampaigns(
+  machines: readonly Machine[],
+  bookings: Bookings,
+  today: string,
+): MyBookingCampaign[] {
+  const seeds = [
+    ...groupedSeeds(machines, bookings),
+    ...machines.flatMap((machine) => ungroupedSeeds(machine, bookings)),
+  ];
+  return seeds.map((seed) => finishCampaign(seed, today)).sort(compareCampaigns);
+}
+
+export function filterMyBookingCampaigns(
+  campaigns: readonly MyBookingCampaign[],
+  status: 'alle' | MyBookingStatus,
+  query: string,
+): MyBookingCampaign[] {
+  const needle = query.trim().toLowerCase();
+  return campaigns.filter((campaign) => {
+    if (status !== 'alle' && campaign.status !== status) return false;
+    if (!needle) return true;
+    const haystack = [
+      campaign.title,
+      campaign.id,
+      campaign.note || '',
+      campaign.owner,
+      ...campaign.machines.flatMap((machine) => [machine.name, machine.group, machine.id]),
+    ]
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(needle);
+  });
 }

@@ -76,6 +76,9 @@
   --color-brand: var(--brand-accent);
   --color-brand-soft: var(--brand-accent-soft);
   --color-brand-foreground: var(--brand-accent-foreground);
+  --color-sensor: var(--sensor);
+  --color-sensor-soft: var(--sensor-soft);
+  --color-sensor-foreground: var(--sensor-foreground);
   --font-sans: 'Inter Variable', sans-serif;
   --font-heading: 'Manrope Variable', sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);

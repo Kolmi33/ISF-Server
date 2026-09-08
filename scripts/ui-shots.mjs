@@ -20,21 +20,38 @@ import { mkdirSync } from 'node:fs';
  *  confirm dialog is reached through the machine form's delete (which asks first) and is left
  *  unanswered. */
 const SCENES = {
+  main: async () => undefined,
   assistant: (p) => p.click('#btnAssist'),
-  settings: (p) => p.click('#btnSettings'),
-  help: (p) => p.click('#btnHelp'),
-  mybookings: (p) => p.click('#btnMine'),
-  allbookings: (p) => p.click('#btnAll'),
-  stats: (p) => p.click('#btnStats'),
-  admin: (p) => p.click('#btnAdmin'),
+  async settings(p) {
+    await p.click('#btnMore');
+    await p.click('#btnSettings');
+  },
+  async help(p) {
+    await p.click('#btnMore');
+    await p.click('#btnHelp');
+  },
+  mybookings: (p) => p.click('#btnBookings'),
+  async allbookings(p) {
+    await p.click('#btnBookings');
+    await p.getByRole('button', { name: 'Alle', exact: true }).click();
+  },
+  async stats(p) {
+    await p.click('#btnMore');
+    await p.click('#btnStats');
+  },
+  async admin(p) {
+    await p.click('#btnMore');
+    await p.click('#btnAdmin');
+  },
   machinefilter: (p) => p.click('#machBtn'),
-  groupfilter: (p) => p.click('#groupBtn'),
   async machineform(p) {
+    await p.click('#btnMore');
     await p.click('#btnAdmin');
     await p.waitForTimeout(600);
     await p.click('#modal button:has-text("Bearbeiten")');
   },
   async statsdrilldown(p) {
+    await p.click('#btnMore');
     await p.click('#btnStats');
     await p.waitForTimeout(900);
     await p.click('#stOut .statrow.click');
@@ -47,6 +64,7 @@ const SCENES = {
   },
   /** The machine form's "Löschen" only opens the confirm dialog; nothing is answered here. */
   async confirm(p) {
+    await p.click('#btnMore');
     await p.click('#btnAdmin');
     await p.waitForTimeout(600);
     await p.click('#modal button:has-text("Bearbeiten")');
@@ -67,7 +85,7 @@ const SCENES = {
     await p.evaluate(() => localStorage.setItem('mb_user', 'Niemand Ohne Buchung'));
     await p.reload({ waitUntil: 'networkidle' });
     await p.waitForSelector('#grid tbody tr');
-    await p.click('#btnMine');
+    await p.click('#btnBookings');
   },
 };
 

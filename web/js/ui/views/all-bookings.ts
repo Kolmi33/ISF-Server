@@ -37,11 +37,14 @@ export function computeAllRuns(
       .filter((date) => date >= today && !isWeekend(parseIsoDateString(date)))
       .sort();
     // The earliest creation timestamp among a run's days (empty string if none have one).
-    const earliestTimestamp = (runDates: string[]): string =>
-      runDates
-        .map((date) => machineBookings[date]!.ts || '') // date is always a key of machineBookings here
-        .filter(Boolean)
-        .sort()[0] || '';
+    const earliestTimestamp = (runDates: string[]): string => {
+      let earliest = '';
+      for (const date of runDates) {
+        const timestamp = machineBookings[date]!.ts || '';
+        if (timestamp && (!earliest || timestamp < earliest)) earliest = timestamp;
+      }
+      return earliest;
+    };
     let currentRunDates: string[] = [];
     let currentRunName: string | null = null;
     for (const date of bookedWorkdays) {

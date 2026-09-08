@@ -21,24 +21,16 @@ import * as api from './net/api.ts';
 import * as gridInteraction from './ui/grid-interaction.ts';
 import * as gridScroll from './ui/grid-scroll.ts';
 import * as favoriteJump from './ui/favorite-jump.ts';
-import * as helpModal from './ui/components/HelpModal.tsx';
 import * as askUserNameModal from './ui/components/AskUserNameModal.tsx';
-import * as settingsModal from './ui/components/SettingsModal.tsx';
 import * as gridComponent from './ui/components/Grid.tsx';
 import * as userChip from './ui/user-chip.ts';
 import * as collisionBanner from './ui/collision-banner.ts';
 import * as liveConnection from './ui/live-connection.ts';
-import * as bookingDetailModal from './ui/components/BookingDetailModal.tsx';
-import * as myBookingsModal from './ui/components/MyBookingsModal.tsx';
-import * as statsModal from './ui/components/StatsModal.tsx';
-import * as allBookingsModal from './ui/components/AllBookingsModal.tsx';
-import * as adminModal from './ui/components/AdminModal.tsx';
-import * as assistantModal from './ui/components/AssistantModal.tsx';
 import * as contextMenu from './ui/components/ContextMenu.tsx';
 import * as confirm from './ui/confirm.ts';
 import type { AskConfirmOptions } from './ui/confirm.ts';
-import * as activeUsersModal from './ui/components/ActiveUsersModal.tsx';
 import * as machineFilterDropdown from './ui/components/MachineFilterDropdown.tsx';
+import * as activeGridFilters from './ui/components/ActiveGridFilters.tsx';
 import * as groupFilterDropdown from './ui/components/GroupFilterDropdown.tsx';
 import * as theme from './ui/theme.ts';
 import * as debugPanel from './ui/debug-panel.ts';
@@ -52,6 +44,29 @@ import { store } from './store-instance.ts';
 import type { BookingData } from '../../shared/types.ts';
 import type { MutateResult } from './ui/mutate.ts';
 import { triggerGridRender } from './ui/grid-render-bridge.ts';
+import { applyGridlineWidth, applyGridlineWidthHeader } from './ui/grid-style-settings.ts';
+
+const loadAssistant = () => import('./ui/components/AssistantModal.tsx');
+const loadMyBookings = () => import('./ui/components/MyBookingsModal.tsx');
+const loadStats = () => import('./ui/components/StatsModal.tsx');
+const loadAdmin = () => import('./ui/components/AdminModal.tsx');
+const loadSettings = () => import('./ui/components/SettingsModal.tsx');
+const loadHelp = () => import('./ui/components/HelpModal.tsx');
+const loadActiveUsers = () => import('./ui/components/ActiveUsersModal.tsx');
+const loadBookingDetail = () => import('./ui/components/BookingDetailModal.tsx');
+
+function runLazyFeature<T>(loader: () => Promise<T>, run: (module: T) => void): void {
+  void loader()
+    .then(run)
+    .catch((error: unknown) => debugPanel.handleError('ui/lazy-feature', error));
+}
+
+function warmFeatureOnIntent(elementId: string, loader: () => Promise<unknown>): void {
+  const element = document.getElementById(elementId)!;
+  const warm = () => void loader().catch(() => undefined);
+  element.addEventListener('pointerenter', warm, { once: true });
+  element.addEventListener('focus', warm, { once: true });
+}
 
 declare global {
   interface Window {
@@ -93,6 +108,9 @@ createRoot(document.getElementById('ctxMenu')!).render(createElement(contextMenu
 createRoot(document.getElementById('machDrop')!).render(
   createElement(machineFilterDropdown.MachineFilterDropdown),
 );
+createRoot(document.getElementById('activeFilters')!).render(
+  createElement(activeGridFilters.ActiveGridFilters),
+);
 createRoot(document.getElementById('groupDrop')!).render(
   createElement(groupFilterDropdown.GroupFilterDropdown),
 );
@@ -104,7 +122,8 @@ gridInteraction.initGridInteraction({
   toggleFav: favoriteJump.toggleFav,
   gotoPrevFree: favoriteJump.gotoPrevFree,
   gotoNextFree: favoriteJump.gotoNextFree,
-  openCellAction: bookingDetailModal.openCellAction,
+  openCellAction: (machineId, date) =>
+    runLazyFeature(loadBookingDetail, (module) => module.openCellAction(machineId, date)),
   prependWeek: gridScroll.prependWeek,
 });
 
@@ -123,12 +142,12 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
 if (localStorage.getItem('mb_compact') === 'on') document.body.classList.add('compact');
 {
   const storedGridlineWidth = parseFloat(localStorage.getItem('mb_gridline_width') || '');
-  if (Number.isFinite(storedGridlineWidth)) settingsModal.applyGridlineWidth(storedGridlineWidth);
+  if (Number.isFinite(storedGridlineWidth)) applyGridlineWidth(storedGridlineWidth);
   const storedGridlineWidthHeader = parseFloat(
     localStorage.getItem('mb_gridline_width_header') || '',
   );
   if (Number.isFinite(storedGridlineWidthHeader)) {
-    settingsModal.applyGridlineWidthHeader(storedGridlineWidthHeader);
+    applyGridlineWidthHeader(storedGridlineWidthHeader);
   }
 }
 
@@ -136,18 +155,55 @@ if (localStorage.getItem('mb_compact') === 'on') document.body.classList.add('co
  * Wires toolbar buttons to open their respective modal dialogs.
  */
 function wireToolbarButtons(): void {
-  document.getElementById('btnAssist')!.onclick = assistantModal.openAssistant;
-  document.getElementById('btnMine')!.onclick = myBookingsModal.openMyBookings;
-  document.getElementById('btnAll')!.onclick = allBookingsModal.openAllBookings;
-  document.getElementById('btnSettings')!.onclick = settingsModal.openSettings;
-  document.getElementById('btnHelp')!.onclick = helpModal.openHelp;
-  document.getElementById('btnStats')!.onclick = () => statsModal.openStats();
-  document.getElementById('btnAdmin')!.onclick = adminModal.openAdmin;
+  document.getElementById('btnAssist')!.onclick = () =>
+    runLazyFeature(loadAssistant, (module) => module.openAssistant());
+  document.getElementById('btnBookings')!.onclick = () =>
+    runLazyFeature(loadMyBookings, (module) => module.openBookings());
+  document.getElementById('btnSettings')!.onclick = () =>
+    runLazyFeature(loadSettings, (module) => module.openSettings());
+  document.getElementById('btnHelp')!.onclick = () =>
+    runLazyFeature(loadHelp, (module) => module.openHelp());
+  document.getElementById('btnStats')!.onclick = () =>
+    runLazyFeature(loadStats, (module) => module.openStats());
+  document.getElementById('btnAdmin')!.onclick = () =>
+    runLazyFeature(loadAdmin, (module) => module.openAdmin());
   document.getElementById('btnRefresh')!.onclick = () => void mutateModule.refreshNow(false);
   // The toolbar's own quick-clear "×" next to the machine/group filter buttons (user request):
   // remove an active filter instantly from the main view, no need to open the dropdown first.
   document.getElementById('machClearBtn')!.onclick = machineFilterDropdown.clearMachineFilter;
   document.getElementById('groupClearBtn')!.onclick = groupFilterDropdown.clearGroupFilter;
+
+  warmFeatureOnIntent('btnAssist', loadAssistant);
+  warmFeatureOnIntent('btnBookings', loadMyBookings);
+  warmFeatureOnIntent('btnSettings', loadSettings);
+  warmFeatureOnIntent('btnHelp', loadHelp);
+  warmFeatureOnIntent('btnStats', loadStats);
+  warmFeatureOnIntent('btnAdmin', loadAdmin);
+}
+
+function wireDisplayControls(): void {
+  const toggle = document.getElementById('onlyMineToggle') as HTMLInputElement;
+  toggle.checked = store.get('personOnly');
+  toggle.onchange = () => {
+    store.set({ personOnly: toggle.checked });
+    localStorage.setItem('mb_persononly', toggle.checked ? 'on' : 'off');
+  };
+
+  const trigger = document.getElementById('btnMore')!;
+  const menu = document.getElementById('toolbarMore')!;
+  const close = () => {
+    menu.classList.remove('open');
+    trigger.setAttribute('aria-expanded', 'false');
+  };
+  trigger.onclick = (event) => {
+    event.stopPropagation();
+    const open = menu.classList.toggle('open');
+    trigger.setAttribute('aria-expanded', String(open));
+  };
+  menu.addEventListener('click', close);
+  document.addEventListener('pointerdown', (event) => {
+    if (!menu.contains(event.target as Node) && !trigger.contains(event.target as Node)) close();
+  });
 }
 
 /**
@@ -164,13 +220,14 @@ function wireUserChip(): void {
   };
   chip.ondblclick = () => {
     if (userClickTimer) clearTimeout(userClickTimer);
-    void activeUsersModal.openActiveUsers();
+    runLazyFeature(loadActiveUsers, (module) => void module.openActiveUsers());
   };
   chip.title = 'Klick: Namen ändern · Doppelklick: aktive Nutzer';
 }
 
 wireToolbarButtons();
 wireUserChip();
+wireDisplayControls();
 
 /**
  * Transitions from the loading screen to the live interactive application once data is loaded.
@@ -179,6 +236,7 @@ function startUI(): void {
   document.getElementById('startScreen')!.style.display = 'none';
   document.getElementById('toolbar')!.style.display = '';
   document.getElementById('gridWrap')!.style.display = 'block';
+  document.getElementById('gridLegend')!.style.display = 'flex';
   groupFilterDropdown.fillGroupSel();
   machineFilterDropdown.updateMachBtn();
   if (!store.get('user') && !store.get('readOnly')) askUserNameModal.askUserName(true);

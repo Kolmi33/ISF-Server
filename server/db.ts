@@ -16,6 +16,13 @@
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import {
+  addDays,
+  formatDateAsIsoString,
+  isWeekend,
+  nextWeekday,
+  parseIsoDateString,
+} from '../shared/dates.js';
 
 // Load Node's built-in sqlite module via dynamic require
 const nodeRequire = createRequire(import.meta.url);
@@ -46,7 +53,7 @@ CREATE TABLE IF NOT EXISTS bookings(
   name TEXT NOT NULL,
   note TEXT,
   ts TEXT,
-  gid TEXT,                       -- Booking group ID (NULL = single cell reservation)
+  gid TEXT,                       -- Booking group ID (required by domain logic; nullable for migration compatibility)
   gtitle TEXT,
   PRIMARY KEY(mid, day)
 );
@@ -79,8 +86,28 @@ export function openDb(path: string): Db {
   if (!existingColumnNames.includes('maint')) {
     db.exec('ALTER TABLE machines ADD COLUMN maint TEXT');
   }
+  const existingBookingColumnNames = (
+    db.prepare('PRAGMA table_info(bookings)').all() as { name: string }[]
+  ).map((column) => column.name);
+  if (!existingBookingColumnNames.includes('gid'))
+    db.exec('ALTER TABLE bookings ADD COLUMN gid TEXT');
+  if (!existingBookingColumnNames.includes('gtitle')) {
+    db.exec('ALTER TABLE bookings ADD COLUMN gtitle TEXT');
+  }
   if (getMeta(db, 'revision') === null) setMeta(db, 'revision', '0');
   if (getMeta(db, 'schema_version') === null) setMeta(db, 'schema_version', '1');
+  if (Number(getMeta(db, 'schema_version')) < 2) {
+    db.exec('BEGIN');
+    try {
+      const migrated = ensureBookingGroupIds(db);
+      setMeta(db, 'schema_version', '2');
+      if (migrated > 0) bumpRev(db);
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+  }
   return db;
 }
 
@@ -152,6 +179,71 @@ export interface ImportResult {
 const orNull = (value: string | undefined): string | null => value || null;
 
 /**
+ * Migrates legacy cells to stable groups while preserving the old UI's only reliable relationship:
+ * consecutive workdays for the same owner on the same machine formed one visible booking run.
+ * Cross-machine relationships are intentionally not guessed because legacy data did not persist them.
+ */
+export function ensureBookingGroupIds(db: Db): number {
+  const rows = db
+    .prepare(
+      "SELECT rowid,mid,day,name FROM bookings WHERE gid IS NULL OR trim(gid) = '' ORDER BY mid,day",
+    )
+    .all() as unknown as { rowid: number; mid: string; day: string; name: string }[];
+  if (!rows.length) return 0;
+
+  const used = new Set(
+    (
+      db
+        .prepare("SELECT DISTINCT gid FROM bookings WHERE gid IS NOT NULL AND trim(gid) <> ''")
+        .all() as {
+        gid: string;
+      }[]
+    ).map((row) => row.gid),
+  );
+  const update = db.prepare('UPDATE bookings SET gid=? WHERE rowid=?');
+  const bookingByCell = new Map(
+    (
+      db
+        .prepare("SELECT mid,day,name,gid FROM bookings WHERE gid IS NOT NULL AND trim(gid) <> ''")
+        .all() as { mid: string; day: string; name: string; gid: string }[]
+    ).map((row) => [`${row.mid}\u0000${row.day}`, row] as const),
+  );
+  const lastRunByOwner = new Map<string, { day: string; gid: string }>();
+  const newGroupId = (rowId: number): string => {
+    const base = `g_legacy_${rowId.toString(36)}`;
+    let groupId = base;
+    let suffix = 1;
+    while (used.has(groupId)) groupId = `${base}_${suffix++}`;
+    used.add(groupId);
+    return groupId;
+  };
+
+  for (const row of rows.filter(({ day }) => !isWeekend(parseIsoDateString(day)))) {
+    const ownerKey = `${row.mid}\u0000${row.name.toLowerCase()}`;
+    const previous = lastRunByOwner.get(ownerKey);
+    const groupId =
+      previous && nextWeekday(previous.day) === row.day ? previous.gid : newGroupId(row.rowid);
+    update.run(groupId, row.rowid);
+    lastRunByOwner.set(ownerKey, { day: row.day, gid: groupId });
+    bookingByCell.set(`${row.mid}\u0000${row.day}`, { ...row, gid: groupId });
+  }
+
+  for (const row of rows.filter(({ day }) => isWeekend(parseIsoDateString(day)))) {
+    const date = parseIsoDateString(row.day);
+    const daysSinceFriday = date.getUTCDay() === 6 ? 1 : 2;
+    const friday = formatDateAsIsoString(addDays(date, -daysSinceFriday));
+    const precedingBooking = bookingByCell.get(`${row.mid}\u0000${friday}`);
+    const groupId =
+      precedingBooking?.name.toLowerCase() === row.name.toLowerCase()
+        ? precedingBooking.gid
+        : newGroupId(row.rowid);
+    update.run(groupId, row.rowid);
+    bookingByCell.set(`${row.mid}\u0000${row.day}`, { ...row, gid: groupId });
+  }
+  return rows.length;
+}
+
+/**
  * Inserts machines from seed data, preserving original array index as the sort order.
  */
 function seedMachines(db: Db, machines: SeedMachine[]): void {
@@ -218,6 +310,7 @@ export function importFromJson(db: Db, jsonPath: string, { force = false } = {})
     if (force) db.exec('DELETE FROM bookings; DELETE FROM machines;');
     seedMachines(db, seedJson.machines || []);
     const bookingCount = seedBookings(db, seedJson.bookings || {});
+    ensureBookingGroupIds(db);
     setMeta(db, 'groups', JSON.stringify(seedJson.groups || []));
     db.exec('COMMIT');
     return { skipped: false, machines: (seedJson.machines || []).length, bookings: bookingCount };

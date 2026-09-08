@@ -149,6 +149,18 @@ describe('paintSelection / clearSelection', () => {
     expect(cell('m2', '2021-01-05').getAttribute('tabindex')).toBe('0');
   });
 
+  it('does not query or rewrite unchanged selected cells on a repeated paint', () => {
+    selection.anchor = { machineId: 'm1', date: '2021-01-04' };
+    selection.focus = { machineId: 'm2', date: '2021-01-05' };
+    paintSelection();
+    const querySelector = vi.spyOn(document, 'querySelector');
+
+    paintSelection();
+
+    expect(querySelector).not.toHaveBeenCalled();
+    querySelector.mockRestore();
+  });
+
   // What: repainting a smaller selection actually clears the marks on cells no longer
   // included — a stale .sel class from the previous, larger selection doesn't linger.
   // How: paints a 2×2 rectangle, then shrinks the selection to a single cell and repaints,

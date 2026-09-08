@@ -93,7 +93,7 @@ export function CategoryTabs({ activeCategory, onCategoryChange }: CategoryTabsP
           className={cn(
             'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
             activeCategory === id
-              ? 'bg-card text-foreground shadow-sm'
+              ? 'bg-card text-foreground'
               : 'text-muted-foreground hover:text-foreground',
           )}
           onClick={() => onCategoryChange(id)}

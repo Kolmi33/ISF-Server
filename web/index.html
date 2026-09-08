@@ -118,11 +118,11 @@
 
 <header style="display:none" id="toolbar">
   <div class="l1">
-    <h1><svg class="ic" aria-hidden="true"><use href="#i-factory"/></svg> Maschinenbelegung</h1>
+    <h1><svg class="ic" aria-hidden="true"><use href="#i-cal"/></svg> Maschinenbelegung</h1>
     <div class="navgroup">
-      <button class="btn" id="btnPrev" title="Vorherige Woche">◀</button>
-      <button class="btn primary" id="btnToday">Heute</button>
-      <button class="btn" id="btnNext" title="Nächste Woche">▶</button>
+      <button class="btn" id="btnPrev" title="Vorherige Woche" aria-label="Vorherige Woche">‹</button>
+      <button class="btn" id="btnToday">Heute</button>
+      <button class="btn" id="btnNext" title="Nächste Woche" aria-label="Nächste Woche">›</button>
       <select id="jumpMonth" title="Zu Monat springen">
         <option value="0">Januar</option><option value="1">Februar</option><option value="2">März</option>
         <option value="3">April</option><option value="4">Mai</option><option value="5">Juni</option>
@@ -142,9 +142,8 @@
     <button class="btn" id="userChip" title="Namen ändern" aria-label="Namen ändern">–</button>
   </div>
   <div class="l2">
-    <button class="btn" id="btnAssist"><svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg> Assistent</button>
-    <button class="btn" id="btnMine"><svg class="ic" aria-hidden="true"><use href="#i-clip"/></svg> Meine Buchungen</button>
-    <button class="btn" id="btnAll"><svg class="ic" aria-hidden="true"><use href="#i-table"/></svg> Alle Buchungen</button>
+    <button class="btn primary" id="btnAssist"><svg class="ic" aria-hidden="true"><use href="#i-compass"/></svg> Assistent</button>
+    <button class="btn" id="btnBookings"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg> Buchungen</button>
     <div id="machWrap">
       <button class="btn" id="machBtn"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg> Filtern ▾</button>
       <button class="btn small clearx" id="machClearBtn" title="Filter entfernen" aria-label="Filter entfernen" style="display:none">×</button>
@@ -152,12 +151,19 @@
     </div>
   </div>
   <div class="r2">
-    <button class="btn" id="btnStats"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg> Statistik</button>
-    <button class="btn" id="btnAdmin"><svg class="ic" aria-hidden="true"><use href="#i-wrench"/></svg> Verwalten</button>
-    <button class="btn" id="btnSettings"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg> Einstellungen</button>
-    <button class="btn" id="btnHelp" title="Legende und Tastaturkürzel" aria-label="Hilfe"><svg class="ic" aria-hidden="true"><use href="#i-help"/></svg></button>
+    <label class="mine-toggle"><input type="checkbox" id="onlyMineToggle" role="switch"> <span>Nur meine</span></label>
+    <div class="more-wrap">
+      <button class="btn small more-button" id="btnMore" aria-label="Weitere Aktionen" aria-haspopup="menu" aria-expanded="false">•••</button>
+      <div class="toolbar-more" id="toolbarMore" role="menu">
+        <button id="btnStats" role="menuitem"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg> Statistik</button>
+        <button id="btnAdmin" role="menuitem"><svg class="ic" aria-hidden="true"><use href="#i-wrench"/></svg> Verwalten</button>
+        <button id="btnSettings" role="menuitem"><svg class="ic" aria-hidden="true"><use href="#i-gear"/></svg> Einstellungen</button>
+        <button id="btnHelp" role="menuitem"><svg class="ic" aria-hidden="true"><use href="#i-help"/></svg> Hilfe</button>
+      </div>
+    </div>
   </div>
 </header>
+<div id="activeFilters"></div>
 
 <div id="collBanner" role="alert">
   <svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>
@@ -168,6 +174,12 @@
 <div id="gridWrap" style="display:none" tabindex="0" role="application"
   aria-label="Belegungsraster: Pfeiltasten navigieren, Shift erweitert die Auswahl, Enter öffnet, Escape hebt auf">
   <table id="grid" role="grid" aria-label="Belegungsraster"><thead></thead><tbody></tbody></table></div>
+<footer id="gridLegend" style="display:none" aria-label="Legende">
+  <span><i class="legend-swatch own"></i> eigene Buchung</span>
+  <span><i class="legend-swatch foreign"></i> fremde Buchung</span>
+  <span><i class="legend-swatch blocked"></i> Sperre</span>
+  <span class="legend-hint">über freie Tage ziehen, um zu buchen</span>
+</footer>
 
 <div id="overlay"><div id="modal" role="dialog" aria-modal="true" tabindex="-1"></div></div>
 <button id="modalReopen" title="Assistent wieder aufklappen" aria-label="Assistent wieder aufklappen"><svg class="ic" aria-hidden="true"><use href="#i-next"/></svg><span>Assistent</span></button>
@@ -176,8 +188,8 @@
      Knöpfe kommen damit aus demselben System wie jeder migrierte Dialog. Die Klassen der
      beiden Knöpfe setzt confirm.ts, weil sie je nach Frage destruktiv oder neutral sind. -->
 <div id="confirm2" class="ui-scope" role="dialog" aria-modal="true">
-  <div class="cbox w-full max-w-[480px] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-    <div class="flex flex-col gap-2 px-6 py-5">
+  <div class="cbox flex max-h-[calc(100dvh_-_32px)] w-full max-w-[480px] flex-col overflow-hidden rounded-2xl border border-border bg-card">
+    <div data-slot="confirm-body" class="flex min-h-0 flex-col gap-2 overflow-y-auto px-6 py-5 [scrollbar-gutter:stable]">
       <h3 id="cfTitle" class="text-[22px] font-semibold leading-tight tracking-tight text-foreground"></h3>
       <div id="cfBody" class="text-sm leading-relaxed text-muted-foreground [&_b]:font-semibold [&_b]:text-foreground"></div>
     </div>

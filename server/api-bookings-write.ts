@@ -76,6 +76,8 @@ function applySingleCellWrite(
 interface BookingWriteBody {
   name?: unknown;
   note?: unknown;
+  groupId?: unknown;
+  groupTitle?: unknown;
   user?: unknown;
   log?: unknown;
 }
@@ -87,7 +89,9 @@ function asBody(body: unknown): BookingWriteBody {
 }
 
 /**
- * `PUT /api/v1/machines/:id/bookings/:date`. Body: `{name, note?}` (+ optional `user`/`log`). An
+ * `PUT /api/v1/machines/:id/bookings/:date`. Body: `{name, note?, groupId?, groupTitle?}`
+ * (+ optional `user`/`log`). Omitting `groupId` preserves an existing cell's group or creates a
+ * new one for a free cell. An
  * `If-Match` header, when given, must equal the cell's current {@link bookingEtag} or the write
  * is refused with 412 before it's even attempted; omitted entirely, the PUT is unconditional —
  * `applyMutate`'s own cell-delta path still enforces its own rules (blocked days, "never
@@ -118,7 +122,12 @@ export function putBooking(
   const cell: CellDelta = {
     machineId,
     day: date,
-    val: { name: input.name, note: pickString(input.note) },
+    val: {
+      name: input.name,
+      note: pickString(input.note),
+      gid: pickString(input.groupId),
+      gtitle: pickString(input.groupTitle),
+    },
   };
   const writeFailure = applySingleCellWrite(
     db,
@@ -174,6 +183,8 @@ interface BatchCellInput {
 }
 interface BatchBody {
   cells?: unknown;
+  groupId?: unknown;
+  groupTitle?: unknown;
   user?: unknown;
   log?: unknown;
 }
@@ -186,7 +197,11 @@ function asBatchBody(body: unknown): BatchBody {
 /** Validate + shape a batch's raw cell list into `CellDelta`s for a booking write, or the
  *  `ApiResponse` to fail with — pulled out of {@link batchBook} purely to keep its own
  *  complexity down; the validation itself is unchanged. */
-function parseBookCells(rawCells: unknown[]): CellDelta[] | ApiResponse {
+function parseBookCells(
+  rawCells: unknown[],
+  groupId?: string,
+  groupTitle?: string,
+): CellDelta[] | ApiResponse {
   const cells: CellDelta[] = [];
   for (const raw of rawCells as BatchCellInput[]) {
     if (
@@ -200,14 +215,16 @@ function parseBookCells(rawCells: unknown[]): CellDelta[] | ApiResponse {
     cells.push({
       machineId: raw.machineId,
       day: raw.date,
-      val: { name: raw.name, note: pickString(raw.note) },
+      val: { name: raw.name, note: pickString(raw.note), gid: groupId, gtitle: groupTitle },
     });
   }
   return cells;
 }
 
 /**
- * `POST /api/v1/bookings/batch`. Body: `{cells: [{machineId, date, name, note?}], user?, log?}`
+ * `POST /api/v1/bookings/batch`. Body:
+ * `{cells: [{machineId, date, name, note?}], groupId?, groupTitle?, user?, log?}`.
+ * All cells share one generated group when `groupId` is omitted, or join the supplied group.
  * — one `applyMutate` call for the whole batch (one transaction, one revision bump, one
  * broadcast — not N of each). 200 when every cell applied cleanly, 207 Multi-Status when some
  * conflicted, 400 when the request itself is malformed (an unknown machine id counts as
@@ -219,7 +236,11 @@ export function batchBook(db: Db, body: unknown, broadcast: Broadcast): ApiRespo
   if (!Array.isArray(input.cells) || input.cells.length === 0) {
     return apiError(400, 'VALIDATION', 'cells (nicht-leeres Array) ist erforderlich.');
   }
-  const cells = parseBookCells(input.cells);
+  const cells = parseBookCells(
+    input.cells,
+    pickString(input.groupId),
+    pickString(input.groupTitle),
+  );
   if (!Array.isArray(cells)) return cells; // the ApiResponse validation error
 
   const result = applyMutate(
