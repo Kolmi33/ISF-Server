@@ -79,12 +79,17 @@ async function openActions(title: string) {
   return screen.findByRole('menuitem', { name: 'Bearbeiten' });
 }
 
+function selectAllStatus() {
+  fireEvent.click(screen.getByRole('tab', { name: /^Alle / }));
+}
+
 describe('MyBookingsModal', () => {
   it('shows the supplied campaign shell and a useful empty state', () => {
     render(<MyBookingsModal />);
     expect(screen.getByRole('heading', { name: 'Meine Buchungen' })).toBeInTheDocument();
-    expect(screen.getByText(/noch keine Buchungen/)).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Alle 0' })).toHaveAttribute('aria-selected', 'true');
+    expect(document.getElementById('modal')).toHaveAttribute('data-dialog-size', 'xl');
+    expect(screen.getByText('In diesem Status liegt gerade nichts.')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Aktiv 0' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('shows only the current user and renders active, planned, and completed statuses', () => {
@@ -97,25 +102,37 @@ describe('MyBookingsModal', () => {
       },
     };
     render(<MyBookingsModal />);
+    selectAllStatus();
     expect(screen.getByRole('tab', { name: 'Alle 3' })).toBeInTheDocument();
     expect(screen.getByText('Alt')).toBeInTheDocument();
     expect(screen.getByText('Heute')).toBeInTheDocument();
     expect(screen.getByText('Später')).toBeInTheDocument();
     expect(screen.queryByText('Fremd')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Termin' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Status' })).toBeInTheDocument();
     expect(screen.getAllByText(/Aktiv|Geplant|Abgeschlossen/)).toHaveLength(6);
   });
 
   it('combines a real booking group into one expandable campaign card', () => {
     window.S.data!.machines = [
       machine(),
-      machine({ id: 's1', name: 'Kistler', cat: 'messtechnik' }),
+      machine({ id: 's1', name: 'Kistler', group: 'Kraft & Dynamik', cat: 'messtechnik' }),
     ];
     window.S.data!.bookings = {
-      m1: { [day(1)]: { name: 'anna', gid: 'g1', gtitle: 'Projekt X' } },
+      m1: {
+        [day(1)]: {
+          name: 'anna',
+          gid: 'g1',
+          gtitle: 'Projekt X',
+          ts: '2026-09-09T10:30:00Z',
+        },
+      },
       s1: { [day(1)]: { name: 'anna', gid: 'g1', gtitle: 'Projekt X' } },
     };
     render(<MyBookingsModal />);
+    selectAllStatus();
     expect(screen.getAllByText('Projekt X')).toHaveLength(1);
+    expect(screen.getByTitle(/Gebucht am 09\.09\.2026/)).toBeInTheDocument();
     const headingButton = screen
       .getAllByRole('button', { name: /Projekt X/ })
       .find((button) => button.hasAttribute('aria-controls'))!;
@@ -123,6 +140,10 @@ describe('MyBookingsModal', () => {
     expect(screen.getByText('Maschinen')).toBeInTheDocument();
     expect(screen.getByText('Messtechnik')).toBeInTheDocument();
     expect(screen.getByText('Kistler')).toBeInTheDocument();
+    expect(screen.getByText('Halle 1')).toBeInTheDocument();
+    expect(screen.getByText('Kraft & Dynamik')).toBeInTheDocument();
+    expect(screen.getByText(/Gebucht von/)).toHaveTextContent('anna');
+    expect(screen.getByText(/am 09\.09\.2026/)).toBeInTheDocument();
     expect(screen.getAllByText('Projekt X')).toHaveLength(1);
     expect(screen.queryByText('g1')).not.toBeInTheDocument();
     expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'Buchungsgruppe oder Gerät');
@@ -131,6 +152,7 @@ describe('MyBookingsModal', () => {
   it('opens the action menu without dismissing the bookings dialog', async () => {
     window.S.data!.bookings = { m1: { [day(1)]: { name: 'anna' } } };
     act(() => openMyBookings());
+    selectAllStatus();
     await openActions('Fräse');
     expect(document.getElementById('overlay')).toHaveClass('open');
     expect(screen.getByRole('menu')).toBeVisible();
@@ -157,7 +179,7 @@ describe('MyBookingsModal', () => {
     expect(screen.getByText(/1 von 2 Buchungen/)).toBeInTheDocument();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'nichts' } });
     fireEvent.click(screen.getByRole('button', { name: 'Filter zurücksetzen' }));
-    expect(screen.getByText('Zukunft')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Aktiv 0' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('keeps maintenance information on the campaign without a top-level warning', () => {
@@ -170,26 +192,87 @@ describe('MyBookingsModal', () => {
     expect(screen.queryByText(/Wartung/)).not.toBeInTheDocument();
   });
 
-  it('consolidates all bookings, supports owner filtering, and restricts foreign actions', async () => {
+  it('consolidates all bookings, shows booking metadata, and restricts foreign actions', async () => {
     window.S.data!.bookings = {
       m1: {
         [day(1)]: { name: 'anna', gid: 'own', gtitle: 'Eigenes Projekt' },
-        [day(5)]: { name: 'bob', gid: 'foreign', gtitle: 'Fremdes Projekt' },
+        [day(5)]: {
+          name: 'bob',
+          gid: 'foreign',
+          gtitle: 'Fremdes Projekt',
+          ts: '2026-09-09T10:30:00Z',
+        },
       },
     };
-    render(<MyBookingsModal />);
-    fireEvent.click(screen.getByRole('button', { name: /^Alle$/ }));
+    render(<MyBookingsModal initialMode="all" />);
+    selectAllStatus();
     expect(screen.getByRole('heading', { name: 'Alle Buchungen' })).toBeInTheDocument();
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Aktiv0',
+      'Geplant2',
+      'Abgeschlossen0',
+      'Alle2',
+    ]);
     expect(screen.getByText('Fremdes Projekt')).toBeInTheDocument();
     expect(screen.getAllByText('bob').length).toBeGreaterThan(0);
-    fireEvent.change(screen.getByRole('combobox', { name: /Person/ }), {
-      target: { value: 'bob' },
-    });
-    expect(screen.queryByText('Eigenes Projekt')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /Person/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Termin' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTitle(/Gebucht von bob/)).toBeInTheDocument();
+    expect(screen.getByTitle(/Gebucht am/)).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Fremdes' } });
     fireEvent.click(screen.getByRole('button', { name: 'Aktionen für Fremdes Projekt' }));
     expect(await screen.findByRole('menuitem', { name: 'Ansehen' })).toBeVisible();
     expect(screen.getByRole('menuitem', { name: 'Als Vorlage verwenden' })).toBeVisible();
     expect(screen.queryByRole('menuitem', { name: 'Stornieren' })).not.toBeInTheDocument();
+  });
+
+  it('keeps all-booking card metadata in stable desktop columns', () => {
+    window.S.data!.bookings = {
+      m1: {
+        [TODAY]: {
+          name: 'anna',
+          gid: 'project',
+          gtitle: 'Projekt X',
+          ts: '2026-09-09T10:30:00Z',
+        },
+      },
+    };
+    render(<MyBookingsModal initialMode="all" />);
+
+    expect(screen.queryByText('Listenentwurf')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Gebucht von anna')).toBeInTheDocument();
+    expect(screen.getByTitle(/Gebucht am/)).toBeInTheDocument();
+    const cardHeader = screen.getByTitle('Gebucht von anna').closest('li')!.firstElementChild!;
+    expect(cardHeader).toHaveClass('sm:grid-cols-[minmax(18rem,1fr)_11rem_16rem_8rem_2.5rem]');
+    const ownerSort = screen.getByRole('button', { name: 'Gebucht von' });
+    fireEvent.click(ownerSort);
+    expect(ownerSort).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(ownerSort);
+    expect(ownerSort.getAttribute('title')).toContain('aufsteigend');
+    fireEvent.click(screen.getAllByRole('button', { name: /Projekt X/ })[0]!);
+    expect(screen.getAllByText(/Gebucht von/)).toHaveLength(2);
+  });
+
+  it('paginates the all-bookings list and returns to the first page after filtering', () => {
+    const machines = Array.from({ length: 30 }, (_, index) =>
+      machine({ id: `m${index}`, name: `Maschine ${index + 1}` }),
+    );
+    window.S.data!.machines = machines;
+    window.S.data!.bookings = Object.fromEntries(
+      machines.map((item) => [item.id, { [day(1)]: { name: `person-${item.id}` } }]),
+    );
+    render(<MyBookingsModal initialMode="all" />);
+    selectAllStatus();
+
+    expect(screen.getAllByRole('button', { name: /Aktionen für/ })).toHaveLength(25);
+    expect(screen.getByText('Seite 1 von 2')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Weiter' }));
+    expect(screen.getAllByRole('button', { name: /Aktionen für/ })).toHaveLength(5);
+    expect(screen.getByText('Seite 2 von 2')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Maschine 1' } });
+    expect(screen.queryByText(/Seite 2 von 2/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Aktionen für/ }).length).toBeGreaterThan(0);
   });
 
   it('opens the existing Assistant from the new-booking action', () => {
@@ -201,6 +284,7 @@ describe('MyBookingsModal', () => {
   it('opens the supplied bar editor for an owned campaign', async () => {
     window.S.data!.bookings = { m1: { [day(2)]: { name: 'anna' } } };
     act(() => openMyBookings());
+    selectAllStatus();
     await openActions('Fräse');
     fireEvent.click(screen.getByRole('menuitem', { name: 'Bearbeiten' }));
     expect(screen.getByRole('heading', { name: 'Belegung bearbeiten' })).toBeInTheDocument();
@@ -220,6 +304,7 @@ describe('MyBookingsModal', () => {
       s1: { [day(2)]: { name: 'anna', gid: 'g1', gtitle: 'Projekt X' } },
     };
     act(() => openMyBookings());
+    selectAllStatus();
     await openActions('Projekt X');
     fireEvent.click(screen.getByRole('menuitem', { name: 'Buchung wiederholen' }));
     expect(screen.getByTestId('assistant')).toHaveAttribute('data-machines', 'm1,s1');
@@ -249,6 +334,7 @@ describe('MyBookingsModal', () => {
     window.S.data!.bookings = { m1: { [day(1)]: { name: 'anna' } } };
     window.askConfirm = vi.fn().mockResolvedValue(false);
     render(<MyBookingsModal />);
+    selectAllStatus();
     await openActions('Fräse');
     await act(async () => fireEvent.click(screen.getByRole('menuitem', { name: 'Stornieren' })));
     expect(window.mutate).not.toHaveBeenCalled();
@@ -264,6 +350,7 @@ describe('MyBookingsModal', () => {
         }),
     ) as typeof window.mutate;
     render(<MyBookingsModal />);
+    selectAllStatus();
     await openActions('Fräse');
     await act(async () => {
       fireEvent.click(screen.getByRole('menuitem', { name: 'Stornieren' }));
@@ -280,6 +367,7 @@ describe('MyBookingsModal', () => {
     store.set({ readOnly: true });
     window.S.data!.bookings = { m1: { [day(1)]: { name: 'anna' } } };
     render(<MyBookingsModal />);
+    selectAllStatus();
     expect(screen.getByRole('button', { name: 'Neue Buchung' })).toBeDisabled();
     await openActions('Fräse');
     expect(screen.getByRole('menuitem', { name: 'Buchung wiederholen' })).toBeDisabled();
@@ -288,6 +376,7 @@ describe('MyBookingsModal', () => {
 
   it('refreshes from the shared store after an SSE-style update', () => {
     render(<MyBookingsModal />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Geplant 0' }));
     act(() => {
       window.S.data!.bookings = { m1: { [day(1)]: { name: 'anna', note: 'Live' } } };
       store.notify();

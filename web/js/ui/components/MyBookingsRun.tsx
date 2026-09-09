@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- card subcomponents intentionally stay co-located with their action menu. */
 // =======================================================================================
 // MY BOOKING CAMPAIGN CARD (web/js/ui/components/MyBookingsRun.tsx)
 // =======================================================================================
@@ -6,15 +7,17 @@ import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
   CalendarDays,
+  Clock3,
   ChevronDown,
   Eye,
   MoreHorizontal,
   Pencil,
   Repeat2,
   Trash2,
+  UserRound,
 } from 'lucide-react';
 import { cn } from 'cn';
-import { formatDateShort, parseIsoDateString } from '../../../../shared/dates.ts';
+import { formatDateShort, formatTimestamp, parseIsoDateString } from '../../../../shared/dates.ts';
 import { getMachineCategory } from '../../core/machines.ts';
 import type { MyBookingCampaign, MyBookingStatus } from '../views/my-bookings.ts';
 import { Button } from '../../components/ui/app-button.tsx';
@@ -86,30 +89,43 @@ interface DeviceSectionProps {
 }
 
 function DeviceSection({ campaign, category, title, highlight }: DeviceSectionProps) {
-  const machineIds = campaign.machines
-    .filter((machine) => getMachineCategory(machine) === category)
-    .map((machine) => machine.id);
-  if (!machineIds.length) return null;
+  const machinesByGroup = new Map<string, string[]>();
+  for (const machine of campaign.machines) {
+    if (getMachineCategory(machine) !== category) continue;
+    const machineIds = machinesByGroup.get(machine.group) || [];
+    machineIds.push(machine.id);
+    machinesByGroup.set(machine.group, machineIds);
+  }
+  if (!machinesByGroup.size) return null;
   return (
     <section>
       <h4 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {title}
       </h4>
-      <div className="mt-2.5 flex flex-wrap gap-1.5">
-        {machineIds.map((machineId) => (
-          <DeviceChip
-            key={machineId}
-            campaign={campaign}
-            machineId={machineId}
-            highlight={highlight}
-          />
+      <div className="mt-2.5 space-y-2.5">
+        {[...machinesByGroup].map(([group, machineIds]) => (
+          <div key={group} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <h5 className="text-[11px] font-medium text-muted-foreground">
+              {group || 'Ohne Bereich'}
+            </h5>
+            <div className="flex flex-wrap gap-1.5">
+              {machineIds.map((machineId) => (
+                <DeviceChip
+                  key={machineId}
+                  campaign={campaign}
+                  machineId={machineId}
+                  highlight={highlight}
+                />
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </section>
   );
 }
 
-interface CampaignActionsProps {
+export interface BookingCampaignActionsProps {
   campaign: MyBookingCampaign;
   pending: boolean;
   readOnly: boolean;
@@ -119,11 +135,16 @@ interface CampaignActionsProps {
   onCancel: () => void;
 }
 
-function isEditingDisabled({ campaign, pending, readOnly, owned }: CampaignActionsProps): boolean {
+function isEditingDisabled({
+  campaign,
+  pending,
+  readOnly,
+  owned,
+}: BookingCampaignActionsProps): boolean {
   return owned && (readOnly || campaign.status === 'abgeschlossen' || pending);
 }
 
-function CampaignActionMenu(props: CampaignActionsProps & { close: () => void }) {
+function CampaignActionMenu(props: BookingCampaignActionsProps & { close: () => void }) {
   const { campaign, pending, readOnly, owned, onGoto, onRepeat, onCancel, close } = props;
   const cancellationDisabled = readOnly || !owned || campaign.status === 'abgeschlossen' || pending;
   const editingDisabled = isEditingDisabled(props);
@@ -214,7 +235,7 @@ function useCampaignActionMenu() {
   return { open, setOpen, position, triggerRef, menuRef, toggleMenu };
 }
 
-function CampaignActions({
+export function BookingCampaignActions({
   campaign,
   pending,
   readOnly,
@@ -222,7 +243,7 @@ function CampaignActions({
   onGoto,
   onRepeat,
   onCancel,
-}: CampaignActionsProps) {
+}: BookingCampaignActionsProps) {
   const { open, setOpen, position, triggerRef, menuRef, toggleMenu } = useCampaignActionMenu();
   return (
     <>
@@ -322,42 +343,73 @@ interface CampaignHeadingProps {
   onToggle: () => void;
 }
 
+function BookingMetadata({
+  campaign,
+  showOwner,
+}: {
+  campaign: MyBookingCampaign;
+  showOwner: boolean;
+}) {
+  return (
+    <>
+      {showOwner && (
+        <div className="hidden min-w-0 sm:block">
+          <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Gebucht von
+          </span>
+          <span
+            className="mt-0.5 block truncate text-[13px] font-medium text-foreground"
+            title={`Gebucht von ${campaign.owner}`}
+          >
+            {campaign.owner}
+          </span>
+        </div>
+      )}
+      <div className="hidden min-w-0 sm:block">
+        <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Gebucht am
+        </span>
+        <span
+          className="mt-0.5 block truncate font-mono text-[12px] tabular-nums text-muted-foreground"
+          title={
+            campaign.createdAt ? `Gebucht am ${formatTimestamp(campaign.createdAt)}` : undefined
+          }
+        >
+          {campaign.createdAt ? formatTimestamp(campaign.createdAt) : '—'}
+        </span>
+      </div>
+    </>
+  );
+}
+
 function StatusAndActions(props: MyBookingCampaignCardProps) {
-  const {
-    campaign,
-    pending,
-    readOnly,
-    owned = true,
-    showOwner,
-    onGoto,
-    onRepeat,
-    onCancel,
-  } = props;
+  const { campaign, pending, readOnly, owned = true, onGoto, onRepeat, onCancel } = props;
   const status = STATUS_META[campaign.status];
   return (
-    <div className="ml-auto flex shrink-0 items-center gap-2">
-      {showOwner && (
-        <span
-          className="max-w-40 truncate rounded-lg bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground"
-          title={campaign.owner}
-        >
-          {owned ? 'ich' : campaign.owner}
-        </span>
-      )}
-      <span className="inline-flex w-fit items-center gap-2 rounded-lg border border-border px-2.5 py-1 text-[11px] font-semibold leading-none text-muted-foreground">
+    <div className="col-span-2 grid shrink-0 grid-cols-[8rem_2.5rem] items-center">
+      <span className="justify-self-center inline-flex w-fit items-center gap-2 rounded-lg border border-border px-2.5 py-1 text-[11px] font-semibold leading-none text-muted-foreground">
         <span className={cn('size-1.5 rounded-full', status.dot)} aria-hidden="true" />
         {status.label}
       </span>
-      <CampaignActions {...{ campaign, pending, readOnly, owned, onGoto, onRepeat, onCancel }} />
+      <div className="justify-self-end">
+        <BookingCampaignActions
+          {...{ campaign, pending, readOnly, owned, onGoto, onRepeat, onCancel }}
+        />
+      </div>
     </div>
   );
 }
 
-function CampaignDetails({ campaign, panelId, highlight }: CampaignDetailsProps) {
+export function BookingCampaignDetails({
+  campaign,
+  panelId,
+  highlight,
+  showBookingMetadata = true,
+}: CampaignDetailsProps) {
   return (
     <div
       id={panelId}
-      className="grid grid-cols-2 gap-x-10 gap-y-5 border-t border-border px-4 py-4 sm:pl-[3.25rem]"
+      className="grid grid-cols-1 gap-x-10 gap-y-5 border-t border-border px-4 py-4 sm:grid-cols-2 sm:pl-[3.25rem]"
     >
       <DeviceSection
         campaign={campaign}
@@ -371,6 +423,21 @@ function CampaignDetails({ campaign, panelId, highlight }: CampaignDetailsProps)
         title="Messtechnik"
         highlight={highlight}
       />
+      {showBookingMetadata && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-3 text-[12px] text-muted-foreground sm:col-span-2">
+          <UserRound className="size-3.5 shrink-0" />
+          <span>
+            Gebucht von <b className="font-semibold text-foreground">{campaign.owner}</b>
+          </span>
+          <span aria-hidden="true">·</span>
+          <Clock3 className="size-3.5 shrink-0" />
+          <span>
+            {campaign.createdAt
+              ? `am ${formatTimestamp(campaign.createdAt)}`
+              : 'Buchungszeitpunkt nicht verfügbar'}
+          </span>
+        </div>
+      )}
       {campaign.note && campaign.note.trim() !== campaign.title.trim() && (
         <p className="text-[13px] text-muted-foreground sm:col-span-2">{campaign.note}</p>
       )}
@@ -382,23 +449,38 @@ interface CampaignDetailsProps {
   campaign: MyBookingCampaign;
   panelId: string;
   highlight: string;
+  /** The table already exposes owner and creation date as dedicated columns. */
+  showBookingMetadata?: boolean;
 }
 
 export function MyBookingCampaignCard(props: MyBookingCampaignCardProps) {
   const panelId = useId();
   return (
     <li className="rounded-xl border border-border bg-background">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 sm:px-4">
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 sm:grid sm:gap-5 sm:px-4',
+          props.showOwner
+            ? 'sm:grid-cols-[minmax(18rem,1fr)_11rem_16rem_8rem_2.5rem]'
+            : 'sm:grid-cols-[minmax(18rem,1fr)_16rem_8rem_2.5rem]',
+        )}
+      >
         <CampaignHeading
           campaign={props.campaign}
           expanded={props.expanded}
           panelId={panelId}
           onToggle={props.onToggle}
         />
+        <BookingMetadata campaign={props.campaign} showOwner={!!props.showOwner} />
         <StatusAndActions {...props} />
       </div>
       {props.expanded && (
-        <CampaignDetails campaign={props.campaign} panelId={panelId} highlight={props.highlight} />
+        <BookingCampaignDetails
+          campaign={props.campaign}
+          panelId={panelId}
+          highlight={props.highlight}
+          showBookingMetadata={!props.showOwner}
+        />
       )}
     </li>
   );

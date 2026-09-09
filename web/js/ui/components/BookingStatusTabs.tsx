@@ -3,10 +3,10 @@ import type { MyBookingCampaign, MyBookingStatus } from '../views/my-bookings.ts
 export type BookingFilterId = 'alle' | MyBookingStatus;
 
 const FILTERS: { id: BookingFilterId; label: string }[] = [
-  { id: 'alle', label: 'Alle' },
   { id: 'aktiv', label: 'Aktiv' },
   { id: 'geplant', label: 'Geplant' },
   { id: 'abgeschlossen', label: 'Abgeschlossen' },
+  { id: 'alle', label: 'Alle' },
 ];
 
 export function BookingStatusTabs({
@@ -28,7 +28,7 @@ export function BookingStatusTabs({
     <div
       role="tablist"
       aria-label="Buchungsstatus"
-      className="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-muted p-1"
+      className="flex max-w-full flex-wrap gap-1 rounded-xl bg-muted p-1"
     >
       {FILTERS.map((item) => (
         <button

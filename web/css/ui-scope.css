@@ -166,12 +166,11 @@
 /* The dialog paints its own sheet (rounded-2xl and border), so `#modal`'s legacy chrome
    gets out of the way. Width stays capped at the widest dialog size; narrower dialogs cap
    themselves with their own `max-w-*` and centre inside. */
-#overlay:has(.ui-scope) {
+#overlay[data-react-dialog] {
   padding: 16px;
+  overflow: hidden;
 }
-#modal:has(> .ui-scope) {
-  width: min(1040px, 100%);
-  max-width: 1040px;
+#modal[data-dialog-size] {
   max-height: calc(100vh - 32px);
   max-height: calc(100dvh - 32px);
   padding: 0;
@@ -182,10 +181,22 @@
   background: transparent;
   border-radius: 16px;
 }
-
-#modal:has(> .ui-scope .mybookings) {
-  width: min(1120px, 100%);
-  max-width: 1120px;
+#modal[data-dialog-size='sm'] {
+  width: min(480px, 100%);
+  max-width: 480px;
+}
+#modal[data-dialog-size='md'] {
+  width: min(640px, 100%);
+  max-width: 640px;
+}
+#modal[data-dialog-size='lg'] {
+  width: min(920px, 100%);
+  max-width: 920px;
+}
+/* Workspaces use available desktop width up to a readable cap; forms keep their compact tier. */
+#modal[data-dialog-size='xl'] {
+  width: min(1440px, 100%);
+  max-width: 1440px;
 }
 
 /* Same idea for the three floating shells that are static markup in index.html: once their

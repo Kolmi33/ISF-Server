@@ -6,7 +6,9 @@ import {
   computeMyBookingsSummary,
   computeMyBookingCampaigns,
   filterMyBookingCampaigns,
+  sortBookingCampaigns,
   type BookingRun,
+  type MyBookingCampaign,
 } from './my-bookings.ts';
 
 const mach = (id: string): Machine => ({ id, name: id.toUpperCase(), group: 'g' });
@@ -321,5 +323,47 @@ describe('computeMyBookingsSummary', () => {
   it('reports 0 days when the soonest booking is today', () => {
     const runs = [run(m1, [today])];
     expect(computeMyBookingsSummary(runs, {}, today).nextInDays).toBe(0);
+  });
+});
+
+describe('sortBookingCampaigns', () => {
+  const campaign = (
+    owner: string,
+    date: string,
+    createdAt: string,
+    title = owner,
+    status: MyBookingCampaign['status'] = 'geplant',
+  ): MyBookingCampaign => ({
+    id: owner,
+    title,
+    status,
+    dates: [date],
+    cells: [],
+    machines: [m1],
+    createdAt,
+    owner,
+  });
+
+  it('sorts all-bookings groups by every available column without mutating input', () => {
+    const lateAlice = campaign('Alice', '2021-01-12', '2021-01-02T10:00:00Z', 'Zulu', 'geplant');
+    const earlyBob = campaign('Bob', '2021-01-06', '2021-01-03T10:00:00Z', 'Alpha', 'aktiv');
+    const input = [lateAlice, earlyBob];
+    expect(sortBookingCampaigns(input, 'scheduled').map((item) => item.owner)).toEqual([
+      'Bob',
+      'Alice',
+    ]);
+    expect(sortBookingCampaigns(input, 'created').map((item) => item.owner)).toEqual([
+      'Bob',
+      'Alice',
+    ]);
+    expect(sortBookingCampaigns(input, 'owner').map((item) => item.owner)).toEqual([
+      'Alice',
+      'Bob',
+    ]);
+    expect(sortBookingCampaigns(input, 'status').map((item) => item.owner)).toEqual([
+      'Bob',
+      'Alice',
+    ]);
+    expect(input).toEqual([lateAlice, earlyBob]);
   });
 });

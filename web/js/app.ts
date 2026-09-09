@@ -160,6 +160,8 @@ function wireToolbarButtons(): void {
     runLazyFeature(loadAssistant, (module) => module.openAssistant());
   document.getElementById('btnBookings')!.onclick = () =>
     runLazyFeature(loadMyBookings, (module) => module.openBookings());
+  document.getElementById('btnAllBookings')!.onclick = () =>
+    runLazyFeature(loadMyBookings, (module) => module.openBookings('all'));
   document.getElementById('btnSettings')!.onclick = () =>
     runLazyFeature(loadSettings, (module) => module.openSettings());
   document.getElementById('btnHelp')!.onclick = () =>
@@ -176,6 +178,7 @@ function wireToolbarButtons(): void {
 
   warmFeatureOnIntent('btnAssist', loadAssistant);
   warmFeatureOnIntent('btnBookings', loadMyBookings);
+  warmFeatureOnIntent('btnAllBookings', loadMyBookings);
   warmFeatureOnIntent('btnSettings', loadSettings);
   warmFeatureOnIntent('btnHelp', loadHelp);
   warmFeatureOnIntent('btnStats', loadStats);

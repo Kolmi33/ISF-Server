@@ -186,6 +186,9 @@ function paintMutation(result: MutateResult | null): void {
   const undo = result?.undo;
   if (undo?.length && undo.length <= 500) patchCells(undo);
   else store.notify();
+  // The grid uses targeted DOM patches for ordinary booking writes. Notify lightweight React
+  // booking summaries separately so their cached group totals and rows stay authoritative.
+  if (undo?.length) window.dispatchEvent(new Event('booking-data-change'));
 }
 
 /**

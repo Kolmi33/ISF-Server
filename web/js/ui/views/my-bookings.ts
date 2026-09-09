@@ -449,3 +449,28 @@ export function filterMyBookingCampaigns(
     return haystack.includes(needle);
   });
 }
+
+/** Sort choices used by the all-bookings overview. The input is never mutated because the
+ * cached campaign list is also used for status counts and pagination. */
+export type AllBookingsSort = 'scheduled' | 'created' | 'owner' | 'status';
+export type SortDirection = 'asc' | 'desc';
+
+export function sortBookingCampaigns(
+  campaigns: readonly MyBookingCampaign[],
+  sort: AllBookingsSort,
+  direction: SortDirection = sort === 'created' ? 'desc' : 'asc',
+): MyBookingCampaign[] {
+  const firstDate = (campaign: MyBookingCampaign) => campaign.dates[0] || '';
+  const sorted = [...campaigns].sort((a, b) => {
+    if (sort === 'status') {
+      const rank: Record<MyBookingStatus, number> = { aktiv: 0, geplant: 1, abgeschlossen: 2 };
+      return rank[a.status] - rank[b.status] || firstDate(a).localeCompare(firstDate(b));
+    }
+    if (sort === 'owner')
+      return a.owner.localeCompare(b.owner, 'de') || firstDate(a).localeCompare(firstDate(b));
+    if (sort === 'created')
+      return a.createdAt.localeCompare(b.createdAt) || firstDate(a).localeCompare(firstDate(b));
+    return firstDate(a).localeCompare(firstDate(b));
+  });
+  return direction === 'asc' ? sorted : sorted.reverse();
+}

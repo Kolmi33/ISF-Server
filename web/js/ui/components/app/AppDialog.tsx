@@ -12,20 +12,13 @@
 //
 // =======================================================================================
 
-import type { ReactNode } from 'react';
+import { useLayoutEffect, type ReactNode } from 'react';
 import { cn } from 'cn';
 import { TooltipProvider } from '../../../components/ui/tooltip.tsx';
 
 export type AppDialogSize = 'sm' | 'md' | 'lg' | 'xl';
 
 /** sm prompts · md forms (the legacy `#modal` width) · lg lists · xl the Assistant/statistics. */
-const DIALOG_WIDTH: Record<AppDialogSize, string> = {
-  sm: 'max-w-[480px]',
-  md: 'max-w-[640px]',
-  lg: 'max-w-[820px]',
-  xl: 'max-w-[1040px]',
-};
-
 export function AppDialog({
   size = 'md',
   labelledBy,
@@ -38,6 +31,20 @@ export function AppDialog({
   className?: string;
   children: ReactNode;
 }) {
+  // AppDialog is the single source of truth for the portal host's semantic size. This avoids
+  // coupling legacy `#modal` sizing to rendered descendants via CSS `:has()`.
+  useLayoutEffect(() => {
+    const modal = document.getElementById('modal');
+    const overlay = document.getElementById('overlay');
+    if (!modal || !overlay) return;
+    modal.dataset.dialogSize = size;
+    overlay.dataset.reactDialog = '';
+    return () => {
+      if (modal.dataset.dialogSize === size) delete modal.dataset.dialogSize;
+      delete overlay.dataset.reactDialog;
+    };
+  }, [size]);
+
   return (
     /* `ui-scope` sits on the outer wrapper because it is `#modal`'s direct child — that is
        what the `#modal:has(> .ui-scope)` chrome override keys off (web/css/ui-scope.css). */
@@ -48,8 +55,7 @@ export function AppDialog({
           aria-modal="true"
           aria-labelledby={labelledBy}
           className={cn(
-            'relative flex max-h-[calc(100dvh_-_32px)] w-full flex-col overflow-hidden rounded-2xl border border-border bg-card',
-            DIALOG_WIDTH[size],
+            'relative flex max-h-[calc(100dvh_-_32px)] w-full max-w-none flex-col overflow-hidden rounded-2xl border border-border bg-card',
             className,
           )}
         >

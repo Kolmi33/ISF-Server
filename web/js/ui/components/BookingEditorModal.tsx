@@ -165,7 +165,7 @@ export function BookingEditorModal({
   );
   const changed = bookingEditChanged(state.model.initialRows, state.rows);
   return (
-    <AppDialog size="xl" labelledBy={titleId} className="booking-editor max-w-[1120px] font-sans">
+    <AppDialog size="xl" labelledBy={titleId} className="booking-editor font-sans">
       <AppDialogHeader
         icon={<CalendarDays className="size-6" />}
         title="Belegung bearbeiten"
