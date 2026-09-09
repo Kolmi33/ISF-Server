@@ -381,7 +381,7 @@ export function GridBodyRow({
   if (row.kind === 'group') {
     return (
       <tr
-        className={`grouprow ${row.isFavoritesGroup ? 'catrow' : ''} ${row.collapsed ? 'collapsed' : ''}`}
+        className={`grouprow ${row.collapsed ? 'collapsed' : ''}`}
         role="row"
         data-group={row.group}
       >

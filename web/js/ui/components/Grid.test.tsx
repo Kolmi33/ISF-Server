@@ -171,6 +171,18 @@ describe('Grid', () => {
     expect(group.querySelector('[colspan]')).toBeNull();
   });
 
+  it('renders favorites with the same group-row treatment as every machine group', () => {
+    const { container } = renderGridIntoTable();
+    const favorites = container.querySelector<HTMLTableRowElement>('tr[data-group="★ Favoriten"]')!;
+    const regularGroup = container.querySelector<HTMLTableRowElement>('tr[data-group="Halle 1"]')!;
+    expect(favorites).not.toBeNull();
+    expect(favorites.classList.contains('grouprow')).toBe(true);
+    expect(favorites.classList.contains('catrow')).toBe(false);
+    expect(favorites.querySelectorAll('td.group-fill')).toHaveLength(
+      regularGroup.querySelectorAll('td.group-fill').length,
+    );
+  });
+
   // What: a cell booked by the current logged-in user gets the "mine" class in addition to
   // "booked", shows the booker's name as text, and carries the note/group title in its hover title.
   // How: renders the fixture's "m-mine" cell (booked by 'anna', the logged-in user) and
