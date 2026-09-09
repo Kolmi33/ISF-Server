@@ -203,6 +203,9 @@ td.gap{background:var(--app-bg);border-bottom:none}
 /* Bereichszeilen kleben beim vertikalen Scrollen unter der Kopfzeile */
 tr.grouprow td{background:var(--grpbg);font-weight:700;padding:5px 8px;cursor:pointer;border-bottom:1px solid var(--app-border);position:sticky;top:var(--theadh,47px);z-index:14}
 tr.grouprow td:first-child{left:0;z-index:16;min-width:var(--machw);max-width:var(--machw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* One real cover cell per physical grid column prevents Chromium's sticky-table painter from
+   exposing the underlying week-gap cells through a spanning group header while scrolling. */
+tr.grouprow td.group-fill{padding:0;border-right:0;background:var(--grpbg)}
 tr.grouprow td .arrow{display:inline-block;width:14px;transition:transform .1s}
 tr.grouprow.collapsed td .arrow{transform:rotate(-90deg)}
 /* Hauptkategorie-Zeile (Maschinen / Messtechnik) – gleicher Stil wie die

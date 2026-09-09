@@ -336,6 +336,12 @@ function MachineRow({
   );
 }
 
+function GroupFillCells({ count }: { count: number }) {
+  return Array.from({ length: count }, (_, index) => (
+    <td className="group-fill" aria-hidden="true" key={index} />
+  ));
+}
+
 /** One row of the grid body: a category header, a group header, or a machine's data row —
  *  driven entirely by the pure `buildGridRows` (`ui/grid.ts`), which decides the row list
  *  and its order; this component just renders whichever kind of row it's handed.
@@ -368,7 +374,7 @@ export function GridBodyRow({
         <td role="rowheader" aria-expanded={!row.collapsed}>
           <span className="arrow">▼</span> {CATEGORY_LABELS[row.category] ?? row.category}
         </td>
-        <td colSpan={columnCount} style={{ background: 'var(--grpbg)' }} aria-hidden="true" />
+        <GroupFillCells count={columnCount} />
       </tr>
     );
   }
@@ -383,7 +389,7 @@ export function GridBodyRow({
           <span className="arrow">▼</span> {row.group}
           <span className="gcount">{row.machineCount}</span>
         </td>
-        <td colSpan={columnCount} style={{ background: 'var(--grpbg)' }} aria-hidden="true" />
+        <GroupFillCells count={columnCount} />
       </tr>
     );
   }

@@ -161,6 +161,16 @@ describe('Grid', () => {
     expect(container.querySelector('tr[data-group="Halle 1"]')).not.toBeNull();
   });
 
+  it('covers every physical date and week-gap column in sticky group rows', () => {
+    const { container } = renderGridIntoTable();
+    const group = container.querySelector<HTMLTableRowElement>('tr[data-group="Halle 1"]')!;
+    const dateColumns = container.querySelectorAll('thead tr:nth-child(2) th').length;
+    const weekGaps = container.querySelectorAll('thead th.gap').length;
+    expect(group.cells).toHaveLength(1 + dateColumns + weekGaps);
+    expect(group.querySelectorAll('td.group-fill')).toHaveLength(dateColumns + weekGaps);
+    expect(group.querySelector('[colspan]')).toBeNull();
+  });
+
   // What: a cell booked by the current logged-in user gets the "mine" class in addition to
   // "booked", shows the booker's name as text, and carries the note/group title in its hover title.
   // How: renders the fixture's "m-mine" cell (booked by 'anna', the logged-in user) and
