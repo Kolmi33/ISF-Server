@@ -310,6 +310,7 @@ function applyCells(
   note: string | null,
   broadcast: Broadcast,
   bridge: boolean,
+  atomic: boolean,
 ): MutateResult {
   if (cells.length > 1000) return { error: 'Zu viele Zellen (max. 1000)' };
   const machineById = new Map(
@@ -341,6 +342,10 @@ function applyCells(
         conflicts,
         operationGroupId,
       );
+    }
+    if (atomic && conflicts.length) {
+      db.exec('ROLLBACK');
+      return { ok: true, applied: 0, conflicts };
     }
     applied = changes.length;
     if (bridge) addWeekendBridges(db, changes);
@@ -374,6 +379,7 @@ export function applyMutate(
   const note = body.log ? String(body.log).slice(0, 200) : null;
   if (Array.isArray(body.machines))
     return applyStructural(db, body.machines as InMachine[], body.groups, who, note, broadcast);
-  if (Array.isArray(body.cells)) return applyCells(db, body.cells, who, note, broadcast, bridge);
+  if (Array.isArray(body.cells))
+    return applyCells(db, body.cells, who, note, broadcast, bridge, body.atomic === true);
   return { error: 'Nichts zu tun' };
 }

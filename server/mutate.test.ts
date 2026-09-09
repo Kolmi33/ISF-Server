@@ -226,6 +226,30 @@ describe('applyMutate — cells', () => {
     expect(bk(db, 'm1', '2021-01-04')!.name).toBe('Bob');
   });
 
+  it('rolls back an atomic edit batch completely when one destination conflicts', () => {
+    const db = mem();
+    addMachine(db, 'm1');
+    addMachine(db, 'm2');
+    book(db, 'm1', '2021-01-04', 'Alice');
+    book(db, 'm2', '2021-01-05', 'Bob');
+    const spy = vi.fn();
+    const res = applyMutate(
+      db,
+      {
+        atomic: true,
+        cells: [
+          { machineId: 'm1', day: '2021-01-04', prev: { name: 'Alice' }, val: null },
+          { machineId: 'm2', day: '2021-01-05', val: { name: 'Alice' } },
+        ],
+      },
+      spy,
+    );
+    expect(res).toMatchObject({ ok: true, applied: 0, conflicts: [{ by: 'Bob' }] });
+    expect(bk(db, 'm1', '2021-01-04')!.name).toBe('Alice');
+    expect(bk(db, 'm2', '2021-01-05')!.name).toBe('Bob');
+    expect(spy).not.toHaveBeenCalled();
+  });
+
   // What: booking a day blocked by the legacy status field is refused, reported with the
   // block's reason text.
   // How: gives the machine a 'wartung' status, tries to book it, and checks the conflict

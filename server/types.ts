@@ -91,6 +91,8 @@ export interface CellDelta {
 /** The `/api/mutate` request body: either a cell-delta or a full structural machine list. */
 export interface MutateBody {
   cells?: CellDelta[];
+  /** Roll back the complete cell batch if any individual cell conflicts. */
+  atomic?: boolean;
   machines?: unknown[];
   groups?: unknown[];
   log?: string;

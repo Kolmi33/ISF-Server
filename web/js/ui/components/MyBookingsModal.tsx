@@ -21,6 +21,7 @@ import { askUserName } from './AskUserNameModal.tsx';
 import { AssistantModal } from './AssistantModal.tsx';
 import { AppDialog } from './app/AppDialog.tsx';
 import { MyBookingCampaignCard } from './MyBookingsRun.tsx';
+import { openBookingEditor } from './BookingEditorModal.tsx';
 import { BookingStatusTabs, type BookingFilterId } from './BookingStatusTabs.tsx';
 import {
   computeBookingCampaigns,
@@ -33,7 +34,6 @@ function useStoreUpdates(): void {
   const [, rerender] = useReducer((count: number) => count + 1, 0);
   useEffect(() => store.subscribe(() => rerender()), []);
 }
-
 function groupedCells(campaign: MyBookingCampaign, today: string) {
   const byMachine = new Map<string, string[]>();
   for (const cell of campaign.cells) {
@@ -44,7 +44,6 @@ function groupedCells(campaign: MyBookingCampaign, today: string) {
   }
   return byMachine;
 }
-
 function deleteCampaignCells(
   data: BookingData,
   campaign: MyBookingCampaign,
@@ -153,7 +152,11 @@ function CampaignList({
             owned={campaign.owner.trim().toLowerCase() === user}
             showOwner={showOwner}
             onToggle={() => onToggle(campaign.id)}
-            onGoto={() => gotoCampaign(campaign)}
+            onGoto={() =>
+              campaign.owner.trim().toLowerCase() === user
+                ? openBookingEditor(campaign, repeatBooking)
+                : gotoCampaign(campaign)
+            }
             onRepeat={() => repeatBooking(campaign)}
             onCancel={() => onCancel(campaign)}
           />

@@ -119,15 +119,21 @@ interface CampaignActionsProps {
   onCancel: () => void;
 }
 
+function isEditingDisabled({ campaign, pending, readOnly, owned }: CampaignActionsProps): boolean {
+  return owned && (readOnly || campaign.status === 'abgeschlossen' || pending);
+}
+
 function CampaignActionMenu(props: CampaignActionsProps & { close: () => void }) {
   const { campaign, pending, readOnly, owned, onGoto, onRepeat, onCancel, close } = props;
   const cancellationDisabled = readOnly || !owned || campaign.status === 'abgeschlossen' || pending;
+  const editingDisabled = isEditingDisabled(props);
   return (
     <>
       <button
         type="button"
         role="menuitem"
-        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={editingDisabled}
         onClick={() => {
           close();
           onGoto();

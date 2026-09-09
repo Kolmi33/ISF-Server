@@ -42,7 +42,7 @@ import { createRoot } from 'react-dom/client';
 import { createElement } from 'react';
 import { store } from './store-instance.ts';
 import type { BookingData } from '../../shared/types.ts';
-import type { MutateResult } from './ui/mutate.ts';
+import type { MutateOptions, MutateResult } from './ui/mutate.ts';
 import { triggerGridRender } from './ui/grid-render-bridge.ts';
 import { applyGridlineWidth, applyGridlineWidthHeader } from './ui/grid-style-settings.ts';
 
@@ -81,6 +81,7 @@ declare global {
     mutate: (
       fn: (fresh: BookingData) => unknown,
       logAction: string,
+      options?: MutateOptions,
     ) => Promise<MutateResult | null>;
     /** Opens an interactive modal confirmation prompt before destructive operations. */
     askConfirm: (options: AskConfirmOptions) => Promise<boolean>;

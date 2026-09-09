@@ -32,6 +32,14 @@ export interface MutateResult {
   count?: number;
   deletedCount?: number;
   undo?: CellUndo[];
+  error?: string;
+}
+
+export interface MutateOptions {
+  /** Wait for the backend response and report failure to the caller instead of closing early. */
+  waitForServer?: boolean;
+  /** Ask the backend to roll back the complete cell batch when any cell conflicts. */
+  atomic?: boolean;
 }
 
 /** Updates the toolbar's "last synced" time indicator. */
@@ -77,6 +85,7 @@ interface MutateApiResponse {
 function buildMutateRequestBody(
   logEntry: { action: string },
   result: MutateResult | null,
+  options: MutateOptions = {},
 ): Record<string, unknown> {
   const common = { log: logEntry.action, user: store.get('user') || '?' };
   if (result && Array.isArray(result.undo)) {
@@ -86,7 +95,7 @@ function buildMutateRequestBody(
       prev: entry.prev || null,
       val: (store.get('data')!.bookings[entry.machineId] || {})[entry.date] || null,
     }));
-    return { cells, ...common };
+    return { cells, ...(options.atomic ? { atomic: true } : {}), ...common };
   }
   return { machines: store.get('data')!.machines, groups: store.get('data')!.groups, ...common };
 }
@@ -109,18 +118,37 @@ async function handleMutateResponse(
   }
 }
 
+/** Restores the pre-edit cells when an all-or-nothing mutation was not accepted by the server. */
+function rollbackOptimistic(result: MutateResult | null): void {
+  if (!result?.undo) return;
+  for (const entry of [...result.undo].reverse()) {
+    const machineBookings = (store.get('data')!.bookings[entry.machineId] ||= {});
+    if (entry.prev) machineBookings[entry.date] = { ...entry.prev };
+    else delete machineBookings[entry.date];
+    if (!Object.keys(machineBookings).length) delete store.get('data')!.bookings[entry.machineId];
+  }
+  store.notify();
+}
+
 /**
  * Persists an applied mutation to the server in the background.
  */
-async function persist(logEntry: { action: string }, result: MutateResult | null): Promise<void> {
+async function persist(
+  logEntry: { action: string },
+  result: MutateResult | null,
+  options: MutateOptions,
+): Promise<boolean> {
   try {
     const out = (await apiPost(
       '/api/mutate',
-      buildMutateRequestBody(logEntry, result),
+      buildMutateRequestBody(logEntry, result, options),
     )) as MutateApiResponse;
     if (!out || out.error) throw new Error((out && out.error) || 'Serverfehler');
+    if (options.atomic && out.conflicts?.length) rollbackOptimistic(result);
     await handleMutateResponse(logEntry, out);
+    return !out.conflicts?.length;
   } catch (error) {
+    if (options.atomic) rollbackOptimistic(result);
     dbg('err', 'Speichern fehlgeschlagen: ' + errorMessage(error));
     toast(
       '⚠️ Speichern fehlgeschlagen (' + errorMessage(error) + ') – hole aktuellen Stand…',
@@ -132,7 +160,32 @@ async function persist(logEntry: { action: string }, result: MutateResult | null
     } catch {
       /* refreshNow handles its own errors */
     }
+    return false;
   }
+}
+
+async function settlePersistence(
+  persistence: Promise<boolean>,
+  result: MutateResult | null,
+  waitForServer: boolean,
+): Promise<MutateResult | null> {
+  if (!waitForServer) {
+    void persistence;
+    return result;
+  }
+  return (await persistence) ? result : { ...result, abort: true };
+}
+
+function mutationBlockedByReadOnly(): boolean {
+  if (!store.get('readOnly')) return false;
+  toast('Nur-Lese-Modus – Buchen nicht möglich.');
+  return true;
+}
+
+function paintMutation(result: MutateResult | null): void {
+  const undo = result?.undo;
+  if (undo?.length && undo.length <= 500) patchCells(undo);
+  else store.notify();
 }
 
 /**
@@ -146,13 +199,11 @@ async function persist(logEntry: { action: string }, result: MutateResult | null
 export async function mutate(
   fn: (fresh: BookingData) => unknown,
   logAction: string,
+  options: MutateOptions = {},
 ): Promise<MutateResult | null> {
-  if (store.get('readOnly')) {
-    toast('Nur-Lese-Modus – Buchen nicht möglich.');
-    return null;
-  }
+  if (mutationBlockedByReadOnly()) return null;
   const result = fn(store.get('data')!) as MutateResult | null;
-  if (result && result.abort) return result;
+  if (result?.abort) return result;
 
   if (isStructuralChange(result)) invalidateMachineLookupCache();
 
@@ -166,11 +217,6 @@ export async function mutate(
   data.log.unshift(logEntry);
   if (data.log.length > 500) data.log.length = 500;
 
-  if (result && result.undo && result.undo.length && result.undo.length <= 500) {
-    patchCells(result.undo);
-  } else {
-    store.notify();
-  }
-  void persist(logEntry, result);
-  return result;
+  paintMutation(result);
+  return settlePersistence(persist(logEntry, result, options), result, !!options.waitForServer);
 }

@@ -373,6 +373,28 @@ describe('buildGridRows', () => {
     });
     expect(rows.map((r) => r.kind)).toEqual(['group', 'machine', 'group', 'machine']);
   });
+
+  it('ignores stale favorite ids without creating an empty favorites list', () => {
+    const rows = buildGridRows([machine({ id: 'real', group: 'G1' })], {
+      ...noFilter,
+      openCategories: new Set(['maschine']),
+      favoriteIds: new Set(['deleted-machine']),
+    });
+    expect(rows.some((row) => row.kind === 'group' && row.isFavoritesGroup)).toBe(false);
+    expect(machineRows(rows)).toEqual(['real']);
+  });
+
+  it('shows only favorites belonging to the active category tab', () => {
+    const production = machine({ id: 'machine-fav', group: 'G1' });
+    const measurement = machine({ id: 'sensor-fav', group: 'Messung', cat: 'messtechnik' });
+    const rows = buildGridRows([production, measurement], {
+      ...noFilter,
+      openCategories: new Set(['messtechnik']),
+      favoriteIds: new Set(['machine-fav', 'sensor-fav']),
+    });
+    expect(machineRows(rows)).toEqual(['sensor-fav']);
+    expect(rows[0]).toMatchObject({ kind: 'group', machineCount: 1, isFavoritesGroup: true });
+  });
 });
 
 describe('computeBookingBlocks', () => {

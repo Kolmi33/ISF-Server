@@ -50,6 +50,14 @@
 @import './ui-scope.css';
 @import './booking-assistant.css';
 
+.booking-editor-busy {
+  background-image: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, currentColor 20%, transparent) 0 3px,
+    transparent 3px 7px
+  );
+}
+
 /* app.css's own tokens, exposed under their real (--app- prefixed, non-colliding) names for
    whatever still-unmigrated screen wants a Tailwind utility against them, e.g. bg-app-panel. */
 @theme {

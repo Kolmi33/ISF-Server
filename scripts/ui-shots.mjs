@@ -31,6 +31,46 @@ const SCENES = {
     await p.click('#btnHelp');
   },
   mybookings: (p) => p.click('#btnBookings'),
+  async bookingeditor(p) {
+    await p.click('#btnBookings');
+    await p.waitForSelector('#modal button[aria-haspopup="menu"]');
+    const actionButtons = p.locator('#modal button[aria-haspopup="menu"]');
+    for (let index = 0; index < (await actionButtons.count()); index++) {
+      await actionButtons.nth(index).click();
+      const edit = p.getByRole('menuitem', { name: 'Bearbeiten' });
+      if ((await edit.isVisible()) && (await edit.isEnabled())) {
+        await edit.click();
+        await p.getByRole('heading', { name: 'Belegung bearbeiten' }).waitFor();
+        return;
+      }
+      await p.keyboard.press('Escape');
+    }
+    throw new Error('No editable booking campaign found for the screenshot user');
+  },
+  async bookingeditormenu(p) {
+    await SCENES.bookingeditor(p);
+    await p.locator('#modal .booking-editor button[aria-label^="Aktionen für"]').first().click();
+    await p.getByRole('menuitem', { name: /Auf Gruppenzeitraum setzen/ }).waitFor();
+  },
+  async favorites(p) {
+    const machineId = await p.evaluate(() => {
+      const visibleFavoriteToggle = document.querySelector('[data-fav]');
+      const selectedId = visibleFavoriteToggle?.getAttribute('data-fav');
+      if (!selectedId) throw new Error('No visible machine available for favorites verification');
+      localStorage.setItem('mb_favs', JSON.stringify([selectedId, 'stale-machine-id']));
+      localStorage.setItem('mb_collapsed', '[]');
+      return selectedId;
+    });
+    await p.reload({ waitUntil: 'networkidle' });
+    const header = p.locator('tr.grouprow').filter({ hasText: 'Favoriten' });
+    await header.waitFor();
+    if ((await header.locator('.gcount').textContent())?.trim() !== '1') {
+      throw new Error('Favorites count did not ignore the stale machine ID');
+    }
+    if ((await p.locator(`[data-fav="${machineId}"]`).count()) !== 1) {
+      throw new Error('Favorite machine was duplicated in its original group');
+    }
+  },
   async allbookings(p) {
     await p.click('#btnBookings');
     await p.getByRole('button', { name: 'Alle', exact: true }).click();

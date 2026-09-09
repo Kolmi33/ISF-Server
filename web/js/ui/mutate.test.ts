@@ -216,6 +216,20 @@ describe('mutate — optimistic apply + logging', () => {
     expect(returned).toEqual({}); // mutate already resolved
     resolveFetch({ ok: true, json: () => Promise.resolve({ rev: 2 }) });
   });
+
+  it('can await an atomic persist for workflows that must keep their dialog open on failure', async () => {
+    const fetchSpy = fetchReturning({ rev: 8 });
+    vi.stubGlobal('fetch', fetchSpy);
+    const result = await mutate(
+      () => ({ undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }] }),
+      'Buchung bearbeitet',
+      { waitForServer: true, atomic: true },
+    );
+    expect(result?.abort).not.toBe(true);
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.atomic).toBe(true);
+    expect(window.S.data!.revision).toBe(8);
+  });
 });
 
 describe('mutate — persist (background)', () => {
@@ -321,6 +335,22 @@ describe('mutate — persist (background)', () => {
       expect(document.getElementById('toast')!.textContent).toContain('Speichern fehlgeschlagen'),
     );
     expect(document.getElementById('toast')!.textContent).toContain('offline');
+  });
+  it('rolls back an awaited atomic edit when persistence and reconciliation both fail', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    const result = await mutate(
+      (fresh) => {
+        fresh.bookings.m1 = { '2021-01-04': booking() };
+        return {
+          count: 1,
+          undo: [{ machineId: 'm1', date: '2021-01-04', prev: null }],
+        };
+      },
+      'Buchung bearbeitet',
+      { atomic: true, waitForServer: true },
+    );
+    expect(result?.abort).toBe(true);
+    expect(window.S.data!.bookings.m1).toBeUndefined();
   });
 });
 

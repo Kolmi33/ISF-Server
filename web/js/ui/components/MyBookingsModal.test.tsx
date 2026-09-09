@@ -174,7 +174,7 @@ describe('MyBookingsModal', () => {
     window.S.data!.bookings = {
       m1: {
         [day(1)]: { name: 'anna', gid: 'own', gtitle: 'Eigenes Projekt' },
-        [day(3)]: { name: 'bob', gid: 'foreign', gtitle: 'Fremdes Projekt' },
+        [day(5)]: { name: 'bob', gid: 'foreign', gtitle: 'Fremdes Projekt' },
       },
     };
     render(<MyBookingsModal />);
@@ -198,16 +198,19 @@ describe('MyBookingsModal', () => {
     expect(screen.getByText('Assistent geöffnet')).toBeInTheDocument();
   });
 
-  it('navigates a campaign to the real plan and applies its machine filter', async () => {
+  it('opens the supplied bar editor for an owned campaign', async () => {
     window.S.data!.bookings = { m1: { [day(2)]: { name: 'anna' } } };
     act(() => openMyBookings());
     await openActions('Fräse');
     fireEvent.click(screen.getByRole('menuitem', { name: 'Bearbeiten' }));
-    expect(window.S.machSel).toEqual(new Set(['m1']));
-    expect(window.S.cats.has('maschine')).toBe(true);
-    expect(vi.mocked(saveFilters)).toHaveBeenCalledOnce();
-    expect(vi.mocked(updateMachBtn)).toHaveBeenCalledOnce();
-    expect(document.getElementById('overlay')).not.toHaveClass('open');
+    expect(screen.getByRole('heading', { name: 'Belegung bearbeiten' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Balken ziehen = verschieben · Kante ziehen = dehnen · Klick = Tag umschalten',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Fräse')).toHaveLength(2);
+    expect(document.getElementById('overlay')).toHaveClass('open');
   });
 
   it('opens the Assistant with the campaign devices and duration when repeating', async () => {
