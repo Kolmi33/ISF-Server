@@ -41,7 +41,7 @@ import {
 } from '../grid.ts';
 import { daysPerWeek, syncJumpControls, ensureOverflow } from '../grid-scroll.ts';
 import { CATEGORIES } from '../../core/machines.ts';
-import { selectCategory } from '../category-fold.ts';
+import { toggleCategory } from '../category-fold.ts';
 import { paintSelection } from '../grid-interaction.ts';
 import { Button } from '../../components/ui/app-button.tsx';
 import { GridBodyRow } from './GridBody.tsx';
@@ -62,11 +62,11 @@ function CategoryToggleButtons() {
             size="sm"
             className={`catbtn ${isOpen ? 'on' : ''}`}
             data-cat={id}
-            title={`${label} anzeigen`}
+            title={`${label} ${isOpen ? 'ausblenden' : 'anzeigen'}`}
             aria-pressed={isOpen}
             onClick={(event) => {
               event.stopPropagation();
-              selectCategory(id);
+              toggleCategory(id);
             }}
           >
             <span className="lbl">{label}</span>

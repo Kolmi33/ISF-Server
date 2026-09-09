@@ -352,26 +352,27 @@ describe('Grid', () => {
     expect(container.querySelector('span.nextfree.back[data-nb="m-favorite"]')).not.toBeNull();
   });
 
-  // The reference uses an exclusive segmented control: selecting one category immediately
-  // replaces the other and persists the selection.
-  it('selects exactly one category from the segmented control', () => {
+  // Both main categories are independent visibility toggles, so enabling Messtechnik keeps
+  // Maschinen visible and persists the combined selection.
+  it('shows both categories when the second segmented-control button is enabled', () => {
+    window.S.cats = new Set(['maschine']);
     const { container } = renderGridIntoTable();
     const button = container.querySelector<HTMLButtonElement>(
       'button.catbtn[data-cat="messtechnik"]',
     )!;
     button.click();
-    expect(window.S.cats).toEqual(new Set(['messtechnik']));
-    expect(JSON.parse(localStorage.getItem('mb_cats')!)).toEqual(['messtechnik']);
+    expect(window.S.cats).toEqual(new Set(['maschine', 'messtechnik']));
+    expect(JSON.parse(localStorage.getItem('mb_cats')!)).toEqual(['maschine', 'messtechnik']);
   });
 
-  it('marks only the selected category button as pressed', () => {
-    window.S.cats = new Set(['maschine']);
+  it('marks both category buttons as pressed when both are visible', () => {
+    window.S.cats = new Set(['maschine', 'messtechnik']);
     const { container } = renderGridIntoTable();
     expect(container.querySelector('[data-cat="maschine"]')?.getAttribute('aria-pressed')).toBe(
       'true',
     );
     expect(container.querySelector('[data-cat="messtechnik"]')?.getAttribute('aria-pressed')).toBe(
-      'false',
+      'true',
     );
   });
 

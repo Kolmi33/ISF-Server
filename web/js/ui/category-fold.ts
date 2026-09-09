@@ -30,13 +30,6 @@ export function toggleCategory(category: string): void {
   store.notify();
 }
 
-/** Selects exactly one main-grid category, as required by the segmented tab in the reference UI. */
-export function selectCategory(category: string): void {
-  store.state.cats = new Set([category]);
-  localStorage.setItem('mb_cats', JSON.stringify([category]));
-  store.notify();
-}
-
 /**
  * Expands or collapses every group within `category` at once — a double-click on its
  * header/toggle button.

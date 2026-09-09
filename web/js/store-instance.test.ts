@@ -59,10 +59,10 @@ describe('store-instance', () => {
     expect(store.state.favs).toEqual(new Set(['m3']));
   });
 
-  it('normalizes the legacy multi-category preference to one selected tab', async () => {
+  it('restores a persisted multi-category selection', async () => {
     localStorage.setItem('mb_cats', JSON.stringify(['maschine', 'messtechnik']));
     const { store } = await import('./store-instance.ts');
-    expect(store.state.cats).toEqual(new Set(['maschine']));
+    expect(store.state.cats).toEqual(new Set(['maschine', 'messtechnik']));
   });
 
   // What: the personOnly flag only reads as true for the exact stored string "on" — any other
