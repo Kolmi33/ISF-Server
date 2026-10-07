@@ -258,9 +258,7 @@ describe('buildGridRows', () => {
   const machineRows = (rows: GridRow[]): string[] =>
     rows.filter((r) => r.kind === 'machine').map((r) => r.machine.id);
 
-  // The segmented category switch is the only category-level UI, so the body starts directly
-  // with group and machine rows and never repeats a redundant category row.
-  it('emits group and machine rows without redundant category rows', () => {
+  it('emits category headings before their group and machine rows', () => {
     const a = machine({ id: 'a', group: 'G1' });
     const b = machine({ id: 'b', group: 'G1' });
     const c = machine({ id: 'c', group: 'G2', cat: 'messtechnik' });
@@ -268,7 +266,15 @@ describe('buildGridRows', () => {
       ...noFilter,
       openCategories: new Set(['maschine', 'messtechnik']),
     });
-    expect(rows.map((r) => r.kind)).toEqual(['group', 'machine', 'machine', 'group', 'machine']);
+    expect(rows.map((r) => r.kind)).toEqual([
+      'category',
+      'group',
+      'machine',
+      'machine',
+      'category',
+      'group',
+      'machine',
+    ]);
     expect(machineRows(rows)).toEqual(['a', 'b', 'c']);
   });
 
@@ -302,8 +308,8 @@ describe('buildGridRows', () => {
       openCategories: new Set(['maschine']),
       collapsedGroups: new Set(['G1']),
     });
-    expect(rows.map((r) => r.kind)).toEqual(['group']);
-    expect(rows[0]).toMatchObject({ collapsed: true });
+    expect(rows.map((r) => r.kind)).toEqual(['category', 'group']);
+    expect(rows[1]).toMatchObject({ collapsed: true });
   });
 
   // What: the group filter (selectedGroups) hides non-matching machines entirely — EXCEPT a
@@ -371,7 +377,7 @@ describe('buildGridRows', () => {
       group: FAVORITES_GROUP_LABEL,
       isFavoritesGroup: true,
     });
-    expect(rows.map((r) => r.kind)).toEqual(['group', 'machine', 'group', 'machine']);
+    expect(rows.map((r) => r.kind)).toEqual(['group', 'machine', 'category', 'group', 'machine']);
   });
 
   it('ignores stale favorite ids without creating an empty favorites list', () => {
@@ -384,17 +390,20 @@ describe('buildGridRows', () => {
     expect(machineRows(rows)).toEqual(['real']);
   });
 
-  it('shows only favorites belonging to the active category tab', () => {
-    const production = machine({ id: 'machine-fav', group: 'G1' });
-    const measurement = machine({ id: 'sensor-fav', group: 'Messung', cat: 'messtechnik' });
-    const rows = buildGridRows([production, measurement], {
-      ...noFilter,
-      openCategories: new Set(['messtechnik']),
-      favoriteIds: new Set(['machine-fav', 'sensor-fav']),
-    });
-    expect(machineRows(rows)).toEqual(['sensor-fav']);
-    expect(rows[0]).toMatchObject({ kind: 'group', machineCount: 1, isFavoritesGroup: true });
-  });
+  it.each([['messtechnik'], []])(
+    'keeps favorites visible with category selection %j',
+    (...categories) => {
+      const production = machine({ id: 'machine-fav', group: 'G1' });
+      const measurement = machine({ id: 'sensor-fav', group: 'Messung', cat: 'messtechnik' });
+      const rows = buildGridRows([production, measurement], {
+        ...noFilter,
+        openCategories: new Set(categories),
+        favoriteIds: new Set(['machine-fav', 'sensor-fav']),
+      });
+      expect(machineRows(rows)).toEqual(['machine-fav', 'sensor-fav']);
+      expect(rows[0]).toMatchObject({ kind: 'group', machineCount: 2, isFavoritesGroup: true });
+    },
+  );
 });
 
 describe('computeBookingBlocks', () => {

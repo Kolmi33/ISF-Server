@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useReducer, useState } from 'react';
 /* eslint-disable max-lines, max-lines-per-function -- the retained list draft shares the modal's view state. */
-import { ArrowDownUp, Inbox, Plus, Search } from 'lucide-react';
+import { ArrowDownUp, Inbox, Plus, Search, X } from 'lucide-react';
 import type { BookingData } from '../../../../shared/types.ts';
 import {
   formatDateShort,
@@ -104,7 +104,7 @@ function gotoCampaign(campaign: MyBookingCampaign): void {
 }
 
 function openNewBooking(): void {
-  openReactModal(<AssistantModal />, { sticky: true });
+  openReactModal(<AssistantModal />, { closeOnBackdrop: false });
 }
 
 function repeatBooking(campaign: MyBookingCampaign): void {
@@ -115,7 +115,7 @@ function repeatBooking(campaign: MyBookingCampaign): void {
         workdays: campaign.dates.length,
       }}
     />,
-    { sticky: true },
+    { closeOnBackdrop: false },
   );
 }
 
@@ -167,7 +167,7 @@ function CampaignList({
 }: ListProps) {
   const user = store.get('user').trim().toLowerCase();
   return (
-    <ScrollArea className="-mr-3 min-h-0 flex-[1_1_24rem] pr-3">
+    <ScrollArea className="-mr-3 min-h-0 flex-1 pr-3">
       {sort && sortDirection && onSort && (
         <CampaignCardColumnHeaders
           showOwner={showOwner}
@@ -423,9 +423,8 @@ function CampaignPagination({
   total: number;
   onPageChange: (page: number) => void;
 }) {
-  if (pageCount <= 1) return null;
-  const first = (page - 1) * CAMPAIGNS_PER_PAGE + 1;
-  const last = Math.min(page * CAMPAIGNS_PER_PAGE, total);
+  const first = total ? (page - 1) * CAMPAIGNS_PER_PAGE + 1 : 0;
+  const last = total ? Math.min(page * CAMPAIGNS_PER_PAGE, total) : 0;
   return (
     <nav
       className="flex shrink-0 items-center justify-between gap-3 px-1 text-[13px] text-muted-foreground"
@@ -517,6 +516,9 @@ function ModalHeader({ titleId, mode }: { titleId: string; mode: BookingsMode })
       <Button size="lg" onClick={openNewBooking} disabled={store.get('readOnly')}>
         <Plus className="size-4" /> Neue Buchung
       </Button>
+      <Button variant="ghost" size="icon" aria-label="Schließen" onClick={closeReactModal}>
+        <X className="size-5" />
+      </Button>
     </header>
   );
 }
@@ -534,7 +536,6 @@ interface BookingsBodyProps {
   page: number;
   pageCount: number;
   pageCampaigns: readonly MyBookingCampaign[];
-  totalBookingGroups: number;
   setFilter: (value: BookingFilterId) => void;
   setQuery: (value: string) => void;
   setSort: (value: AllBookingsSort) => void;
@@ -558,7 +559,6 @@ function BookingsBody(props: BookingsBodyProps) {
     page,
     pageCount,
     pageCampaigns,
-    totalBookingGroups,
   } = props;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 border-t border-border bg-muted/30 px-6 pb-6 pt-5 sm:px-7">
@@ -577,18 +577,6 @@ function BookingsBody(props: BookingsBodyProps) {
           />
         </div>
       </div>
-      {mode === 'all' && (
-        <p className="shrink-0 px-1 text-[13px] text-muted-foreground">
-          {filter !== 'alle' || query.trim()
-            ? `${visible.length} von ${totalBookingGroups} Buchungsgruppen`
-            : `${totalBookingGroups} Buchungsgruppen`}
-        </p>
-      )}
-      {mode === 'mine' && (filter !== 'alle' || query.trim()) && visible.length > 0 && (
-        <p className="shrink-0 px-1 text-[13px] text-muted-foreground">
-          {visible.length} von {campaigns.length} Buchungen
-        </p>
-      )}
       {visible.length ? (
         <CampaignList
           campaigns={pageCampaigns}
@@ -642,9 +630,7 @@ export function MyBookingsModal({ initialMode = 'mine' }: { initialMode?: Bookin
     [data, storeVersion, today],
   );
   const campaigns = mode === 'mine' ? myCampaigns : allCampaigns;
-  const totalBookingGroups = allCampaigns.length;
-  // Keep filtering and sorting out of page navigation too. `totalBookingGroups` comes from the
-  // cached authoritative campaign array, so reading it is O(1), not another booking scan.
+  // Keep filtering and sorting out of page navigation too.
   const visible = useMemo(
     () =>
       sortBookingCampaigns(filterMyBookingCampaigns(campaigns, filter, query), sort, sortDirection),
@@ -677,7 +663,6 @@ export function MyBookingsModal({ initialMode = 'mine' }: { initialMode?: Bookin
     page: currentPage,
     pageCount,
     pageCampaigns,
-    totalBookingGroups,
     setFilter: (value: BookingFilterId) => {
       setFilter(value);
       setPage(1);
@@ -705,7 +690,7 @@ export function MyBookingsModal({ initialMode = 'mine' }: { initialMode?: Bookin
     cancel,
   };
   return (
-    <AppDialog size="xl" labelledBy={titleId} className="mybookings font-sans">
+    <AppDialog size="xl" fullHeight labelledBy={titleId} className="mybookings font-sans">
       <ModalHeader titleId={titleId} mode={mode} />
       <BookingsBody {...bodyProps} />
     </AppDialog>
@@ -717,7 +702,7 @@ export function openMyBookings(): void {
     askUserName(false);
     return;
   }
-  openReactModal(<MyBookingsModal />);
+  openReactModal(<MyBookingsModal />, { closeOnBackdrop: false });
 }
 
 export function openBookings(initialMode: BookingsMode = 'mine'): void {
@@ -725,5 +710,5 @@ export function openBookings(initialMode: BookingsMode = 'mine'): void {
     askUserName(false);
     return;
   }
-  openReactModal(<MyBookingsModal initialMode={initialMode} />);
+  openReactModal(<MyBookingsModal initialMode={initialMode} />, { closeOnBackdrop: false });
 }

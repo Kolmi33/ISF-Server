@@ -270,6 +270,27 @@ describe('patchCells — merge-aware rendering (regression)', () => {
     return document.querySelector(`td.cell[data-machine-id="m1"][data-date="${TUE}"]`)!;
   }
 
+  it('moves the label and repairs the surviving edge when only the first day is deleted', () => {
+    window.S.data!.bookings = {
+      m1: { [TODAY]: { name: 'anna' }, [TUE]: { name: 'anna' } },
+    };
+    patchCells([
+      { machineId: 'm1', date: TODAY },
+      { machineId: 'm1', date: TUE },
+    ]);
+    expect(tueCell().textContent).toBe('');
+    delete window.S.data!.bookings.m1![TODAY];
+    patchCells([{ machineId: 'm1', date: TODAY }]);
+    expect(cell()).toHaveClass('free');
+    expect(tueCell().textContent).toBe('anna');
+    expect(tueCell()).not.toHaveClass('merge-left');
+    window.S.data!.bookings.m1![TODAY] = { name: 'anna' };
+    patchCells([{ machineId: 'm1', date: TODAY }]);
+    expect(cell().textContent).toBe('anna');
+    expect(tueCell().textContent).toBe('');
+    expect(tueCell()).toHaveClass('merge-left');
+  });
+
   beforeEach(() => {
     buildTwoDayDom();
     // The extra store fields computeVisibleBookingBlocks' own recipe (buildGridRows +

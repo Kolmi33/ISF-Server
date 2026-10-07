@@ -1,4 +1,6 @@
 import { AppDialogHeader } from '../app/AppDialog.tsx';
+import { X } from 'lucide-react';
+import { Button } from '../../../components/ui/app-button.tsx';
 
 /* Derselbe Kompass wie in der Toolbar (`#i-compass`, `web/index.html`). Bewusst inline und
    nicht per `<use href="#i-compass">`: das Sprite-Symbol trägt keine eigenen Mal-Attribute,
@@ -22,12 +24,17 @@ function CompassIcon({ className }: { className?: string }) {
   );
 }
 
-export function AssistantHeader() {
+export function AssistantHeader({ onClose }: { onClose?: () => void }) {
   return (
     <AppDialogHeader
       icon={<CompassIcon className="size-6" />}
       title="Buchungsassistent"
       titleId="buchungsassistent-title"
+      actions={
+        <Button variant="ghost" size="icon" aria-label="Schließen" onClick={onClose}>
+          <X className="size-5" />
+        </Button>
+      }
       subtitle="Laborgeräte reservieren"
     />
   );

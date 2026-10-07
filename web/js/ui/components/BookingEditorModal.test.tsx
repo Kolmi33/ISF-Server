@@ -19,7 +19,7 @@ const machine = (id: string, name: string, cat?: string): Machine => ({
   name,
   group: 'Halle',
   cat,
-  days: '1111100',
+  days: '1111111',
 });
 
 function setup() {
@@ -75,6 +75,35 @@ afterEach(() => {
 });
 
 describe('BookingEditorModal', () => {
+  it('fills every column crossed by a single pointer move and removes the same range', async () => {
+    render(<BookingEditorModal campaign={setup()} onSearchWindow={vi.fn()} />);
+    const header = document.querySelector(`[data-editor-day="${day(2)}"]`)!;
+    const pointer = (target: Element | Window, type: string, x: number) =>
+      fireEvent(target, new MouseEvent(type, { bubbles: true, button: 0, clientX: x }));
+    pointer(header, 'pointerdown', 100);
+    pointer(window, 'pointermove', 168);
+    pointer(window, 'pointerup', 168);
+    fireEvent.click(screen.getByRole('button', { name: 'Entfernen' }));
+    pointer(document.querySelector(`[data-editor-day="${day(3)}"]`)!, 'pointerdown', 100);
+    pointer(window, 'pointermove', 134);
+    pointer(window, 'pointerup', 134);
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Änderungen speichern' })),
+    );
+    for (const id of ['m1', 's1'])
+      for (const offset of [2])
+        expect(store.get('data')!.bookings[id]![day(offset)]?.name).toBe('Anna');
+    for (const id of ['m1', 's1'])
+      for (const offset of [3, 4])
+        expect(store.get('data')!.bookings[id]![day(offset)]).toBeUndefined();
+  });
+
+  it('extends the available dates with the axis controls', () => {
+    render(<BookingEditorModal campaign={setup()} onSearchWindow={vi.fn()} />);
+    expect(document.querySelector(`[data-editor-day="${day(22)}"]`)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '14 Tage danach' }));
+    expect(document.querySelector(`[data-editor-day="${day(22)}"]`)).not.toBeNull();
+  });
   it('renders the real machine and measurement rows with the supplied bar-editor controls', () => {
     render(<BookingEditorModal campaign={setup()} onSearchWindow={vi.fn()} />);
     expect(screen.getByRole('heading', { name: 'Belegung bearbeiten' })).toBeInTheDocument();

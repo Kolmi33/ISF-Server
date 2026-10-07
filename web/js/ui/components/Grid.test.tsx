@@ -155,9 +155,9 @@ describe('Grid', () => {
   });
 
   // Categories live exclusively in the segmented switch; the body begins with group rows.
-  it('renders group rows without redundant category header rows', () => {
+  it('renders category headings above group rows', () => {
     const { container } = renderGridIntoTable();
-    expect(container.querySelector('tr[data-catgroup]')).toBeNull();
+    expect(container.querySelector('tr[data-catgroup="maschine"]')).not.toBeNull();
     expect(container.querySelector('tr[data-group="Halle 1"]')).not.toBeNull();
   });
 

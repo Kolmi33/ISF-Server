@@ -1,17 +1,13 @@
 import type { Booking, BookingData, Machine } from '../../../shared/types.ts';
-import {
-  addDays,
-  formatDateAsIsoString,
-  isWeekend,
-  parseIsoDateString,
-} from '../../../shared/dates.ts';
+/* eslint-disable max-lines -- booking-edit operations intentionally share one domain module. */
+import { addDays, formatDateAsIsoString, parseIsoDateString } from '../../../shared/dates.ts';
 import {
   getMachineCategory,
   getMaintenanceSlotAtDate,
   isMachineAvailableOnWeekday,
   isMachineBlockedOnDate,
 } from '../core/machines.ts';
-import { sweepWeekends, type CellUndo, type Conflict } from '../core/bookings.ts';
+import { type CellUndo, type Conflict } from '../core/bookings.ts';
 import type { MyBookingCampaign } from './views/my-bookings.ts';
 
 export type BookingEditCategory = 'maschine' | 'messtechnik';
@@ -65,7 +61,7 @@ function campaignEntries(data: BookingData, campaign: MyBookingCampaign, today: 
   const entries: { machine: Machine; date: string; booking: Booking }[] = [];
   for (const machine of data.machines) {
     for (const [date, booking] of Object.entries(data.bookings[machine.id] || {})) {
-      if (date < today || isWeekend(parseIsoDateString(date))) continue;
+      if (date < today) continue;
       if (matchesCampaign(campaign, machine.id, date, booking)) {
         entries.push({ machine, date, booking });
       }
@@ -143,6 +139,22 @@ export function shiftBookingEditRows(
   machineId?: string,
   allowedDays?: readonly string[],
 ): BookingEditRow[] {
+  if (allowedDays?.length) {
+    const dates = rows
+      .filter((row) => !machineId || row.machineId === machineId)
+      .flatMap((row) => row.dates)
+      .sort();
+    if (dates.length) {
+      const dayOffset = (a: string, b: string) =>
+        Math.round(
+          (parseIsoDateString(a).getTime() - parseIsoDateString(b).getTime()) / 86_400_000,
+        );
+      delta = Math.max(
+        dayOffset(allowedDays[0]!, dates[0]!),
+        Math.min(delta, dayOffset(allowedDays.at(-1)!, dates.at(-1)!)),
+      );
+    }
+  }
   const shifted = rows.map((row) =>
     machineId && row.machineId !== machineId
       ? { ...row, dates: [...row.dates] }
@@ -395,8 +407,25 @@ export function applyBookingEdit(
   const undo: CellUndo[] = [];
   const deletedCount = removeOldCells(data, model, desiredKeys, undo);
   const count = addNewCells(data, model, rows, source, undo);
-  for (const machineId of new Set(undo.map((entry) => entry.machineId))) {
-    undo.push(...sweepWeekends(data, machineId));
-  }
   return { count, deletedCount, undo };
+}
+
+/** Apply an explicit paint operation, so revisiting a cell never toggles it back. */
+export function paintBookingEditDates(
+  data: BookingData,
+  model: BookingEditModel,
+  rows: readonly BookingEditRow[],
+  machineIds: readonly string[],
+  dates: readonly string[],
+  fill: boolean,
+): BookingEditRow[] {
+  return rows.map((row) => {
+    if (!machineIds.includes(row.machineId)) return { ...row, dates: [...row.dates] };
+    const next = new Set(row.dates);
+    for (const date of dates) {
+      if (fill && !bookingEditBlock(data, model, row.machineId, date)) next.add(date);
+      else if (!fill && next.size > 1) next.delete(date);
+    }
+    return { ...row, dates: [...next].sort() };
+  });
 }

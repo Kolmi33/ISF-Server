@@ -43,6 +43,17 @@ describe('openReactModal / closeReactModal', () => {
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
   });
 
+  it('can prevent backdrop dismissal while allowing Escape', () => {
+    act(() => openReactModal(<p>workspace</p>, { closeOnBackdrop: false }));
+    fireEvent.click(document.getElementById('overlay')!);
+    expect(document.getElementById('overlay')).toHaveClass('open');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.getElementById('overlay')).not.toHaveClass('open');
+    act(() => openReactModal(<p>ordinary dialog</p>));
+    fireEvent.click(document.getElementById('overlay')!);
+    expect(document.getElementById('overlay')).not.toHaveClass('open');
+  });
+
   it('lets an open nested popover handle Escape before the modal', () => {
     act(() =>
       openReactModal(

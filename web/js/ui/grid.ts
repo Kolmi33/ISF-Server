@@ -17,7 +17,11 @@
 
 import type { Booking, Bookings, Machine, MachineCategory } from '../../../shared/types.ts';
 import { addDays, formatDateAsIsoString } from '../../../shared/dates.ts';
-import { getMachineCategory, getMaintenanceSlotAtDate } from '../core/machines.ts';
+import {
+  getMachineCategory,
+  getMaintenanceSlotAtDate,
+  partitionFavoriteMachines,
+} from '../core/machines.ts';
 import { getBooking } from '../core/bookings.ts';
 
 /** The four mutually exclusive states of a grid cell in priority order. */
@@ -338,9 +342,8 @@ export function orderedMachines(
 ): Machine[] {
   const isMesstechnik = (machine: Machine): number =>
     getMachineCategory(machine) === 'messtechnik' ? 1 : 0;
-  const favorites = machines.filter((machine) => favoriteIds.has(machine.id));
-  const everyoneElse = machines
-    .filter((machine) => !favoriteIds.has(machine.id))
+  const { favorites, rest } = partitionFavoriteMachines(machines, favoriteIds);
+  const everyoneElse = rest
     .slice()
     .sort((machineA, machineB) => isMesstechnik(machineA) - isMesstechnik(machineB));
   return favorites.concat(everyoneElse);
@@ -494,7 +497,8 @@ export function buildGridRows(
     (options.visibleMachineIds !== null && options.visibleMachineIds !== undefined);
   const orderedList = orderedMachines(machines, favoriteIds);
   const visibleOrderedList = orderedList.filter((machine) => {
-    if (!openCategories.has(getMachineCategory(machine))) return false;
+    if (!favoriteIds.has(machine.id) && !openCategories.has(getMachineCategory(machine)))
+      return false;
     const group = displayGroup(machine, favoriteIds);
     return !isHiddenByFilter(machine, group === FAVORITES_GROUP_LABEL, options);
   });
@@ -502,10 +506,17 @@ export function buildGridRows(
 
   const rows: GridRow[] = [];
   const cursor = new GridRowsCursor();
+  let currentCategory: MachineCategory | null = null;
 
   for (const machine of visibleOrderedList) {
     const group = displayGroup(machine, favoriteIds);
     const isFavoritesGroup = group === FAVORITES_GROUP_LABEL;
+    const category = getMachineCategory(machine);
+    if (!isFavoritesGroup && category !== currentCategory) {
+      currentCategory = category;
+      rows.push({ kind: 'category', category, collapsed: false });
+      cursor.group = null;
+    }
     cursor.enterGroup(group, isFavoritesGroup, machineCountByGroup, collapsedGroups, rows);
     if (collapsedGroups.has(group) && !isMachineFilterActive) continue;
 

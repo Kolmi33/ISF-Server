@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useReducer } from 'react';
 import { addDays, startOfDay, format } from 'date-fns';
 import { mondayOfDate, parseIsoDateString } from '../../../../shared/dates.ts';
 import type { AvailabilityWindow } from '../../core/booking-assistant-types.ts';
@@ -64,6 +64,8 @@ function bookResult(result: AvailabilityWindow): void {
 
 /** Thin host adapter: the supplied frontend owns its presentation and interaction state. */
 export function AssistantModal({ preset }: { preset?: AssistantPreset }) {
+  const [, refreshCatalog] = useReducer((version: number) => version + 1, 0);
+  useEffect(() => store.subscribe(() => refreshCatalog()), []);
   const [initialRange] = useState(() => {
     if (!preset) return { from: startOfDay(new Date()), to: addDays(startOfDay(new Date()), 6) };
     const from = nextMonday();
@@ -72,11 +74,9 @@ export function AssistantModal({ preset }: { preset?: AssistantPreset }) {
   const [initialPlan] = useState(() =>
     preset?.machineIds.map((machineId) => createDeviceEntry(machineId)),
   );
-  const [catalog] = useState(() =>
-    assistantCatalog(
-      orderedMachines(store.get('data')!.machines, store.get('favs')),
-      store.get('favs'),
-    ),
+  const catalog = assistantCatalog(
+    orderedMachines(store.get('data')!.machines, store.get('favs')),
+    store.get('favs'),
   );
   return (
     <BuchungsAssistent
@@ -95,5 +95,5 @@ export function AssistantModal({ preset }: { preset?: AssistantPreset }) {
 }
 
 export function openAssistant(): void {
-  openReactModal(<AssistantModal />, { sticky: true });
+  openReactModal(<AssistantModal />, { closeOnBackdrop: false });
 }

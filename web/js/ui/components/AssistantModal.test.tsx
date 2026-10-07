@@ -217,7 +217,7 @@ describe('supplied assistant host integration', () => {
     click('Buchen');
     expect(openBookingForm).not.toHaveBeenCalled();
     expect(document.getElementById('toast')!.textContent).toContain('Verfügbarkeit');
-    store.set({ readOnly: true });
+    act(() => store.set({ readOnly: true }));
     click('Buchen');
     expect(document.getElementById('toast')!.textContent).toContain('Lesemodus');
   });
@@ -295,7 +295,7 @@ describe('supplied assistant host integration', () => {
     // anfänglichen sieben Tage.
     expect(trigger).not.toContain(`· ${initialWorkdays.length} Arbeitstage`);
   });
-  it('grouping help opens on focus and only Abbrechen dismisses the assistant', () => {
+  it('grouping help opens on focus and Escape dismisses while backdrop clicks do not', () => {
     const help = screen.getByRole('button', { name: 'Hinweis zu Bedarfsgruppen' });
     fireEvent.keyDown(document.body, { key: 'Tab' });
     act(() => help.focus());
@@ -304,15 +304,14 @@ describe('supplied assistant host integration', () => {
     expect(tooltip.textContent).toContain('Auswählen (UND):');
     expect(tooltip.textContent).toContain('Alternativen gruppieren (ODER):');
     expect(tooltip.textContent).toContain('Trennen:');
-    expect(screen.queryByRole('button', { name: 'Dialog schließen' })).toBeNull();
-    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.getByRole('button', { name: 'Schließen' })).toBeTruthy();
     fireEvent.click(document.getElementById('overlay')!);
     expect(
       within(document.getElementById('modal')!).getByRole('heading', {
         name: 'Buchungsassistent',
       }),
     ).toBeTruthy();
-    click('Abbrechen');
+    fireEvent.keyDown(document.body, { key: 'Escape' });
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false);
   });
 });

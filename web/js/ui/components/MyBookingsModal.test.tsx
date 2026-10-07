@@ -90,7 +90,25 @@ describe('MyBookingsModal', () => {
     expect(document.getElementById('modal')).toHaveAttribute('data-dialog-size', 'xl');
     expect(screen.getByText('In diesem Status liegt gerade nichts.')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Aktiv 0' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('0–0 von 0')).toBeInTheDocument();
+    expect(screen.getByText('Seite 1 von 1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Zurück' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Weiter' })).toBeDisabled();
   });
+
+  it.each(['mine', 'all'] as const)(
+    'keeps the pagination footer on a single-page %s view',
+    (initialMode) => {
+      window.S.data!.bookings = { m1: { [day(1)]: { name: 'anna' } } };
+      render(<MyBookingsModal initialMode={initialMode} />);
+      selectAllStatus();
+
+      expect(screen.getByText('1–1 von 1')).toBeInTheDocument();
+      expect(screen.getByText('Seite 1 von 1')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Zurück' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Weiter' })).toBeDisabled();
+    },
+  );
 
   it('shows only the current user and renders active, planned, and completed statuses', () => {
     window.S.data!.bookings = {
@@ -176,7 +194,7 @@ describe('MyBookingsModal', () => {
     expect(screen.getByText('Vergangen')).toBeInTheDocument();
     expect(screen.queryByText('Zukunft')).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Halle 1' } });
-    expect(screen.getByText(/1 von 2 Buchungen/)).toBeInTheDocument();
+    expect(screen.queryByText(/1 von 2 Buchungen/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'nichts' } });
     fireEvent.click(screen.getByRole('button', { name: 'Filter zurücksetzen' }));
     expect(screen.getByRole('tab', { name: 'Aktiv 0' })).toHaveAttribute('aria-selected', 'true');

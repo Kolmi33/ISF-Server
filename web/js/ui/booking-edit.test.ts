@@ -9,6 +9,7 @@ import {
   resizeBookingEditRow,
   shiftBookingEditRows,
   toggleBookingEditDate,
+  paintBookingEditDates,
 } from './booking-edit.ts';
 import type { MyBookingCampaign } from './views/my-bookings.ts';
 
@@ -65,6 +66,44 @@ function fixture(): { data: BookingData; campaign: MyBookingCampaign } {
 }
 
 describe('booking edit domain', () => {
+  it('loads and preserves explicitly booked weekends when another row changes', () => {
+    const { data, campaign } = fixture();
+    data.bookings.m1!['2026-09-12'] = { ...booking };
+    const model = buildBookingEditModel(data, campaign, TODAY);
+    expect(model.initialRows[0]!.dates).toContain('2026-09-12');
+    const rows = shiftBookingEditRows(model.initialRows, 1, 's1', model.days);
+    expect(applyBookingEdit(data, model, rows, 'Anna').abort).not.toBe(true);
+    expect(data.bookings.m1!['2026-09-12']).toEqual(booking);
+  });
+
+  it('clamps a large move at the axis boundary instead of jumping to the source', () => {
+    const { data, campaign } = fixture();
+    const model = buildBookingEditModel(data, campaign, TODAY);
+    const moved = shiftBookingEditRows(model.initialRows, 100, undefined, model.days);
+    expect(moved[0]!.dates.at(-1)).toBe(model.days.at(-1));
+    expect(moved[0]!.dates.length).toBe(model.initialRows[0]!.dates.length);
+  });
+
+  it('paints dates idempotently, skips occupied cells and keeps one day on removal', () => {
+    const { data, campaign } = fixture();
+    const model = buildBookingEditModel(data, campaign, TODAY);
+    const rows = [{ machineId: 'm2', category: 'maschine' as const, dates: ['2026-09-10'] }];
+    const painted = paintBookingEditDates(
+      data,
+      model,
+      rows,
+      ['m2'],
+      ['2026-09-11', '2026-09-14'],
+      true,
+    );
+    expect(painted[0]!.dates).toEqual(['2026-09-10', '2026-09-11']);
+    expect(paintBookingEditDates(data, model, painted, ['m2'], ['2026-09-11'], true)).toEqual(
+      painted,
+    );
+    expect(
+      paintBookingEditDates(data, model, painted, ['m2'], painted[0]!.dates, false)[0]!.dates,
+    ).toHaveLength(1);
+  });
   it('builds rows from real live group cells and leaves historic days immutable', () => {
     const { data, campaign } = fixture();
     const model = buildBookingEditModel(data, campaign, TODAY);

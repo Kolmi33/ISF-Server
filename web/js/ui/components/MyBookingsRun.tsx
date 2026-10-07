@@ -318,15 +318,18 @@ function CampaignHeading({ campaign, expanded, panelId, onToggle }: CampaignHead
       <span className="min-w-0">
         <span className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
           <span className="text-[15px] font-medium text-foreground">{campaign.title}</span>
+          {campaign.note?.trim() && campaign.note.trim() !== campaign.title.trim() && (
+            <span className="text-[13px] text-muted-foreground/75">{campaign.note}</span>
+          )}
           {showTechnicalId && (
-            <span className="font-mono text-[13px] tracking-tight text-muted-foreground/75">
+            <span className="text-[13px] tracking-tight text-muted-foreground/75">
               {campaign.id}
             </span>
           )}
         </span>
         <span className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground">
           <CalendarDays className="size-3.5 shrink-0" />
-          <span className="font-mono tabular-nums">{rangeLabel(campaign)}</span>
+          <span className="tabular-nums">{rangeLabel(campaign)}</span>
           <span>· {plural(campaign.dates.length, 'Tag', 'Tage')}</span>
           <span>· {plural(machineCount, 'Maschine', 'Maschinen')}</span>
           <span>· {plural(sensorCount, 'Sensor', 'Sensoren')}</span>
@@ -353,7 +356,7 @@ function BookingMetadata({
   return (
     <>
       {showOwner && (
-        <div className="hidden min-w-0 sm:block">
+        <div className="hidden min-w-0 text-center sm:block">
           <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             Gebucht von
           </span>
@@ -365,12 +368,12 @@ function BookingMetadata({
           </span>
         </div>
       )}
-      <div className="hidden min-w-0 sm:block">
+      <div className="hidden min-w-0 text-center sm:block">
         <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           Gebucht am
         </span>
         <span
-          className="mt-0.5 block truncate font-mono text-[12px] tabular-nums text-muted-foreground"
+          className="mt-0.5 block truncate text-[12px] tabular-nums text-muted-foreground"
           title={
             campaign.createdAt ? `Gebucht am ${formatTimestamp(campaign.createdAt)}` : undefined
           }
@@ -437,9 +440,6 @@ export function BookingCampaignDetails({
               : 'Buchungszeitpunkt nicht verfügbar'}
           </span>
         </div>
-      )}
-      {campaign.note && campaign.note.trim() !== campaign.title.trim() && (
-        <p className="text-[13px] text-muted-foreground sm:col-span-2">{campaign.note}</p>
       )}
     </div>
   );

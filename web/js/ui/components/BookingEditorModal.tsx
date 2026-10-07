@@ -31,10 +31,11 @@ function EditorLegend() {
         <span className="h-3 w-5 rounded-sm bg-primary/85" /> gebucht
       </span>
       <span className="flex items-center gap-2">
-        <span className="booking-editor-busy h-3 w-5 rounded-sm border border-border" /> fremdbelegt
+        <span className="booking-editor-busy h-3 w-5 rounded-sm border border-red-500 bg-red-100" />{' '}
+        fremdbelegt
       </span>
       <span className="flex items-center gap-2">
-        <span className="h-3 w-5 rounded-sm bg-brand/25" /> Wartung
+        <span className="h-3 w-5 rounded-sm border border-amber-600 bg-amber-200" /> Wartung
       </span>
       <span className="flex items-center gap-2">
         <span className="h-3 w-5 rounded-sm bg-destructive/75" /> Konflikt

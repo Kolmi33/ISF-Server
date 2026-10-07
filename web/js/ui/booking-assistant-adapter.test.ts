@@ -28,7 +28,6 @@ describe('backend/frontend assistant boundary', () => {
     expect(catalog.map((c) => [c.section?.label, c.label])).toEqual([
       [undefined, 'Favoriten'],
       ['Maschinen', 'Alte Halle'],
-      ['Messtechnik', 'Labor'],
     ]);
     expect(catalog[1]!.devices[0]).toEqual({
       id: 'real-id',
@@ -38,6 +37,13 @@ describe('backend/frontend assistant boundary', () => {
       info: 'Nur mit Einweisung',
     });
     expect(assistantCatalog([], new Set())).toEqual([]);
+    expect(catalog.flatMap((category) => category.devices.map((device) => device.id))).toEqual([
+      'meter',
+      'real-id',
+    ]);
+    expect(
+      assistantCatalog(data.machines, new Set()).map((category) => category.section?.label),
+    ).toEqual(['Maschinen', 'Messtechnik']);
   });
   it('transfers exact workdays across the DST weekend and selected result duration', () => {
     const window = searchAssistant(data, plan, range, 2, 3)[0]!;

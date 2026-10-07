@@ -14,12 +14,15 @@ import type { ReactNode } from 'react';
 
 let currentRoot: Root | null = null;
 let isCurrentModalSticky = false;
+let closeOnBackdrop = true;
 let lastFocusedElement: HTMLElement | null = null;
 let isCollapsed = false;
 
 export interface OpenReactModalOptions {
   /** When true, Escape and clicking the overlay backdrop do not close the modal. */
   sticky?: boolean;
+  /** Allow Escape while preventing accidental backdrop dismissal. */
+  closeOnBackdrop?: boolean;
 }
 
 /** Open a React-rendered modal, mirroring legacy `openModal`'s DOM chrome (focus, overlay). One
@@ -30,6 +33,7 @@ export interface OpenReactModalOptions {
  *  createRoot()". */
 export function openReactModal(node: ReactNode, options: OpenReactModalOptions = {}): void {
   isCurrentModalSticky = !!options.sticky;
+  closeOnBackdrop = options.closeOnBackdrop ?? true;
   isCollapsed = false;
   lastFocusedElement = document.activeElement as HTMLElement | null;
   document.getElementById('modalReopen')?.classList.remove('show');
@@ -116,7 +120,7 @@ document.addEventListener(
   (event) => {
     if (!currentRoot || (event.target as HTMLElement).id !== 'overlay') return;
     event.stopPropagation();
-    if (isCurrentModalSticky) return;
+    if (isCurrentModalSticky || !closeOnBackdrop) return;
     if (isCollapsed) dismissCollapsedTab();
     else closeReactModal();
   },

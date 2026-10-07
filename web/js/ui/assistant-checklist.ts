@@ -15,7 +15,7 @@
 // =======================================================================================
 
 import type { Machine } from '../../../shared/types.ts';
-import { CATEGORIES, getMachineCategory } from '../core/machines.ts';
+import { CATEGORIES, getMachineCategory, partitionFavoriteMachines } from '../core/machines.ts';
 
 const FAVORITES_KEY = 'fav';
 const FAVORITES_LABEL = '★ Favoriten';
@@ -137,8 +137,7 @@ export function buildChecklistRows(
   const { favoriteIds, searchQuery, openKeys } = options;
   const lowercaseQuery = searchQuery.trim().toLowerCase();
   const searching = !!lowercaseQuery;
-  const favorites = machines.filter((m) => favoriteIds.has(m.id));
-  const rest = machines.filter((m) => !favoriteIds.has(m.id));
+  const { favorites, rest } = partitionFavoriteMachines(machines, favoriteIds);
   const rows: ChecklistRow[] = [];
   pushFavoriteRows(rows, favorites, searching, lowercaseQuery, openKeys);
   pushNonFavoriteRows(rows, rest, searching, lowercaseQuery, openKeys);

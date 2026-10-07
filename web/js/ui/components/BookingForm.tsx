@@ -16,13 +16,14 @@
 //
 // =======================================================================================
 
-import { useId, useState } from 'react';
+/* eslint-disable max-lines-per-function -- form state and validation stay together for focus handling. */
+import { useId, useState, useRef, useEffect } from 'react';
 import { CalendarPlus, TriangleAlert } from 'lucide-react';
 import type { Machine } from '../../../../shared/types.ts';
 import { getAllDaysInRange, formatDateLong } from '../../../../shared/dates.ts';
 import { bookCells, type Conflict } from '../../core/bookings.ts';
 import { closeReactModal, openReactModal } from '../modal.tsx';
-import { toast, offerUndo } from '../toast.ts';
+import { offerUndo } from '../toast.ts';
 import { store } from '../../store-instance.ts';
 import { machById } from '../machine-lookup.ts';
 import { Button } from '../../components/ui/app-button.tsx';
@@ -110,6 +111,9 @@ function ConflictList({ conflicts }: { conflicts: readonly Conflict[] }) {
 }
 
 interface FormFieldsState {
+  error: { field: string; message: string } | null;
+  title: string;
+  setTitle: (value: string) => void;
   name: string;
   setName: (value: string) => void;
   fromDate: string;
@@ -141,6 +145,8 @@ function DateRangeFields({ fields }: { fields: FormFieldsState }) {
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <FormField label="Von" htmlFor={fromId}>
         <Input
+          name="fromDate"
+          aria-invalid={fields.error?.field === 'dates'}
           id={fromId}
           type="date"
           className="h-10 rounded-lg"
@@ -150,6 +156,9 @@ function DateRangeFields({ fields }: { fields: FormFieldsState }) {
       </FormField>
       <FormField label="Bis" htmlFor={toId}>
         <Input
+          name="dates"
+          aria-invalid={fields.error?.field === 'dates'}
+          aria-describedby={fields.error?.field === 'dates' ? `${toId}-error` : undefined}
           id={toId}
           type="date"
           className="h-10 rounded-lg"
@@ -157,6 +166,11 @@ function DateRangeFields({ fields }: { fields: FormFieldsState }) {
           onChange={(event) => fields.setToDate(event.target.value)}
         />
       </FormField>
+      {fields.error?.field === 'dates' && (
+        <p id={`${toId}-error`} role="alert" className="text-sm text-destructive sm:col-span-2">
+          {fields.error.message}
+        </p>
+      )}
     </div>
   );
 }
@@ -171,6 +185,7 @@ function BookingFormFields({
   fixedDates?: readonly string[];
 }) {
   const nameId = useId();
+  const bookingTitleId = useId();
   const noteId = useId();
   return (
     <>
@@ -180,14 +195,40 @@ function BookingFormFields({
       <FormField label="Name" htmlFor={nameId}>
         <Input
           id={nameId}
+          name="name"
+          aria-invalid={fields.error?.field === 'name'}
+          aria-describedby={fields.error?.field === 'name' ? `${nameId}-error` : undefined}
           type="text"
           className="h-10 rounded-lg"
           value={fields.name}
           onChange={(event) => fields.setName(event.target.value)}
         />
+        {fields.error?.field === 'name' && (
+          <p id={`${nameId}-error`} role="alert" className="text-sm text-destructive">
+            {fields.error.message}
+          </p>
+        )}
       </FormField>
       {fixedDates ? <FixedDatesRow dates={fixedDates} /> : <DateRangeFields fields={fields} />}
-      <FormField label="Notiz" htmlFor={noteId} hint="Dient zugleich als Titel der Buchungsgruppe.">
+      <FormField label="Titel" htmlFor={bookingTitleId} hint="Pflichtfeld">
+        <Input
+          id={bookingTitleId}
+          name="title"
+          aria-invalid={fields.error?.field === 'title'}
+          aria-describedby={fields.error?.field === 'title' ? `${bookingTitleId}-error` : undefined}
+          type="text"
+          required
+          className="h-10 rounded-lg"
+          value={fields.title}
+          onChange={(event) => fields.setTitle(event.target.value)}
+        />
+        {fields.error?.field === 'title' && (
+          <p id={`${bookingTitleId}-error`} role="alert" className="text-sm text-destructive">
+            {fields.error.message}
+          </p>
+        )}
+      </FormField>
+      <FormField label="Notiz" htmlFor={noteId}>
         <Input
           id={noteId}
           type="text"
@@ -211,6 +252,8 @@ interface BookingFormProps {
 }
 
 interface SubmitBookingInput {
+  onError: (field: string, message: string) => void;
+  title: string;
   machineIds: readonly string[];
   name: string;
   fromDate: string;
@@ -233,18 +276,23 @@ async function submitBooking(input: SubmitBookingInput): Promise<readonly Confli
     input.fixedDates,
   );
   if ('error' in validation) {
-    toast(validation.error);
+    input.onError(input.name.trim() ? 'dates' : 'name', validation.error);
     return undefined;
   }
 
   const trimmedName = input.name.trim();
+  const trimmedTitle = input.title.trim();
+  if (!trimmedTitle) {
+    input.onError('title', 'Bitte Titel eingeben.');
+    return undefined;
+  }
   const trimmedNote = input.note.trim();
   const result = await window.mutate(
     (fresh) =>
       bookCells(fresh, input.machineIds, validation.dates, {
         name: trimmedName,
         note: trimmedNote,
-        title: trimmedNote, // note doubles as the group title, exactly as legacy combines them
+        title: trimmedTitle,
         skipConflicts: input.skipConflicts,
         ts: new Date().toISOString(),
         newGid: generateGroupId,
@@ -263,13 +311,23 @@ async function submitBooking(input: SubmitBookingInput): Promise<readonly Confli
 export function BookingForm({ machineIds, from, to, dates }: BookingFormProps) {
   const machines = machineIds.map((id) => machById(id)).filter((m): m is Machine => !!m);
   const [name, setName] = useState(store.get('user'));
+  const [title, setTitle] = useState('');
+  const [error, setError] = useState<FormFieldsState['error']>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error)
+      formRef.current?.querySelector<HTMLInputElement>(`input[name="${error.field}"]`)?.focus();
+  }, [error]);
   const [fromDate, setFromDate] = useState(from);
   const [toDate, setToDate] = useState(to);
   const [note, setNote] = useState('');
   const [conflicts, setConflicts] = useState<readonly Conflict[] | null>(null);
 
   async function submit(skipConflicts: boolean): Promise<void> {
+    setError(null);
     const newConflicts = await submitBooking({
+      onError: (field, message) => setError({ field, message }),
+      title,
       machineIds,
       name,
       fromDate,
@@ -291,11 +349,30 @@ export function BookingForm({ machineIds, from, to, dates }: BookingFormProps) {
         subtitle={`${machines.length} Maschine${machines.length === 1 ? '' : 'n'} reservieren`}
       />
       <AppDialogBody className="max-h-[65vh] overflow-y-auto">
-        <BookingFormFields
-          machines={machines}
-          fields={{ name, setName, fromDate, setFromDate, toDate, setToDate, note, setNote }}
-          fixedDates={dates}
-        />
+        <div ref={formRef} className="flex flex-col gap-4" onChange={() => setError(null)}>
+          <BookingFormFields
+            machines={machines}
+            fields={{
+              error,
+              title,
+              setTitle,
+              name,
+              setName,
+              fromDate,
+              setFromDate,
+              toDate,
+              setToDate,
+              note,
+              setNote,
+            }}
+            fixedDates={dates}
+          />
+          {dates && error?.field === 'dates' && (
+            <p role="alert" className="text-sm text-destructive">
+              {error.message}
+            </p>
+          )}
+        </div>
         <div id="bkConflicts" className="contents">
           {conflicts && (
             <>

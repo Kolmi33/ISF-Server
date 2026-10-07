@@ -12,16 +12,18 @@ export function BuchungsAssistent(props: BuchungsAssistentProps) {
   const state = useAssistantState(props);
   return (
     <DeviceProvider catalog={props.catalog}>
-      {/* Der Dialog ist so hoch wie sein Inhalt, aber nie höher als das Fenster: die Mitte
-          schrumpft (siehe ihr `flex-[1_1_506px]`), Kopf und Fußzeile bleiben stehen. Sonst
-          rutschte die Fußzeile auf niedrigen Fenstern aus dem Bild. Die `booking-assistant`-
-          Klasse trägt nur noch die Fußzeilen-Regeln (web/css/booking-assistant.css). */}
-      <AppDialog size="xl" labelledBy="buchungsassistent-title" className="booking-assistant">
-        <AssistantHeader />
+      {/* The workspace fills the viewport; its middle scrolls while header and footer stay visible. */}
+      <AppDialog
+        size="xl"
+        fullHeight
+        labelledBy="buchungsassistent-title"
+        className="booking-assistant"
+      >
+        <AssistantHeader onClose={state.onCancel} />
         {state.view === 'results' ? (
           <ResultsPanel state={state} />
         ) : (
-          <div className="flex min-h-0 flex-[1_1_506px] flex-col border-t border-border md:flex-row">
+          <div className="flex min-h-0 flex-1 flex-col border-t border-border md:flex-row">
             <CatalogPanel state={state} />
             <PlanPanel state={state} />
           </div>

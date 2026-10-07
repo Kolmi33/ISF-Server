@@ -212,10 +212,19 @@ export function refreshDot(machineId: string): void {
  *  write, delete, or undo — doesn't redo that computation once per cell. */
 export function patchCells(entries: readonly { machineId: string; date: string }[]): void {
   const segments = currentVisibleSegments(entries);
-  const machineIds = new Set<string>();
-  for (const entry of entries) {
+  const machineIds = new Set(entries.map((entry) => entry.machineId));
+  const repaint = new Map(entries.map((entry) => [`${entry.machineId}|${entry.date}`, entry]));
+  // A deletion can move the name or split a bar anywhere within its week. Repaint the
+  // affected resource rows across those weeks, including their unchanged surviving cells.
+  for (const key of segments.keys()) {
+    const separator = key.lastIndexOf('|');
+    const machineId = key.slice(0, separator);
+    if (machineIds.has(machineId)) {
+      repaint.set(key, { machineId, date: key.slice(separator + 1) });
+    }
+  }
+  for (const entry of repaint.values()) {
     refreshCell(entry.machineId, entry.date, segments);
-    machineIds.add(entry.machineId);
   }
   machineIds.forEach(refreshDot);
   paintSelection();

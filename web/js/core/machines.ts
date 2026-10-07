@@ -451,3 +451,13 @@ export function moveMachine(
   machines[currentIndex] = neighborMachine;
   machines[targetNeighborIndex] = currentMachine;
 }
+/** Shared list membership: favorites appear once, separately from category departments. */
+export function partitionFavoriteMachines(
+  machines: readonly Machine[],
+  favoriteIds: ReadonlySet<string>,
+) {
+  return {
+    favorites: machines.filter((machine) => favoriteIds.has(machine.id)),
+    rest: machines.filter((machine) => !favoriteIds.has(machine.id)),
+  };
+}

@@ -1,6 +1,6 @@
 import { format, parseISO } from 'date-fns';
 import type { BookingData, Machine } from '../../../shared/types.ts';
-import { CATEGORIES, getMachineCategory } from '../core/machines.ts';
+import { CATEGORIES, getMachineCategory, partitionFavoriteMachines } from '../core/machines.ts';
 import { availableForBooking, searchBookingWindows } from '../core/booking-assistant-search.ts';
 import type {
   AvailabilityWindow,
@@ -39,6 +39,7 @@ export function assistantCatalog(
   machines: readonly Machine[],
   favorites: ReadonlySet<string>,
 ): CatalogCategory[] {
+  const { favorites: favoriteMachines, rest } = partitionFavoriteMachines(machines, favorites);
   const device = (machine: Machine) => ({
     id: machine.id,
     name: machine.name,
@@ -51,11 +52,11 @@ export function assistantCatalog(
       id: 'favorites',
       label: 'Favoriten',
       starred: true,
-      devices: machines.filter((m) => favorites.has(m.id)).map(device),
+      devices: favoriteMachines.map(device),
     },
   ];
   for (const category of CATEGORIES) {
-    const members = machines.filter((m) => getMachineCategory(m) === category.id);
+    const members = rest.filter((m) => getMachineCategory(m) === category.id);
     for (const group of new Set(members.map((m) => m.group)))
       catalog.push({
         id: JSON.stringify([category.id, group]),

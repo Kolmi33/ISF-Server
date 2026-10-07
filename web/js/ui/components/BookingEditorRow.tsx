@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, MoreHorizontal, Repeat2, Trash2 } from 'lucide-react';
+import {
+  CalendarDays,
+  MoreHorizontal,
+  Repeat2,
+  Trash2,
+  LockKeyhole,
+  TriangleAlert,
+} from 'lucide-react';
 import { cn } from 'cn';
 import { parseIsoDateString } from '../../../../shared/dates.ts';
 import { getMachineCategory } from '../../core/machines.ts';
@@ -199,22 +206,30 @@ function barCellClasses(
 ) {
   return cn(
     'relative h-8 border-r border-border/60',
-    isWeekendDate(date) && 'bg-muted/70',
-    kind === 'maintenance' && 'bg-brand/20',
-    kind === 'foreign' && 'booking-editor-busy',
+    isWeekendDate(date) && 'bg-gray-200 dark:bg-gray-700',
+    kind === 'maintenance' && 'bg-amber-200 ring-1 ring-inset ring-amber-600',
+    kind === 'foreign' && 'booking-editor-busy bg-red-100 ring-1 ring-inset ring-red-500',
     !booked && !kind && 'hover:bg-primary/10',
     booked && 'cursor-grab',
     booked && (first || last) && 'cursor-ew-resize',
   );
 }
 
+// The cell combines gesture, boundary, selection, and blocked-state decisions in one renderer.
+// eslint-disable-next-line complexity
 function BarCell({ row, rows, model, date, index, onRowsChange, begin }: BarCellProps) {
   const booked = row.dates.includes(date);
   const first = booked && !row.dates.includes(model.days[index - 1]!);
   const last = booked && !row.dates.includes(model.days[index + 1]!);
   const block = bookingEditBlock(store.get('data')!, model, row.machineId, date);
   const click = (event: React.PointerEvent) => {
-    if (booked) begin(event, barMode(first, last, event.nativeEvent.offsetX), date, row.machineId);
+    if (booked)
+      begin(
+        event,
+        barMode(first, last, event.clientX - event.currentTarget.getBoundingClientRect().left),
+        date,
+        row.machineId,
+      );
     else onRowsChange(toggleBookingEditDate(store.get('data')!, model, rows, row.machineId, date));
   };
   return (
@@ -223,11 +238,24 @@ function BarCell({ row, rows, model, date, index, onRowsChange, begin }: BarCell
       className={barCellClasses(date, booked, first, last, block?.kind)}
       onPointerDown={click}
     >
+      {block && !booked && (block.kind === 'foreign' || block.kind === 'maintenance') && (
+        <span className="pointer-events-none absolute inset-0 grid place-items-center">
+          {block.kind === 'foreign' ? (
+            <LockKeyhole className="size-4 text-red-800" />
+          ) : (
+            <TriangleAlert className="size-4 text-amber-900" />
+          )}
+        </span>
+      )}
       {booked && (
         <span
           className={cn(
-            'absolute inset-y-1 left-0 right-0',
-            block ? 'bg-destructive/75' : 'bg-primary/85',
+            'pointer-events-none absolute inset-y-1 left-0 right-0',
+            block
+              ? 'bg-destructive/75'
+              : isWeekendDate(date)
+                ? 'bg-gray-500 dark:bg-gray-400'
+                : 'bg-primary/85',
             first && 'left-0.5 rounded-l-md',
             last && 'right-0.5 rounded-r-md',
           )}
@@ -244,6 +272,7 @@ export interface BookingEditorRowProps {
   campaignDates: readonly string[];
   onRowsChange: (rows: BookingEditRow[]) => void;
   begin: BarCellProps['begin'];
+  paintRow: (event: React.PointerEvent, start: boolean) => void;
 }
 
 export function BookingEditorRow(props: BookingEditorRowProps) {
@@ -283,7 +312,11 @@ export function BookingEditorRow(props: BookingEditorRowProps) {
         aria-label={`${machineName(props.row.machineId)} – Pfeiltasten verschieben, Umschalt und Pfeil dehnt`}
         className="sticky left-0 z-20 flex h-8 items-center gap-2 border-r border-border bg-card pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">
+        <span
+          onPointerDown={(event) => props.paintRow(event, true)}
+          onPointerEnter={(event) => props.paintRow(event, false)}
+          className="min-w-0 flex-1 cursor-crosshair touch-none select-none truncate text-[13px] text-foreground"
+        >
           {machineName(props.row.machineId)}
         </span>
         <RowMenu

@@ -21,11 +21,14 @@ export type AppDialogSize = 'sm' | 'md' | 'lg' | 'xl';
 /** sm prompts · md forms (the legacy `#modal` width) · lg lists · xl the Assistant/statistics. */
 export function AppDialog({
   size = 'md',
+  fullHeight = false,
   labelledBy,
   className,
   children,
 }: {
   size?: AppDialogSize;
+  /** Fill the available viewport for workspaces with a flexible scrolling body. */
+  fullHeight?: boolean;
   /** id of the `AppDialogHeader` title that names this dialog. */
   labelledBy: string;
   className?: string;
@@ -56,6 +59,7 @@ export function AppDialog({
           aria-labelledby={labelledBy}
           className={cn(
             'relative flex max-h-[calc(100dvh_-_32px)] w-full max-w-none flex-col overflow-hidden rounded-2xl border border-border bg-card',
+            fullHeight && 'h-[calc(100dvh_-_32px)]',
             className,
           )}
         >

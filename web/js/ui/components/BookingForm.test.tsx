@@ -22,6 +22,17 @@ beforeEach(() => {
 });
 
 describe('BookingForm', () => {
+  it('requires a nonblank title before booking', async () => {
+    render(<BookingForm machineIds={['m1']} from="2021-01-04" to="2021-01-04" />);
+    fireEvent.change(screen.getByLabelText('Titel'), { target: { value: '   ' } });
+    await act(async () => screen.getByRole('button', { name: 'Buchen' }).click());
+    expect(window.mutate).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Titel eingeben');
+    expect(screen.getByLabelText('Titel')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Titel')).toHaveFocus();
+    fireEvent.change(screen.getByLabelText('Titel'), { target: { value: 'Projekt' } });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
   // What: the form lists which machine(s) it's booking and defaults its name/date fields
   // from the current user and the given props.
   // How: renders with one machine and a date range and checks the machine name, the
@@ -45,7 +56,7 @@ describe('BookingForm', () => {
       screen.getByRole('button', { name: 'Buchen' }).click();
     });
     expect(window.mutate).not.toHaveBeenCalled();
-    expect(document.getElementById('toast')!.textContent).toContain('Namen eingeben');
+    expect(screen.getByRole('alert')).toHaveTextContent('Namen eingeben');
   });
 
   // What: submitting with `from` after `to` (an inverted range) is rejected client-side.
@@ -56,7 +67,7 @@ describe('BookingForm', () => {
       screen.getByRole('button', { name: 'Buchen' }).click();
     });
     expect(window.mutate).not.toHaveBeenCalled();
-    expect(document.getElementById('toast')!.textContent).toContain('gültigen Zeitraum');
+    expect(screen.getByRole('alert')).toHaveTextContent('gültigen Zeitraum');
   });
 
   // What: a range so large it would create an excessive number of cells is rejected
@@ -68,7 +79,7 @@ describe('BookingForm', () => {
       screen.getByRole('button', { name: 'Buchen' }).click();
     });
     expect(window.mutate).not.toHaveBeenCalled();
-    expect(document.getElementById('toast')!.textContent).toContain('zu groß');
+    expect(screen.getByRole('alert')).toHaveTextContent('zu groß');
   });
 
   // What: a successful book covers every day in the range, weekends included (the form
@@ -80,6 +91,8 @@ describe('BookingForm', () => {
   it('books every day in range including weekends, and closes on success', async () => {
     window.mutate = vi.fn().mockResolvedValue({ count: 2, undo: [] });
     act(() => openBookingForm(['m1'], '2021-01-09', '2021-01-10')); // Sat, Sun
+    fireEvent.change(screen.getByLabelText('Titel'), { target: { value: ' Projekt A ' } });
+    fireEvent.change(screen.getByLabelText('Notiz'), { target: { value: 'Separate note' } });
     await act(async () => {
       screen.getByRole('button', { name: 'Buchen' }).click();
     });
@@ -89,6 +102,9 @@ describe('BookingForm', () => {
     const fresh = { machines: [machine()], bookings: {} };
     const result = reducer(fresh);
     expect(result.count).toBe(2); // Sat + Sun both booked
+    expect(fresh.bookings).toMatchObject({
+      m1: { '2021-01-09': { gtitle: 'Projekt A', note: 'Separate note' } },
+    });
     expect(document.getElementById('overlay')!.classList.contains('open')).toBe(false); // closed
   });
 
@@ -103,6 +119,7 @@ describe('BookingForm', () => {
       .fn()
       .mockResolvedValueOnce({ conflicts: [{ machineId: 'm1', date: '2021-01-04', by: 'bob' }] });
     act(() => openBookingForm(['m1'], '2021-01-04', '2021-01-04'));
+    fireEvent.change(screen.getByLabelText('Titel'), { target: { value: 'Projekt A' } });
     await act(async () => {
       screen.getByRole('button', { name: 'Buchen' }).click();
     });
@@ -129,6 +146,7 @@ describe('BookingForm', () => {
     }));
     window.mutate = vi.fn().mockResolvedValue({ conflicts: manyConflicts });
     render(<BookingForm machineIds={['m1']} from="2021-01-01" to="2021-01-20" />);
+    fireEvent.change(screen.getByLabelText('Titel'), { target: { value: 'Projekt A' } });
     await act(async () => {
       screen.getByRole('button', { name: 'Buchen' }).click();
     });
@@ -160,6 +178,7 @@ describe('BookingForm — fixed dates (opened from the Assistant)', () => {
     window.mutate = vi.fn().mockResolvedValue({ count: 3, undo: [] });
     const dates = ['2021-01-04', '2021-01-06', '2021-01-08']; // Mon, Wed, Fri — gapped
     act(() => openBookingForm(['m1'], dates[0]!, dates[dates.length - 1]!, dates));
+    fireEvent.change(screen.getByLabelText('Titel'), { target: { value: 'Projekt A' } });
     expect(document.querySelectorAll('#modal input[type="date"]')).toHaveLength(0);
     expect(screen.getByText(/Mo\.?,? 04\.01\.2021/)).toBeInTheDocument();
     await act(async () => {
